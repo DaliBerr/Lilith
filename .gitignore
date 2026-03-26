@@ -1,0 +1,10 @@
+.vscode/*
+**/Assets/TextMesh Pro/*
+*.log
+Extract/*
+Library/*
+Temp/*
+Obj/
+Logs/
+UserSettings/
+.dotnet-home/
