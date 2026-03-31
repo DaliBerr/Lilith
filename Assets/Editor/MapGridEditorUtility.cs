@@ -38,6 +38,7 @@ namespace Kernel.MapGrid.Editor
 
     public static class MapGridEditorUtility
     {
+        private const string SceneCellEditUndoName = "Scene Cell Edit";
         private delegate bool UndoableOperation(MapGridAuthoring authoring, int undoGroup, out string error);
 
         public static string BuildChunkRowName(int chunkY) => $"ChunkRow_{chunkY}";
@@ -124,7 +125,7 @@ namespace Kernel.MapGrid.Editor
             return true;
         }
 
-        public static bool TryValidateTextEditing(MapGridAuthoring authoring, bool requireBrushText, string brushText, out string error)
+        public static bool TryValidateSceneCellEditing(MapGridAuthoring authoring, bool requireBrushText, string brushText, out string error)
         {
             error = null;
 
@@ -135,13 +136,13 @@ namespace Kernel.MapGrid.Editor
 
             if (!authoring.HasGeneratedContent())
             {
-                error = "GeneratedContent is missing. Generate the grid before editing text in Scene view.";
+                error = "GeneratedContent is missing. Generate the grid before editing cells in Scene view.";
                 return false;
             }
 
             if (authoring.IndexedCellCount <= 0)
             {
-                error = "The map index is empty. Rebuild Index before editing text in Scene view.";
+                error = "The map index is empty. Rebuild Index before editing cells in Scene view.";
                 return false;
             }
 
@@ -177,6 +178,11 @@ namespace Kernel.MapGrid.Editor
         public static bool FrameCamera(MapGridAuthoring authoring, out string error)
         {
             return ExecuteUndoable("Frame Camera", authoring, FrameCameraInternal, out error);
+        }
+
+        public static bool DisableEmptyTextColliders(MapGridAuthoring authoring, out string error)
+        {
+            return ExecuteUndoable("Disable Empty Text Colliders", authoring, DisableEmptyTextCollidersInternal, out error);
         }
 
         public static bool ReplaceSelectedCell(MapGridAuthoring authoring, GameObject replacementPrefab, GameObject selectedObject, out string error)
@@ -258,20 +264,88 @@ namespace Kernel.MapGrid.Editor
             changed = false;
             error = null;
 
-            if (!TryResolveCellText(authoring, coordinates, out _, out var textComponent, out error))
+            if (!TryResolveCellText(authoring, coordinates, out _, out _, out var textComponent, out error))
             {
                 return false;
             }
 
-            if (textComponent.text == newText)
+            var textChanged = textComponent.text != newText;
+            if (textChanged)
+            {
+                Undo.RecordObject(textComponent, SceneCellEditUndoName);
+                textComponent.text = newText;
+                UnityEditor.EditorUtility.SetDirty(textComponent);
+            }
+
+            var shouldEnableCollider = !string.IsNullOrEmpty(newText);
+            if (!TrySetCellColliderEnabled(authoring, coordinates, shouldEnableCollider, out var colliderChanged, out error))
+            {
+                return false;
+            }
+
+            changed = textChanged || colliderChanged;
+            return true;
+        }
+
+        public static bool TrySetCellColliderEnabled(
+            MapGridAuthoring authoring,
+            Vector2Int coordinates,
+            bool enabled,
+            out bool changed,
+            out string error)
+        {
+            changed = false;
+            error = null;
+
+            if (!TryResolveCellData(authoring, coordinates, out var cellObject, out var cellData, out error))
+            {
+                return false;
+            }
+
+            if (!TryResolveManagedCollider(cellObject, cellData, out var managedCollider, out error))
+            {
+                return false;
+            }
+
+            if (managedCollider.enabled == enabled)
             {
                 return true;
             }
 
-            Undo.RecordObject(textComponent, "Scene Text Edit");
-            textComponent.text = newText;
-            UnityEditor.EditorUtility.SetDirty(textComponent);
+            Undo.RecordObject(managedCollider, SceneCellEditUndoName);
+            if (!cellData.SetColliderEnabled(enabled))
+            {
+                error = $"Failed to update the managed Collider on '{cellObject.name}'.";
+                return false;
+            }
+
+            UnityEditor.EditorUtility.SetDirty(managedCollider);
             changed = true;
+            return true;
+        }
+
+        public static bool TryResolveCellData(
+            MapGridAuthoring authoring,
+            Vector2Int coordinates,
+            out GameObject cellObject,
+            out CellData cellData,
+            out string error)
+        {
+            cellObject = null;
+            cellData = null;
+            error = null;
+
+            if (!TryResolveIndexedCell(authoring, coordinates, out cellObject, out error))
+            {
+                return false;
+            }
+
+            if (!cellObject.TryGetComponent<CellData>(out cellData) || cellData == null)
+            {
+                error = $"Cell '{cellObject.name}' does not contain a CellData component.";
+                return false;
+            }
+
             return true;
         }
 
@@ -295,7 +369,7 @@ namespace Kernel.MapGrid.Editor
 
             if (textComponents.Length > 1)
             {
-                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Scene text editing requires exactly one.";
+                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Scene cell editing requires exactly one.";
                 return false;
             }
 
@@ -519,6 +593,49 @@ namespace Kernel.MapGrid.Editor
             return true;
         }
 
+        private static bool DisableEmptyTextCollidersInternal(MapGridAuthoring authoring, int undoGroup, out string error)
+        {
+            error = null;
+
+            if (!TryValidateSceneCellEditing(authoring, requireBrushText: false, string.Empty, out error))
+            {
+                return false;
+            }
+
+            var cells = authoring.Cells;
+            for (var i = 0; i < cells.Count; i++)
+            {
+                var entry = cells[i];
+                if (entry == null)
+                {
+                    error = $"Cell entry at index {i} is null.";
+                    return false;
+                }
+
+                if (!TryResolveCellData(authoring, entry.Position, out var cellObject, out _, out error))
+                {
+                    return false;
+                }
+
+                if (!TryHasCellTextContent(cellObject, out var hasTextContent, out error))
+                {
+                    return false;
+                }
+
+                if (hasTextContent)
+                {
+                    continue;
+                }
+
+                if (!TrySetCellColliderEnabled(authoring, entry.Position, false, out _, out error))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private static bool ReplaceSelectedCellInternal(
             MapGridAuthoring authoring,
             GameObject replacementPrefab,
@@ -684,15 +801,13 @@ namespace Kernel.MapGrid.Editor
             return true;
         }
 
-        private static bool TryResolveCellText(
+        private static bool TryResolveIndexedCell(
             MapGridAuthoring authoring,
             Vector2Int coordinates,
             out GameObject cellObject,
-            out TMP_Text textComponent,
             out string error)
         {
             cellObject = null;
-            textComponent = null;
             error = null;
 
             if (authoring == null)
@@ -709,7 +824,33 @@ namespace Kernel.MapGrid.Editor
 
             if (!authoring.TryGetCell(coordinates, out cellObject) || cellObject == null)
             {
-                error = $"No indexed cell exists at ({coordinates.x}, {coordinates.y}). Rebuild Index or Rebuild Grid before editing text.";
+                error = $"No indexed cell exists at ({coordinates.x}, {coordinates.y}). Rebuild Index or Rebuild Grid before editing cells.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryResolveCellText(
+            MapGridAuthoring authoring,
+            Vector2Int coordinates,
+            out GameObject cellObject,
+            out CellData cellData,
+            out TMP_Text textComponent,
+            out string error)
+        {
+            cellObject = null;
+            cellData = null;
+            textComponent = null;
+            error = null;
+
+            if (!TryResolveCellData(authoring, coordinates, out cellObject, out cellData, out error))
+            {
+                return false;
+            }
+
+            if (!TryResolveManagedCollider(cellObject, cellData, out _, out error))
+            {
                 return false;
             }
 
@@ -719,6 +860,64 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
+            return true;
+        }
+
+        private static bool TryResolveManagedCollider(
+            GameObject cellObject,
+            CellData cellData,
+            out Collider managedCollider,
+            out string error)
+        {
+            managedCollider = null;
+            error = null;
+
+            if (cellData == null)
+            {
+                error = $"Cell '{cellObject?.name ?? "<null>"}' does not contain a CellData component.";
+                return false;
+            }
+
+            if (!cellData.TryCacheManagedCollider())
+            {
+                error = $"Cell '{cellObject.name}' does not have a managed Collider configured on its CellData component.";
+                return false;
+            }
+
+            managedCollider = cellData.ManagedCollider;
+            if (managedCollider == null)
+            {
+                error = $"Cell '{cellObject.name}' does not have a managed Collider configured on its CellData component.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryHasCellTextContent(GameObject cellObject, out bool hasTextContent, out string error)
+        {
+            hasTextContent = false;
+            error = null;
+
+            if (cellObject == null)
+            {
+                error = "Cell object is null.";
+                return false;
+            }
+
+            var textComponents = cellObject.GetComponentsInChildren<TMP_Text>(includeInactive: true);
+            if (textComponents == null || textComponents.Length == 0)
+            {
+                return true;
+            }
+
+            if (textComponents.Length > 1)
+            {
+                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Disable Empty Text Colliders requires zero or one TMP_Text.";
+                return false;
+            }
+
+            hasTextContent = !string.IsNullOrWhiteSpace(textComponents[0].text);
             return true;
         }
 

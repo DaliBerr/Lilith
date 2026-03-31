@@ -5,16 +5,17 @@ using UnityEngine;
 
 namespace Kernel.MapGrid.Editor
 {
-    internal enum MapGridTextBrushMode
+    internal enum MapGridCellBrushMode
     {
         FillText,
         EraseText,
+        SetColliderState,
     }
 
     [CustomEditor(typeof(MapGridAuthoring))]
     public sealed class MapGridAuthoringEditor : UnityEditor.Editor
     {
-        private const string SceneTextEditUndoName = "Scene Text Edit";
+        private const string SceneCellEditUndoName = "Scene Cell Edit";
         private const float HoverFillAlpha = 0.08f;
 
         private delegate bool InspectorAction(out string error);
@@ -22,16 +23,17 @@ namespace Kernel.MapGrid.Editor
         private readonly HashSet<Vector2Int> strokeVisitedCoordinates = new();
 
         private GameObject replacementPrefab;
-        private bool sceneTextEditEnabled;
-        private MapGridTextBrushMode textBrushMode = MapGridTextBrushMode.FillText;
+        private bool sceneCellEditEnabled;
+        private MapGridCellBrushMode cellBrushMode = MapGridCellBrushMode.FillText;
         private string brushText = string.Empty;
+        private bool colliderBrushEnabled = true;
         private bool isStrokeActive;
         private int activeStrokeUndoGroup = -1;
         private bool hasHoveredCoordinate;
         private Vector2Int hoveredCoordinate;
         private Vector2Int? lastStrokeCoordinate;
-        private string sceneTextEditMessage;
-        private MessageType sceneTextEditMessageType = MessageType.Info;
+        private string sceneCellEditMessage;
+        private MessageType sceneCellEditMessageType = MessageType.Info;
 
         private SerializedProperty gridWidthProperty;
         private SerializedProperty gridHeightProperty;
@@ -78,7 +80,7 @@ namespace Kernel.MapGrid.Editor
             EditorGUILayout.Space();
             DrawGridActions(authoring);
             EditorGUILayout.Space();
-            DrawSceneTextEditSection(authoring);
+            DrawSceneCellEditSection(authoring);
             EditorGUILayout.Space();
             DrawReplaceCellSection(authoring);
 
@@ -88,24 +90,24 @@ namespace Kernel.MapGrid.Editor
         private void OnSceneGUI()
         {
             var authoring = (MapGridAuthoring)target;
-            if (!sceneTextEditEnabled)
+            if (!sceneCellEditEnabled)
             {
                 FinishTextStroke(commitChanges: true);
                 ResetHoverState();
                 return;
             }
 
-            var requiresBrushText = textBrushMode == MapGridTextBrushMode.FillText;
-            if (!MapGridEditorUtility.TryValidateTextEditing(authoring, requiresBrushText, brushText, out var error))
+            var requiresBrushText = cellBrushMode == MapGridCellBrushMode.FillText;
+            if (!MapGridEditorUtility.TryValidateSceneCellEditing(authoring, requiresBrushText, brushText, out var error))
             {
-                SetSceneTextMessage(error, MessageType.Warning);
+                SetSceneCellEditMessage(error, MessageType.Warning);
                 FinishTextStroke(commitChanges: true);
                 ResetHoverState();
                 return;
             }
 
-            ClearTransientSceneTextMessage();
-            HandleSceneTextEditing(authoring, Event.current);
+            ClearTransientSceneCellEditMessage();
+            HandleSceneCellEditing(authoring, Event.current);
         }
 
         private void DrawConfiguration()
@@ -130,7 +132,7 @@ namespace Kernel.MapGrid.Editor
         {
             EditorGUILayout.LabelField("Status", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("Indexed Cells", $"{authoring.IndexedCellCount} / {authoring.ExpectedCellCount}");
-            EditorGUILayout.LabelField("Generated Content", authoring.HasGeneratedContent() ? "Present" : "Empty");
+            EditorGUILayout.LabelField("Generated Map Content", authoring.HasGeneratedContent() ? "Present" : "Empty");
 
             if (!MapGridEditorUtility.TryValidateAuthoring(authoring, requireDefaultPrefab: false, out var validationError))
             {
@@ -168,22 +170,34 @@ namespace Kernel.MapGrid.Editor
                 }
             }
 
-            if (GUILayout.Button("Frame Camera"))
+            using (new EditorGUILayout.HorizontalScope())
             {
-                ExecuteAction((out string error) => MapGridEditorUtility.FrameCamera(authoring, out error));
+                if (GUILayout.Button("Frame Camera"))
+                {
+                    ExecuteAction((out string error) => MapGridEditorUtility.FrameCamera(authoring, out error));
+                }
+
+                if (GUILayout.Button("Disable Empty Text Colliders"))
+                {
+                    ExecuteAction((out string error) => MapGridEditorUtility.DisableEmptyTextColliders(authoring, out error));
+                }
             }
         }
 
-        private void DrawSceneTextEditSection(MapGridAuthoring authoring)
+        private void DrawSceneCellEditSection(MapGridAuthoring authoring)
         {
-            EditorGUILayout.LabelField("Scene Text Edit", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Scene Cell Edit", EditorStyles.boldLabel);
 
             EditorGUI.BeginChangeCheck();
-            sceneTextEditEnabled = EditorGUILayout.Toggle("Enable Scene Edit", sceneTextEditEnabled);
-            textBrushMode = (MapGridTextBrushMode)EditorGUILayout.EnumPopup("Mode", textBrushMode);
-            if (textBrushMode == MapGridTextBrushMode.FillText)
+            sceneCellEditEnabled = EditorGUILayout.Toggle("Enable Scene Edit", sceneCellEditEnabled);
+            cellBrushMode = (MapGridCellBrushMode)EditorGUILayout.EnumPopup("Mode", cellBrushMode);
+            if (cellBrushMode == MapGridCellBrushMode.FillText)
             {
                 brushText = EditorGUILayout.TextField("Brush Text", brushText);
+            }
+            else if (cellBrushMode == MapGridCellBrushMode.SetColliderState)
+            {
+                colliderBrushEnabled = EditorGUILayout.Toggle("Enable Collider", colliderBrushEnabled);
             }
 
             if (EditorGUI.EndChangeCheck())
@@ -193,18 +207,18 @@ namespace Kernel.MapGrid.Editor
             }
 
             EditorGUILayout.HelpBox(
-                "With MapRoot selected, left-drag in Scene view to batch edit the text on generated cells. Alt / Right Mouse / Middle Mouse keep Scene navigation.",
+                "With MapRoot selected, left-drag in Scene view to batch edit generated cells. Alt / Right Mouse / Middle Mouse keep Scene navigation.",
                 MessageType.Info);
 
-            var requiresBrushText = textBrushMode == MapGridTextBrushMode.FillText;
-            if (!MapGridEditorUtility.TryValidateTextEditing(authoring, requiresBrushText, brushText, out var validationError))
+            var requiresBrushText = cellBrushMode == MapGridCellBrushMode.FillText;
+            if (!MapGridEditorUtility.TryValidateSceneCellEditing(authoring, requiresBrushText, brushText, out var validationError))
             {
                 EditorGUILayout.HelpBox(validationError, MessageType.Warning);
             }
 
-            if (!string.IsNullOrEmpty(sceneTextEditMessage))
+            if (!string.IsNullOrEmpty(sceneCellEditMessage))
             {
-                EditorGUILayout.HelpBox(sceneTextEditMessage, sceneTextEditMessageType);
+                EditorGUILayout.HelpBox(sceneCellEditMessage, sceneCellEditMessageType);
             }
         }
 
@@ -234,7 +248,7 @@ namespace Kernel.MapGrid.Editor
             }
         }
 
-        private void HandleSceneTextEditing(MapGridAuthoring authoring, Event currentEvent)
+        private void HandleSceneCellEditing(MapGridAuthoring authoring, Event currentEvent)
         {
             UpdateHoveredCoordinate(authoring, currentEvent.mousePosition);
 
@@ -317,7 +331,7 @@ namespace Kernel.MapGrid.Editor
 
             Undo.IncrementCurrentGroup();
             activeStrokeUndoGroup = Undo.GetCurrentGroup();
-            Undo.SetCurrentGroupName(SceneTextEditUndoName);
+            Undo.SetCurrentGroupName(SceneCellEditUndoName);
             isStrokeActive = true;
             lastStrokeCoordinate = null;
             strokeVisitedCoordinates.Clear();
@@ -350,7 +364,6 @@ namespace Kernel.MapGrid.Editor
                 ? MapGridEditorUtility.BuildStrokeCoordinates(lastStrokeCoordinate.Value, coordinate)
                 : new List<Vector2Int> { coordinate };
 
-            var newText = textBrushMode == MapGridTextBrushMode.FillText ? brushText : string.Empty;
             for (var i = 0; i < segment.Count; i++)
             {
                 var point = segment[i];
@@ -359,9 +372,28 @@ namespace Kernel.MapGrid.Editor
                     continue;
                 }
 
-                if (!MapGridEditorUtility.TrySetCellText(authoring, point, newText, out _, out var error))
+                string error;
+                bool success;
+                switch (cellBrushMode)
                 {
-                    SetSceneTextMessage(error, MessageType.Error);
+                    case MapGridCellBrushMode.FillText:
+                        success = MapGridEditorUtility.TrySetCellText(authoring, point, brushText, out _, out error);
+                        break;
+                    case MapGridCellBrushMode.EraseText:
+                        success = MapGridEditorUtility.TrySetCellText(authoring, point, string.Empty, out _, out error);
+                        break;
+                    case MapGridCellBrushMode.SetColliderState:
+                        success = MapGridEditorUtility.TrySetCellColliderEnabled(authoring, point, colliderBrushEnabled, out _, out error);
+                        break;
+                    default:
+                        success = false;
+                        error = "Unknown scene cell edit mode.";
+                        break;
+                }
+
+                if (!success)
+                {
+                    SetSceneCellEditMessage(error, MessageType.Error);
                     ShowSceneNotification(error);
                     FinishTextStroke(commitChanges: false);
                     return false;
@@ -406,9 +438,14 @@ namespace Kernel.MapGrid.Editor
 
         private Color GetPreviewColor()
         {
-            return textBrushMode == MapGridTextBrushMode.FillText
-                ? new Color(0.2f, 0.85f, 1f, 1f)
-                : new Color(1f, 0.4f, 0.2f, 1f);
+            return cellBrushMode switch
+            {
+                MapGridCellBrushMode.FillText => new Color(0.2f, 0.85f, 1f, 1f),
+                MapGridCellBrushMode.EraseText => new Color(1f, 0.4f, 0.2f, 1f),
+                MapGridCellBrushMode.SetColliderState when colliderBrushEnabled => new Color(0.25f, 0.9f, 0.35f, 1f),
+                MapGridCellBrushMode.SetColliderState => new Color(0.95f, 0.2f, 0.2f, 1f),
+                _ => Color.white,
+            };
         }
 
         private static void DrawHoveredCell(MapGridAuthoring authoring, Vector2Int coordinate, Color outlineColor)
@@ -445,27 +482,27 @@ namespace Kernel.MapGrid.Editor
             strokeVisitedCoordinates.Clear();
         }
 
-        private void SetSceneTextMessage(string message, MessageType messageType)
+        private void SetSceneCellEditMessage(string message, MessageType messageType)
         {
-            sceneTextEditMessage = message;
-            sceneTextEditMessageType = messageType;
+            sceneCellEditMessage = message;
+            sceneCellEditMessageType = messageType;
             Repaint();
         }
 
-        private void ClearTransientSceneTextMessage()
+        private void ClearTransientSceneCellEditMessage()
         {
-            if (sceneTextEditMessageType == MessageType.Error)
+            if (sceneCellEditMessageType == MessageType.Error)
             {
                 return;
             }
 
-            if (string.IsNullOrEmpty(sceneTextEditMessage))
+            if (string.IsNullOrEmpty(sceneCellEditMessage))
             {
                 return;
             }
 
-            sceneTextEditMessage = null;
-            sceneTextEditMessageType = MessageType.Info;
+            sceneCellEditMessage = null;
+            sceneCellEditMessageType = MessageType.Info;
             Repaint();
         }
 

@@ -190,7 +190,7 @@
 
 - [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
 - [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)
-- [`Assets/Scripts/Kernel/CellData.cs`](Assets/Scripts/Kernel/CellData.cs)
+- [`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs)
 - [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
 - [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
 - [`Assets/Editor/MapGridAuthoringTests.cs`](Assets/Editor/MapGridAuthoringTests.cs)
@@ -209,6 +209,7 @@
   - 当前场景配置使用 `CellData`
   - 既支持 `SetCoordinates(int, int)`，也支持 `SetCoordinates(Vector2Int)`
   - 既支持 `GetCoordinates()`，也支持直接读成员
+  - `CellData` 当前还负责缓存并开关 cell 子物体上的主 3D `Collider`
 - `MapGridCameraUtility` 能按网格尺寸自动框住目标相机
 - Editor 侧已经支持：
   - `Generate Grid`
@@ -216,18 +217,21 @@
   - `Rebuild Grid`
   - `Rebuild Index`
   - `Frame Camera`
+  - `Disable Empty Text Colliders`
+    - 遍历所有已索引 cell；若没有 `TMP_Text` 或文字为空白，则禁用该 cell 的 Collider
   - `Replace Selected Cell`
-  - `Scene Text Edit`
-    - 在 Scene 视图里左键拖刷，批量修改生成 cell 下唯一的 `TMP_Text`
-    - `Fill Text`：把刷过的格子文字改成当前输入字符串
-    - `Erase Text`：把刷过的格子文字清空为 `string.Empty`
+  - `Scene Cell Edit`
+    - 在 Scene 视图里左键拖刷，批量修改生成 cell 的文本或碰撞状态
+    - `FillText`：把刷过的格子文字改成当前输入字符串，并启用 Collider
+    - `EraseText`：把刷过的格子文字清空为 `string.Empty`，并禁用 Collider
+    - `SetColliderState`：按当前 `Enable Collider` 选项，批量启用或禁用 Collider
 - 已有编辑器测试覆盖：
   - 局部坐标换算
   - chunk 计算
   - 网格中心计算
   - 索引查询
   - 重复坐标/越界坐标报错
-  - Scene 文字刷图的坐标映射、路径插值、唯一 `TMP_Text` 校验
+  - Scene Cell Edit 的坐标映射、路径插值、唯一 `TMP_Text` 校验与 Collider 联动
 
 这是当前仓库里完成度最高、闭环最好的一组逻辑。
 
@@ -352,6 +356,28 @@
   - 区块矿物 seed 计算
   - 二次贝塞尔绳索采样辅助
 
+### 9. 输入与玩家平面移动
+
+关键文件：
+
+- [`Assets/Scripts/Kernel/Input/InputActionManager.cs`](Assets/Scripts/Kernel/Input/InputActionManager.cs)
+- [`Assets/Scripts/Kernel/Input/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Input/PlayerPlaneMovement.cs)
+- [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
+
+当前能力：
+
+- `InputActionManager` 统一创建、启用、禁用并释放 `PlayerControls`
+  - 若场景中未手动放置，会在首个场景加载前自动创建运行时实例
+- 当前 `Player Controls` 已定义 `Movement/MovVector2`
+  - 默认使用 `W/A/S/D` 输出 `Vector2`
+  - `Accelerate` 当前绑定为 `Left Shift`
+- `PlayerPlaneMovement` 会把该输入映射到世界坐标 `(x, 0, z)`
+  - 挂有动态 `Rigidbody` 时直接写入刚体 `velocity`
+  - 挂有 `isKinematic = true` 的 `Rigidbody` 时走 `MovePosition`
+  - 没有 `Rigidbody` 时直接改 `transform.position` 的 `XZ`
+  - `transform.position.y` 保持不变
+  - 按住加速键时，移动速度会乘以 `1.5`
+
 ## 当前未闭环或需要特别注意的点
 
 这些不是“猜测”，而是当前仓库快照里能直接看到的事实：
@@ -378,11 +404,12 @@
 - 改启动流程：[`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) + [`Assets/Scenes/Start.unity`](Assets/Scenes/Start.unity)
 - 改游戏状态：[`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) + [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
 - 加新 UI Screen：[`Assets/Prefabs/UI`](Assets/Prefabs/UI) + [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
-- 改网格生成、格子替换或 Scene 文字刷图：[`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs) + [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
-- 改坐标承载组件：[`Assets/Scripts/Kernel/CellData.cs`](Assets/Scripts/Kernel/CellData.cs) + [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)
+- 改网格生成、格子替换或 Scene Cell Edit：[`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs) + [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
+- 改坐标承载组件：[`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs) + [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)
 - 接存档：[`Assets/Scripts/Vocalith/Scribe`](Assets/Scripts/Vocalith/Scribe) + [`Assets/Scripts/Kernel/StatusSaveData.cs`](Assets/Scripts/Kernel/StatusSaveData.cs)
 - 改本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
 - 查日志：[`Assets/Scripts/Vocalith/Log`](Assets/Scripts/Vocalith/Log)
+- 改玩家输入或平面移动：[`Assets/Scripts/Kernel/Input`](Assets/Scripts/Kernel/Input) + [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
 
 ## 最后总结
 

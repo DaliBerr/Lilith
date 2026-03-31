@@ -190,6 +190,128 @@ namespace Kernel.MapGrid.Editor.Tests
             Assert.That(success, Is.True, error);
             Assert.That(changed, Is.True);
             Assert.That(text.text, Is.EqualTo(string.Empty));
+            Assert.That(cell.GetComponent<CellData>().IsColliderEnabled, Is.False);
+        }
+
+        [Test]
+        public void TrySetCellText_EnablesColliderWhenTextIsFilled()
+        {
+            var authoring = CreateAuthoring();
+            authoring.GridWidth = 1;
+            authoring.GridHeight = 1;
+
+            var cell = CreateCell("Cell_A", new Vector2Int(0, 0), textComponentCount: 1);
+            var cellData = cell.GetComponent<CellData>();
+            Assert.That(cellData.SetColliderEnabled(false), Is.True);
+
+            authoring.ReplaceCellEntries(new[]
+            {
+                new CellEntry(0, 0, cell),
+            });
+
+            var success = MapGridEditorUtility.TrySetCellText(authoring, new Vector2Int(0, 0), "Filled", out var changed, out var error);
+
+            Assert.That(success, Is.True, error);
+            Assert.That(changed, Is.True);
+            Assert.That(cellData.IsColliderEnabled, Is.True);
+        }
+
+        [Test]
+        public void TrySetCellColliderEnabled_TogglesColliderWithoutChangingText()
+        {
+            var authoring = CreateAuthoring();
+            authoring.GridWidth = 1;
+            authoring.GridHeight = 1;
+
+            var cell = CreateCell("Cell_A", new Vector2Int(0, 0), textComponentCount: 1);
+            var text = cell.GetComponentInChildren<TMP_Text>(true);
+            text.text = "Wall";
+
+            authoring.ReplaceCellEntries(new[]
+            {
+                new CellEntry(0, 0, cell),
+            });
+
+            var disableSuccess = MapGridEditorUtility.TrySetCellColliderEnabled(authoring, new Vector2Int(0, 0), false, out var disableChanged, out var disableError);
+
+            Assert.That(disableSuccess, Is.True, disableError);
+            Assert.That(disableChanged, Is.True);
+            Assert.That(cell.GetComponent<CellData>().IsColliderEnabled, Is.False);
+            Assert.That(text.text, Is.EqualTo("Wall"));
+
+            var enableSuccess = MapGridEditorUtility.TrySetCellColliderEnabled(authoring, new Vector2Int(0, 0), true, out var enableChanged, out var enableError);
+
+            Assert.That(enableSuccess, Is.True, enableError);
+            Assert.That(enableChanged, Is.True);
+            Assert.That(cell.GetComponent<CellData>().IsColliderEnabled, Is.True);
+            Assert.That(text.text, Is.EqualTo("Wall"));
+        }
+
+        [Test]
+        public void TrySetCellColliderEnabled_FailsWhenCellDataIsMissing()
+        {
+            var authoring = CreateAuthoring();
+            authoring.GridWidth = 1;
+            authoring.GridHeight = 1;
+
+            var cell = CreateCell("Cell_A", new Vector2Int(0, 0), textComponentCount: 1, includeCellData: false);
+            authoring.ReplaceCellEntries(new[]
+            {
+                new CellEntry(0, 0, cell),
+            });
+
+            var success = MapGridEditorUtility.TrySetCellColliderEnabled(authoring, new Vector2Int(0, 0), true, out _, out var error);
+
+            Assert.That(success, Is.False);
+            StringAssert.Contains("CellData component", error);
+        }
+
+        [Test]
+        public void TrySetCellColliderEnabled_FailsWhenManagedColliderIsMissing()
+        {
+            var authoring = CreateAuthoring();
+            authoring.GridWidth = 1;
+            authoring.GridHeight = 1;
+
+            var cell = CreateCell("Cell_A", new Vector2Int(0, 0), textComponentCount: 1, includeManagedCollider: false);
+            authoring.ReplaceCellEntries(new[]
+            {
+                new CellEntry(0, 0, cell),
+            });
+
+            var success = MapGridEditorUtility.TrySetCellColliderEnabled(authoring, new Vector2Int(0, 0), true, out _, out var error);
+
+            Assert.That(success, Is.False);
+            StringAssert.Contains("managed Collider", error);
+        }
+
+        [Test]
+        public void DisableEmptyTextColliders_DisablesOnlyCellsWithoutTextContent()
+        {
+            var authoring = CreateAuthoring();
+            authoring.GridWidth = 3;
+            authoring.GridHeight = 1;
+
+            var filledCell = CreateCell("Cell_Filled", new Vector2Int(0, 0), textComponentCount: 1);
+            var emptyCell = CreateCell("Cell_Empty", new Vector2Int(1, 0), textComponentCount: 1);
+            var noTextCell = CreateCell("Cell_NoText", new Vector2Int(2, 0), textComponentCount: 0);
+
+            filledCell.GetComponentInChildren<TMP_Text>(true).text = "Wall";
+            emptyCell.GetComponentInChildren<TMP_Text>(true).text = "   ";
+
+            authoring.ReplaceCellEntries(new[]
+            {
+                new CellEntry(0, 0, filledCell),
+                new CellEntry(1, 0, emptyCell),
+                new CellEntry(2, 0, noTextCell),
+            });
+
+            var success = MapGridEditorUtility.DisableEmptyTextColliders(authoring, out var error);
+
+            Assert.That(success, Is.True, error);
+            Assert.That(filledCell.GetComponent<CellData>().IsColliderEnabled, Is.True);
+            Assert.That(emptyCell.GetComponent<CellData>().IsColliderEnabled, Is.False);
+            Assert.That(noTextCell.GetComponent<CellData>().IsColliderEnabled, Is.False);
         }
 
         [Test]
@@ -243,11 +365,19 @@ namespace Kernel.MapGrid.Editor.Tests
             return gameObject;
         }
 
-        private GameObject CreateCell(string name, Vector2Int coordinates, int textComponentCount)
+        private GameObject CreateCell(
+            string name,
+            Vector2Int coordinates,
+            int textComponentCount,
+            bool includeManagedCollider = true,
+            bool includeCellData = true)
         {
             var cell = CreateGameObject(name);
-            var cellData = cell.AddComponent<CellData>();
-            cellData.SetCoordinates(coordinates);
+            if (includeCellData)
+            {
+                var cellData = cell.AddComponent<CellData>();
+                cellData.SetCoordinates(coordinates);
+            }
 
             for (var i = 0; i < textComponentCount; i++)
             {
@@ -255,6 +385,14 @@ namespace Kernel.MapGrid.Editor.Tests
                 createdObjects.Add(textObject);
                 textObject.transform.SetParent(cell.transform, false);
                 textObject.AddComponent<TextMeshPro>();
+            }
+
+            if (includeManagedCollider)
+            {
+                var colliderObject = new GameObject("Collider");
+                createdObjects.Add(colliderObject);
+                colliderObject.transform.SetParent(cell.transform, false);
+                colliderObject.AddComponent<BoxCollider>();
             }
 
             return cell;

@@ -62,13 +62,15 @@
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Input\PlayerPlaneMovement.cs" />
     <Compile Include="Assets\Scripts\Kernel\StatusSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScrobePolymorph.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCollections.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Input\GlobalTextInputGuard.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\Log.cs" />
-    <Compile Include="Assets\Scripts\Kernel\CellData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Cell\CellData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UI.cs" />
@@ -87,7 +89,9 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\Scribe.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeValue.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogForwarder.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Input\InputActionManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScale.cs" />
+    <Compile Include="Assets\Input\Player Controls.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status.cs" />
   </ItemGroup>
   <ItemGroup>
