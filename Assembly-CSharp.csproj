@@ -49,6 +49,7 @@
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\6000.3.9f1\Editor\Data\Tools\BuildPipeline\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Scripts\Kernel\Status\Status.cs" />
     <Compile Include="Assets\Prefabs\UI\GameUIScreen.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationJsonUtility.cs" />
@@ -62,37 +63,42 @@
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Input\PlayerPlaneMovement.cs" />
-    <Compile Include="Assets\Scripts\Kernel\StatusSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScrobePolymorph.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCollections.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletLifeSettings.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\GlobalTextInputGuard.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\Log.cs" />
     <Compile Include="Assets\Scripts\Kernel\Cell\CellData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UI.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Status\StatusController.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\Events.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\SerializedFieldConverter.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
     <Compile Include="Assets\Scripts\StartUp.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\BaseCharEnemyNorm1.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\CodeC.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\IsaveItem.cs" />
     <Compile Include="Assets\Prefabs\UI\MainMenuUI.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogBootStrap.cs" />
-    <Compile Include="Assets\Scripts\Kernel\StatusController.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\PlayerPlaneMovement.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeBootstrap.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyMovement.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridAuthoring.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\Scribe.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeValue.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogForwarder.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\InputActionManager.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Status\StatusSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScale.cs" />
     <Compile Include="Assets\Input\Player Controls.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Status.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />

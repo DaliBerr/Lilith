@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Kernel.MapGrid;
 using TMPro;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace Kernel.MapGrid.Editor
@@ -39,6 +40,7 @@ namespace Kernel.MapGrid.Editor
     public static class MapGridEditorUtility
     {
         private const string SceneCellEditUndoName = "Scene Cell Edit";
+        private const string SyncGroundWallUndoName = "Sync Ground/Wall From Text";
         private delegate bool UndoableOperation(MapGridAuthoring authoring, int undoGroup, out string error);
 
         public static string BuildChunkRowName(int chunkY) => $"ChunkRow_{chunkY}";
@@ -129,20 +131,8 @@ namespace Kernel.MapGrid.Editor
         {
             error = null;
 
-            if (!TryValidateAuthoring(authoring, requireDefaultPrefab: false, out error))
+            if (!TryValidateIndexedGeneratedCells(authoring, out error))
             {
-                return false;
-            }
-
-            if (!authoring.HasGeneratedContent())
-            {
-                error = "GeneratedContent is missing. Generate the grid before editing cells in Scene view.";
-                return false;
-            }
-
-            if (authoring.IndexedCellCount <= 0)
-            {
-                error = "The map index is empty. Rebuild Index before editing cells in Scene view.";
                 return false;
             }
 
@@ -183,6 +173,17 @@ namespace Kernel.MapGrid.Editor
         public static bool DisableEmptyTextColliders(MapGridAuthoring authoring, out string error)
         {
             return ExecuteUndoable("Disable Empty Text Colliders", authoring, DisableEmptyTextCollidersInternal, out error);
+        }
+
+        /// <summary>
+        /// Scans the indexed map cells and classifies them as Ground or Wall from TMP text content.
+        /// </summary>
+        /// <param name="authoring">Current map authoring component.</param>
+        /// <param name="error">Validation or processing error.</param>
+        /// <returns>True when every indexed cell was synchronized successfully.</returns>
+        public static bool SyncGroundWallFromText(MapGridAuthoring authoring, out string error)
+        {
+            return ExecuteUndoable(SyncGroundWallUndoName, authoring, SyncGroundWallFromTextInternal, out error);
         }
 
         public static bool ReplaceSelectedCell(MapGridAuthoring authoring, GameObject replacementPrefab, GameObject selectedObject, out string error)
@@ -416,6 +417,55 @@ namespace Kernel.MapGrid.Editor
             return coordinates;
         }
 
+        /// <summary>
+        /// Builds the inclusive rectangle defined by two corner coordinates.
+        /// </summary>
+        /// <param name="start">One corner of the rectangle.</param>
+        /// <param name="end">The opposite corner of the rectangle.</param>
+        /// <returns>All coordinates inside the normalized rectangle, ordered by Y then X.</returns>
+        public static List<Vector2Int> BuildRectangleCoordinates(Vector2Int start, Vector2Int end)
+        {
+            var minX = Mathf.Min(start.x, end.x);
+            var maxX = Mathf.Max(start.x, end.x);
+            var minY = Mathf.Min(start.y, end.y);
+            var maxY = Mathf.Max(start.y, end.y);
+            var coordinates = new List<Vector2Int>((maxX - minX + 1) * (maxY - minY + 1));
+
+            for (var y = minY; y <= maxY; y++)
+            {
+                for (var x = minX; x <= maxX; x++)
+                {
+                    coordinates.Add(new Vector2Int(x, y));
+                }
+            }
+
+            return coordinates;
+        }
+
+        private static bool TryValidateIndexedGeneratedCells(MapGridAuthoring authoring, out string error)
+        {
+            error = null;
+
+            if (!TryValidateAuthoring(authoring, requireDefaultPrefab: false, requireCoordinateBinding: false, out error))
+            {
+                return false;
+            }
+
+            if (!authoring.HasGeneratedContent())
+            {
+                error = "GeneratedContent is missing. Generate the grid before running map actions.";
+                return false;
+            }
+
+            if (authoring.IndexedCellCount <= 0)
+            {
+                error = "The map index is empty. Rebuild Index before running map actions.";
+                return false;
+            }
+
+            return true;
+        }
+
         private static bool ExecuteUndoable(string actionName, MapGridAuthoring authoring, UndoableOperation operation, out string error)
         {
             error = null;
@@ -597,7 +647,7 @@ namespace Kernel.MapGrid.Editor
         {
             error = null;
 
-            if (!TryValidateSceneCellEditing(authoring, requireBrushText: false, string.Empty, out error))
+            if (!TryValidateIndexedGeneratedCells(authoring, out error))
             {
                 return false;
             }
@@ -631,6 +681,44 @@ namespace Kernel.MapGrid.Editor
                 {
                     return false;
                 }
+            }
+
+            return true;
+        }
+
+        private static bool SyncGroundWallFromTextInternal(MapGridAuthoring authoring, int undoGroup, out string error)
+        {
+            error = null;
+
+            if (!TryValidateIndexedGeneratedCells(authoring, out error))
+            {
+                return false;
+            }
+
+            if (!TryValidateRequiredTag(MapGridAuthoring.GroundTagName, out error) ||
+                !TryValidateRequiredTag(MapGridAuthoring.WallTagName, out error))
+            {
+                return false;
+            }
+
+            if (!TryCollectGroundWallRefreshTargets(authoring, out var dirtyTargets, out error))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < dirtyTargets.Count; i++)
+            {
+                Undo.RecordObject(dirtyTargets[i], SyncGroundWallUndoName);
+            }
+
+            if (!authoring.TryRefreshGroundWallState(out error))
+            {
+                return false;
+            }
+
+            for (var i = 0; i < dirtyTargets.Count; i++)
+            {
+                UnityEditor.EditorUtility.SetDirty(dirtyTargets[i]);
             }
 
             return true;
@@ -913,12 +1001,84 @@ namespace Kernel.MapGrid.Editor
 
             if (textComponents.Length > 1)
             {
-                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Disable Empty Text Colliders requires zero or one TMP_Text.";
+                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Text-based map actions require zero or one TMP_Text.";
                 return false;
             }
 
             hasTextContent = !string.IsNullOrWhiteSpace(textComponents[0].text);
             return true;
+        }
+
+        private static bool TryCollectGroundWallRefreshTargets(MapGridAuthoring authoring, out List<UnityEngine.Object> dirtyTargets, out string error)
+        {
+            dirtyTargets = new List<UnityEngine.Object>();
+            error = null;
+
+            var seenInstanceIds = new HashSet<int>();
+            var cells = authoring.Cells;
+            for (var i = 0; i < cells.Count; i++)
+            {
+                var entry = cells[i];
+                if (entry == null)
+                {
+                    error = $"Cell entry at index {i} is null.";
+                    return false;
+                }
+
+                if (!TryResolveCellData(authoring, entry.Position, out var cellObject, out var cellData, out error))
+                {
+                    return false;
+                }
+
+                if (!TryResolveManagedCollider(cellObject, cellData, out var managedCollider, out error))
+                {
+                    return false;
+                }
+
+                TryAddUndoTarget(cellObject, dirtyTargets, seenInstanceIds);
+                TryAddUndoTarget(managedCollider, dirtyTargets, seenInstanceIds);
+                TryAddUndoTarget(managedCollider.gameObject, dirtyTargets, seenInstanceIds);
+            }
+
+            return true;
+        }
+
+        private static bool TryValidateRequiredTag(string tagName, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(tagName))
+            {
+                error = "Required tag name is empty.";
+                return false;
+            }
+
+            var tags = InternalEditorUtility.tags;
+            for (var i = 0; i < tags.Length; i++)
+            {
+                if (string.Equals(tags[i], tagName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            error = $"Unity tag '{tagName}' is not defined in Project Settings > Tags and Layers.";
+            return false;
+        }
+
+        private static void TryAddUndoTarget(UnityEngine.Object target, ICollection<UnityEngine.Object> dirtyTargets, ISet<int> seenInstanceIds)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            var instanceId = target.GetInstanceID();
+            if (!seenInstanceIds.Add(instanceId))
+            {
+                return;
+            }
+
+            dirtyTargets.Add(target);
         }
 
         private static bool TryAddCellEntry(

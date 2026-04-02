@@ -111,6 +111,15 @@ namespace Kernel
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Fire"",
+                    ""type"": ""Button"",
+                    ""id"": ""a8645e12-e22b-4db5-acde-0b5c79e4b5c1"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -179,6 +188,17 @@ namespace Kernel
                     ""action"": ""Accelerate"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""79d41978-bca0-4d3e-9e78-845f40fb03b1"",
+                    ""path"": ""<Mouse>/leftButton"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Fire"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -189,6 +209,7 @@ namespace Kernel
             m_Movement = asset.FindActionMap("Movement", throwIfNotFound: true);
             m_Movement_Move = m_Movement.FindAction("Move", throwIfNotFound: true);
             m_Movement_Accelerate = m_Movement.FindAction("Accelerate", throwIfNotFound: true);
+            m_Movement_Fire = m_Movement.FindAction("Fire", throwIfNotFound: true);
         }
 
         ~@PlayerControls()
@@ -271,6 +292,7 @@ namespace Kernel
         private List<IMovementActions> m_MovementActionsCallbackInterfaces = new List<IMovementActions>();
         private readonly InputAction m_Movement_Move;
         private readonly InputAction m_Movement_Accelerate;
+        private readonly InputAction m_Movement_Fire;
         /// <summary>
         /// Provides access to input actions defined in input action map "Movement".
         /// </summary>
@@ -290,6 +312,10 @@ namespace Kernel
             /// Provides access to the underlying input action "Movement/Accelerate".
             /// </summary>
             public InputAction @Accelerate => m_Wrapper.m_Movement_Accelerate;
+            /// <summary>
+            /// Provides access to the underlying input action "Movement/Fire".
+            /// </summary>
+            public InputAction @Fire => m_Wrapper.m_Movement_Fire;
             /// <summary>
             /// Provides access to the underlying input action map instance.
             /// </summary>
@@ -322,6 +348,9 @@ namespace Kernel
                 @Accelerate.started += instance.OnAccelerate;
                 @Accelerate.performed += instance.OnAccelerate;
                 @Accelerate.canceled += instance.OnAccelerate;
+                @Fire.started += instance.OnFire;
+                @Fire.performed += instance.OnFire;
+                @Fire.canceled += instance.OnFire;
             }
 
             /// <summary>
@@ -339,6 +368,9 @@ namespace Kernel
                 @Accelerate.started -= instance.OnAccelerate;
                 @Accelerate.performed -= instance.OnAccelerate;
                 @Accelerate.canceled -= instance.OnAccelerate;
+                @Fire.started -= instance.OnFire;
+                @Fire.performed -= instance.OnFire;
+                @Fire.canceled -= instance.OnFire;
             }
 
             /// <summary>
@@ -393,6 +425,13 @@ namespace Kernel
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnAccelerate(InputAction.CallbackContext context);
+            /// <summary>
+            /// Method invoked when associated input action "Fire" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+            /// </summary>
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+            void OnFire(InputAction.CallbackContext context);
         }
     }
 }

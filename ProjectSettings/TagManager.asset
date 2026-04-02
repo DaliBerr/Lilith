@@ -6,6 +6,10 @@ TagManager:
   tags:
   - BackGround_Object
   - Player_Object
+  - Bullet_Object
+  - Enemy_Object
+  - Ground
+  - Wall
   layers:
   - Default
   - TransparentFX
@@ -15,9 +19,9 @@ TagManager:
   - UI
   - Player
   - Wall
-  - 
-  - 
-  - 
+  - Bullet
+  - Enemy
+  - Ground
   - 
   - 
   - 
@@ -40,8 +44,17 @@ TagManager:
   - 
   - 
   m_SortingLayers:
+  - name: BackGround
+    uniqueID: 4201336131
+    locked: 0
   - name: Default
     uniqueID: 0
+    locked: 0
+  - name: Player
+    uniqueID: 1594189433
+    locked: 0
+  - name: ForeGround
+    uniqueID: 3002866499
     locked: 0
   m_RenderingLayers:
   - Default

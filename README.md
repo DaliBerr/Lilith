@@ -9,7 +9,7 @@
 - 一套轻量游戏状态系统 `Kernel.GameState`
 - 一个业务 UI 示例 `MainMenuScreen`（脚本已写，资源与启动接线尚未完全闭环）
 
-这份 README 的目标不是介绍“未来想做什么”，而是说明当前仓库里已经存在什么、在哪里，以及 agent 应该从哪里开始读。
+这份 README 的目标是说明当前仓库里已经存在什么、在哪里，以及 agent 应该从哪里开始读，同时还有未来的规划。
 
 ## 工程事实
 
@@ -23,6 +23,9 @@
 - 当前仓库里没有 `asmdef/asmref`
   - 运行时代码默认编进 `Assembly-CSharp`
   - Editor 代码默认编进 `Assembly-CSharp-Editor`
+
+## 未来规划
+- 这个项目未来希望发展成一款基于文字构筑的俯视角肉鸽射击游戏。核心思路是把“文字”本身作为战斗系统的一部分，而不是单纯的视觉表现：玩家在战斗中击败敌人后，可以收集掉落的文字词元或预组好的词包，并按照固定语法将它们组合成自己的攻击方式。例如，不同的核心词、行为词和数值词可以共同决定子弹的属性、飞行方式和攻击范围，从而形成明显不同的 build。整体目标是让玩家在每一局中不断通过拾取、替换和重组文字来“写出”自己的战斗风格，并在局外通过永久解锁来逐步扩展可用词元、构筑深度和开局选择，使游戏兼具即时战斗的爽感、组合发现的乐趣，以及肉鸽式的成长循环。
 
 ## 建议阅读顺序
 
@@ -205,11 +208,18 @@
   - 相机 framing 参数
   - `cellEntries`
   - 运行时 `cellLookup`
+  - `TryRefreshGroundWallState()`
+    - 可在运行时或 Editor Action 中扫描已索引 cell；空白或无文字的格子会被标记为 `Ground` 并禁用 Collider，非空白格子会被标记为 `Wall` 并启用 Collider
+  - `TryInitializeCellSurfaceCache() / TryMarkCellSurfaceDirty() / TryRefreshDirtyGroundWallState()`
+    - 支持先做一次全量引用缓存，再在运行时只刷新被标脏的格子，避免每次都重扫整张地图
 - `MapGridCoordinateBinding` 通过反射把“任意组件上的坐标字段/属性/方法”接到网格系统
   - 当前场景配置使用 `CellData`
   - 既支持 `SetCoordinates(int, int)`，也支持 `SetCoordinates(Vector2Int)`
   - 既支持 `GetCoordinates()`，也支持直接读成员
-  - `CellData` 当前还负责缓存并开关 cell 子物体上的主 3D `Collider`
+- `CellData` 当前还负责：
+  - 缓存并开关 cell 子物体上的主 3D `Collider`
+  - 暴露 cell 根节点或指定子节点的移动控制接口
+  - 在绑定了目标 `Transform/Rigidbody` 后，支持位置、平移、速度与停止控制
 - `MapGridCameraUtility` 能按网格尺寸自动框住目标相机
 - Editor 侧已经支持：
   - `Generate Grid`
@@ -219,9 +229,14 @@
   - `Frame Camera`
   - `Disable Empty Text Colliders`
     - 遍历所有已索引 cell；若没有 `TMP_Text` 或文字为空白，则禁用该 cell 的 Collider
+  - `Sync Ground/Wall From Text`
+    - 遍历所有已索引 cell；若没有 `TMP_Text` 或文字为空白，则将 cell 根节点与受控 Collider 物体标记为 `Ground`，并禁用 Collider
+    - 若文字非空白，则将 cell 根节点与受控 Collider 物体标记为 `Wall`，并启用 Collider
   - `Replace Selected Cell`
   - `Scene Cell Edit`
-    - 在 Scene 视图里左键拖刷，批量修改生成 cell 的文本或碰撞状态
+    - 在 Scene 视图里支持两种选择模式：
+      - `Paint`：左键拖刷路径上的格子
+      - `Rectangle`：点击一个起点后拖到另一个点，松开鼠标时对包围矩形内所有格子应用操作
     - `FillText`：把刷过的格子文字改成当前输入字符串，并启用 Collider
     - `EraseText`：把刷过的格子文字清空为 `string.Empty`，并禁用 Collider
     - `SetColliderState`：按当前 `Enable Collider` 选项，批量启用或禁用 Collider
@@ -231,7 +246,24 @@
   - 网格中心计算
   - 索引查询
   - 重复坐标/越界坐标报错
-  - Scene Cell Edit 的坐标映射、路径插值、唯一 `TMP_Text` 校验与 Collider 联动
+  - Scene Cell Edit 的路径插值、矩形框选坐标、唯一 `TMP_Text` 校验与 Collider 联动
+
+### 4. 基础战斗交互
+
+关键文件：
+
+- [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)
+- [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
+- [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
+- [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
+
+当前能力：
+
+- `PlayerPlaneMovement` 负责实例化并初始化 `CharBullet`
+- `CharBullet` 持有独立伤害值；命中带有 `Enemey` 标签的对象时，会尝试从碰撞体父级解析 `Enemy` 组件并调用统一受伤接口
+- `CharBullet` 也兼容正确拼写的 `Enemy` 标签，方便已有场景对象逐步收敛
+- `Enemy` 统一暴露 `MaxHealth`、`CurrentHealth`、`IsDead` 和 `TryApplyDamage`
+- `BaseCharEnemyNorm1` 当前维护运行时生命值，并在生命归零后销毁自身
 
 这是当前仓库里完成度最高、闭环最好的一组逻辑。
 
@@ -361,7 +393,7 @@
 关键文件：
 
 - [`Assets/Scripts/Kernel/Input/InputActionManager.cs`](Assets/Scripts/Kernel/Input/InputActionManager.cs)
-- [`Assets/Scripts/Kernel/Input/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Input/PlayerPlaneMovement.cs)
+- [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)
 - [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
 
 当前能力：
@@ -371,12 +403,83 @@
 - 当前 `Player Controls` 已定义 `Movement/MovVector2`
   - 默认使用 `W/A/S/D` 输出 `Vector2`
   - `Accelerate` 当前绑定为 `Left Shift`
+  - `Fire` 当前绑定为鼠标左键，并按住连续发射
 - `PlayerPlaneMovement` 会把该输入映射到世界坐标 `(x, 0, z)`
   - 挂有动态 `Rigidbody` 时直接写入刚体 `velocity`
   - 挂有 `isKinematic = true` 的 `Rigidbody` 时走 `MovePosition`
   - 没有 `Rigidbody` 时直接改 `transform.position` 的 `XZ`
   - `transform.position.y` 保持不变
   - 按住加速键时，移动速度会乘以 `1.5`
+  - 同时会基于主相机（或显式指定相机）把鼠标屏幕坐标投影到角色所在水平面，并让角色沿 Y 轴朝向该点
+  - `rotationSpeed <= 0` 时会立即转向，否则按给定角速度平滑转向
+  - 按住鼠标左键时，会按 `fireInterval` 连续向当前点击地面方向发射 `CharBullet`
+  - 子弹瞄准优先使用真实地面/格子碰撞体命中点；命不中时回退到玩家高度平面
+
+### 10. 文字子弹运行时组件
+
+关键文件：
+
+- [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
+- [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
+
+当前能力：
+
+- `CharBullet` 面向“文字即元素”的运行时子弹表达，默认使用 `TMP_Text` 作为字形承载
+- 默认优先依赖 Inspector 手动拖拽 `glyphText / movementTarget / sizeTarget / movementRigidbody`
+  - 如果未手动指定，只会在当前 prefab 层级内做轻量缓存，不会自动新建 GameObject
+- 提供文字与尺寸控制接口
+  - `TrySetText`
+  - `TrySetFontSize`
+  - `TrySetBaseLocalScale`
+  - `TrySetBaseUniformScale`
+  - `TrySetScaleMultiplier`
+- 提供运动控制接口
+  - `TrySetDirection`
+  - `TrySetSpeed`
+  - `TrySetDirectionAndSpeed`
+  - `TrySetVelocity`
+  - `MoveStep`
+  - `TrySetWorldPosition`
+  - `TrySetLocalPosition`
+  - `TryTranslate`
+  - `TryStopMovement`
+- 提供 Hybrid 生命周期接口
+  - `InitializeShot`
+  - `ApplyLifeCost`
+  - `Expire`
+- 生命周期同时支持三种回收条件
+  - 超过最大存活时间
+  - 超过最大飞行距离
+  - 命中后扣减生命直至归零
+- 当前默认命中配置为一次命中耗尽全部生命，但保留 `impactLifeCost` 用于后续穿透法术
+- 可在 `Transform` 直驱、`Rigidbody.isKinematic` 和动态 `Rigidbody` 三种模式下复用
+- 支持 `World / Self` 两种移动空间，可用于后续拼装法术、轨迹和表现层逻辑
+- `CharBullet.prefab` 当前使用球形 Trigger Collider 作为命中体，并会随 `scaleMultiplier` 同步缩放判定半径
+
+### 11. 敌人生成与追踪
+
+关键文件：
+
+- [`Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs`](Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs)
+- [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
+- [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
+- [`Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs)
+- [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
+
+当前能力：
+
+- `EnemyGenerator` 可按随机区间 `spawnIntervalRange` 持续刷新敌人
+- 刷怪位置以玩家为圆心，在 XZ 平面上按 `spawnDistance` 固定半径随机采样
+- 每次刷怪会校验候选点是否落在 tag 为 `Ground` 的格子上；若命中非地面或越界区域，会在 `maxGroundSpawnRolls` 次数内继续重 roll
+- 生成器支持手动指定 `targetPlayer`，未指定时会自动查找场景中的 `PlayerPlaneMovement`
+- 生成器支持手动指定 `targetMapGrid`，未指定时会自动查找场景中的 `MapGridAuthoring`
+- `EnemyGenerator` 期望 `CharEnemy.prefab` 已预挂 `CharEnemyMovement`，生成后只负责注入当前玩家目标
+- `Enemy` 只定义敌人数据契约；当前由派生类对外提供 `moveSpeed / rotationSpeed / stoppingDistance`
+- `BaseCharEnemyNorm1` 是当前默认的基础文字敌人类型，自身持有并校验默认移动参数与基础战斗参数
+- `CharEnemyMovement` 会在 XZ 平面持续朝向并追踪玩家，并从同物体上的 `Enemy` 组件读取移动参数
+- 同时兼容 `Transform` 直驱、`Rigidbody.isKinematic` 和动态 `Rigidbody` 三种移动模式
+- 仅当 `Rigidbody` 挂在敌人自身根节点时才使用刚体驱动；若 prefab 误绑到子刚体，会自动回退到 `Transform` 驱动
+- 进入 `stoppingDistance` 后会停止继续贴近，避免敌人持续抖动穿模
 
 ## 当前未闭环或需要特别注意的点
 
@@ -405,11 +508,13 @@
 - 改游戏状态：[`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) + [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
 - 加新 UI Screen：[`Assets/Prefabs/UI`](Assets/Prefabs/UI) + [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
 - 改网格生成、格子替换或 Scene Cell Edit：[`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs) + [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
-- 改坐标承载组件：[`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs) + [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)
+- 改坐标承载组件或 cell 位移控制：[`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs) + [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)
 - 接存档：[`Assets/Scripts/Vocalith/Scribe`](Assets/Scripts/Vocalith/Scribe) + [`Assets/Scripts/Kernel/StatusSaveData.cs`](Assets/Scripts/Kernel/StatusSaveData.cs)
 - 改本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
 - 查日志：[`Assets/Scripts/Vocalith/Log`](Assets/Scripts/Vocalith/Log)
-- 改玩家输入或平面移动：[`Assets/Scripts/Kernel/Input`](Assets/Scripts/Kernel/Input) + [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
+- 改玩家输入或平面移动：[`Assets/Scripts/Kernel/Input`](Assets/Scripts/Kernel/Input) + [`Assets/Scripts/Kernel/Player`](Assets/Scripts/Kernel/Player) + [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
+- 改敌人生成、敌人数据或追踪：[`Assets/Scripts/Kernel/Enemy`](Assets/Scripts/Kernel/Enemy) + [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
+- 改文字子弹或文字法术表现：[`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs) + [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
 
 ## 最后总结
 

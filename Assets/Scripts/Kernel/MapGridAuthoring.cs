@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 namespace Kernel.MapGrid
@@ -27,7 +28,29 @@ namespace Kernel.MapGrid
     [DisallowMultipleComponent]
     public sealed class MapGridAuthoring : MonoBehaviour
     {
+        private sealed class CellSurfaceRuntimeCacheEntry
+        {
+            public CellSurfaceRuntimeCacheEntry(
+                GameObject cellObject,
+                CellData cellData,
+                Collider managedCollider,
+                TMP_Text textComponent)
+            {
+                CellObject = cellObject;
+                CellData = cellData;
+                ManagedCollider = managedCollider;
+                TextComponent = textComponent;
+            }
+
+            public GameObject CellObject { get; }
+            public CellData CellData { get; }
+            public Collider ManagedCollider { get; set; }
+            public TMP_Text TextComponent { get; }
+        }
+
         public const string GeneratedContentObjectName = "GeneratedContent";
+        public const string GroundTagName = "Ground";
+        public const string WallTagName = "Wall";
 
         [Header("Grid")]
         [SerializeField] private int gridWidth = 1;
@@ -53,6 +76,10 @@ namespace Kernel.MapGrid
         [SerializeField] private List<CellEntry> cellEntries = new();
 
         private readonly Dictionary<Vector2Int, GameObject> cellLookup = new();
+        private readonly Dictionary<Vector2Int, CellSurfaceRuntimeCacheEntry> cellSurfaceCache = new();
+        private readonly HashSet<Vector2Int> dirtyCellSurfaceCoordinates = new();
+        private readonly List<Vector2Int> dirtyCellSurfaceBuffer = new();
+        private bool isCellSurfaceCacheInitialized;
 
         public int GridWidth
         {
@@ -123,10 +150,14 @@ namespace Kernel.MapGrid
         public IReadOnlyList<CellEntry> Cells => cellEntries;
         public int IndexedCellCount => cellEntries?.Count ?? 0;
         public int ExpectedCellCount => gridWidth * gridHeight;
+        public bool IsCellSurfaceCacheInitialized => isCellSurfaceCacheInitialized;
+        public int CellSurfaceCacheCount => cellSurfaceCache.Count;
+        public int DirtyCellSurfaceCount => dirtyCellSurfaceCoordinates.Count;
 
         private void OnEnable()
         {
             TryRebuildLookupFromEntries(out _);
+            InvalidateCellSurfaceCache();
         }
 
         private void OnValidate()
@@ -139,6 +170,7 @@ namespace Kernel.MapGrid
             cellEntries ??= new List<CellEntry>();
             cameraPadding = Mathf.Max(0f, cameraPadding);
             cameraDistance = Mathf.Max(0.01f, cameraDistance);
+            InvalidateCellSurfaceCache();
 
             if (autoFrameCamera)
             {
@@ -354,10 +386,188 @@ namespace Kernel.MapGrid
             return generatedRoot != null && generatedRoot.childCount > 0;
         }
 
+        /// <summary>
+        /// Builds the runtime cache used by incremental Ground and Wall surface refreshes.
+        /// </summary>
+        /// <param name="error">Validation or cache initialization error.</param>
+        /// <returns>True when every indexed cell was cached successfully.</returns>
+        public bool TryInitializeCellSurfaceCache(out string error)
+        {
+            error = null;
+
+            if (!TryRebuildLookupFromEntries(out error))
+            {
+                InvalidateCellSurfaceCache();
+                return false;
+            }
+
+            if (cellEntries == null || cellEntries.Count == 0)
+            {
+                InvalidateCellSurfaceCache();
+                error = "The map index is empty. Rebuild Index or generate the grid before initializing the cell surface cache.";
+                return false;
+            }
+
+            cellSurfaceCache.Clear();
+            dirtyCellSurfaceCoordinates.Clear();
+            dirtyCellSurfaceBuffer.Clear();
+
+            for (var i = 0; i < cellEntries.Count; i++)
+            {
+                var entry = cellEntries[i];
+                if (entry == null)
+                {
+                    InvalidateCellSurfaceCache();
+                    error = $"Cell entry at index {i} is null.";
+                    return false;
+                }
+
+                if (!TryBuildCellSurfaceRuntimeCache(entry.Position, entry.CellObject, out var cacheEntry, out error))
+                {
+                    InvalidateCellSurfaceCache();
+                    return false;
+                }
+
+                cellSurfaceCache[entry.Position] = cacheEntry;
+            }
+
+            isCellSurfaceCacheInitialized = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Marks one cell as dirty so the next incremental refresh re-evaluates its Ground or Wall state.
+        /// </summary>
+        /// <param name="coordinates">Grid coordinates of the target cell.</param>
+        /// <param name="error">Validation or lookup error.</param>
+        /// <returns>True when the target cell was successfully marked dirty.</returns>
+        public bool TryMarkCellSurfaceDirty(Vector2Int coordinates, out string error)
+        {
+            error = null;
+
+            if (!TryEnsureCellSurfaceCacheInitialized(out error))
+            {
+                return false;
+            }
+
+            if (!cellSurfaceCache.ContainsKey(coordinates))
+            {
+                error = $"No cached cell surface exists at ({coordinates.x}, {coordinates.y}).";
+                return false;
+            }
+
+            dirtyCellSurfaceCoordinates.Add(coordinates);
+            return true;
+        }
+
+        /// <summary>
+        /// Marks one cell as dirty so the next incremental refresh re-evaluates its Ground or Wall state.
+        /// </summary>
+        /// <param name="x">Grid X coordinate of the target cell.</param>
+        /// <param name="y">Grid Y coordinate of the target cell.</param>
+        /// <param name="error">Validation or lookup error.</param>
+        /// <returns>True when the target cell was successfully marked dirty.</returns>
+        public bool TryMarkCellSurfaceDirty(int x, int y, out string error)
+        {
+            return TryMarkCellSurfaceDirty(new Vector2Int(x, y), out error);
+        }
+
+        /// <summary>
+        /// Marks every cached cell as dirty so the next refresh reapplies Ground or Wall state to the full map.
+        /// </summary>
+        /// <param name="error">Validation or cache initialization error.</param>
+        /// <returns>True when the dirty set now contains every indexed cell.</returns>
+        public bool TryMarkAllCellSurfacesDirty(out string error)
+        {
+            error = null;
+
+            if (!TryEnsureCellSurfaceCacheInitialized(out error))
+            {
+                return false;
+            }
+
+            dirtyCellSurfaceCoordinates.Clear();
+            foreach (var coordinates in cellSurfaceCache.Keys)
+            {
+                dirtyCellSurfaceCoordinates.Add(coordinates);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Refreshes only the cells currently marked dirty, using cached references instead of rescanning the whole map.
+        /// </summary>
+        /// <param name="refreshedCellCount">Number of dirty cells that actually changed tag or collider state.</param>
+        /// <param name="error">Validation or refresh error.</param>
+        /// <returns>True when every dirty cell was processed successfully.</returns>
+        public bool TryRefreshDirtyGroundWallState(out int refreshedCellCount, out string error)
+        {
+            refreshedCellCount = 0;
+            error = null;
+
+            if (!TryEnsureCellSurfaceCacheInitialized(out error))
+            {
+                return false;
+            }
+
+            if (dirtyCellSurfaceCoordinates.Count <= 0)
+            {
+                return true;
+            }
+
+            dirtyCellSurfaceBuffer.Clear();
+            foreach (var coordinates in dirtyCellSurfaceCoordinates)
+            {
+                dirtyCellSurfaceBuffer.Add(coordinates);
+            }
+
+            dirtyCellSurfaceCoordinates.Clear();
+            for (var i = 0; i < dirtyCellSurfaceBuffer.Count; i++)
+            {
+                var coordinates = dirtyCellSurfaceBuffer[i];
+                if (!TryRefreshCachedCellSurfaceState(coordinates, out var changed, out error))
+                {
+                    dirtyCellSurfaceCoordinates.Add(coordinates);
+                    for (var remaining = i + 1; remaining < dirtyCellSurfaceBuffer.Count; remaining++)
+                    {
+                        dirtyCellSurfaceCoordinates.Add(dirtyCellSurfaceBuffer[remaining]);
+                    }
+
+                    dirtyCellSurfaceBuffer.Clear();
+                    return false;
+                }
+
+                if (changed)
+                {
+                    refreshedCellCount++;
+                }
+            }
+
+            dirtyCellSurfaceBuffer.Clear();
+            return true;
+        }
+
+        /// <summary>
+        /// Refreshes the indexed map cells so empty text cells become Ground and non-empty text cells become Wall.
+        /// </summary>
+        /// <param name="error">Validation or processing error.</param>
+        /// <returns>True when every indexed cell was refreshed successfully.</returns>
+        public bool TryRefreshGroundWallState(out string error)
+        {
+            if (!TryMarkAllCellSurfacesDirty(out error))
+            {
+                return false;
+            }
+
+            return TryRefreshDirtyGroundWallState(out _, out error);
+        }
+
         public void ReplaceCellEntries(IList<CellEntry> entries)
         {
             cellEntries = CloneEntries(entries);
             TryRebuildLookupFromEntries(out _);
+            InvalidateCellSurfaceCache();
         }
 
         public void ClearCellEntries()
@@ -365,6 +575,7 @@ namespace Kernel.MapGrid
             cellEntries ??= new List<CellEntry>();
             cellEntries.Clear();
             cellLookup.Clear();
+            InvalidateCellSurfaceCache();
         }
 
         public bool TryRebuildLookupFromEntries(out string error)
@@ -380,6 +591,7 @@ namespace Kernel.MapGrid
                 {
                     error = $"Cell entry at index {i} is null.";
                     cellLookup.Clear();
+                    InvalidateCellSurfaceCache();
                     return false;
                 }
 
@@ -387,6 +599,7 @@ namespace Kernel.MapGrid
                 {
                     error = $"Cell entry ({entry.X}, {entry.Y}) is missing its GameObject reference.";
                     cellLookup.Clear();
+                    InvalidateCellSurfaceCache();
                     return false;
                 }
 
@@ -394,6 +607,7 @@ namespace Kernel.MapGrid
                 {
                     error = $"Cell entry ({entry.X}, {entry.Y}) is out of grid bounds.";
                     cellLookup.Clear();
+                    InvalidateCellSurfaceCache();
                     return false;
                 }
 
@@ -401,6 +615,7 @@ namespace Kernel.MapGrid
                 {
                     error = $"Duplicate cell entry detected at ({entry.X}, {entry.Y}).";
                     cellLookup.Clear();
+                    InvalidateCellSurfaceCache();
                     return false;
                 }
 
@@ -408,6 +623,247 @@ namespace Kernel.MapGrid
             }
 
             return true;
+        }
+
+        private bool TryEnsureCellSurfaceCacheInitialized(out string error)
+        {
+            if (isCellSurfaceCacheInitialized)
+            {
+                error = null;
+                return true;
+            }
+
+            return TryInitializeCellSurfaceCache(out error);
+        }
+
+        private bool TryBuildCellSurfaceRuntimeCache(
+            Vector2Int coordinates,
+            GameObject cellObject,
+            out CellSurfaceRuntimeCacheEntry cacheEntry,
+            out string error)
+        {
+            cacheEntry = null;
+            error = null;
+
+            if (cellObject == null)
+            {
+                error = $"No indexed cell exists at ({coordinates.x}, {coordinates.y}).";
+                return false;
+            }
+
+            if (!TryResolveCellSurfaceTargets(cellObject, out var cellData, out var managedCollider, out error))
+            {
+                return false;
+            }
+
+            if (!TryResolveSingleCellTextComponent(cellObject, out var textComponent, out error))
+            {
+                return false;
+            }
+
+            cacheEntry = new CellSurfaceRuntimeCacheEntry(cellObject, cellData, managedCollider, textComponent);
+            return true;
+        }
+
+        private bool TryGetCachedCellSurface(
+            Vector2Int coordinates,
+            out CellSurfaceRuntimeCacheEntry cacheEntry,
+            out string error)
+        {
+            cacheEntry = null;
+            error = null;
+
+            if (!TryGetCell(coordinates, out var cellObject) || cellObject == null)
+            {
+                error = $"No indexed cell exists at ({coordinates.x}, {coordinates.y}). Rebuild Index or Rebuild Grid before refreshing cached cell surfaces.";
+                return false;
+            }
+
+            if (cellSurfaceCache.TryGetValue(coordinates, out cacheEntry) &&
+                IsCellSurfaceRuntimeCacheEntryValid(cellObject, cacheEntry))
+            {
+                return true;
+            }
+
+            if (!TryBuildCellSurfaceRuntimeCache(coordinates, cellObject, out cacheEntry, out error))
+            {
+                return false;
+            }
+
+            cellSurfaceCache[coordinates] = cacheEntry;
+            return true;
+        }
+
+        private bool TryRefreshCachedCellSurfaceState(Vector2Int coordinates, out bool changed, out string error)
+        {
+            changed = false;
+            error = null;
+
+            if (!TryGetCachedCellSurface(coordinates, out var cacheEntry, out error))
+            {
+                return false;
+            }
+
+            GetExpectedSurfaceState(cacheEntry.TextComponent, out var targetTag, out var shouldEnableCollider);
+            if (IsSurfaceStateCurrent(cacheEntry, targetTag, shouldEnableCollider))
+            {
+                return true;
+            }
+
+            if (!TrySetGameObjectTag(cacheEntry.CellObject, targetTag, out error))
+            {
+                return false;
+            }
+
+            var colliderObject = cacheEntry.ManagedCollider.gameObject;
+            if (colliderObject != cacheEntry.CellObject && !TrySetGameObjectTag(colliderObject, targetTag, out error))
+            {
+                return false;
+            }
+
+            if (cacheEntry.ManagedCollider.enabled != shouldEnableCollider && !cacheEntry.CellData.SetColliderEnabled(shouldEnableCollider))
+            {
+                error = $"Failed to update the managed Collider on '{cacheEntry.CellObject.name}'.";
+                return false;
+            }
+
+            cacheEntry.ManagedCollider = cacheEntry.CellData.ManagedCollider;
+            changed = true;
+            return true;
+        }
+
+        private static bool TryResolveCellSurfaceTargets(GameObject cellObject, out CellData cellData, out Collider managedCollider, out string error)
+        {
+            cellData = null;
+            managedCollider = null;
+            error = null;
+
+            if (cellObject == null)
+            {
+                error = "Cell object is null.";
+                return false;
+            }
+
+            if (!cellObject.TryGetComponent(out cellData) || cellData == null)
+            {
+                error = $"Cell '{cellObject.name}' does not contain a CellData component.";
+                return false;
+            }
+
+            if (!cellData.TryCacheManagedCollider())
+            {
+                error = $"Cell '{cellObject.name}' does not have a managed Collider configured on its CellData component.";
+                return false;
+            }
+
+            managedCollider = cellData.ManagedCollider;
+            if (managedCollider == null)
+            {
+                error = $"Cell '{cellObject.name}' does not have a managed Collider configured on its CellData component.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryResolveSingleCellTextComponent(GameObject cellObject, out TMP_Text textComponent, out string error)
+        {
+            textComponent = null;
+            error = null;
+
+            if (cellObject == null)
+            {
+                error = "Cell object is null.";
+                return false;
+            }
+
+            var textComponents = cellObject.GetComponentsInChildren<TMP_Text>(includeInactive: true);
+            if (textComponents == null || textComponents.Length == 0)
+            {
+                return true;
+            }
+
+            if (textComponents.Length > 1)
+            {
+                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Ground refresh requires zero or one TMP_Text.";
+                return false;
+            }
+
+            textComponent = textComponents[0];
+            return true;
+        }
+
+        private static void GetExpectedSurfaceState(TMP_Text textComponent, out string targetTag, out bool shouldEnableCollider)
+        {
+            shouldEnableCollider = textComponent != null && !string.IsNullOrWhiteSpace(textComponent.text);
+            targetTag = shouldEnableCollider ? WallTagName : GroundTagName;
+        }
+
+        private static bool IsSurfaceStateCurrent(CellSurfaceRuntimeCacheEntry cacheEntry, string targetTag, bool shouldEnableCollider)
+        {
+            if (cacheEntry == null || cacheEntry.CellObject == null || cacheEntry.ManagedCollider == null)
+            {
+                return false;
+            }
+
+            var colliderObject = cacheEntry.ManagedCollider.gameObject;
+            var isCellTagCurrent = string.Equals(cacheEntry.CellObject.tag, targetTag, StringComparison.Ordinal);
+            var isColliderTagCurrent = colliderObject == cacheEntry.CellObject ||
+                                       string.Equals(colliderObject.tag, targetTag, StringComparison.Ordinal);
+            var isColliderStateCurrent = cacheEntry.ManagedCollider.enabled == shouldEnableCollider;
+            return isCellTagCurrent && isColliderTagCurrent && isColliderStateCurrent;
+        }
+
+        private static bool IsCellSurfaceRuntimeCacheEntryValid(GameObject cellObject, CellSurfaceRuntimeCacheEntry cacheEntry)
+        {
+            return cacheEntry != null &&
+                   cacheEntry.CellObject == cellObject &&
+                   cacheEntry.CellData != null &&
+                   cacheEntry.CellData.gameObject == cellObject &&
+                   cacheEntry.ManagedCollider != null &&
+                   IsTransformInsideCell(cacheEntry.ManagedCollider.transform, cellObject.transform) &&
+                   (cacheEntry.TextComponent == null || IsTransformInsideCell(cacheEntry.TextComponent.transform, cellObject.transform));
+        }
+
+        private static bool TrySetGameObjectTag(GameObject target, string tagName, out string error)
+        {
+            error = null;
+
+            if (target == null)
+            {
+                error = "Target GameObject is null.";
+                return false;
+            }
+
+            if (target.tag == tagName)
+            {
+                return true;
+            }
+
+            try
+            {
+                target.tag = tagName;
+            }
+            catch (UnityException exception)
+            {
+                error = exception.Message;
+                return false;
+            }
+
+            return true;
+        }
+
+        private void InvalidateCellSurfaceCache()
+        {
+            isCellSurfaceCacheInitialized = false;
+            cellSurfaceCache.Clear();
+            dirtyCellSurfaceCoordinates.Clear();
+            dirtyCellSurfaceBuffer.Clear();
+        }
+
+        private static bool IsTransformInsideCell(Transform candidate, Transform cellRoot)
+        {
+            return candidate != null && cellRoot != null && (candidate == cellRoot || candidate.IsChildOf(cellRoot));
         }
 
         private static List<CellEntry> CloneEntries(IList<CellEntry> entries)

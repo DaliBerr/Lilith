@@ -12,6 +12,12 @@ namespace Kernel.MapGrid.Editor
         SetColliderState,
     }
 
+    internal enum MapGridSceneCellSelectionMode
+    {
+        Paint,
+        Rectangle,
+    }
+
     [CustomEditor(typeof(MapGridAuthoring))]
     public sealed class MapGridAuthoringEditor : UnityEditor.Editor
     {
@@ -24,6 +30,7 @@ namespace Kernel.MapGrid.Editor
 
         private GameObject replacementPrefab;
         private bool sceneCellEditEnabled;
+        private MapGridSceneCellSelectionMode sceneCellSelectionMode = MapGridSceneCellSelectionMode.Paint;
         private MapGridCellBrushMode cellBrushMode = MapGridCellBrushMode.FillText;
         private string brushText = string.Empty;
         private bool colliderBrushEnabled = true;
@@ -32,6 +39,8 @@ namespace Kernel.MapGrid.Editor
         private bool hasHoveredCoordinate;
         private Vector2Int hoveredCoordinate;
         private Vector2Int? lastStrokeCoordinate;
+        private Vector2Int? rectangleAnchorCoordinate;
+        private Vector2Int? rectanglePreviewCoordinate;
         private string sceneCellEditMessage;
         private MessageType sceneCellEditMessageType = MessageType.Info;
 
@@ -64,7 +73,7 @@ namespace Kernel.MapGrid.Editor
 
         private void OnDisable()
         {
-            FinishTextStroke(commitChanges: true);
+            FinishSceneCellEdit(commitChanges: true);
             ResetHoverState();
         }
 
@@ -92,7 +101,7 @@ namespace Kernel.MapGrid.Editor
             var authoring = (MapGridAuthoring)target;
             if (!sceneCellEditEnabled)
             {
-                FinishTextStroke(commitChanges: true);
+                FinishSceneCellEdit(commitChanges: true);
                 ResetHoverState();
                 return;
             }
@@ -101,7 +110,7 @@ namespace Kernel.MapGrid.Editor
             if (!MapGridEditorUtility.TryValidateSceneCellEditing(authoring, requiresBrushText, brushText, out var error))
             {
                 SetSceneCellEditMessage(error, MessageType.Warning);
-                FinishTextStroke(commitChanges: true);
+                FinishSceneCellEdit(commitChanges: true);
                 ResetHoverState();
                 return;
             }
@@ -182,6 +191,11 @@ namespace Kernel.MapGrid.Editor
                     ExecuteAction((out string error) => MapGridEditorUtility.DisableEmptyTextColliders(authoring, out error));
                 }
             }
+
+            if (GUILayout.Button("Sync Ground/Wall From Text"))
+            {
+                ExecuteAction((out string error) => MapGridEditorUtility.SyncGroundWallFromText(authoring, out error));
+            }
         }
 
         private void DrawSceneCellEditSection(MapGridAuthoring authoring)
@@ -190,7 +204,8 @@ namespace Kernel.MapGrid.Editor
 
             EditorGUI.BeginChangeCheck();
             sceneCellEditEnabled = EditorGUILayout.Toggle("Enable Scene Edit", sceneCellEditEnabled);
-            cellBrushMode = (MapGridCellBrushMode)EditorGUILayout.EnumPopup("Mode", cellBrushMode);
+            sceneCellSelectionMode = (MapGridSceneCellSelectionMode)EditorGUILayout.EnumPopup("Selection Mode", sceneCellSelectionMode);
+            cellBrushMode = (MapGridCellBrushMode)EditorGUILayout.EnumPopup("Operation", cellBrushMode);
             if (cellBrushMode == MapGridCellBrushMode.FillText)
             {
                 brushText = EditorGUILayout.TextField("Brush Text", brushText);
@@ -202,12 +217,13 @@ namespace Kernel.MapGrid.Editor
 
             if (EditorGUI.EndChangeCheck())
             {
+                FinishSceneCellEdit(commitChanges: true);
                 SceneView.RepaintAll();
                 Repaint();
             }
 
             EditorGUILayout.HelpBox(
-                "With MapRoot selected, left-drag in Scene view to batch edit generated cells. Alt / Right Mouse / Middle Mouse keep Scene navigation.",
+                "With MapRoot selected, use Paint to apply while left-dragging, or Rectangle to drag out a boxed area and apply it on mouse release. Alt / Right Mouse / Middle Mouse keep Scene navigation.",
                 MessageType.Info);
 
             var requiresBrushText = cellBrushMode == MapGridCellBrushMode.FillText;
@@ -265,17 +281,36 @@ namespace Kernel.MapGrid.Editor
                 return;
             }
 
-            if (currentEvent.type == EventType.Repaint && hasHoveredCoordinate)
+            if (currentEvent.type == EventType.Repaint)
             {
-                DrawHoveredCell(authoring, hoveredCoordinate, GetPreviewColor());
+                DrawSceneCellEditPreview(authoring);
                 return;
             }
 
-            if (currentEvent.alt || currentEvent.button != 0)
+            if (currentEvent.alt)
             {
                 return;
             }
 
+            if ((currentEvent.type == EventType.MouseDown ||
+                 currentEvent.type == EventType.MouseDrag ||
+                 currentEvent.type == EventType.MouseUp) &&
+                currentEvent.button != 0)
+            {
+                return;
+            }
+
+            if (sceneCellSelectionMode == MapGridSceneCellSelectionMode.Paint)
+            {
+                HandlePaintSceneCellEditing(authoring, currentEvent);
+                return;
+            }
+
+            HandleRectangleSceneCellEditing(authoring, currentEvent);
+        }
+
+        private void HandlePaintSceneCellEditing(MapGridAuthoring authoring, Event currentEvent)
+        {
             switch (currentEvent.type)
             {
                 case EventType.MouseDown:
@@ -284,7 +319,7 @@ namespace Kernel.MapGrid.Editor
                         return;
                     }
 
-                    BeginTextStroke();
+                    BeginSceneCellEdit();
                     if (!ApplyStrokeToCoordinate(authoring, hoveredCoordinate))
                     {
                         currentEvent.Use();
@@ -313,7 +348,7 @@ namespace Kernel.MapGrid.Editor
                         return;
                     }
 
-                    FinishTextStroke(commitChanges: true);
+                    FinishSceneCellEdit(commitChanges: true);
                     currentEvent.Use();
                     break;
                 case EventType.MouseMove:
@@ -322,7 +357,64 @@ namespace Kernel.MapGrid.Editor
             }
         }
 
-        private void BeginTextStroke()
+        private void HandleRectangleSceneCellEditing(MapGridAuthoring authoring, Event currentEvent)
+        {
+            switch (currentEvent.type)
+            {
+                case EventType.MouseDown:
+                    if (!hasHoveredCoordinate)
+                    {
+                        return;
+                    }
+
+                    BeginSceneCellEdit();
+                    rectangleAnchorCoordinate = hoveredCoordinate;
+                    rectanglePreviewCoordinate = hoveredCoordinate;
+                    SceneView.RepaintAll();
+                    currentEvent.Use();
+                    break;
+                case EventType.MouseDrag:
+                    if (!isStrokeActive)
+                    {
+                        return;
+                    }
+
+                    if (hasHoveredCoordinate &&
+                        (!rectanglePreviewCoordinate.HasValue || rectanglePreviewCoordinate.Value != hoveredCoordinate))
+                    {
+                        rectanglePreviewCoordinate = hoveredCoordinate;
+                        SceneView.RepaintAll();
+                    }
+
+                    currentEvent.Use();
+                    break;
+                case EventType.MouseUp:
+                    if (!isStrokeActive)
+                    {
+                        return;
+                    }
+
+                    if (hasHoveredCoordinate)
+                    {
+                        rectanglePreviewCoordinate = hoveredCoordinate;
+                    }
+
+                    if (!ApplyRectangleSelection(authoring))
+                    {
+                        currentEvent.Use();
+                        return;
+                    }
+
+                    FinishSceneCellEdit(commitChanges: true);
+                    currentEvent.Use();
+                    break;
+                case EventType.MouseMove:
+                    SceneView.RepaintAll();
+                    break;
+            }
+        }
+
+        private void BeginSceneCellEdit()
         {
             if (isStrokeActive)
             {
@@ -334,14 +426,16 @@ namespace Kernel.MapGrid.Editor
             Undo.SetCurrentGroupName(SceneCellEditUndoName);
             isStrokeActive = true;
             lastStrokeCoordinate = null;
+            rectangleAnchorCoordinate = null;
+            rectanglePreviewCoordinate = null;
             strokeVisitedCoordinates.Clear();
         }
 
-        private void FinishTextStroke(bool commitChanges)
+        private void FinishSceneCellEdit(bool commitChanges)
         {
             if (!isStrokeActive || activeStrokeUndoGroup < 0)
             {
-                ResetStrokeState();
+                ResetSceneCellEditState();
                 return;
             }
 
@@ -354,7 +448,7 @@ namespace Kernel.MapGrid.Editor
                 Undo.RevertAllDownToGroup(activeStrokeUndoGroup);
             }
 
-            ResetStrokeState();
+            ResetSceneCellEditState();
             SceneView.RepaintAll();
         }
 
@@ -373,29 +467,9 @@ namespace Kernel.MapGrid.Editor
                 }
 
                 string error;
-                bool success;
-                switch (cellBrushMode)
+                if (!TryApplyOperationToCoordinate(authoring, point, out error))
                 {
-                    case MapGridCellBrushMode.FillText:
-                        success = MapGridEditorUtility.TrySetCellText(authoring, point, brushText, out _, out error);
-                        break;
-                    case MapGridCellBrushMode.EraseText:
-                        success = MapGridEditorUtility.TrySetCellText(authoring, point, string.Empty, out _, out error);
-                        break;
-                    case MapGridCellBrushMode.SetColliderState:
-                        success = MapGridEditorUtility.TrySetCellColliderEnabled(authoring, point, colliderBrushEnabled, out _, out error);
-                        break;
-                    default:
-                        success = false;
-                        error = "Unknown scene cell edit mode.";
-                        break;
-                }
-
-                if (!success)
-                {
-                    SetSceneCellEditMessage(error, MessageType.Error);
-                    ShowSceneNotification(error);
-                    FinishTextStroke(commitChanges: false);
+                    HandleSceneCellEditFailure(error);
                     return false;
                 }
             }
@@ -403,6 +477,55 @@ namespace Kernel.MapGrid.Editor
             lastStrokeCoordinate = coordinate;
             Repaint();
             return true;
+        }
+
+        private bool ApplyRectangleSelection(MapGridAuthoring authoring)
+        {
+            if (!TryGetRectanglePreviewBounds(out var start, out var end))
+            {
+                const string error = "Rectangle selection is incomplete.";
+                HandleSceneCellEditFailure(error);
+                return false;
+            }
+
+            var coordinates = MapGridEditorUtility.BuildRectangleCoordinates(start, end);
+            for (var i = 0; i < coordinates.Count; i++)
+            {
+                var point = coordinates[i];
+                if (!TryApplyOperationToCoordinate(authoring, point, out var error))
+                {
+                    HandleSceneCellEditFailure(error);
+                    return false;
+                }
+            }
+
+            Repaint();
+            return true;
+        }
+
+        private bool TryApplyOperationToCoordinate(MapGridAuthoring authoring, Vector2Int coordinate, out string error)
+        {
+            error = null;
+
+            switch (cellBrushMode)
+            {
+                case MapGridCellBrushMode.FillText:
+                    return MapGridEditorUtility.TrySetCellText(authoring, coordinate, brushText, out _, out error);
+                case MapGridCellBrushMode.EraseText:
+                    return MapGridEditorUtility.TrySetCellText(authoring, coordinate, string.Empty, out _, out error);
+                case MapGridCellBrushMode.SetColliderState:
+                    return MapGridEditorUtility.TrySetCellColliderEnabled(authoring, coordinate, colliderBrushEnabled, out _, out error);
+                default:
+                    error = "Unknown scene cell edit mode.";
+                    return false;
+            }
+        }
+
+        private void HandleSceneCellEditFailure(string error)
+        {
+            SetSceneCellEditMessage(error, MessageType.Error);
+            ShowSceneNotification(error);
+            FinishSceneCellEdit(commitChanges: false);
         }
 
         private void UpdateHoveredCoordinate(MapGridAuthoring authoring, Vector2 mousePosition)
@@ -415,6 +538,37 @@ namespace Kernel.MapGrid.Editor
             {
                 SceneView.RepaintAll();
             }
+        }
+
+        private void DrawSceneCellEditPreview(MapGridAuthoring authoring)
+        {
+            var previewColor = GetPreviewColor();
+            if (sceneCellSelectionMode == MapGridSceneCellSelectionMode.Rectangle &&
+                TryGetRectanglePreviewBounds(out var start, out var end))
+            {
+                DrawRectangleSelection(authoring, start, end, previewColor);
+                return;
+            }
+
+            if (hasHoveredCoordinate)
+            {
+                DrawHoveredCell(authoring, hoveredCoordinate, previewColor);
+            }
+        }
+
+        private bool TryGetRectanglePreviewBounds(out Vector2Int start, out Vector2Int end)
+        {
+            start = default;
+            end = default;
+
+            if (!isStrokeActive || !rectangleAnchorCoordinate.HasValue || !rectanglePreviewCoordinate.HasValue)
+            {
+                return false;
+            }
+
+            start = rectangleAnchorCoordinate.Value;
+            end = rectanglePreviewCoordinate.Value;
+            return true;
         }
 
         private static bool TryGetHoveredCoordinate(MapGridAuthoring authoring, Vector2 mousePosition, out Vector2Int coordinate)
@@ -450,15 +604,30 @@ namespace Kernel.MapGrid.Editor
 
         private static void DrawHoveredCell(MapGridAuthoring authoring, Vector2Int coordinate, Color outlineColor)
         {
-            var center = authoring.GetCellLocalPosition(coordinate.x, coordinate.y);
+            DrawCoordinateRectangle(authoring, coordinate, coordinate, outlineColor);
+        }
+
+        private static void DrawRectangleSelection(MapGridAuthoring authoring, Vector2Int start, Vector2Int end, Color outlineColor)
+        {
+            DrawCoordinateRectangle(authoring, start, end, outlineColor);
+        }
+
+        private static void DrawCoordinateRectangle(MapGridAuthoring authoring, Vector2Int start, Vector2Int end, Color outlineColor)
+        {
+            var minX = Mathf.Min(start.x, end.x);
+            var maxX = Mathf.Max(start.x, end.x);
+            var minY = Mathf.Min(start.y, end.y);
+            var maxY = Mathf.Max(start.y, end.y);
+            var minCenter = authoring.GetCellLocalPosition(minX, minY);
+            var maxCenter = authoring.GetCellLocalPosition(maxX, maxY);
             var halfWidth = authoring.CellSize.x * 0.5f;
             var halfHeight = authoring.CellSize.y * 0.5f;
             var vertices = new[]
             {
-                new Vector3(center.x - halfWidth, center.y - halfHeight, 0f),
-                new Vector3(center.x - halfWidth, center.y + halfHeight, 0f),
-                new Vector3(center.x + halfWidth, center.y + halfHeight, 0f),
-                new Vector3(center.x + halfWidth, center.y - halfHeight, 0f),
+                new Vector3(minCenter.x - halfWidth, minCenter.y - halfHeight, 0f),
+                new Vector3(minCenter.x - halfWidth, maxCenter.y + halfHeight, 0f),
+                new Vector3(maxCenter.x + halfWidth, maxCenter.y + halfHeight, 0f),
+                new Vector3(maxCenter.x + halfWidth, minCenter.y - halfHeight, 0f),
             };
 
             using (new Handles.DrawingScope(authoring.transform.localToWorldMatrix))
@@ -474,11 +643,13 @@ namespace Kernel.MapGrid.Editor
             hoveredCoordinate = default;
         }
 
-        private void ResetStrokeState()
+        private void ResetSceneCellEditState()
         {
             isStrokeActive = false;
             activeStrokeUndoGroup = -1;
             lastStrokeCoordinate = null;
+            rectangleAnchorCoordinate = null;
+            rectanglePreviewCoordinate = null;
             strokeVisitedCoordinates.Clear();
         }
 

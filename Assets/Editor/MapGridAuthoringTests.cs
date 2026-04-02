@@ -121,6 +121,55 @@ namespace Kernel.MapGrid.Editor.Tests
         }
 
         [Test]
+        public void BuildRectangleCoordinates_ReturnsInclusiveAreaInRowMajorOrder()
+        {
+            var coordinates = MapGridEditorUtility.BuildRectangleCoordinates(new Vector2Int(1, 1), new Vector2Int(3, 2));
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    new Vector2Int(1, 1),
+                    new Vector2Int(2, 1),
+                    new Vector2Int(3, 1),
+                    new Vector2Int(1, 2),
+                    new Vector2Int(2, 2),
+                    new Vector2Int(3, 2),
+                },
+                coordinates);
+        }
+
+        [Test]
+        public void BuildRectangleCoordinates_NormalizesReverseDraggedCorners()
+        {
+            var coordinates = MapGridEditorUtility.BuildRectangleCoordinates(new Vector2Int(3, 2), new Vector2Int(1, 1));
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    new Vector2Int(1, 1),
+                    new Vector2Int(2, 1),
+                    new Vector2Int(3, 1),
+                    new Vector2Int(1, 2),
+                    new Vector2Int(2, 2),
+                    new Vector2Int(3, 2),
+                },
+                coordinates);
+        }
+
+        [Test]
+        public void BuildRectangleCoordinates_ReturnsSingleCoordinateForSingleCellSelection()
+        {
+            var coordinates = MapGridEditorUtility.BuildRectangleCoordinates(new Vector2Int(2, 2), new Vector2Int(2, 2));
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    new Vector2Int(2, 2),
+                },
+                coordinates);
+        }
+
+        [Test]
         public void TryGetUniqueCellText_FailsWhenNoTextExists()
         {
             var cell = CreateCell("Cell_NoText", new Vector2Int(0, 0), textComponentCount: 0);
@@ -286,6 +335,139 @@ namespace Kernel.MapGrid.Editor.Tests
         }
 
         [Test]
+        public void RectangleFillText_UpdatesOnlyCellsInsideTheSelection()
+        {
+            var authoring = CreateAuthoring();
+            CreateIndexedCellGrid(authoring, 3, 3, out var texts, out var cells);
+
+            for (var y = 0; y < 3; y++)
+            {
+                for (var x = 0; x < 3; x++)
+                {
+                    Assert.That(cells[x, y].SetColliderEnabled(false), Is.True);
+                }
+            }
+
+            ApplyRectangleText(authoring, new Vector2Int(0, 1), new Vector2Int(1, 2), "Filled");
+
+            for (var y = 0; y < 3; y++)
+            {
+                for (var x = 0; x < 3; x++)
+                {
+                    var isInside = IsInsideRectangle(x, y, new Vector2Int(0, 1), new Vector2Int(1, 2));
+                    Assert.That(texts[x, y].text, Is.EqualTo(isInside ? "Filled" : string.Empty));
+                    Assert.That(cells[x, y].IsColliderEnabled, Is.EqualTo(isInside));
+                }
+            }
+        }
+
+        [Test]
+        public void RectangleEraseText_ClearsOnlyCellsInsideTheSelection()
+        {
+            var authoring = CreateAuthoring();
+            CreateIndexedCellGrid(authoring, 3, 3, out var texts, out var cells);
+
+            for (var y = 0; y < 3; y++)
+            {
+                for (var x = 0; x < 3; x++)
+                {
+                    texts[x, y].text = "Wall";
+                    Assert.That(cells[x, y].SetColliderEnabled(true), Is.True);
+                }
+            }
+
+            ApplyRectangleText(authoring, new Vector2Int(1, 0), new Vector2Int(2, 1), string.Empty);
+
+            for (var y = 0; y < 3; y++)
+            {
+                for (var x = 0; x < 3; x++)
+                {
+                    var isInside = IsInsideRectangle(x, y, new Vector2Int(1, 0), new Vector2Int(2, 1));
+                    Assert.That(texts[x, y].text, Is.EqualTo(isInside ? string.Empty : "Wall"));
+                    Assert.That(cells[x, y].IsColliderEnabled, Is.EqualTo(!isInside));
+                }
+            }
+        }
+
+        [Test]
+        public void RectangleSetColliderState_ChangesOnlyCellsInsideTheSelection()
+        {
+            var authoring = CreateAuthoring();
+            CreateIndexedCellGrid(authoring, 3, 3, out var texts, out var cells);
+
+            for (var y = 0; y < 3; y++)
+            {
+                for (var x = 0; x < 3; x++)
+                {
+                    texts[x, y].text = $"Cell_{x}_{y}";
+                    Assert.That(cells[x, y].SetColliderEnabled(false), Is.True);
+                }
+            }
+
+            ApplyRectangleCollider(authoring, new Vector2Int(1, 1), new Vector2Int(2, 2), true);
+
+            for (var y = 0; y < 3; y++)
+            {
+                for (var x = 0; x < 3; x++)
+                {
+                    var isInside = IsInsideRectangle(x, y, new Vector2Int(1, 1), new Vector2Int(2, 2));
+                    Assert.That(texts[x, y].text, Is.EqualTo($"Cell_{x}_{y}"));
+                    Assert.That(cells[x, y].IsColliderEnabled, Is.EqualTo(isInside));
+                }
+            }
+        }
+
+        [Test]
+        public void CellData_TrySetWorldPosition_MovesCellRootByDefault()
+        {
+            var cell = CreateCell("Cell_A", new Vector2Int(0, 0), textComponentCount: 1);
+            var cellData = cell.GetComponent<CellData>();
+            var targetPosition = new Vector3(3f, 4f, 5f);
+
+            var success = cellData.TrySetWorldPosition(targetPosition);
+
+            Assert.That(success, Is.True);
+            Assert.That(cell.transform.position, Is.EqualTo(targetPosition));
+            Assert.That(cellData.MovementTarget, Is.SameAs(cell.transform));
+        }
+
+        [Test]
+        public void CellData_TryBindMovementTarget_UsesChildTransformForTranslation()
+        {
+            var cell = CreateCell("Cell_A", new Vector2Int(0, 0), textComponentCount: 1);
+            var movementObject = CreateChildObject(cell, "Movement");
+            var cellData = cell.GetComponent<CellData>();
+
+            var bindSuccess = cellData.TryBindMovementTarget(movementObject.transform);
+            var translateSuccess = cellData.TryTranslate(new Vector3(2f, 0f, 0f), Space.Self);
+
+            Assert.That(bindSuccess, Is.True);
+            Assert.That(translateSuccess, Is.True);
+            Assert.That(movementObject.transform.localPosition, Is.EqualTo(new Vector3(2f, 0f, 0f)));
+            Assert.That(cell.transform.localPosition, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
+        public void CellData_TrySetLinearVelocity_UsesBoundRigidbody()
+        {
+            var cell = CreateCell("Cell_A", new Vector2Int(0, 0), textComponentCount: 1);
+            var movementObject = CreateChildObject(cell, "Movement", typeof(Rigidbody));
+            var movementRigidbody = movementObject.GetComponent<Rigidbody>();
+            var cellData = cell.GetComponent<CellData>();
+
+            var bindSuccess = cellData.TryBindMovementTarget(movementObject.transform, movementRigidbody);
+            var velocitySuccess = cellData.TrySetLinearVelocity(new Vector3(1f, 2f, 3f));
+            var stopSuccess = cellData.TryStopMovement();
+
+            Assert.That(bindSuccess, Is.True);
+            Assert.That(velocitySuccess, Is.True);
+            Assert.That(movementRigidbody.linearVelocity, Is.EqualTo(new Vector3(1f, 2f, 3f)));
+            Assert.That(stopSuccess, Is.True);
+            Assert.That(movementRigidbody.linearVelocity, Is.EqualTo(Vector3.zero));
+            Assert.That(movementRigidbody.angularVelocity, Is.EqualTo(Vector3.zero));
+        }
+
+        [Test]
         public void DisableEmptyTextColliders_DisablesOnlyCellsWithoutTextContent()
         {
             var authoring = CreateAuthoring();
@@ -312,6 +494,111 @@ namespace Kernel.MapGrid.Editor.Tests
             Assert.That(filledCell.GetComponent<CellData>().IsColliderEnabled, Is.True);
             Assert.That(emptyCell.GetComponent<CellData>().IsColliderEnabled, Is.False);
             Assert.That(noTextCell.GetComponent<CellData>().IsColliderEnabled, Is.False);
+        }
+
+        [Test]
+        public void TryInitializeCellSurfaceCache_BuildsRuntimeCacheAndLeavesDirtySetEmpty()
+        {
+            var authoring = CreateAuthoring();
+            authoring.GridWidth = 2;
+            authoring.GridHeight = 1;
+
+            var textCell = CreateCell("Cell_Text", new Vector2Int(0, 0), textComponentCount: 1);
+            var noTextCell = CreateCell("Cell_NoText", new Vector2Int(1, 0), textComponentCount: 0);
+
+            authoring.ReplaceCellEntries(new[]
+            {
+                new CellEntry(0, 0, textCell),
+                new CellEntry(1, 0, noTextCell),
+            });
+
+            var success = authoring.TryInitializeCellSurfaceCache(out var error);
+
+            Assert.That(success, Is.True, error);
+            Assert.That(authoring.IsCellSurfaceCacheInitialized, Is.True);
+            Assert.That(authoring.CellSurfaceCacheCount, Is.EqualTo(2));
+            Assert.That(authoring.DirtyCellSurfaceCount, Is.Zero);
+        }
+
+        [Test]
+        public void TryRefreshGroundWallState_AssignsTagsAndColliderStateFromCellText()
+        {
+            var authoring = CreateAuthoring();
+            authoring.GridWidth = 3;
+            authoring.GridHeight = 1;
+
+            var wallCell = CreateCell("Cell_Wall", new Vector2Int(0, 0), textComponentCount: 1);
+            var groundCell = CreateCell("Cell_Ground", new Vector2Int(1, 0), textComponentCount: 1);
+            var noTextCell = CreateCell("Cell_NoText", new Vector2Int(2, 0), textComponentCount: 0);
+
+            wallCell.GetComponentInChildren<TMP_Text>(true).text = "#";
+            groundCell.GetComponentInChildren<TMP_Text>(true).text = "   ";
+            Assert.That(groundCell.GetComponent<CellData>().SetColliderEnabled(true), Is.True);
+            Assert.That(noTextCell.GetComponent<CellData>().SetColliderEnabled(true), Is.True);
+
+            authoring.ReplaceCellEntries(new[]
+            {
+                new CellEntry(0, 0, wallCell),
+                new CellEntry(1, 0, groundCell),
+                new CellEntry(2, 0, noTextCell),
+            });
+
+            var success = authoring.TryRefreshGroundWallState(out var error);
+
+            Assert.That(success, Is.True, error);
+            Assert.That(wallCell.tag, Is.EqualTo("Wall"));
+            Assert.That(wallCell.GetComponent<CellData>().ManagedCollider.gameObject.tag, Is.EqualTo("Wall"));
+            Assert.That(wallCell.GetComponent<CellData>().IsColliderEnabled, Is.True);
+
+            Assert.That(groundCell.tag, Is.EqualTo("Ground"));
+            Assert.That(groundCell.GetComponent<CellData>().ManagedCollider.gameObject.tag, Is.EqualTo("Ground"));
+            Assert.That(groundCell.GetComponent<CellData>().IsColliderEnabled, Is.False);
+
+            Assert.That(noTextCell.tag, Is.EqualTo("Ground"));
+            Assert.That(noTextCell.GetComponent<CellData>().ManagedCollider.gameObject.tag, Is.EqualTo("Ground"));
+            Assert.That(noTextCell.GetComponent<CellData>().IsColliderEnabled, Is.False);
+        }
+
+        [Test]
+        public void TryRefreshDirtyGroundWallState_UpdatesOnlyMarkedCells()
+        {
+            var authoring = CreateAuthoring();
+            authoring.GridWidth = 2;
+            authoring.GridHeight = 1;
+
+            var leftCell = CreateCell("Cell_Left", new Vector2Int(0, 0), textComponentCount: 1);
+            var rightCell = CreateCell("Cell_Right", new Vector2Int(1, 0), textComponentCount: 1);
+            var leftText = leftCell.GetComponentInChildren<TMP_Text>(true);
+            var rightText = rightCell.GetComponentInChildren<TMP_Text>(true);
+            leftText.text = "A";
+            rightText.text = "B";
+
+            authoring.ReplaceCellEntries(new[]
+            {
+                new CellEntry(0, 0, leftCell),
+                new CellEntry(1, 0, rightCell),
+            });
+
+            var fullRefreshSuccess = authoring.TryRefreshGroundWallState(out var fullRefreshError);
+            Assert.That(fullRefreshSuccess, Is.True, fullRefreshError);
+
+            leftText.text = "   ";
+            var markDirtySuccess = authoring.TryMarkCellSurfaceDirty(new Vector2Int(0, 0), out var markDirtyError);
+            Assert.That(markDirtySuccess, Is.True, markDirtyError);
+
+            var dirtyRefreshSuccess = authoring.TryRefreshDirtyGroundWallState(out var refreshedCellCount, out var dirtyRefreshError);
+
+            Assert.That(dirtyRefreshSuccess, Is.True, dirtyRefreshError);
+            Assert.That(refreshedCellCount, Is.EqualTo(1));
+            Assert.That(authoring.DirtyCellSurfaceCount, Is.Zero);
+
+            Assert.That(leftCell.tag, Is.EqualTo("Ground"));
+            Assert.That(leftCell.GetComponent<CellData>().ManagedCollider.gameObject.tag, Is.EqualTo("Ground"));
+            Assert.That(leftCell.GetComponent<CellData>().IsColliderEnabled, Is.False);
+
+            Assert.That(rightCell.tag, Is.EqualTo("Wall"));
+            Assert.That(rightCell.GetComponent<CellData>().ManagedCollider.gameObject.tag, Is.EqualTo("Wall"));
+            Assert.That(rightCell.GetComponent<CellData>().IsColliderEnabled, Is.True);
         }
 
         [Test]
@@ -396,6 +683,68 @@ namespace Kernel.MapGrid.Editor.Tests
             }
 
             return cell;
+        }
+
+        private void CreateIndexedCellGrid(MapGridAuthoring authoring, int width, int height, out TMP_Text[,] texts, out CellData[,] cells)
+        {
+            authoring.GridWidth = width;
+            authoring.GridHeight = height;
+
+            texts = new TMP_Text[width, height];
+            cells = new CellData[width, height];
+            var entries = new List<CellEntry>(width * height);
+
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    var cell = CreateCell($"Cell_{x}_{y}", new Vector2Int(x, y), textComponentCount: 1);
+                    texts[x, y] = cell.GetComponentInChildren<TMP_Text>(true);
+                    cells[x, y] = cell.GetComponent<CellData>();
+                    entries.Add(new CellEntry(x, y, cell));
+                }
+            }
+
+            authoring.ReplaceCellEntries(entries);
+        }
+
+        private void ApplyRectangleText(MapGridAuthoring authoring, Vector2Int start, Vector2Int end, string text)
+        {
+            var coordinates = MapGridEditorUtility.BuildRectangleCoordinates(start, end);
+            for (var i = 0; i < coordinates.Count; i++)
+            {
+                var success = MapGridEditorUtility.TrySetCellText(authoring, coordinates[i], text, out _, out var error);
+                Assert.That(success, Is.True, error);
+            }
+        }
+
+        private void ApplyRectangleCollider(MapGridAuthoring authoring, Vector2Int start, Vector2Int end, bool enabled)
+        {
+            var coordinates = MapGridEditorUtility.BuildRectangleCoordinates(start, end);
+            for (var i = 0; i < coordinates.Count; i++)
+            {
+                var success = MapGridEditorUtility.TrySetCellColliderEnabled(authoring, coordinates[i], enabled, out _, out var error);
+                Assert.That(success, Is.True, error);
+            }
+        }
+
+        private static bool IsInsideRectangle(int x, int y, Vector2Int start, Vector2Int end)
+        {
+            var minX = Mathf.Min(start.x, end.x);
+            var maxX = Mathf.Max(start.x, end.x);
+            var minY = Mathf.Min(start.y, end.y);
+            var maxY = Mathf.Max(start.y, end.y);
+            return x >= minX && x <= maxX && y >= minY && y <= maxY;
+        }
+
+        private GameObject CreateChildObject(GameObject parent, string name, params System.Type[] components)
+        {
+            var child = components == null || components.Length == 0
+                ? new GameObject(name)
+                : new GameObject(name, components);
+            createdObjects.Add(child);
+            child.transform.SetParent(parent.transform, false);
+            return child;
         }
     }
 }
