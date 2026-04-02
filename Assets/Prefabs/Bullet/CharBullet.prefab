@@ -171,7 +171,24 @@ MonoBehaviour:
   sizeTarget: {fileID: 7091639651607865356}
   movementRigidbody: {fileID: 8839746597319551138}
   impactCollider: {fileID: 5855570384046936633}
-  damage: 50
+  attackSpec:
+    coreType: 1
+    behaviorType: 1
+    valueType: 1
+    resultType: 1
+    damage: 1
+    projectileCount: 1
+    bounceCount: 0
+    chainCount: 0
+    pierceCount: 0
+    projectileLife: 1
+    impactLifeCost: 1
+    projectileSpeed: 320
+    maxLifetime: 2
+    maxTravelDistance: 512
+    impactMask:
+      serializedVersion: 2
+      m_Bits: 2035
   autoMove: 1
   movementSpace: 0
   direction: {x: 0, y: 0, z: 1}

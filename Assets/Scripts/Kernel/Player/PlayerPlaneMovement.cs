@@ -1,5 +1,6 @@
 using System;
 using Kernel;
+using Kernel.Bullet;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -26,16 +27,8 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     [SerializeField] private Transform bulletSpawnOrigin;
     [SerializeField] private Vector3 bulletSpawnLocalOffset = new(0f, 0f, 32f);
     [SerializeField, Min(MinimumFireInterval)] private float fireInterval = 0.12f;
-    [SerializeField, Min(0f)] private float bulletSpeed = 320f;
     [SerializeField] private LayerMask aimRaycastMask = Physics.DefaultRaycastLayers;
-    [SerializeField] private CharBulletLifeSettings bulletLifeSettings = new()
-    {
-        maxLifetime = 2f,
-        maxTravelDistance = 512f,
-        maxLife = 1,
-        impactLifeCost = 1,
-        impactMask = Physics.DefaultRaycastLayers,
-    };
+    [SerializeField] private AttackSpec attackSpec = AttackSpec.CreateDefault();
 
     private float nextFireTime;
 
@@ -171,7 +164,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         }
 
         CharBullet bulletInstance = Instantiate(bulletPrefab, spawnPosition, Quaternion.identity);
-        bulletInstance.InitializeShot(transform, spawnPosition, bulletDirection, bulletSpeed, bulletLifeSettings);
+        bulletInstance.InitializeShot(transform, spawnPosition, bulletDirection, attackSpec);
         return true;
     }
 
@@ -420,8 +413,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private void SanitizeConfiguration()
     {
         fireInterval = Mathf.Max(MinimumFireInterval, fireInterval);
-        bulletSpeed = Mathf.Max(0f, bulletSpeed);
-        bulletLifeSettings = bulletLifeSettings.GetSanitized();
+        attackSpec = attackSpec.GetSanitized();
     }
 
     private void OnValidate()

@@ -69,7 +69,6 @@ namespace Kernel.MapGrid
 
         [Header("Camera")]
         [SerializeField] private Camera targetCamera;
-        [SerializeField] private bool autoFrameCamera = true;
         [SerializeField] private float cameraPadding = 0f;
         [SerializeField] private float cameraDistance = 10f;
 
@@ -129,12 +128,6 @@ namespace Kernel.MapGrid
             set => targetCamera = value;
         }
 
-        public bool AutoFrameCamera
-        {
-            get => autoFrameCamera;
-            set => autoFrameCamera = value;
-        }
-
         public float CameraPadding
         {
             get => cameraPadding;
@@ -171,11 +164,6 @@ namespace Kernel.MapGrid
             cameraPadding = Mathf.Max(0f, cameraPadding);
             cameraDistance = Mathf.Max(0.01f, cameraDistance);
             InvalidateCellSurfaceCache();
-
-            if (autoFrameCamera)
-            {
-                MapGridCameraUtility.TryFrameResolvedCamera(this, out _);
-            }
         }
 
         public bool ContainsCell(int x, int y)

@@ -1,0 +1,35 @@
+{
+    "version": 1,
+    "name": "UI Controls",
+    "maps": [
+        {
+            "name": "MainScene UI",
+            "id": "0624724f-2f5e-4311-935f-24f3523db3be",
+            "actions": [
+                {
+                    "name": "Backpack",
+                    "type": "Button",
+                    "id": "accb9e22-d57c-4a32-9902-efe3928015b3",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "be19fcf1-97d1-43a9-8d4a-72261775e41f",
+                    "path": "<Keyboard>/tab",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Backpack",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}

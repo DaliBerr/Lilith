@@ -52,7 +52,6 @@ namespace Kernel.MapGrid.Editor
         private SerializedProperty defaultCellPrefabProperty;
         private SerializedProperty coordinateBindingProperty;
         private SerializedProperty targetCameraProperty;
-        private SerializedProperty autoFrameCameraProperty;
         private SerializedProperty cameraPaddingProperty;
         private SerializedProperty cameraDistanceProperty;
 
@@ -66,7 +65,6 @@ namespace Kernel.MapGrid.Editor
             defaultCellPrefabProperty = serializedObject.FindProperty("defaultCellPrefab");
             coordinateBindingProperty = serializedObject.FindProperty("coordinateBinding");
             targetCameraProperty = serializedObject.FindProperty("targetCamera");
-            autoFrameCameraProperty = serializedObject.FindProperty("autoFrameCamera");
             cameraPaddingProperty = serializedObject.FindProperty("cameraPadding");
             cameraDistanceProperty = serializedObject.FindProperty("cameraDistance");
         }
@@ -132,7 +130,6 @@ namespace Kernel.MapGrid.Editor
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Camera Settings", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(targetCameraProperty);
-            EditorGUILayout.PropertyField(autoFrameCameraProperty);
             EditorGUILayout.PropertyField(cameraPaddingProperty);
             EditorGUILayout.PropertyField(cameraDistanceProperty);
         }

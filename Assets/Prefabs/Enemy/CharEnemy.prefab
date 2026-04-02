@@ -58,19 +58,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1751406668114500696, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_fontSize
-      value: 360
+      value: 160
       objectReference: {fileID: 0}
     - target: {fileID: 2122197172334215060, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Size.x
-      value: 35
+      value: 16
       objectReference: {fileID: 0}
     - target: {fileID: 2122197172334215060, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Size.y
-      value: 35
+      value: 16
       objectReference: {fileID: 0}
     - target: {fileID: 2122197172334215060, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Size.z
-      value: 35
+      value: 16
       objectReference: {fileID: 0}
     - target: {fileID: 2122197172334215060, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_IncludeLayers.m_Bits
@@ -78,11 +78,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 36
+      value: 16
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 36
+      value: 16
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.w

@@ -205,7 +205,7 @@
   - `cellSize`
   - chunk 切分尺寸
   - 默认 cell prefab
-  - 相机 framing 参数
+  - 手动 `Frame Camera` 使用的相机 framing 参数
   - `cellEntries`
   - 运行时 `cellLookup`
   - `TryRefreshGroundWallState()`
@@ -220,7 +220,7 @@
   - 缓存并开关 cell 子物体上的主 3D `Collider`
   - 暴露 cell 根节点或指定子节点的移动控制接口
   - 在绑定了目标 `Transform/Rigidbody` 后，支持位置、平移、速度与停止控制
-- `MapGridCameraUtility` 能按网格尺寸自动框住目标相机
+- `MapGridCameraUtility` 能按网格尺寸手动框住目标相机
 - Editor 侧已经支持：
   - `Generate Grid`
   - `Clear Grid`
@@ -253,15 +253,16 @@
 关键文件：
 
 - [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)
+- [`Assets/Scripts/Kernel/Bullet/AttackSpec.cs`](Assets/Scripts/Kernel/Bullet/AttackSpec.cs)
 - [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
 - [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
 - [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
 
 当前能力：
 
-- `PlayerPlaneMovement` 负责实例化并初始化 `CharBullet`
-- `CharBullet` 持有独立伤害值；命中带有 `Enemey` 标签的对象时，会尝试从碰撞体父级解析 `Enemy` 组件并调用统一受伤接口
-- `CharBullet` 也兼容正确拼写的 `Enemy` 标签，方便已有场景对象逐步收敛
+- `AttackSpec` 统一承载当前子弹攻击配置，包括 `CoreType / BehaviorType / ValueType / ResultType`、伤害、速度、数量词条与生命周期参数
+- `PlayerPlaneMovement` 负责实例化 `CharBullet`，并把当前 `AttackSpec` 注入到发射流程
+- `CharBullet` 会从 `AttackSpec` 读取伤害、弹速、命中消耗和飞行回收参数；命中带有 `Enemy_Object` 标签的对象时，会尝试从碰撞体父级解析 `Enemy` 组件并调用统一受伤接口
 - `Enemy` 统一暴露 `MaxHealth`、`CurrentHealth`、`IsDead` 和 `TryApplyDamage`
 - `BaseCharEnemyNorm1` 当前维护运行时生命值，并在生命归零后销毁自身
 
@@ -388,12 +389,13 @@
   - 区块矿物 seed 计算
   - 二次贝塞尔绳索采样辅助
 
-### 9. 输入与玩家平面移动
+### 9. 输入、玩家平面移动与主相机跟随
 
 关键文件：
 
 - [`Assets/Scripts/Kernel/Input/InputActionManager.cs`](Assets/Scripts/Kernel/Input/InputActionManager.cs)
 - [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)
+- [`Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs`](Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs)
 - [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
 
 当前能力：
@@ -414,17 +416,25 @@
   - `rotationSpeed <= 0` 时会立即转向，否则按给定角速度平滑转向
   - 按住鼠标左键时，会按 `fireInterval` 连续向当前点击地面方向发射 `CharBullet`
   - 子弹瞄准优先使用真实地面/格子碰撞体命中点；命不中时回退到玩家高度平面
+- `PlayerFollowCamera` 当前挂在 `Start.unity` 的 `Main Camera`
+  - 只跟随玩家位置，不继承玩家旋转
+  - 进入场景时会把正交尺寸恢复到局部战斗视野，不再自动切到“显示整张地图”的 framing
 
 ### 10. 文字子弹运行时组件
 
 关键文件：
 
+- [`Assets/Scripts/Kernel/Bullet/AttackSpec.cs`](Assets/Scripts/Kernel/Bullet/AttackSpec.cs)
 - [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
 - [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
 
 当前能力：
 
 - `CharBullet` 面向“文字即元素”的运行时子弹表达，默认使用 `TMP_Text` 作为字形承载
+- 所有与攻击有关的主要参数已集中到 `AttackSpec`
+  - 当前包含 `CoreType / BehaviorType / ValueType / ResultType`
+  - 以及 `Damage / ProjectileCount / BounceCount / ChainCount / PierceCount / ProjectileLife / ImpactLifeCost / ProjectileSpeed / MaxLifetime / MaxTravelDistance / ImpactMask`
+  - 当前运行时已直接消费 `Damage / ProjectileLife / ImpactLifeCost / ProjectileSpeed / MaxLifetime / MaxTravelDistance / ImpactMask`
 - 默认优先依赖 Inspector 手动拖拽 `glyphText / movementTarget / sizeTarget / movementRigidbody`
   - 如果未手动指定，只会在当前 prefab 层级内做轻量缓存，不会自动新建 GameObject
 - 提供文字与尺寸控制接口
@@ -447,7 +457,7 @@
   - `InitializeShot`
   - `ApplyLifeCost`
   - `Expire`
-- 生命周期同时支持三种回收条件
+- 生命周期同时支持三种回收条件，并由 `AttackSpec` 统一给出参数
   - 超过最大存活时间
   - 超过最大飞行距离
   - 命中后扣减生命直至归零

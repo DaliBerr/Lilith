@@ -4,6 +4,13 @@ using TMPro;
 using UnityEngine;
 using Vocalith.Logging;
 
+
+namespace Kernel.Bullet
+{
+/// <summary>
+/// CharBullet 是一个高度模块化的子弹控制组件，设计用于承载各种基于字符的攻击行为。
+/// 通过组合不同的攻击配置和运行时参数，CharBullet 可以实现丰富多样的子弹表现和交互效果。
+/// </summary>
 [DisallowMultipleComponent]
 public sealed class CharBullet : MonoBehaviour
 {
@@ -28,7 +35,7 @@ public sealed class CharBullet : MonoBehaviour
     [SerializeField] private SphereCollider impactCollider;
 
     [Header("Combat")]
-    [SerializeField, Min(0f)] private float damage = 1f;
+    [SerializeField] private AttackSpec attackSpec = AttackSpec.CreateDefault();
 
     [Header("Movement")]
     [SerializeField] private bool autoMove = true;
@@ -50,7 +57,6 @@ public sealed class CharBullet : MonoBehaviour
     private int remainingLife;
     private bool hasPreviousImpactCheckCenter;
     private bool isActiveShot;
-    private CharBulletLifeSettings currentLifeSettings;
 
     public TMP_Text GlyphText
     {
@@ -117,14 +123,15 @@ public sealed class CharBullet : MonoBehaviour
     public Vector3 Direction => direction;
     public float Speed => speed;
     public float ScaleMultiplier => scaleMultiplier;
-    public float Damage => damage;
+    public float Damage => attackSpec.damage;
+    public AttackSpec CurrentAttackSpec => attackSpec;
 
     private void Awake()
     {
         TryCacheBindings();
         EnsureCompatiblePhysicsBindings(allowFallbackCreation: false);
         EnsureImpactColliderConfiguration();
-        damage = Mathf.Max(0f, damage);
+        attackSpec = attackSpec.GetSanitized();
         CaptureCurrentScaleAsBase();
         CaptureImpactColliderBaseRadius();
         ApplyScaleMultiplier();
@@ -135,22 +142,21 @@ public sealed class CharBullet : MonoBehaviour
     /// param: owner 发射者根节点，用于忽略自碰撞
     /// param: spawnPosition 子弹出生世界坐标
     /// param: shotDirection 本次发射方向
-    /// param: shotSpeed 本次发射速度
-    /// param: lifeSettings 本次发射使用的生命周期配置
+    /// param: shotAttackSpec 本次发射使用的攻击配置
     /// returns: 无
     /// </summary>
-    public void InitializeShot(Transform owner, Vector3 spawnPosition, Vector3 shotDirection, float shotSpeed, CharBulletLifeSettings lifeSettings)
+    public void InitializeShot(Transform owner, Vector3 spawnPosition, Vector3 shotDirection, AttackSpec shotAttackSpec)
     {
         TryCacheBindings(overwriteExisting: true);
         EnsureCompatiblePhysicsBindings(allowFallbackCreation: false);
         EnsureImpactColliderConfiguration();
+        attackSpec = shotAttackSpec.GetSanitized();
         ownerRoot = owner;
         spawnWorldPosition = spawnPosition;
         elapsedLifetime = 0f;
         impactedTargetRoots.Clear();
         hasPreviousImpactCheckCenter = false;
-        currentLifeSettings = lifeSettings.GetSanitized();
-        remainingLife = currentLifeSettings.maxLife;
+        remainingLife = attackSpec.projectileLife;
         isActiveShot = true;
         autoMove = true;
         movementSpace = Space.World;
@@ -158,11 +164,11 @@ public sealed class CharBullet : MonoBehaviour
         EnableImpactCollider(true);
         TryStopMovement();
         TrySetWorldPosition(spawnPosition);
-        TrySetDirectionAndSpeed(shotDirection, shotSpeed, Space.World);
+        TrySetDirectionAndSpeed(shotDirection, attackSpec.projectileSpeed, Space.World);
         ApplyFacingDirection(shotDirection);
         IgnoreOwnerCollisions();
         ResetImpactCheckState();
-        // LogShotInitialized(spawnPosition, shotDirection, shotSpeed);
+        // LogShotInitialized(spawnPosition, shotDirection, attackSpec.projectileSpeed);
         // LogSpawnOverlapIfNeeded();
     }
 
@@ -294,6 +300,122 @@ public sealed class CharBullet : MonoBehaviour
         EnsureImpactColliderConfiguration();
         CaptureImpactColliderBaseRadius();
         ApplyImpactColliderScale();
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 用新的攻击配置替换当前子弹持有的 AttackSpec，并按需同步当前运行时状态。
+    /// param: newAttackSpec 需要应用的新攻击配置
+    /// param: syncCurrentSpeed 是否同时把当前速度同步到攻击配置里的 projectileSpeed
+    /// param: syncRemainingLife 是否同时把当前剩余生命同步到攻击配置里的 projectileLife
+    /// returns: 无条件返回 true
+    /// </summary>
+    public bool TrySetAttackSpec(AttackSpec newAttackSpec, bool syncCurrentSpeed = true, bool syncRemainingLife = true)
+    {
+        ApplyAttackSpec(newAttackSpec, syncCurrentSpeed, syncRemainingLife);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 更新当前攻击的语义词条，不修改数值参数。
+    /// param: coreType 攻击核心类型
+    /// param: behaviorType 攻击行为类型
+    /// param: valueType 攻击数值类型
+    /// param: resultType 攻击结果类型
+    /// returns: 无条件返回 true
+    /// </summary>
+    public bool TrySetAttackTypes(
+        AttackCoreType coreType,
+        AttackBehaviorType behaviorType,
+        AttackValueType valueType,
+        AttackResultType resultType)
+    {
+        AttackSpec newAttackSpec = attackSpec;
+        newAttackSpec.coreType = coreType;
+        newAttackSpec.behaviorType = behaviorType;
+        newAttackSpec.valueType = valueType;
+        newAttackSpec.resultType = resultType;
+        ApplyAttackSpec(newAttackSpec, syncCurrentSpeed: false, syncRemainingLife: false);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 更新当前攻击的伤害值。
+    /// param: newDamage 需要应用的新伤害
+    /// returns: 无条件返回 true
+    /// </summary>
+    public bool TrySetDamage(float newDamage)
+    {
+        AttackSpec newAttackSpec = attackSpec;
+        newAttackSpec.damage = Mathf.Max(0f, newDamage);
+        ApplyAttackSpec(newAttackSpec, syncCurrentSpeed: false, syncRemainingLife: false);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 更新当前攻击的投射物数量、反弹、链式和穿透词条。
+    /// param: projectileCount 需要应用的投射物数量
+    /// param: bounceCount 需要应用的反弹次数
+    /// param: chainCount 需要应用的链式次数
+    /// param: pierceCount 需要应用的穿透次数
+    /// param: syncRemainingLife 是否把当前剩余生命同步到新的 projectileLife
+    /// returns: 无条件返回 true
+    /// </summary>
+    public bool TrySetProjectileCounts(int projectileCount, int bounceCount, int chainCount, int pierceCount, bool syncRemainingLife = false)
+    {
+        AttackSpec newAttackSpec = attackSpec;
+        newAttackSpec.projectileCount = Mathf.Max(1, projectileCount);
+        newAttackSpec.bounceCount = Mathf.Max(0, bounceCount);
+        newAttackSpec.chainCount = Mathf.Max(0, chainCount);
+        newAttackSpec.pierceCount = Mathf.Max(0, pierceCount);
+        ApplyAttackSpec(newAttackSpec, syncCurrentSpeed: false, syncRemainingLife: syncRemainingLife);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 更新当前攻击的子弹生命与命中生命消耗。
+    /// param: projectileLife 需要应用的子弹生命
+    /// param: impactLifeCost 需要应用的单次命中生命消耗
+    /// param: syncRemainingLife 是否同时覆盖当前剩余生命
+    /// returns: 无条件返回 true
+    /// </summary>
+    public bool TrySetLifeSettings(int projectileLife, int impactLifeCost, bool syncRemainingLife = true)
+    {
+        AttackSpec newAttackSpec = attackSpec;
+        newAttackSpec.projectileLife = Mathf.Max(1, projectileLife);
+        newAttackSpec.impactLifeCost = Mathf.Max(1, impactLifeCost);
+        ApplyAttackSpec(newAttackSpec, syncCurrentSpeed: false, syncRemainingLife: syncRemainingLife);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 更新当前攻击的弹速，并按需同步到当前飞行速度。
+    /// param: projectileSpeed 需要应用的新弹速
+    /// param: syncCurrentSpeed 是否同时覆盖当前 speed
+    /// returns: 无条件返回 true
+    /// </summary>
+    public bool TrySetProjectileSpeed(float projectileSpeed, bool syncCurrentSpeed = true)
+    {
+        AttackSpec newAttackSpec = attackSpec;
+        newAttackSpec.projectileSpeed = Mathf.Max(0f, projectileSpeed);
+        ApplyAttackSpec(newAttackSpec, syncCurrentSpeed: syncCurrentSpeed, syncRemainingLife: false);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 更新当前攻击的存活时间、飞行距离和命中层级。
+    /// param: maxLifetime 需要应用的最大存活时间
+    /// param: maxTravelDistance 需要应用的最大飞行距离
+    /// param: impactMask 需要应用的命中层级掩码
+    /// returns: 无条件返回 true
+    /// </summary>
+    public bool TrySetAttackLifetime(float maxLifetime, float maxTravelDistance, LayerMask impactMask)
+    {
+        AttackSpec newAttackSpec = attackSpec;
+        newAttackSpec.maxLifetime = Mathf.Max(0f, maxLifetime);
+        newAttackSpec.maxTravelDistance = Mathf.Max(0f, maxTravelDistance);
+        newAttackSpec.impactMask = impactMask;
+        ApplyAttackSpec(newAttackSpec, syncCurrentSpeed: false, syncRemainingLife: false);
         return true;
     }
 
@@ -718,7 +840,7 @@ public sealed class CharBullet : MonoBehaviour
         TryCacheBindings();
         EnsureCompatiblePhysicsBindings(allowFallbackCreation: false);
         EnsureImpactColliderConfiguration();
-        damage = Mathf.Max(0f, damage);
+        attackSpec = attackSpec.GetSanitized();
         scaleMultiplier = Mathf.Max(0f, scaleMultiplier);
         speed = Mathf.Max(0f, speed);
         if (direction.sqrMagnitude > MinimumVectorSqrMagnitude)
@@ -743,19 +865,19 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         elapsedLifetime += Mathf.Max(0f, deltaTime);
-        if (currentLifeSettings.maxLifetime > 0f && elapsedLifetime >= currentLifeSettings.maxLifetime)
+        if (attackSpec.maxLifetime > 0f && elapsedLifetime >= attackSpec.maxLifetime)
         {
             Expire();
             return;
         }
 
-        if (currentLifeSettings.maxTravelDistance <= 0f)
+        if (attackSpec.maxTravelDistance <= 0f)
         {
             return;
         }
 
         Vector3 distanceVector = MovementTarget.position - spawnWorldPosition;
-        if (distanceVector.sqrMagnitude >= currentLifeSettings.maxTravelDistance * currentLifeSettings.maxTravelDistance)
+        if (distanceVector.sqrMagnitude >= attackSpec.maxTravelDistance * attackSpec.maxTravelDistance)
         {
             Expire();
         }
@@ -963,7 +1085,7 @@ public sealed class CharBullet : MonoBehaviour
                 radius,
                 sweepVector / sweepDistance,
                 sweepDistance,
-                currentLifeSettings.impactMask,
+                attackSpec.impactMask,
                 QueryTriggerInteraction.Ignore);
 
             if (hits != null && hits.Length > 0)
@@ -1001,7 +1123,7 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private void CheckImpactOverlapAt(Vector3 center, float radius)
     {
-        Collider[] overlaps = Physics.OverlapSphere(center, radius, currentLifeSettings.impactMask, QueryTriggerInteraction.Ignore);
+        Collider[] overlaps = Physics.OverlapSphere(center, radius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < overlaps.Length; i++)
         {
             if (!TryRegisterImpact(overlaps[i]))
@@ -1043,7 +1165,7 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         TryApplyDamageToEnemy(other, targetRoot);
-        int nextLife = Mathf.Max(0, remainingLife - Mathf.Max(1, currentLifeSettings.impactLifeCost));
+        int nextLife = Mathf.Max(0, remainingLife - Mathf.Max(1, attackSpec.impactLifeCost));
         GameDebug.LogFormat(
             "[CharBullet] Hit target='{0}' via collider='{1}' layer={2} life {3}->{4}",
             targetRoot.name,
@@ -1051,7 +1173,7 @@ public sealed class CharBullet : MonoBehaviour
             other.gameObject.layer,
             remainingLife,
             nextLife);
-        ApplyLifeCost(currentLifeSettings.impactLifeCost);
+        ApplyLifeCost(attackSpec.impactLifeCost);
         return true;
     }
 
@@ -1064,7 +1186,7 @@ public sealed class CharBullet : MonoBehaviour
     private void TryApplyDamageToEnemy(Collider other, Transform targetRoot)
     {
         Enemy enemy = other.GetComponentInParent<Enemy>();
-        if (damage <= 0f || !IsEnemyImpactTarget(other, targetRoot, enemy))
+        if (Damage <= 0f || !IsEnemyImpactTarget(other, targetRoot, enemy))
         {
             return;
         }
@@ -1078,12 +1200,12 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         float previousHealth = enemy.CurrentHealth;
-        if (!enemy.TryApplyDamage(damage, out float remainingHealth, out bool isDead))
+        if (!enemy.TryApplyDamage(Damage, out float remainingHealth, out bool isDead))
         {
             GameDebug.LogFormat(
                 "[CharBullet] Enemy target='{0}' ignored damage={1} health={2}/{3}",
                 targetRoot.name,
-                damage,
+                Damage,
                 previousHealth,
                 enemy.MaxHealth);
             return;
@@ -1093,7 +1215,7 @@ public sealed class CharBullet : MonoBehaviour
             "[CharBullet] Damaged enemy target='{0}' via collider='{1}' damage={2} health {3}->{4}",
             targetRoot.name,
             other.name,
-            damage,
+            Damage,
             previousHealth,
             remainingHealth);
 
@@ -1193,7 +1315,7 @@ public sealed class CharBullet : MonoBehaviour
             return;
         }
 
-        Collider[] overlaps = Physics.OverlapSphere(bounds.center, overlapRadius, currentLifeSettings.impactMask, QueryTriggerInteraction.Ignore);
+        Collider[] overlaps = Physics.OverlapSphere(bounds.center, overlapRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < overlaps.Length; i++)
         {
             Collider overlap = overlaps[i];
@@ -1223,6 +1345,27 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         CaptureCurrentScaleAsBase();
+    }
+
+    /// <summary>
+    /// summary: 统一应用新的攻击配置，并按需刷新当前子弹的缓存速度与剩余生命。
+    /// param: newAttackSpec 需要应用的新攻击配置
+    /// param: syncCurrentSpeed 是否同步当前飞行速度
+    /// param: syncRemainingLife 是否同步当前剩余生命
+    /// returns: 无
+    /// </summary>
+    private void ApplyAttackSpec(AttackSpec newAttackSpec, bool syncCurrentSpeed, bool syncRemainingLife)
+    {
+        attackSpec = newAttackSpec.GetSanitized();
+        if (syncCurrentSpeed)
+        {
+            speed = attackSpec.projectileSpeed;
+        }
+
+        if (syncRemainingLife)
+        {
+            remainingLife = attackSpec.projectileLife;
+        }
     }
 
     private void ApplyScaleMultiplier()
@@ -1290,7 +1433,7 @@ public sealed class CharBullet : MonoBehaviour
 
     private bool IsImpactLayerIncluded(int layer)
     {
-        return (currentLifeSettings.impactMask.value & (1 << layer)) != 0;
+        return (attackSpec.impactMask.value & (1 << layer)) != 0;
     }
 
     private bool IsOwnedTransform(Transform candidate)
@@ -1585,4 +1728,5 @@ public sealed class CharBullet : MonoBehaviour
     {
         return candidate != null && (candidate == transform || candidate.IsChildOf(transform));
     }
+}
 }

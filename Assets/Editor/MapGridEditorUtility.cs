@@ -489,7 +489,7 @@ namespace Kernel.MapGrid.Editor
                     return false;
                 }
 
-                if ((actionName == "Frame Camera" || authoring.AutoFrameCamera) &&
+                if (actionName == "Frame Camera" &&
                     !TryFrameCameraForUndo(authoring, actionName, out error))
                 {
                     Undo.RevertAllDownToGroup(undoGroup);

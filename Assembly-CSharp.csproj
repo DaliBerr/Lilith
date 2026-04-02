@@ -50,28 +50,34 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Scripts\Kernel\Status\Status.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\PlayerFollowCamera.cs" />
     <Compile Include="Assets\Prefabs\UI\GameUIScreen.cs" />
+    <Compile Include="Assets\Input\UI Controls.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationManager.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\Core\EdgeCoreTokenDef.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationJsonUtility.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\localizationPack.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\GameDebug.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScreen.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\Core\IceCoreTokenDef.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeDeep.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIWidget.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCrossRefs.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\Core\FireCoreTokenDef.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScrobePolymorph.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCollections.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletLifeSettings.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\GlobalTextInputGuard.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\Log.cs" />
     <Compile Include="Assets\Scripts\Kernel\Cell\CellData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\AttackSpec.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
@@ -84,6 +90,7 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\BaseCharEnemyNorm1.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\CodeC.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\IsaveItem.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\Core\ThunderCoreTokenDef.cs" />
     <Compile Include="Assets\Prefabs\UI\MainMenuUI.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogBootStrap.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerPlaneMovement.cs" />
