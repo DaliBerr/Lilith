@@ -686,6 +686,12 @@ public sealed class AttackFormulaCompilerTests
         public override float MaxHealth => maxHealth;
         public override float CurrentHealth => currentHealth;
 
+        public override float AttackRange => throw new System.NotImplementedException();
+
+        public override float AttackCooldown => throw new System.NotImplementedException();
+
+        public override float AttackDamage => throw new System.NotImplementedException();
+
         public void SetHealth(float health)
         {
             maxHealth = Mathf.Max(0f, health);

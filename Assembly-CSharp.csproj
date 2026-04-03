@@ -57,6 +57,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationJsonUtility.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\localizationPack.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\GameDebug.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyMeleeAttacker.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScreen.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeDeep.cs" />
@@ -67,6 +68,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackProjectileEmitter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ValueTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\WaveManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CompiledAttack.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
@@ -90,6 +92,7 @@
     <Compile Include="Assets\Scripts\Kernel\Status\StatusController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PostTokenData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\Events.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealth.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\SerializedFieldConverter.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
     <Compile Include="Assets\Scripts\StartUp.cs" />
@@ -106,6 +109,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BehaviorTokenData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridAuthoring.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\WaveDefinition.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\Scribe.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeValue.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogForwarder.cs" />
@@ -1308,6 +1312,10 @@
       <HintPath>Library\ScriptAssemblies\Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="MCPForUnity.Runtime">
+      <HintPath>Library\ScriptAssemblies\MCPForUnity.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.RenderPipelines.Core.Runtime">
       <HintPath>Library\ScriptAssemblies\Unity.RenderPipelines.Core.Runtime.dll</HintPath>
       <Private>False</Private>
@@ -1338,6 +1346,10 @@
     </Reference>
     <Reference Include="Unity.Profiling.Core">
       <HintPath>Library\ScriptAssemblies\Unity.Profiling.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="MCPForUnity.Editor">
+      <HintPath>Library\ScriptAssemblies\MCPForUnity.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.InputSystem.ForUI">

@@ -23,6 +23,7 @@
 - `Assets/**/*.unity`
 - `Assets/**/*.prefab`
 - `Assets/**/*.asset`（ScriptableObject 配置类等）
+- 若 `Unity MCP` 可用，优先通过 `Unity MCP` 查询 Scene / Prefab / GameObject / Component 状态，而不是直接打开这些 YAML 文本
 
 ---
 
@@ -64,6 +65,28 @@
 
 ---
 
+## Unity MCP / Unity MCP 使用约定
+若当前 agent 可以访问 `Unity MCP`，默认把它视为 Unity Editor 的一等入口，而不是可选附加能力。
+
+- 先读 `mcpforunity://editor/state`，确认 `ready_for_tools`、编译状态、活动场景
+- 涉及 Scene / Prefab / GameObject / Component / Console / Test / Screenshot / Build / Package / Editor 状态时，优先调用 `Unity MCP`
+- 优先使用编辑器真实状态回答“对象是否存在、组件是否挂载、场景是否激活、控制台是否报错、测试是否通过”这类问题，不要先靠手读 `.unity` / `.prefab` 文本猜
+- 修改 C# 脚本仍以源码文件为主；但修改后应优先通过 `Unity MCP` 检查编译状态、Console 和场景接线结果
+- 只有在以下情况才优先直接读 `.unity` / `.prefab` / `.meta` 文本：
+  1. `Unity MCP` 当前不可用
+  2. 需要处理 YAML merge / GUID / Missing Script / Missing Reference
+  3. 需要做文本级 diff 或审查序列化变更
+
+默认建议优先调用的 `Unity MCP` 能力：
+
+- 查编辑器是否就绪：`mcpforunity://editor/state`
+- 查当前场景与根对象：`manage_scene(action="get_active")`、`find_gameobjects`
+- 查/改对象与组件：`manage_gameobject`、`manage_components`
+- 查/改 Prefab：`manage_prefabs`
+- 查 Console / 编译问题：`read_console`
+- 运行测试：`run_tests`、`get_test_job`
+- 做场景截图或 UI 自检：`manage_camera`
+
 ## How to work / 工作方式与策略（重要）
 1) **先问目标，再读文件**  
    在动手修改前，先明确要解决的问题是什么（报错、功能、重构、性能、架构）。
@@ -74,28 +97,32 @@
    - `Assets/**/Scripts` 中的 `GameManager`/`Bootstrap`/`Entry`/`Main`/`App` 类
    - `MonoBehaviour` 的 `Awake/Start/Update` 链路
    - `ScriptableObject` 配置加载点
-4) **修改要可编译、可回滚**  
+4) **若 `Unity MCP` 可用，相关操作要主动调用它**  
+   - 先用 `mcpforunity://editor/state` 判断编辑器是否可操作
+   - 先用 `find_gameobjects` / `manage_scene` / `manage_prefabs` / `read_console` 建立事实，再决定读哪些文件
+   - 涉及场景挂载、Prefab 层级、组件启停、Console 报错、测试结果时，不要跳过 `Unity MCP`
+5) **修改要可编译、可回滚**  
    - 保持 API 变更最小化
    - 给出明确的修改点与原因
    - 若涉及多人协作，优先不改变资源 GUID
-5) **当上下文可能超限时，主动摘要**  
+6) **当上下文可能超限时，主动摘要**  
    - 用项目结构摘要（模块、关键类、依赖）替代全文粘贴
    - 明确你已忽略哪些目录以节省上下文
-6) **为必要的方法/函数添加注释**
+7) **为必要的方法/函数添加注释**
    - 注释保持简短
    - 注释至少包含"<summary>,<param>,<returns>"
-7) **README 优先与维护**  
+8) **README 优先与维护**  
    - 执行任务前，先阅读根目录 `README.md`，优先理解现有架构说明与约定
    - 任务完成后，评估本次改动是否影响架构、流程、入口、依赖或关键脚本说明
    - 若有影响，需同步更新 `README.md`，确保文档与当前实现一致
-8) **UI 文本组件规范**
+9) **UI 文本组件规范**
    - 所有文字类条目默认使用 `TMPro`（如 `TMP_Text` / `TextMeshProUGUI`）
    - 非兼容性修复场景下，不再新增 `UnityEngine.UI.Text`
-9) **分层边界是硬规则**
+10) **分层边界是硬规则**
    - 禁止在 `Assets/Scripts/Vocalith/**` 新增任何 `Kernel.*` 引用
    - 若基础设施需要游戏语义，必须改为在 `Kernel` 增加 adapter / extension / bridge，或将抽象下沉到 `Vocalith`
    - 当前其他 `Vocalith` 子模块若仍存在历史反向依赖，属于技术债，不代表规则例外
-10) **按通知阈值发送完成通知**
+11) **按通知阈值发送完成通知**
    - 默认不要在每个任务结束后都发送 `ntfy_me`
    - 只有在任务满足“通知阈值”时，才发送当前任务的完成情况
    - 通知阈值可按以下任一条件判断：
@@ -130,4 +157,5 @@
 ## Default assumption 
 - `.meta` 文件与 `Library/Temp` 等不参与业务逻辑讨论。
 - 功能实现以 `Assets/**/Scripts` 的 C# 代码为准。
+- 若 `Unity MCP` 可用，Editor / Scene / Prefab / Console / Test 的真实状态以 `Unity MCP` 返回结果为准。
 - 如果你发现自己在读大量资源文件，请立刻停下并改用“按需读取”的方式。

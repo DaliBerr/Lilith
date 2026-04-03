@@ -138,6 +138,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 9040077734227831188, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2777352532888450817}
+    - targetCorrespondingSourceObject: {fileID: 9040077734227831188, guid: e19e371526e657f47a119f1f95594d76, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6645123987412301111}
   m_SourcePrefab: {fileID: 100100000, guid: e19e371526e657f47a119f1f95594d76, type: 3}
 --- !u!4 &1506151790293226984 stripped
 Transform:
@@ -185,10 +188,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 992d721d992de144dab77c1d57fb215b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BaseCharEnemyNorm1
+  enemyName: Norm1
   moveSpeed: 120
   rotationSpeed: 540
   stoppingDistance: 1
-  attackRange: 0
+  attackRange: 3
   attackCooldown: 0
-  attackDamage: 0
+  attackDamage: 1
   health: 100
+--- !u!114 &6645123987412301111
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7740772627045821859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f7dc5e4d7c94ab4a9dc0d23baf8d7f1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyMeleeAttacker
+  enemyData: {fileID: 2777352532888450817}
+  targetPlayer: {fileID: 0}
+  targetPlayerHealth: {fileID: 0}

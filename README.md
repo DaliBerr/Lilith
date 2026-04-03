@@ -24,6 +24,26 @@
   - 运行时代码默认编进 `Assembly-CSharp`
   - Editor 代码默认编进 `Assembly-CSharp-Editor`
 
+## Agent 与 Unity MCP
+
+如果 agent 当前可以访问 `Unity MCP`，本仓库默认采用“源码编辑 + Editor 联动验证”的工作流。
+
+- 涉及 `Scene`、`Prefab`、`GameObject`、`Component`、`Console`、`Test`、`Screenshot`、`Build`、`Package`、`Editor` 状态时，优先调用 `Unity MCP`
+- 先读 `mcpforunity://editor/state`，确认 `ready_for_tools`、编译状态、活动场景，再决定读哪些文件
+- 不要为了确认对象是否存在、组件是否挂载、场景是否激活、Console 是否报错，优先去手读 `.unity` / `.prefab` YAML 文本
+- 纯 C# 业务逻辑修改仍以 `Assets/**/Scripts` 源码为主；修改后再通过 `Unity MCP` 检查编译、Console 和场景接线结果
+- 只有在 `Unity MCP` 不可用，或要处理 `GUID` / `Missing Script` / `Missing Reference` / YAML merge / 文本级 diff 时，才回退到直接读 `.unity`、`.prefab`、`.meta`
+
+建议优先使用的 `Unity MCP` 能力：
+
+- 编辑器就绪与活动场景：`mcpforunity://editor/state`、`manage_scene(action="get_active")`
+- 查找对象与组件：`find_gameobjects`、`manage_gameobject`、`manage_components`
+- 查改 Prefab：`manage_prefabs`
+- 检查编译与 Console：`read_console`
+- 跑测试：`run_tests`、`get_test_job`
+- 场景截图与视觉自检：`manage_camera`
+- 批量执行编辑器操作：`batch_execute`
+
 ## 未来规划
 - 这个项目未来希望发展成一款基于文字构筑的俯视角肉鸽射击游戏。核心思路是把“文字”本身作为战斗系统的一部分，而不是单纯的视觉表现：玩家在战斗中击败敌人后，可以收集掉落的文字词元或预组好的词包，并按照固定语法将它们组合成自己的攻击方式。例如，不同的核心词、行为词和数值词可以共同决定子弹的属性、飞行方式和攻击范围，从而形成明显不同的 build。整体目标是让玩家在每一局中不断通过拾取、替换和重组文字来“写出”自己的战斗风格，并在局外通过永久解锁来逐步扩展可用词元、构筑深度和开局选择，使游戏兼具即时战斗的爽感、组合发现的乐趣，以及肉鸽式的成长循环。
 
@@ -31,21 +51,22 @@
 
 如果 agent 需要快速建立上下文，建议按这个顺序读：
 
-1. [`Assets/Scenes/Start.unity`](Assets/Scenes/Start.unity)
+1. 若 `Unity MCP` 可用，先看 `mcpforunity://editor/state`、`manage_scene(action="get_active")`，并用 `find_gameobjects` 确认 `Startup`、`UIRoot`、`EnemyGenerator`、`WaveManager` 等对象是否实际存在
+2. [`Assets/Scenes/Start.unity`](Assets/Scenes/Start.unity)
    先看当前场景里有哪些根对象：`MapRoot`、`UIRoot`、`Startup`、`Main Camera`、各 UI Layer。
-2. [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
+3. [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
    看代码层设计的启动流程：语言初始化、状态初始化、UI 启动、Addressables 初始化。
-3. [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
+4. [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
    看 UI 是怎么被实例化、压栈、出栈和销毁的。
-4. [`Assets/Prefabs/UI/MainMenuUI.cs`](Assets/Prefabs/UI/MainMenuUI.cs)
+5. [`Assets/Prefabs/UI/MainMenuUI.cs`](Assets/Prefabs/UI/MainMenuUI.cs)
    看当前唯一明确写出来的业务 Screen。
-5. [`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) 和 [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
+6. [`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) 和 [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
    看状态机语义和切换规则。
-6. [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) 和 [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
+7. [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) 和 [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
    看地图网格的运行时数据结构与 Editor 生成逻辑。
-7. [`Assets/Scripts/Vocalith/Localization/LocalizationManager.cs`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
+8. [`Assets/Scripts/Vocalith/Localization/LocalizationManager.cs`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
    看语言包、JSON 补丁和 Addressables 读取。
-8. [`Assets/Scripts/Vocalith/Scribe/Scribe.cs`](Assets/Scripts/Vocalith/Scribe/Scribe.cs)
+9. [`Assets/Scripts/Vocalith/Scribe/Scribe.cs`](Assets/Scripts/Vocalith/Scribe/Scribe.cs)
    看当前自定义存档系统的底层协议与读写入口。
 
 ## 代码分层
@@ -100,6 +121,13 @@
   - 序列化类型名仍显示旧命名 `Lonize.UI.UIManager`
 - 场景里存在名为 `Startup` 的根对象
   - 但当前已提交的 `Start.unity` 中，没有看到 `Kernel.Startup` 组件的序列化记录
+- 场景里存在名为 `EnemyGenerator` 的对象
+  - 当前默认敌人 prefab 是 [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
+  - 自治随机刷怪循环已关闭，改由波次系统驱动单次生成
+- 场景里存在名为 `WaveManager` 的对象
+  - 当前会自动顺序执行挂到场景里的 [`Assets/Data/Waves`](Assets/Data/Waves) 波次资产
+- `Player` 当前除了 [`PlayerPlaneMovement`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs) 外，还挂了 [`PlayerHealth`](Assets/Scripts/Kernel/Player/PlayerHealth.cs)
+  - 敌人的近战攻击当前直接结算到这个生命组件上
 
 这意味着：
 
@@ -414,6 +442,7 @@
 
 - [`Assets/Scripts/Kernel/Input/InputActionManager.cs`](Assets/Scripts/Kernel/Input/InputActionManager.cs)
 - [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)
+- [`Assets/Scripts/Kernel/Player/PlayerHealth.cs`](Assets/Scripts/Kernel/Player/PlayerHealth.cs)
 - [`Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs`](Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs)
 - [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
 
@@ -438,6 +467,9 @@
 - `PlayerFollowCamera` 当前挂在 `Start.unity` 的 `Main Camera`
   - 只跟随玩家位置，不继承玩家旋转
   - 进入场景时会把正交尺寸恢复到局部战斗视野，不再自动切到“显示整张地图”的 framing
+- `PlayerHealth` 当前提供最小生命值与受伤入口
+  - 当前只负责维护 `maxHealth / currentHealth` 和 `TryApplyDamage`
+  - 当前还没有 UI 血条、死亡演出、复活或状态机接线
 
 ### 10. 文字子弹运行时组件
 
@@ -544,30 +576,51 @@
   - `FireCore` 默认把文字设为红色
   - `EdgeCore` 默认会缩小子弹并提高弹速
 
-### 11. 敌人生成与追踪
+### 11. 敌人波次、生成与近战
 
 关键文件：
 
 - [`Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs`](Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs)
+- [`Assets/Scripts/Kernel/Enemy/WaveManager.cs`](Assets/Scripts/Kernel/Enemy/WaveManager.cs)
+- [`Assets/Scripts/Kernel/Enemy/WaveDefinition.cs`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs)
 - [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
 - [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
 - [`Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs)
+- [`Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs`](Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs)
+- [`Assets/Data/Waves`](Assets/Data/Waves)
 - [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
 
 当前能力：
 
-- `EnemyGenerator` 可按随机区间 `spawnIntervalRange` 持续刷新敌人
+- `EnemyGenerator` 仍然负责“刷在哪里”和“实例化谁”
+  - 可按随机区间 `spawnIntervalRange` 持续刷新敌人
+  - 也支持在外部关闭自治循环后，由波次系统显式调用单次生成接口
 - 刷怪位置以玩家为圆心，在 XZ 平面上按 `spawnDistance` 固定半径随机采样
 - 每次刷怪会校验候选点是否落在 tag 为 `Ground` 的格子上；若命中非地面或越界区域，会在 `maxGroundSpawnRolls` 次数内继续重 roll
 - 生成器支持手动指定 `targetPlayer`，未指定时会自动查找场景中的 `PlayerPlaneMovement`
 - 生成器支持手动指定 `targetMapGrid`，未指定时会自动查找场景中的 `MapGridAuthoring`
-- `EnemyGenerator` 期望 `CharEnemy.prefab` 已预挂 `CharEnemyMovement`，生成后只负责注入当前玩家目标
-- `Enemy` 只定义敌人数据契约；当前由派生类对外提供 `moveSpeed / rotationSpeed / stoppingDistance`
-- `BaseCharEnemyNorm1` 是当前默认的基础文字敌人类型，自身持有并校验默认移动参数与基础战斗参数
+- `EnemyGenerator` 期望默认敌人 prefab 与附加敌人 prefab 都已预挂 `CharEnemyMovement`
+  - 当前支持按 `Enemy.EnemyName` 从 prefab 目录中解析目标敌人
+  - 生成后会注入当前玩家目标，并在可用时把波次配置应用到敌人数据
+- `WaveDefinition` 当前采用“每波一个 ScriptableObject” 的配置方式
+  - 当前每波可配置统一刷怪间隔，以及多个 `enemyName + spawnCount + EnemyWaveConfig` 条目
+  - 勾选 `randomizeEnemySpawns` 后，同一波内会按各条目的剩余数量做加权随机抽取；不勾选时仍按 Inspector 中条目顺序依次刷出
+- `WaveManager` 当前负责“何时刷、刷多少、这一波是什么参数”
+  - 首波自动开始
+  - 当前波会按固定间隔刷满配额，并根据 `WaveDefinition` 选择“顺序刷”或“随机刷”
+  - 场上敌人清空并等待 `interWaveDelay` 后自动切到下一波
+  - 最后一波完成后停止，不循环
+- `Enemy` 现在统一暴露名称、移动、生命和攻击只读契约
+- `BaseCharEnemyNorm1` 是当前默认的基础文字敌人类型
+  - 支持接收 `EnemyWaveConfig` 作为运行时覆写
+  - 应用波次配置时会同步把 `stoppingDistance` 设为 `attackRange`
 - `CharEnemyMovement` 会在 XZ 平面持续朝向并追踪玩家，并从同物体上的 `Enemy` 组件读取移动参数
 - 同时兼容 `Transform` 直驱、`Rigidbody.isKinematic` 和动态 `Rigidbody` 三种移动模式
 - 仅当 `Rigidbody` 挂在敌人自身根节点时才使用刚体驱动；若 prefab 误绑到子刚体，会自动回退到 `Transform` 驱动
 - 进入 `stoppingDistance` 后会停止继续贴近，避免敌人持续抖动穿模
+- `EnemyMeleeAttacker` 当前提供最小近战攻击闭环
+  - 只在进入 `attackRange`、冷却结束且玩家仍存活时结算一次 `attackDamage`
+  - 当前不包含攻击动画、特效、击退或玩家死亡演出
 
 ## 当前未闭环或需要特别注意的点
 
@@ -592,6 +645,13 @@
 
 如果 agent 想快速落点，可以按需求直接跳到下面这些位置：
 
+- 若 `Unity MCP` 可用，涉及 Scene / Prefab / Component / Console / Test / Screenshot 的任务，先调用对应 `Unity MCP` 工具，再决定读哪些文件
+- 查当前场景真实挂载与对象存在性：`manage_scene(action="get_active")` + `find_gameobjects`
+- 查当前组件状态、启用状态和对象层级：`manage_gameobject` + `manage_components`
+- 查 Prefab 当前结构、子物体和组件：`manage_prefabs`
+- 查编译报错和运行期告警：`read_console`
+- 跑 EditMode / PlayMode 测试：`run_tests` + `get_test_job`
+
 - 改启动流程：[`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) + [`Assets/Scenes/Start.unity`](Assets/Scenes/Start.unity)
 - 改游戏状态：[`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) + [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
 - 加新 UI Screen：[`Assets/Prefabs/UI`](Assets/Prefabs/UI) + [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
@@ -601,7 +661,5 @@
 - 改本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
 - 查日志：[`Assets/Scripts/Vocalith/Log`](Assets/Scripts/Vocalith/Log)
 - 改玩家输入或平面移动：[`Assets/Scripts/Kernel/Input`](Assets/Scripts/Kernel/Input) + [`Assets/Scripts/Kernel/Player`](Assets/Scripts/Kernel/Player) + [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
-- 改敌人生成、敌人数据或追踪：[`Assets/Scripts/Kernel/Enemy`](Assets/Scripts/Kernel/Enemy) + [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
+- 改敌人生成、波次、敌人数据或追踪：[`Assets/Scripts/Kernel/Enemy`](Assets/Scripts/Kernel/Enemy) + [`Assets/Data/Waves`](Assets/Data/Waves) + [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
 - 改文字子弹或文字法术表现：[`Assets/Scripts/Kernel/Bullet`](Assets/Scripts/Kernel/Bullet) + [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
-
-

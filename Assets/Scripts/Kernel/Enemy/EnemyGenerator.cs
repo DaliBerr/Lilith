@@ -1,5 +1,8 @@
 using Kernel.MapGrid;
 using UnityEngine;
+using System;
+using System.Collections.Generic;
+using VocalithRandom = Vocalith.Random;
 
 /// <summary>
 /// 按随机时间间隔在玩家周围固定半径生成文字敌人。
@@ -12,25 +15,32 @@ public sealed class EnemyGenerator : MonoBehaviour
     private const int MinimumGroundSpawnRolls = 1;
 
     [SerializeField] private CharEnemyMovement charEnemyPrefab;
+    [SerializeField] private List<CharEnemyMovement> additionalEnemyPrefabs = new();
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private MapGridAuthoring targetMapGrid;
     [SerializeField] private Transform spawnedEnemyParent;
     [SerializeField] private Vector2 spawnIntervalRange = new(1f, 2.5f);
     [SerializeField, Min(0f)] private float spawnDistance = 30f;
     [SerializeField, Min(MinimumGroundSpawnRolls)] private int maxGroundSpawnRolls = 16;
+    [SerializeField] private bool runAutonomousLoop = true;
 
     private float nextSpawnTime;
+    private VocalithRandom randomSource;
 
     private void Awake()
     {
         TryResolveTargetPlayer();
         TryResolveMapGrid();
         SanitizeConfiguration();
+        EnsureRandomSource();
     }
 
     private void OnEnable()
     {
-        ScheduleNextSpawn(Time.time);
+        if (runAutonomousLoop)
+        {
+            ScheduleNextSpawn(Time.time);
+        }
     }
 
     /// <summary>
@@ -40,12 +50,12 @@ public sealed class EnemyGenerator : MonoBehaviour
     /// </summary>
     private void Update()
     {
-        if (Time.time < nextSpawnTime)
+        if (!runAutonomousLoop || Time.time < nextSpawnTime)
         {
             return;
         }
 
-        TrySpawnEnemy();
+        TrySpawnEnemyInternal(out _);
         ScheduleNextSpawn(Time.time);
     }
 
@@ -71,21 +81,57 @@ public sealed class EnemyGenerator : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 生成一名新的文字敌人，并把当前玩家目标注入到敌人行为脚本。
-    /// param: 无
+    /// summary: 切换生成器是否运行自身的随机刷怪循环。
+    /// param: shouldRun 为 true 时启用自治循环，为 false 时仅允许外部显式触发单次生成
+    /// returns: 无
+    /// </summary>
+    public void SetAutonomousLoop(bool shouldRun)
+    {
+        runAutonomousLoop = shouldRun;
+        if (runAutonomousLoop)
+        {
+            ScheduleNextSpawn(Time.time);
+        }
+    }
+
+    /// <summary>
+    /// summary: 按当前波次配置显式生成一名敌人，并把覆写数值应用到新实例。
+    /// param: config 当前波次给出的敌人数值配置
+    /// param: spawnedEnemy 输出的实际生成敌人数据组件
+    /// param: prefabOverride 可选的敌人 prefab 覆写；为空时回退到生成器默认 prefab
     /// returns: 成功实例化敌人时返回 true
     /// </summary>
-    private bool TrySpawnEnemy()
+    public bool TrySpawnEnemy(EnemyWaveConfig config, out Enemy spawnedEnemy, CharEnemyMovement prefabOverride = null)
     {
-        if (charEnemyPrefab == null || !TryGetSpawnPosition(out Vector3 spawnPosition))
+        if (!TrySpawnEnemyInternal(out spawnedEnemy, prefabOverride))
         {
             return false;
         }
 
-        Quaternion spawnRotation = GetSpawnRotation(spawnPosition, targetPlayer.position);
-        CharEnemyMovement enemyMovement = Instantiate(charEnemyPrefab, spawnPosition, spawnRotation, spawnedEnemyParent);
-        enemyMovement.TrySetTarget(targetPlayer);
+        if (spawnedEnemy is IEnemyWaveConfigReceiver receiver)
+        {
+            receiver.ApplyWaveConfig(config);
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// summary: 按敌人名称从生成器的 prefab 目录中解析目标敌人，并应用当前波次配置完成一次生成。
+    /// param: enemyName 本次需要生成的敌人名称
+    /// param: config 当前波次给出的敌人数值配置
+    /// param: spawnedEnemy 输出的实际生成敌人数据组件
+    /// returns: 成功找到同名 prefab 并实例化敌人时返回 true
+    /// </summary>
+    public bool TrySpawnEnemy(string enemyName, EnemyWaveConfig config, out Enemy spawnedEnemy)
+    {
+        spawnedEnemy = null;
+        if (!TryResolveEnemyPrefab(enemyName, out CharEnemyMovement prefabToSpawn))
+        {
+            return false;
+        }
+
+        return TrySpawnEnemy(config, out spawnedEnemy, prefabToSpawn);
     }
 
     /// <summary>
@@ -108,6 +154,64 @@ public sealed class EnemyGenerator : MonoBehaviour
 
         targetPlayer = playerMovement.transform;
         return true;
+    }
+
+    /// <summary>
+    /// summary: 生成一名新的文字敌人，并把当前玩家目标注入到敌人移动行为脚本。
+    /// param: spawnedEnemy 输出的实际生成敌人数据组件
+    /// param: prefabOverride 可选的敌人 prefab 覆写；为空时回退到默认 prefab
+    /// returns: 成功实例化敌人时返回 true
+    /// </summary>
+    private bool TrySpawnEnemyInternal(out Enemy spawnedEnemy, CharEnemyMovement prefabOverride = null)
+    {
+        spawnedEnemy = null;
+        CharEnemyMovement prefabToSpawn = prefabOverride != null ? prefabOverride : charEnemyPrefab;
+        if (prefabToSpawn == null || !TryResolveTargetPlayer() || !TryGetSpawnPosition(out Vector3 spawnPosition))
+        {
+            return false;
+        }
+
+        Quaternion spawnRotation = GetSpawnRotation(spawnPosition, targetPlayer.position);
+        CharEnemyMovement enemyMovement = Instantiate(prefabToSpawn, spawnPosition, spawnRotation, spawnedEnemyParent);
+        enemyMovement.TrySetTarget(targetPlayer);
+        TryBindEnemyAttackTarget(enemyMovement);
+        enemyMovement.TryGetComponent(out spawnedEnemy);
+        return spawnedEnemy != null;
+    }
+
+    /// <summary>
+    /// summary: 按敌人名称在默认 prefab 与附加 prefab 目录中解析目标敌人模板。
+    /// param: enemyName 当前波次条目指定的敌人名称
+    /// param: prefab 输出的匹配 prefab
+    /// returns: 成功找到同名敌人 prefab 时返回 true
+    /// </summary>
+    private bool TryResolveEnemyPrefab(string enemyName, out CharEnemyMovement prefab)
+    {
+        prefab = null;
+        if (string.IsNullOrWhiteSpace(enemyName))
+        {
+            return false;
+        }
+
+        if (TryMatchEnemyPrefab(charEnemyPrefab, enemyName, out prefab))
+        {
+            return true;
+        }
+
+        if (additionalEnemyPrefabs == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < additionalEnemyPrefabs.Count; i++)
+        {
+            if (TryMatchEnemyPrefab(additionalEnemyPrefabs[i], enemyName, out prefab))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -145,13 +249,9 @@ public sealed class EnemyGenerator : MonoBehaviour
     /// </summary>
     private Vector3 GetRandomSpawnCandidatePosition()
     {
-        Vector2 randomOffset = Random.insideUnitCircle;
-        if (randomOffset.sqrMagnitude <= MinimumSpawnOffsetSqrMagnitude)
-        {
-            randomOffset = Vector2.up;
-        }
-
-        randomOffset.Normalize();
+        EnsureRandomSource();
+        float angleRadians = NextFloat(0f, Mathf.PI * 2f);
+        Vector2 randomOffset = new(Mathf.Cos(angleRadians), Mathf.Sin(angleRadians));
         Vector3 playerPosition = targetPlayer.position;
         return playerPosition + new Vector3(randomOffset.x, 0f, randomOffset.y) * spawnDistance;
     }
@@ -209,13 +309,53 @@ public sealed class EnemyGenerator : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 检查某个敌人 prefab 是否声明了目标敌人名称。
+    /// param: candidatePrefab 当前待比较的敌人 prefab
+    /// param: enemyName 当前波次条目指定的敌人名称
+    /// param: matchedPrefab 当名称匹配时输出该 prefab
+    /// returns: prefab 上存在 Enemy 组件且名称匹配时返回 true
+    /// </summary>
+    private static bool TryMatchEnemyPrefab(CharEnemyMovement candidatePrefab, string enemyName, out CharEnemyMovement matchedPrefab)
+    {
+        matchedPrefab = null;
+        if (candidatePrefab == null || !candidatePrefab.TryGetComponent(out Enemy enemy))
+        {
+            return false;
+        }
+
+        if (!string.Equals(enemy.EnemyName, enemyName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        matchedPrefab = candidatePrefab;
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 如果敌人身上挂有近战攻击组件，则把当前玩家目标同步注入进去。
+    /// param: enemyMovement 刚刚实例化完成的敌人移动组件
+    /// returns: 无
+    /// </summary>
+    private void TryBindEnemyAttackTarget(CharEnemyMovement enemyMovement)
+    {
+        if (enemyMovement == null || targetPlayer == null || !enemyMovement.TryGetComponent(out EnemyMeleeAttacker meleeAttacker))
+        {
+            return;
+        }
+
+        meleeAttacker.TrySetTarget(targetPlayer);
+    }
+
+    /// <summary>
     /// summary: 抽取下一次刷怪时间，保证间隔始终落在配置范围内。
     /// param: currentTime 当前时间戳
     /// returns: 无
     /// </summary>
     private void ScheduleNextSpawn(float currentTime)
     {
-        nextSpawnTime = currentTime + Random.Range(spawnIntervalRange.x, spawnIntervalRange.y);
+        EnsureRandomSource();
+        nextSpawnTime = currentTime + NextFloat(spawnIntervalRange.x, spawnIntervalRange.y);
     }
 
     /// <summary>
@@ -225,9 +365,43 @@ public sealed class EnemyGenerator : MonoBehaviour
     /// </summary>
     private void SanitizeConfiguration()
     {
+        if (additionalEnemyPrefabs == null)
+        {
+            additionalEnemyPrefabs = new List<CharEnemyMovement>();
+        }
+
         spawnIntervalRange.x = Mathf.Max(MinimumSpawnInterval, spawnIntervalRange.x);
         spawnIntervalRange.y = Mathf.Max(spawnIntervalRange.x, spawnIntervalRange.y);
         spawnDistance = Mathf.Max(0f, spawnDistance);
         maxGroundSpawnRolls = Mathf.Max(MinimumGroundSpawnRolls, maxGroundSpawnRolls);
+    }
+
+    /// <summary>
+    /// summary: 确保当前生成器拥有可用的 Vocalith 随机数源。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void EnsureRandomSource()
+    {
+        if (randomSource == null)
+        {
+            randomSource = new VocalithRandom();
+        }
+    }
+
+    /// <summary>
+    /// summary: 使用 Vocalith 随机数源在指定浮点区间内采样一个值。
+    /// param: minInclusive 采样下界
+    /// param: maxInclusive 采样上界
+    /// returns: 位于给定区间内的随机浮点值
+    /// </summary>
+    private float NextFloat(float minInclusive, float maxInclusive)
+    {
+        if (maxInclusive <= minInclusive)
+        {
+            return minInclusive;
+        }
+
+        return minInclusive + (maxInclusive - minInclusive) * randomSource.NextFloat01();
     }
 }

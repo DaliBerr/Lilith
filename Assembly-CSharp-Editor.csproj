@@ -51,7 +51,9 @@
   <ItemGroup>
     <Compile Include="Assets\Editor\SystemCallBlocker.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Editor\ReadmeEditor.cs" />
+    <Compile Include="Assets\Editor\WaveManagerTests.cs" />
     <Compile Include="Assets\Editor\AttackFormulaCompilerTests.cs" />
+    <Compile Include="Assets\Editor\EnemyMeleeAttackerTests.cs" />
     <Compile Include="Assets\Editor\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\EnemyGeneratorTests.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
@@ -1297,6 +1299,10 @@
       <HintPath>Library\ScriptAssemblies\Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="MCPForUnity.Runtime">
+      <HintPath>Library\ScriptAssemblies\MCPForUnity.Runtime.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.RenderPipelines.Core.Runtime">
       <HintPath>Library\ScriptAssemblies\Unity.RenderPipelines.Core.Runtime.dll</HintPath>
       <Private>False</Private>
@@ -1327,6 +1333,10 @@
     </Reference>
     <Reference Include="Unity.Profiling.Core">
       <HintPath>Library\ScriptAssemblies\Unity.Profiling.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="MCPForUnity.Editor">
+      <HintPath>Library\ScriptAssemblies\MCPForUnity.Editor.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Unity.InputSystem.ForUI">

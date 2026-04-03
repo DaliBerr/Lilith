@@ -1217,13 +1217,13 @@ public sealed class CharBullet : MonoBehaviour
         TryApplyDamageToEnemy(other, targetRoot, "Direct");
         TryApplyExplosionDamageAt(impactPoint);
         int nextLife = Mathf.Max(0, remainingLife - Mathf.Max(1, attackSpec.impactLifeCost));
-        GameDebug.LogFormat(
-            "[CharBullet] Hit target='{0}' via collider='{1}' layer={2} life {3}->{4}",
-            targetRoot.name,
-            other.name,
-            other.gameObject.layer,
-            remainingLife,
-            nextLife);
+        // GameDebug.LogFormat(
+        //     "[CharBullet] Hit target='{0}' via collider='{1}' layer={2} life {3}->{4}",
+        //     targetRoot.name,
+        //     other.name,
+        //     other.gameObject.layer,
+        //     remainingLife,
+        //     nextLife);
         ApplyLifeCost(attackSpec.impactLifeCost);
         return true;
     }
@@ -1264,14 +1264,14 @@ public sealed class CharBullet : MonoBehaviour
             return false;
         }
 
-        GameDebug.LogFormat(
-            "[CharBullet] Damaged enemy target='{0}' via {1} collider='{2}' damage={3} health {4}->{5}",
-            targetRoot.name,
-            damageSource,
-            other.name,
-            Damage,
-            previousHealth,
-            remainingHealth);
+        // GameDebug.LogFormat(
+        //     "[CharBullet] Damaged enemy target='{0}' via {1} collider='{2}' damage={3} health {4}->{5}",
+        //     targetRoot.name,
+        //     damageSource,
+        //     other.name,
+        //     Damage,
+        //     previousHealth,
+        //     remainingHealth);
 
         if (isDead)
         {

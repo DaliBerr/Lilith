@@ -4,7 +4,7 @@ using UnityEngine;
 /// 当前默认的基础文字敌人类型。
 /// </summary>
 [DisallowMultipleComponent]
-public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsReceiver
+public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsReceiver, IEnemyWaveConfigReceiver
 {
     private const float DefaultMoveSpeed = 120f;
     private const float DefaultRotationSpeed = 540f;
@@ -28,10 +28,21 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     public override float MoveSpeed => moveSpeed;
     public override float RotationSpeed => rotationSpeed;
     public override float StoppingDistance => stoppingDistance;
+    public override float AttackRange => attackRange;
+    public override float AttackCooldown => attackCooldown;
+    public override float AttackDamage => attackDamage;
     public override float MaxHealth => health;
-    public override float CurrentHealth => currentHealth;
+    public override float CurrentHealth
+    {
+        get
+        {
+            EnsureHealthInitialized();
+            return currentHealth;
+        }
+    }
 
     private float currentHealth;
+    private bool hasInitializedHealth;
 
     private void Awake()
     {
@@ -72,6 +83,23 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     }
 
     /// <summary>
+    /// summary: 把当前波次给出的运行时配置覆盖到当前敌人数据，并把生命值重置到新满血。
+    /// param: config 当前波次指定的敌人数值配置
+    /// returns: 无
+    /// </summary>
+    public void ApplyWaveConfig(EnemyWaveConfig config)
+    {
+        health = SanitizePositiveValue(config.maxHealth, health);
+        moveSpeed = SanitizeValue(config.moveSpeed, moveSpeed);
+        attackRange = SanitizeValue(config.attackRange, attackRange);
+        attackCooldown = SanitizeValue(config.attackCooldown, attackCooldown);
+        attackDamage = SanitizeValue(config.attackDamage, attackDamage);
+        stoppingDistance = attackRange;
+        SanitizeConfiguration();
+        ResetHealthToFull();
+    }
+
+    /// <summary>
     /// summary: 尝试对当前敌人扣减生命值；生命归零时销毁当前对象。
     /// param: damage 本次命中造成的伤害数值
     /// param: remainingHealth 本次伤害结算后的剩余生命值
@@ -80,6 +108,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     /// </summary>
     public override bool TryApplyDamage(float damage, out float remainingHealth, out bool isDead)
     {
+        EnsureHealthInitialized();
         remainingHealth = currentHealth;
         isDead = IsDead;
         if (damage <= 0f || IsDead)
@@ -140,6 +169,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     private void ResetHealthToFull()
     {
         currentHealth = health;
+        hasInitializedHealth = true;
     }
 
     /// <summary>
@@ -208,5 +238,21 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
         }
 
         return value;
+    }
+
+    /// <summary>
+    /// summary: 确保在测试或首次访问生命值时，当前敌人已经有合法的运行时生命状态。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void EnsureHealthInitialized()
+    {
+        if (hasInitializedHealth)
+        {
+            return;
+        }
+
+        SanitizeConfiguration();
+        ResetHealthToFull();
     }
 }
