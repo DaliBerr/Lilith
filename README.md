@@ -254,15 +254,34 @@
 
 - [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)
 - [`Assets/Scripts/Kernel/Bullet/AttackSpec.cs`](Assets/Scripts/Kernel/Bullet/AttackSpec.cs)
+- [`Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs)
+- [`Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs)
 - [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
 - [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
 - [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
 
 当前能力：
 
-- `AttackSpec` 统一承载当前子弹攻击配置，包括 `CoreType / BehaviorType / ValueType / ResultType`、伤害、速度、数量词条与生命周期参数
-- `PlayerPlaneMovement` 负责实例化 `CharBullet`，并把当前 `AttackSpec` 注入到发射流程
-- `CharBullet` 会从 `AttackSpec` 读取伤害、弹速、命中消耗和飞行回收参数；命中带有 `Enemy_Object` 标签的对象时，会尝试从碰撞体父级解析 `Enemy` 组件并调用统一受伤接口
+- `AttackSpec` 仍然是单发子弹的底层运行时配置，负责速度、生命周期、命中层级和基础伤害等参数
+- `AttackFormulaLoadout` 持有当前装备的有序词元列表，并缓存最新 `CompiledAttack`
+- `AttackFormulaCompiler` 负责把 `Pre? + Core + Behavior? + Value? + Result? + Value? + Post?` 编译成 `CompiledAttack`
+  - 缺少 `Core` 时为硬失败
+  - 其他非法顺序默认给出 warning 并尽力继续编译
+  - `Behavior` 缺失时默认 `Straight`
+  - `Result` 缺失时默认 `DirectDamage`
+  - token 还可以直接声明最终子弹文本覆盖；这部分不走 DSL，按被接受 token 的顺序最后一个生效
+  - 已被编译器接受的 token 还会按顺序回放自己的修饰 DSL
+  - 当前 DSL 支持 `= / += / -= / *= / /=`
+  - 当前可修饰目标包括 `TextColor / FontSize / ScaleMultiplier / ProjectileSpeed / MaxLifetime / MaxTravelDistance / ImpactRadiusMultiplier`
+  - `FontSize` 当前不再直接写 TMP 字号，而是驱动文字节点 `RectTransform` 的宽高，默认保持宽高一致，并在运行时基于当前文字容器尺寸执行 `+= / -= / *= / /=`
+  - 当 `FontSize` 生效时，球形碰撞体半径会同步锁定为文字容器边长的一半
+- `PlayerPlaneMovement` 发射时只会读取 `AttackFormulaLoadout` 的编译结果；缺少 loadout、loadout 为空或编译失败时都不会发射
+- `AttackProjectileEmitter` 会把 `CompiledAttack` 落地成实际子弹批次
+  - 当前支持 `Straight`
+  - 当前支持 `Spread`
+- `CharBullet` 会从 `AttackSpec` 读取伤害、弹速、命中消耗和飞行回收参数，并从 `CompiledAttack` 读取最终表现修饰；命中带有 `Enemy_Object` 标签的对象时，会尝试从碰撞体父级解析 `Enemy` 组件并调用统一受伤接口
+  - 当前支持 `DirectDamage`
+  - 当前支持 `Explosion`，并按“直击 + 爆炸 AoE”两段结算主目标
 - `Enemy` 统一暴露 `MaxHealth`、`CurrentHealth`、`IsDead` 和 `TryApplyDamage`
 - `BaseCharEnemyNorm1` 当前维护运行时生命值，并在生命归零后销毁自身
 
@@ -425,24 +444,79 @@
 关键文件：
 
 - [`Assets/Scripts/Kernel/Bullet/AttackSpec.cs`](Assets/Scripts/Kernel/Bullet/AttackSpec.cs)
+- [`Assets/Scripts/Kernel/Bullet/CompiledAttack.cs`](Assets/Scripts/Kernel/Bullet/CompiledAttack.cs)
+- [`Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs)
+- [`Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs)
+- [`Assets/Scripts/Kernel/Bullet/AttackProjectileEmitter.cs`](Assets/Scripts/Kernel/Bullet/AttackProjectileEmitter.cs)
+- [`Assets/Scripts/Kernel/Bullet/TokenData`](Assets/Scripts/Kernel/Bullet/TokenData)
 - [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
 - [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
+- [`Assets/Editor/AttackTokenAssetGenerator.cs`](Assets/Editor/AttackTokenAssetGenerator.cs)
 
 当前能力：
 
 - `CharBullet` 面向“文字即元素”的运行时子弹表达，默认使用 `TMP_Text` 作为字形承载
-- 所有与攻击有关的主要参数已集中到 `AttackSpec`
+- 文字子弹现在分成两层数据：
+  - `CompiledAttack` 表达由 token 公式编译出的高层语义结果
+  - `AttackSpec` 表达单发子弹真正运行时要消费的底层参数
+- 当前 token 资产全部继承自 `BaseTokenData : ScriptableObject`
+  - `CoreTokenData`
+  - `BehaviorTokenData`
+  - `ValueTokenData`
+  - `ResultTokenData`
+  - 以及预留的 `PreTokenData / PostTokenData`
+- 每个 token 资产都可以挂一组有序修饰表达式
+  - 例如 `=Color.red` `#FF0000`
+  - 例如 `+=10f`
+  - 例如 `*=0.8`
+- 每个 token 资产也可以直接设置最终子弹文本覆盖
+  - 这部分不走表达式解析
+  - 若多个已接受 token 都设置了文本覆盖，则按公式顺序最后一个生效
+- `AttackFormulaCompiler` 当前支持从左到右编译：
+  - `Core`
+  - `Behavior`
+  - `Value`
+  - `Result`
+  - `Post` 的位置校验与透传
+  - 已被接受的 token 会继续按出现顺序回放修饰表达式
+- 当前可执行的行为/结果组合是：
+  - `Straight`
+  - `Spread`
+  - `DirectDamage`
+  - `Explosion`
+- `Value` 当前只支持单个数值载荷
+  - 跟在 `Spread` 后时表示投射物数量
+  - 跟在 `Explosion` 后时表示爆炸半径
+- 所有与单发子弹有关的主要参数已集中到 `AttackSpec`
   - 当前包含 `CoreType / BehaviorType / ValueType / ResultType`
   - 以及 `Damage / ProjectileCount / BounceCount / ChainCount / PierceCount / ProjectileLife / ImpactLifeCost / ProjectileSpeed / MaxLifetime / MaxTravelDistance / ImpactMask`
   - 当前运行时已直接消费 `Damage / ProjectileLife / ImpactLifeCost / ProjectileSpeed / MaxLifetime / MaxTravelDistance / ImpactMask`
+- `PlayerPlaneMovement` 当前会优先读取 `AttackFormulaLoadout`
+  - 编译成功时按 `CompiledAttack` 发射
+  - 仅接受来自 `AttackFormulaLoadout` 的 `CompiledAttack`
+  - 编译失败时不会发射，并输出编译错误
+- `CompiledAttack` 除了战斗语义之外，还会承载最终表现修饰
+  - `DisplayText`
+  - `ScaleMultiplier`
+  - `ImpactRadiusMultiplier`
+  - `TextColor`
+  - `FontSize`
+    - 当前语义是文字容器的方形宽高尺寸；相对运算会以当前 prefab 文字容器尺寸为基准
+- `AttackProjectileEmitter` 会根据 `CompiledAttack` 生成一批实际子弹
+  - `Straight` 发射 1 发
+  - `Spread` 按对称角度发射多发
 - 默认优先依赖 Inspector 手动拖拽 `glyphText / movementTarget / sizeTarget / movementRigidbody`
   - 如果未手动指定，只会在当前 prefab 层级内做轻量缓存，不会自动新建 GameObject
 - 提供文字与尺寸控制接口
   - `TrySetText`
+  - `TrySetTextColor`
   - `TrySetFontSize`
+    - 当前会修改文字节点 `RectTransform` 的宽高，而不是直接写 `TMP_Text.fontSize`
+    - 当前还会同步把 `SphereCollider.radius` 设为尺寸的一半
   - `TrySetBaseLocalScale`
   - `TrySetBaseUniformScale`
   - `TrySetScaleMultiplier`
+  - `TrySetImpactRadiusMultiplier`
 - 提供运动控制接口
   - `TrySetDirection`
   - `TrySetSpeed`
@@ -462,9 +536,13 @@
   - 超过最大飞行距离
   - 命中后扣减生命直至归零
 - 当前默认命中配置为一次命中耗尽全部生命，但保留 `impactLifeCost` 用于后续穿透法术
+- `Explosion` 命中时会先结算直击，再以命中点为中心做一次 `OverlapSphere` 范围伤害
 - 可在 `Transform` 直驱、`Rigidbody.isKinematic` 和动态 `Rigidbody` 三种模式下复用
 - 支持 `World / Self` 两种移动空间，可用于后续拼装法术、轨迹和表现层逻辑
-- `CharBullet.prefab` 当前使用球形 Trigger Collider 作为命中体，并会随 `scaleMultiplier` 同步缩放判定半径
+- `CharBullet.prefab` 当前使用球形 Trigger Collider 作为命中体，并会按 `scaleMultiplier * impactRadiusMultiplier` 叠加缩放判定半径
+- 可通过 Editor 菜单 `Tools/Lilith/Bullet/Generate Default Token Assets` 生成一组默认 token 资产到 `Assets/Data/BulletTokens`
+  - `FireCore` 默认把文字设为红色
+  - `EdgeCore` 默认会缩小子弹并提高弹速
 
 ### 11. 敌人生成与追踪
 
@@ -524,10 +602,6 @@
 - 查日志：[`Assets/Scripts/Vocalith/Log`](Assets/Scripts/Vocalith/Log)
 - 改玩家输入或平面移动：[`Assets/Scripts/Kernel/Input`](Assets/Scripts/Kernel/Input) + [`Assets/Scripts/Kernel/Player`](Assets/Scripts/Kernel/Player) + [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
 - 改敌人生成、敌人数据或追踪：[`Assets/Scripts/Kernel/Enemy`](Assets/Scripts/Kernel/Enemy) + [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
-- 改文字子弹或文字法术表现：[`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs) + [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
+- 改文字子弹或文字法术表现：[`Assets/Scripts/Kernel/Bullet`](Assets/Scripts/Kernel/Bullet) + [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
 
-## 最后总结
 
-如果只用一句话描述当前项目状态：
-
-> 当前仓库已经搭好了“基础设施 + 网格编辑 + 状态系统 + 主菜单脚本”的骨架，其中 `MapGrid` 最完整，`UI / 启动 / 存档 / 数据加载` 仍处于基础框架已存在、业务闭环未完成的阶段。

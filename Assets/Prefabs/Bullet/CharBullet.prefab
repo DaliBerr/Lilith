@@ -194,6 +194,7 @@ MonoBehaviour:
   direction: {x: 0, y: 0, z: 1}
   speed: 0
   scaleMultiplier: 1
+  impactRadiusMultiplier: 1
 --- !u!4 &5133490595419490152 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 215781830275387871, guid: e19e371526e657f47a119f1f95594d76, type: 3}
@@ -239,7 +240,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 10
+  m_Radius: 12
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!54 &8839746597319551138 stripped
 Rigidbody:

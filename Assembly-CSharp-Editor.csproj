@@ -51,11 +51,13 @@
   <ItemGroup>
     <Compile Include="Assets\Editor\SystemCallBlocker.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Editor\ReadmeEditor.cs" />
+    <Compile Include="Assets\Editor\AttackFormulaCompilerTests.cs" />
     <Compile Include="Assets\Editor\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\EnemyGeneratorTests.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
     <Compile Include="Assets\Editor\CompileBeforePlay.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringTests.cs" />
+    <Compile Include="Assets\Editor\AttackTokenAssetGenerator.cs" />
     <Compile Include="Assets\Editor\MapGridEditorUtility.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -45,11 +45,14 @@ public sealed class CharBullet : MonoBehaviour
 
     [Header("Scale")]
     [SerializeField, Min(0f)] private float scaleMultiplier = 1f;
+    [SerializeField, Min(0f)] private float impactRadiusMultiplier = 1f;
 
     private readonly HashSet<int> impactedTargetRoots = new();
     private Vector3 baseLocalScale = Vector3.one;
     private float baseImpactRadius = 0.5f;
+    private float fontSizeDrivenImpactRadius;
     private bool hasBaseScaleSnapshot;
+    private bool hasFontSizeDrivenImpactRadius;
     private Transform ownerRoot;
     private Vector3 spawnWorldPosition;
     private Vector3 previousImpactCheckCenter;
@@ -57,6 +60,7 @@ public sealed class CharBullet : MonoBehaviour
     private int remainingLife;
     private bool hasPreviousImpactCheckCenter;
     private bool isActiveShot;
+    private CompiledAttack compiledAttack;
 
     public TMP_Text GlyphText
     {
@@ -123,8 +127,10 @@ public sealed class CharBullet : MonoBehaviour
     public Vector3 Direction => direction;
     public float Speed => speed;
     public float ScaleMultiplier => scaleMultiplier;
+    public float ImpactRadiusMultiplier => impactRadiusMultiplier;
     public float Damage => attackSpec.damage;
     public AttackSpec CurrentAttackSpec => attackSpec;
+    public CompiledAttack CurrentCompiledAttack => compiledAttack;
 
     private void Awake()
     {
@@ -138,19 +144,22 @@ public sealed class CharBullet : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 初始化一次新的子弹发射，重置移动、命中和生命周期状态。
+    /// summary: 初始化一次新的子弹发射，并额外注入编译后的高层攻击语义。
     /// param: owner 发射者根节点，用于忽略自碰撞
     /// param: spawnPosition 子弹出生世界坐标
     /// param: shotDirection 本次发射方向
     /// param: shotAttackSpec 本次发射使用的攻击配置
+    /// param: shotCompiledAttack 本次发射对应的编译结果
     /// returns: 无
     /// </summary>
-    public void InitializeShot(Transform owner, Vector3 spawnPosition, Vector3 shotDirection, AttackSpec shotAttackSpec)
+    public void InitializeShot(Transform owner, Vector3 spawnPosition, Vector3 shotDirection, AttackSpec shotAttackSpec, CompiledAttack shotCompiledAttack)
     {
         TryCacheBindings(overwriteExisting: true);
         EnsureCompatiblePhysicsBindings(allowFallbackCreation: false);
         EnsureImpactColliderConfiguration();
-        attackSpec = shotAttackSpec.GetSanitized();
+        AttackSpec resolvedAttackSpec = shotCompiledAttack != null ? shotCompiledAttack.AttackSpec : shotAttackSpec;
+        attackSpec = resolvedAttackSpec.GetSanitized();
+        compiledAttack = shotCompiledAttack;
         ownerRoot = owner;
         spawnWorldPosition = spawnPosition;
         elapsedLifetime = 0f;
@@ -160,6 +169,8 @@ public sealed class CharBullet : MonoBehaviour
         isActiveShot = true;
         autoMove = true;
         movementSpace = Space.World;
+        hasFontSizeDrivenImpactRadius = false;
+        fontSizeDrivenImpactRadius = 0f;
 
         EnableImpactCollider(true);
         TryStopMovement();
@@ -168,6 +179,8 @@ public sealed class CharBullet : MonoBehaviour
         ApplyFacingDirection(shotDirection);
         IgnoreOwnerCollisions();
         ResetImpactCheckState();
+        ApplyCompiledAttackPresentation();
+
         // LogShotInitialized(spawnPosition, shotDirection, attackSpec.projectileSpeed);
         // LogSpawnOverlapIfNeeded();
     }
@@ -436,18 +449,37 @@ public sealed class CharBullet : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 直接设置子弹文字的字体大小。
-    /// param: fontSize 需要应用的字体大小
+    /// summary: 直接设置子弹文字的颜色。
+    /// param: color 需要应用的文字颜色
     /// returns: 成功拿到文字组件并完成赋值时返回 true
     /// </summary>
-    public bool TrySetFontSize(float fontSize)
+    public bool TrySetTextColor(Color color)
     {
         if (GlyphText == null)
         {
             return false;
         }
 
-        glyphText.fontSize = Mathf.Max(0f, fontSize);
+        glyphText.color = color;
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 设置文字节点的宽高尺寸，并默认保持宽高一致；当前 FontSize 语义映射到文字容器尺寸而非 TMP 字号。
+    /// param: fontSize 需要应用的文字容器边长
+    /// returns: 成功拿到文字节点的 RectTransform 并完成赋值时返回 true
+    /// </summary>
+    public bool TrySetFontSize(float fontSize)
+    {
+        if (!TryGetGlyphRectTransform(out RectTransform glyphRectTransform))
+        {
+            return false;
+        }
+
+        float sanitizedSize = Mathf.Max(0f, fontSize);
+        glyphRectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, sanitizedSize);
+        glyphRectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, sanitizedSize);
+        ApplyImpactColliderRadiusFromFontSize(sanitizedSize);
         return true;
     }
 
@@ -528,6 +560,23 @@ public sealed class CharBullet : MonoBehaviour
         EnsureBaseScaleSnapshot();
         scaleMultiplier = Mathf.Max(0f, multiplier);
         ApplyScaleMultiplier();
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 设置命中球半径的独立倍率，并在视觉缩放之外继续叠加碰撞半径修饰。
+    /// param: multiplier 需要应用的命中半径倍率
+    /// returns: 成功拿到命中体并完成刷新时返回 true
+    /// </summary>
+    public bool TrySetImpactRadiusMultiplier(float multiplier)
+    {
+        if (impactCollider == null)
+        {
+            return false;
+        }
+
+        impactRadiusMultiplier = Mathf.Max(0f, multiplier);
+        ApplyImpactColliderScale();
         return true;
     }
 
@@ -1164,7 +1213,9 @@ public sealed class CharBullet : MonoBehaviour
             return false;
         }
 
-        TryApplyDamageToEnemy(other, targetRoot);
+        Vector3 impactPoint = GetImpactPoint(other);
+        TryApplyDamageToEnemy(other, targetRoot, "Direct");
+        TryApplyExplosionDamageAt(impactPoint);
         int nextLife = Mathf.Max(0, remainingLife - Mathf.Max(1, attackSpec.impactLifeCost));
         GameDebug.LogFormat(
             "[CharBullet] Hit target='{0}' via collider='{1}' layer={2} life {3}->{4}",
@@ -1181,14 +1232,15 @@ public sealed class CharBullet : MonoBehaviour
     /// summary: 当命中的对象被标记为敌人时，尝试把当前子弹伤害应用到其 Enemy 组件上。
     /// param: other 本次命中的碰撞体
     /// param: targetRoot 当前命中去重使用的根节点
-    /// returns: 无
+    /// param: damageSource 本次伤害来源，便于区分直击和爆炸日志
+    /// returns: 成功对敌人结算伤害时返回 true
     /// </summary>
-    private void TryApplyDamageToEnemy(Collider other, Transform targetRoot)
+    private bool TryApplyDamageToEnemy(Collider other, Transform targetRoot, string damageSource)
     {
         Enemy enemy = other.GetComponentInParent<Enemy>();
         if (Damage <= 0f || !IsEnemyImpactTarget(other, targetRoot, enemy))
         {
-            return;
+            return false;
         }
 
         if (enemy == null)
@@ -1196,24 +1248,26 @@ public sealed class CharBullet : MonoBehaviour
             GameDebug.LogFormat(
                 "[CharBullet] Target '{0}' is tagged as enemy but has no Enemy component.",
                 targetRoot.name);
-            return;
+            return false;
         }
 
         float previousHealth = enemy.CurrentHealth;
         if (!enemy.TryApplyDamage(Damage, out float remainingHealth, out bool isDead))
         {
             GameDebug.LogFormat(
-                "[CharBullet] Enemy target='{0}' ignored damage={1} health={2}/{3}",
+                "[CharBullet] Enemy target='{0}' ignored {1} damage={2} health={3}/{4}",
                 targetRoot.name,
+                damageSource,
                 Damage,
                 previousHealth,
                 enemy.MaxHealth);
-            return;
+            return false;
         }
 
         GameDebug.LogFormat(
-            "[CharBullet] Damaged enemy target='{0}' via collider='{1}' damage={2} health {3}->{4}",
+            "[CharBullet] Damaged enemy target='{0}' via {1} collider='{2}' damage={3} health {4}->{5}",
             targetRoot.name,
+            damageSource,
             other.name,
             Damage,
             previousHealth,
@@ -1221,7 +1275,50 @@ public sealed class CharBullet : MonoBehaviour
 
         if (isDead)
         {
-            GameDebug.LogFormat("[CharBullet] Enemy target='{0}' died.", targetRoot.name);
+            GameDebug.LogFormat("[CharBullet] Enemy target='{0}' died from {1}.", targetRoot.name, damageSource);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 若当前编译结果带有爆炸语义，则在命中点附近再做一次 AoE 伤害结算。
+    /// param: impactPoint 当前命中的世界位置
+    /// returns: 无
+    /// </summary>
+    private void TryApplyExplosionDamageAt(Vector3 impactPoint)
+    {
+        if (!ShouldTriggerExplosion())
+        {
+            return;
+        }
+
+        float explosionRadius = GetExplosionRadius();
+        if (explosionRadius <= 0f || Damage <= 0f)
+        {
+            return;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(impactPoint, explosionRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        var damagedRoots = new HashSet<int>();
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            if (!damagedRoots.Add(overlapRoot.GetInstanceID()))
+            {
+                continue;
+            }
+
+            TryApplyDamageToEnemy(overlap, overlapRoot, "Explosion");
         }
     }
 
@@ -1253,6 +1350,52 @@ public sealed class CharBullet : MonoBehaviour
 
         string targetTag = target.tag;
         return string.Equals(targetTag, EnemyTagName, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// summary: 判断当前这发子弹是否需要在命中时触发爆炸结算。
+    /// param: 无
+    /// returns: 结果词为 Explosion 时返回 true
+    /// </summary>
+    private bool ShouldTriggerExplosion()
+    {
+        if (compiledAttack != null)
+        {
+            return compiledAttack.HasExplosion;
+        }
+
+        return attackSpec.resultType == AttackResultType.Explosion;
+    }
+
+    /// <summary>
+    /// summary: 获取当前子弹命中后要使用的爆炸半径。
+    /// param: 无
+    /// returns: 已编译的爆炸半径；未配置时返回 0
+    /// </summary>
+    private float GetExplosionRadius()
+    {
+        if (compiledAttack != null)
+        {
+            return Mathf.Max(0f, compiledAttack.ExplosionRadius);
+        }
+
+        return 0f;
+    }
+
+    /// <summary>
+    /// summary: 基于当前命中体估算一次爆炸或直击的世界位置。
+    /// param: other 当前命中的碰撞体
+    /// returns: 命中的世界位置；不可用时回退到子弹当前位置
+    /// </summary>
+    private Vector3 GetImpactPoint(Collider other)
+    {
+        Vector3 referencePoint = MovementTarget != null ? MovementTarget.position : transform.position;
+        if (other == null)
+        {
+            return referencePoint;
+        }
+
+        return other.ClosestPoint(referencePoint);
     }
 
     /// <summary>
@@ -1386,7 +1529,95 @@ public sealed class CharBullet : MonoBehaviour
             return;
         }
 
-        impactCollider.radius = baseImpactRadius * scaleMultiplier;
+        if (hasFontSizeDrivenImpactRadius)
+        {
+            impactCollider.radius = Mathf.Max(0f, fontSizeDrivenImpactRadius);
+            return;
+        }
+
+        impactCollider.radius = baseImpactRadius * scaleMultiplier * impactRadiusMultiplier;
+    }
+
+    private void ApplyCompiledAttackPresentation()
+    {
+        float resolvedScaleMultiplier = compiledAttack != null ? Mathf.Max(0f, compiledAttack.ScaleMultiplier) : scaleMultiplier;
+        float resolvedImpactRadiusMultiplier = compiledAttack != null ? Mathf.Max(0f, compiledAttack.ImpactRadiusMultiplier) : impactRadiusMultiplier;
+
+        TrySetScaleMultiplier(resolvedScaleMultiplier);
+        TrySetImpactRadiusMultiplier(resolvedImpactRadiusMultiplier);
+
+        if (compiledAttack == null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(compiledAttack.DisplayText))
+        {
+            TrySetText(compiledAttack.DisplayText);
+        }
+
+        if (compiledAttack.HasTextColorOverride)
+        {
+            TrySetTextColor(compiledAttack.TextColor);
+        }
+
+        if (compiledAttack.HasFontSizeOverride)
+        {
+            float baseFontSize = GetCurrentGlyphSquareSize();
+            TrySetFontSize(compiledAttack.ResolveFontSize(baseFontSize));
+        }
+    }
+
+    private bool TryGetGlyphRectTransform(out RectTransform glyphRectTransform)
+    {
+        glyphRectTransform = null;
+
+        if (GlyphText != null && GlyphText.rectTransform != null)
+        {
+            glyphRectTransform = GlyphText.rectTransform;
+            return true;
+        }
+
+        if (SizeTarget is RectTransform sizeRectTransform)
+        {
+            glyphRectTransform = sizeRectTransform;
+            return true;
+        }
+
+        return false;
+    }
+
+    private float GetCurrentGlyphSquareSize()
+    {
+        if (!TryGetGlyphRectTransform(out RectTransform glyphRectTransform))
+        {
+            return 0f;
+        }
+
+        Rect rect = glyphRectTransform.rect;
+        if (rect.width > 0f)
+        {
+            return rect.width;
+        }
+
+        if (rect.height > 0f)
+        {
+            return rect.height;
+        }
+
+        return 0f;
+    }
+
+    private void ApplyImpactColliderRadiusFromFontSize(float fontSize)
+    {
+        if (impactCollider == null)
+        {
+            return;
+        }
+
+        hasFontSizeDrivenImpactRadius = true;
+        fontSizeDrivenImpactRadius = Mathf.Max(0f, fontSize) * 0.5f;
+        ApplyImpactColliderScale();
     }
 
     private Vector3 GetStoredVelocity()

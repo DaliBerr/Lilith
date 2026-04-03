@@ -3,6 +3,7 @@ using Kernel;
 using Kernel.Bullet;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Vocalith.Logging;
 
 /// <summary>
 /// 使用 PlayerControls 的 Movement 输入在世界 XZ 平面移动玩家，并让玩家朝向鼠标投影点。
@@ -28,12 +29,16 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     [SerializeField] private Vector3 bulletSpawnLocalOffset = new(0f, 0f, 32f);
     [SerializeField, Min(MinimumFireInterval)] private float fireInterval = 0.12f;
     [SerializeField] private LayerMask aimRaycastMask = Physics.DefaultRaycastLayers;
-    [SerializeField] private AttackSpec attackSpec = AttackSpec.CreateDefault();
+    [SerializeField] private AttackFormulaLoadout attackFormulaLoadout;
 
     private float nextFireTime;
+    private CompiledAttack compiledAttackCache;
+    private int compiledAttackRevision = -1;
+    private int lastLoggedCompileFailureRevision = int.MinValue;
 
     private void Awake()
     {
+        TryAutoAssignLoadout();
         if (targetRigidbody == null)
         {
             targetRigidbody = GetComponent<Rigidbody>();
@@ -163,9 +168,12 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return false;
         }
 
-        CharBullet bulletInstance = Instantiate(bulletPrefab, spawnPosition, Quaternion.identity);
-        bulletInstance.InitializeShot(transform, spawnPosition, bulletDirection, attackSpec);
-        return true;
+        if (!TryResolveAttackForFiring(out CompiledAttack compiledAttack))
+        {
+            return false;
+        }
+
+        return AttackProjectileEmitter.Emit(bulletPrefab, transform, spawnPosition, bulletDirection, compiledAttack) > 0;
     }
 
     /// <summary>
@@ -413,12 +421,102 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private void SanitizeConfiguration()
     {
         fireInterval = Mathf.Max(MinimumFireInterval, fireInterval);
-        attackSpec = attackSpec.GetSanitized();
     }
 
     private void OnValidate()
     {
+        TryAutoAssignLoadout();
         SanitizeConfiguration();
+    }
+
+    /// <summary>
+    /// summary: 从词槽 loadout 读取并缓存最新编译结果。
+    /// param: compiledAttack 输出的最终发射配置
+    /// returns: 当前存在可执行攻击时返回 true
+    /// </summary>
+    private bool TryResolveAttackForFiring(out CompiledAttack compiledAttack)
+    {
+        compiledAttack = null;
+        if (attackFormulaLoadout == null || !attackFormulaLoadout.HasTokens)
+        {
+            LogCompileFailureIfNeeded(null);
+            return false;
+        }
+
+        if (compiledAttackCache == null || compiledAttackRevision != attackFormulaLoadout.Revision)
+        {
+            compiledAttackCache = attackFormulaLoadout.Recompile();
+            compiledAttackRevision = attackFormulaLoadout.Revision;
+        }
+
+        compiledAttack = compiledAttackCache;
+        if (compiledAttack != null && compiledAttack.CanFire)
+        {
+            lastLoggedCompileFailureRevision = int.MinValue;
+            return true;
+        }
+
+        LogCompileFailureIfNeeded(compiledAttack);
+        return false;
+    }
+
+    /// <summary>
+    /// summary: 当同物体上挂有 loadout 组件时自动建立引用，减少场景接线遗漏。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void TryAutoAssignLoadout()
+    {
+        if (attackFormulaLoadout == null)
+        {
+            attackFormulaLoadout = GetComponent<AttackFormulaLoadout>();
+        }
+    }
+
+    /// <summary>
+    /// summary: 仅在 loadout 修订号变化时输出一次编译失败日志，避免按住开火时刷屏。
+    /// param: compiledAttack 当前失败的编译结果
+    /// returns: 无
+    /// </summary>
+    private void LogCompileFailureIfNeeded(CompiledAttack compiledAttack)
+    {
+        int currentRevision = attackFormulaLoadout != null ? attackFormulaLoadout.Revision : int.MinValue;
+        if (currentRevision == lastLoggedCompileFailureRevision)
+        {
+            return;
+        }
+
+        lastLoggedCompileFailureRevision = currentRevision;
+        if (compiledAttack == null)
+        {
+            if (attackFormulaLoadout == null)
+            {
+                GameDebug.LogWarning("[PlayerPlaneMovement] Attack formula loadout is missing. Firing is disabled until a loadout is assigned.");
+                return;
+            }
+
+            if (!attackFormulaLoadout.HasTokens)
+            {
+                GameDebug.LogWarning("[PlayerPlaneMovement] Attack formula loadout is empty. Firing is disabled until at least one valid core formula is equipped.");
+                return;
+            }
+
+            GameDebug.LogWarning("[PlayerPlaneMovement] Attack formula loadout failed to compile and produced no result.");
+            return;
+        }
+
+        for (int i = 0; i < compiledAttack.Messages.Count; i++)
+        {
+            AttackCompileMessage message = compiledAttack.Messages[i];
+            if (message.severity == AttackCompileMessageSeverity.Error)
+            {
+                GameDebug.LogError($"[PlayerPlaneMovement] Attack formula error: {message.message} token='{message.tokenId}'");
+            }
+            else if (message.severity == AttackCompileMessageSeverity.Warning)
+            {
+                GameDebug.LogWarning($"[PlayerPlaneMovement] Attack formula warning: {message.message} token='{message.tokenId}'");
+            }
+        }
     }
 
     /// <summary>

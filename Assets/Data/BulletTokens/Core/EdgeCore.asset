@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc6feaa7c15873440ad3a0aac4d60c3f, type: 3}
+  m_Name: EdgeCore
+  m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
+  tokenId: edge_core
+  displayText: Edge
+  description: Base edge core.
+  tokenType: 2
+  hasBulletTextOverride: 1
+  bulletTextOverride: "\u5203"
+  modifiers:
+  - target: 0
+    expression: =Color.white
+  - target: 1
+    expression: -=12
+  coreType: 4
+  defaultValueType: 1
+  damage: 1
+  projectileLife: 1
+  impactLifeCost: 1
+  projectileSpeed: 320
+  maxLifetime: 2
+  maxTravelDistance: 512
+  impactMask:
+    serializedVersion: 2
+    m_Bits: 2035
