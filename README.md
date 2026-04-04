@@ -128,6 +128,9 @@
   - 当前会自动顺序执行挂到场景里的 [`Assets/Data/Waves`](Assets/Data/Waves) 波次资产
 - `Player` 当前除了 [`PlayerPlaneMovement`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs) 外，还挂了 [`PlayerHealth`](Assets/Scripts/Kernel/Player/PlayerHealth.cs)
   - 敌人的近战攻击当前直接结算到这个生命组件上
+- [`Assets/Prefabs/UI/MainUI.prefab`](Assets/Prefabs/UI/MainUI.prefab) 的 `TopPanel/HP Bar/Bar` 当前挂有 [`PlayerHealthBarController`](Assets/Scripts/Kernel/UI/PlayerHealthBarController.cs)
+  - 运行时会按 `20 HP = 1 格` 实例化 [`Health_Prefab`](Assets/Prefabs/UI/Health_Prefab.prefab)
+  - 玩家生命变化通过 `PlayerHealthChangedEvent` 经由 `EventBus` 推送到血槽 UI，扣血与回血都走同一套逐格进度动画
 
 这意味着：
 

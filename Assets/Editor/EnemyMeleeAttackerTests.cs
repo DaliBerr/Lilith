@@ -27,6 +27,8 @@ public sealed class EnemyMeleeAttackerTests
         GameObject playerObject = CreateGameObject("Player");
         PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
         SetPrivateField(playerHealth, "maxHealth", 20f);
+        SetPrivateField(playerHealth, "currentHealth", 20f);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
 
         GameObject enemyObject = CreateGameObject("Enemy");
         enemyObject.transform.position = new Vector3(1f, 0f, 0f);

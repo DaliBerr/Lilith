@@ -57,11 +57,54 @@ public class StrokeRevealUIImage : MonoBehaviour
     /// <returns>无。</returns>
     private void OnDestroy()
     {
+        DestroyRuntimeMaterial();
+    }
+
+    /// <summary>
+    /// 设置当前笔画使用的基础材质。
+    /// </summary>
+    /// <param name="material">共享的基础材质。</param>
+    /// <returns>无。</returns>
+    public void SetBaseMaterial(Material material)
+    {
+        if (baseMaterial == material)
+        {
+            return;
+        }
+
+        baseMaterial = material;
+
         if (_runtimeMaterial != null)
         {
-            Destroy(_runtimeMaterial);
-            _runtimeMaterial = null;
+            DestroyRuntimeMaterial();
         }
+
+        if (_image == null)
+        {
+            _image = GetComponent<Image>();
+        }
+
+        if (_image != null && baseMaterial == null)
+        {
+            _image.material = null;
+        }
+    }
+
+    /// <summary>
+    /// 初始化当前笔画的材质与显示参数。
+    /// </summary>
+    /// <param name="material">共享的基础材质。</param>
+    /// <param name="dir">揭示方向向量。</param>
+    /// <param name="softnessValue">边缘柔和度。</param>
+    /// <param name="progressValue">显示进度。</param>
+    /// <returns>无。</returns>
+    public void Initialize(Material material, Vector2 dir, float softnessValue, float progressValue)
+    {
+        SetBaseMaterial(material);
+        EnsureMaterialInstance();
+        SetRevealDirection(dir);
+        SetSoftness(softnessValue);
+        SetProgress(progressValue);
     }
 
     /// <summary>
@@ -139,10 +182,45 @@ public class StrokeRevealUIImage : MonoBehaviour
         {
             dir = Vector2.right;
         }
+
         dir.Normalize();
 
         _runtimeMaterial.SetFloat(ProgressId, progress);
         _runtimeMaterial.SetVector(RevealDirId, new Vector4(dir.x, dir.y, 0f, 0f));
         _runtimeMaterial.SetFloat(SoftnessId, softness);
+    }
+
+    /// <summary>
+    /// 销毁当前运行时材质实例。
+    /// </summary>
+    /// <param name="无">无。</param>
+    /// <returns>无。</returns>
+    private void DestroyRuntimeMaterial()
+    {
+        if (_runtimeMaterial == null)
+        {
+            return;
+        }
+
+        if (_image == null)
+        {
+            _image = GetComponent<Image>();
+        }
+
+        if (_image != null && _image.material == _runtimeMaterial)
+        {
+            _image.material = null;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(_runtimeMaterial);
+        }
+        else
+        {
+            DestroyImmediate(_runtimeMaterial);
+        }
+
+        _runtimeMaterial = null;
     }
 }

@@ -1,4 +1,5 @@
 using UnityEngine;
+using Vocalith.EventSystem;
 
 /// <summary>
 /// 提供玩家最小生命值与受伤结算能力。
@@ -67,9 +68,36 @@ public sealed class PlayerHealth : MonoBehaviour
             return false;
         }
 
+        float previousHealth = currentHealth;
         currentHealth = Mathf.Max(0f, currentHealth - damage);
         remainingHealth = currentHealth;
         isDead = IsDead;
+        PublishHealthChanged(previousHealth);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 对当前玩家结算一次治疗，并返回最新生命结果。
+    /// param: healing 本次治疗值
+    /// param: resultingHealth 本次结算后的生命值
+    /// param: isDead 本次结算后玩家是否死亡
+    /// returns: 成功处理本次治疗时返回 true
+    /// </summary>
+    public bool TryApplyHealing(float healing, out float resultingHealth, out bool isDead)
+    {
+        EnsureInitialized();
+        resultingHealth = currentHealth;
+        isDead = IsDead;
+        if (healing <= 0f || IsDead || currentHealth >= maxHealth)
+        {
+            return false;
+        }
+
+        float previousHealth = currentHealth;
+        currentHealth = Mathf.Min(maxHealth, currentHealth + healing);
+        resultingHealth = currentHealth;
+        isDead = IsDead;
+        PublishHealthChanged(previousHealth);
         return true;
     }
 
@@ -98,6 +126,22 @@ public sealed class PlayerHealth : MonoBehaviour
     {
         currentHealth = maxHealth;
         hasInitializedHealth = true;
+    }
+
+    /// <summary>
+    /// summary: 在生命值发生有效变化后，向事件总线广播当前玩家的生命结果。
+    /// param: previousHealth 变化前生命值
+    /// returns: 无
+    /// </summary>
+    private void PublishHealthChanged(float previousHealth)
+    {
+        EventManager.eventBus.Publish(new PlayerHealthChangedEvent(
+            this,
+            previousHealth,
+            currentHealth,
+            maxHealth,
+            currentHealth - previousHealth,
+            IsDead));
     }
 
     /// <summary>

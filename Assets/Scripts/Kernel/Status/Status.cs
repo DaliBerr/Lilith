@@ -33,26 +33,6 @@ namespace Kernel.GameState
     /// </summary>
     public static class StatusList
     {
-        #region 建筑相关状态
-        // 建筑放置状态（一般不需要跨存档保存）
-        public static Status BuildingPlacementStatus = new Status
-        {
-            StatusName = "PlacingBuilding",
-            InActiveWith = null,
-            allowSwitchWith = new List<string> { "BuildingDestroying" },
-            Persistent = false
-        };
-
-        // 拆除建筑状态（一般不需要跨存档保存）
-        public static Status BuildingDestroyingStatus = new Status
-        {
-            StatusName = "BuildingDestroying",
-            InActiveWith = null,
-            allowSwitchWith = new List<string> { "PlacingBuilding" },
-            Persistent = false
-        };
-        #endregion
-
         #region 游戏模式状态
         // 开发者模式状态（通常希望读档后保持）
         public static Status DevModeStatus = new Status
@@ -119,7 +99,13 @@ namespace Kernel.GameState
             allowSwitchWith = new List<string> { "Paused", "Playing", "SaveLoading" },
             Persistent = false
         };
-
+        public static Status InBackPackStatus = new Status
+        {   
+            StatusName = "BackPack",
+            InActiveWith = null,
+            allowSwitchWith = new List<string> { "Paused", "Playing", "SaveLoading" },
+            Persistent = false
+        };
         public static Status SaveLoadingStatus = new Status
         {
             StatusName = "SaveLoading",
@@ -148,8 +134,6 @@ namespace Kernel.GameState
         static StatusList()
         {
             _statusByName = new Dictionary<string, Status>();
-            Register(BuildingPlacementStatus);
-            Register(BuildingDestroyingStatus);
             Register(DevModeStatus);
             Register(NormalModeStatus);
             Register(PausedStatus);
@@ -159,6 +143,7 @@ namespace Kernel.GameState
             Register(InPauseMenuStatus);
             Register(InMainMenuStatus);
             Register(InMenuStatus);
+            Register(InBackPackStatus);
         }
 
         /// <summary>
@@ -198,4 +183,5 @@ namespace Kernel.GameState
             return new List<Status>(_statusByName.Values);
         }
     }
+
 }

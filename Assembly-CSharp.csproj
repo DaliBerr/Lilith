@@ -51,12 +51,13 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\Kernel\Status\Status.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerFollowCamera.cs" />
-    <Compile Include="Assets\Prefabs\UI\GameUIScreen.cs" />
     <Compile Include="Assets\Input\UI Controls.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationJsonUtility.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\localizationPack.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\PlayerHealthBarController.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\GameDebug.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealthChangedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyMeleeAttacker.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScreen.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
@@ -69,6 +70,7 @@
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ValueTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\GameUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CompiledAttack.cs" />
@@ -105,9 +107,12 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaLoadout.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogBootStrap.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerPlaneMovement.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BackPackUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeBootstrap.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\MainUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyMovement.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\PauseUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BehaviorTokenData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridAuthoring.cs" />
