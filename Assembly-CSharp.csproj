@@ -68,6 +68,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackProjectileEmitter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ValueTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CompiledAttack.cs" />
@@ -77,6 +78,7 @@
     <Compile Include="Assets\Scripts\Vocalith\UI\UIManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCollections.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\GlobalTextInputGuard.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Animation\StrokeUIImage.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ResultTokenData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\Log.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PreTokenData.cs" />
@@ -140,6 +142,7 @@
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF Overlay.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap-Mobile.shader" />
     <None Include="Assets\TextMesh Pro\Fonts\LiberationSans - OFL.txt" />
+    <None Include="Assets\Shader\UIStrokeReveal.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_Sprite.shader" />
   </ItemGroup>
