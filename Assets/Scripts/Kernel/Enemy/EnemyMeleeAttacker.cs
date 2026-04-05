@@ -25,6 +25,11 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
     /// </summary>
     private void Update()
     {
+        if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
+        {
+            return;
+        }
+
         TryPerformAttack(Time.time);
     }
 

@@ -803,7 +803,13 @@ public sealed class CharBullet : MonoBehaviour
         isActiveShot = false;
         EnableImpactCollider(false);
         TryStopMovement();
-        Destroy(gameObject);
+        if (Application.isPlaying)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        DestroyImmediate(gameObject);
     }
 
     /// <summary>

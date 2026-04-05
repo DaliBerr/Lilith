@@ -141,6 +141,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 9040077734227831188, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       insertIndex: -1
       addedObject: {fileID: 6645123987412301111}
+    - targetCorrespondingSourceObject: {fileID: 9040077734227831188, guid: e19e371526e657f47a119f1f95594d76, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6206645505761663584}
   m_SourcePrefab: {fileID: 100100000, guid: e19e371526e657f47a119f1f95594d76, type: 3}
 --- !u!4 &1506151790293226984 stripped
 Transform:
@@ -211,3 +214,19 @@ MonoBehaviour:
   enemyData: {fileID: 2777352532888450817}
   targetPlayer: {fileID: 0}
   targetPlayerHealth: {fileID: 0}
+--- !u!114 &6206645505761663584
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7740772627045821859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2d98ce5fe7977546b8dcb9e0b10e5e0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyBulletTokenDropper
+  pickupPrefab: {fileID: 2195565621800164352, guid: 4e60f8bcc2a4a2e4d86a5b54c877702f, type: 3}
+  pickupParent: {fileID: 0}
+  pickupHeightOffset: 6
+  pickupSpreadRadius: 6

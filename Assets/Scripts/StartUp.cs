@@ -1,5 +1,4 @@
 using System.Collections;
-using System.IO;
 // using Kernel.Building;
 // using Kernel.Inventory;
 // using Kernel.Item;
@@ -33,6 +32,28 @@ namespace Kernel
             }
         }
 
+        /// <summary>
+        /// summary: 在场景加载后确保存在 Startup 组件；若场景中只有空的 Startup 根对象，则直接补挂到该对象上。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureRuntimeInstance()
+        {
+            if (FindFirstObjectByType<Startup>() != null)
+            {
+                return;
+            }
+
+            GameObject bootstrapObject = GameObject.Find(nameof(Startup));
+            if (bootstrapObject == null)
+            {
+                bootstrapObject = new GameObject(nameof(Startup));
+            }
+
+            bootstrapObject.AddComponent<Startup>();
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -56,8 +77,7 @@ namespace Kernel
         }
 
         /// <summary>
-        /// 启动协程：初始化状态系统，顺序压栈主菜单
-        ///  + 加载界面，执行全局初始化。
+        /// 启动协程：初始化状态系统，完成全局初始化后进入主战斗 HUD。
         /// </summary>
         /// <returns>协程枚举器。</returns>
         
@@ -72,22 +92,40 @@ namespace Kernel
             {
                 StatusController.AddStatus(StatusList.DevModeStatus);
             }
-            // 2) 顺序压栈主菜单（作为底层界面）
-            //    等 MainMenu 创建 + Show 动画完全结束
-            yield return UIManager.Instance.PrePushScreenCo<MainMenuScreen>();
-
-            // 3) 再添加“游戏加载中”状态，并把加载界面压在主菜单上面
+            // 2) 进入全局初始化期。
             StatusController.AddStatus(StatusList.GameLoadingStatus);
-            
-            //    同样顺序压栈 GameLoading（这时 MainMenu 会被 Hide）
-            // yield return UIManager.Instance.PushScreenAndWait<GameLoading>();
-            // GameDebug.Log("[Startup] Pushed GameLoading Screen (with waiting)");
 
-            // 4) 执行全局初始化（Addressables + Def 加载）
+            // 3) 执行全局初始化（Addressables + Def 加载）
             yield return StartCoroutine(InitGlobal());
 
-            // 5) 不要再 Push 主菜单：GameLoading 完成时会自己 Pop，
-            //    然后 UIManager 会把下面的 MainMenu 再 Show 出来。
+            if (StatusController.HasStatus(StatusList.GameLoadingStatus))
+            {
+                StatusController.RemoveStatus(StatusList.GameLoadingStatus);
+            }
+
+            // 4) 初始化完成后进入主战斗 HUD，作为背包和暂停菜单的根界面。
+            yield return StartCoroutine(EnterMainUI());
+        }
+
+        /// <summary>
+        /// summary: 在启动完成后确保 UI 栈顶进入 MainUIScreen，作为运行时战斗 HUD 的入口。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator EnterMainUI()
+        {
+            if (UIManager.Instance == null)
+            {
+                GameDebug.LogError("[Startup] UIManager is missing. MainUIScreen cannot be pushed.");
+                yield break;
+            }
+
+            if (UIManager.Instance.GetTopScreen() is MainUIScreen)
+            {
+                yield break;
+            }
+
+            yield return UIManager.Instance.PushScreenAndWait<MainUIScreen>();
         }
 
         private IEnumerator InitLanguage()

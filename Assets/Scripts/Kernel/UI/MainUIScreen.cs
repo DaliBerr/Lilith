@@ -37,6 +37,12 @@ namespace Kernel.UI
         protected override void OnInit()
         {
             TryAutoBindReferences();
+            BindButtonCallbacks();
+        }
+
+        private void OnDestroy()
+        {
+            UnbindButtonCallbacks();
         }
 
         private void OnValidate()
@@ -84,6 +90,47 @@ namespace Kernel.UI
             {
                 pauseButtonText ??= pauseButton.GetComponentInChildren<TMP_Text>(true);
             }
+        }
+
+        /// <summary>
+        /// summary: 把 MainUI 的暂停按钮接到统一的 UIInputRouter 暂停入口。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void BindButtonCallbacks()
+        {
+            if (pauseButton == null)
+            {
+                return;
+            }
+
+            pauseButton.onClick.RemoveListener(HandlePauseButtonClicked);
+            pauseButton.onClick.AddListener(HandlePauseButtonClicked);
+        }
+
+        /// <summary>
+        /// summary: 清理 MainUI 暂停按钮事件，避免对象销毁后残留无效委托。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void UnbindButtonCallbacks()
+        {
+            if (pauseButton == null)
+            {
+                return;
+            }
+
+            pauseButton.onClick.RemoveListener(HandlePauseButtonClicked);
+        }
+
+        /// <summary>
+        /// summary: 点击暂停按钮时，通过 UIInputRouter 请求打开暂停菜单。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HandlePauseButtonClicked()
+        {
+            UIInputRouter.Instance?.RequestOpenPauseMenu();
         }
 
         /// <summary>

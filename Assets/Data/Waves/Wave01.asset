@@ -23,6 +23,9 @@ MonoBehaviour:
       attackRange: 16
       attackCooldown: 0.9
       attackDamage: 5
+      tokenDrops:
+      - token: {fileID: 11400000, guid: 60ae7cfbc364cfd42be3310cae27c72d, type: 2}
+        dropChance: 1
   - enemyName: Norm1
     spawnCount: 4
     enemyConfig:
@@ -31,3 +34,4 @@ MonoBehaviour:
       attackRange: 16
       attackCooldown: 0.9
       attackDamage: 5
+      tokenDrops: []

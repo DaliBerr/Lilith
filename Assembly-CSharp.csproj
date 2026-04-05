@@ -63,11 +63,15 @@
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeDeep.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIWidget.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BackPackTokenLayoutUtility.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCrossRefs.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTokenPickup.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\UIInputRouter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackProjectileEmitter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyBulletTokenDropper.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ValueTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\GameUIScreen.cs" />
@@ -106,8 +110,10 @@
     <Compile Include="Assets\Prefabs\UI\MainMenuUI.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaLoadout.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogBootStrap.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\PlayerBulletTokenInventory.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerPlaneMovement.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackUIScreen.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BackPackGridSlotView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeBootstrap.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\MainUIScreen.cs" />

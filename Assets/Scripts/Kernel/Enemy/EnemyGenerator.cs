@@ -108,10 +108,7 @@ public sealed class EnemyGenerator : MonoBehaviour
             return false;
         }
 
-        if (spawnedEnemy is IEnemyWaveConfigReceiver receiver)
-        {
-            receiver.ApplyWaveConfig(config);
-        }
+        ApplyWaveConfigToReceivers(spawnedEnemy, config);
 
         return true;
     }
@@ -177,6 +174,26 @@ public sealed class EnemyGenerator : MonoBehaviour
         TryBindEnemyAttackTarget(enemyMovement);
         enemyMovement.TryGetComponent(out spawnedEnemy);
         return spawnedEnemy != null;
+    }
+
+    /// <summary>
+    /// summary: 把同一份波次配置广播给生成对象根节点上的全部接收者，避免数值与掉落逻辑拆成多个组件后漏配。
+    /// param: spawnedEnemy 本次已经成功实例化出的敌人
+    /// param: config 当前波次指定的敌人配置
+    /// returns: 无
+    /// </summary>
+    private static void ApplyWaveConfigToReceivers(Enemy spawnedEnemy, EnemyWaveConfig config)
+    {
+        if (spawnedEnemy == null)
+        {
+            return;
+        }
+
+        IEnemyWaveConfigReceiver[] receivers = spawnedEnemy.GetComponents<IEnemyWaveConfigReceiver>();
+        for (int i = 0; i < receivers.Length; i++)
+        {
+            receivers[i].ApplyWaveConfig(config);
+        }
     }
 
     /// <summary>

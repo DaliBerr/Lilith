@@ -1,6 +1,7 @@
 using System;
 using Kernel;
 using Kernel.Bullet;
+using Kernel.GameState;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Vocalith.Logging;
@@ -59,6 +60,12 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     /// </summary>
     private void Update()
     {
+        if (IsGameplayInputBlockedByUI())
+        {
+            StopPlanarMotion();
+            return;
+        }
+
         HandleFireInput();
         if (targetRigidbody != null)
         {
@@ -81,6 +88,12 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     /// </summary>
     private void FixedUpdate()
     {
+        if (IsGameplayInputBlockedByUI())
+        {
+            StopPlanarMotion();
+            return;
+        }
+
         if (targetRigidbody == null)
         {
             return;
@@ -576,5 +589,40 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         }
 
         return inputManager.Player.Movement.Fire.IsPressed();
+    }
+
+    /// <summary>
+    /// summary: 检查当前是否存在会阻断战斗输入的 UI；背包和暂停菜单打开时玩家的移动、转向与射击都会暂停。
+    /// param: 无
+    /// returns: 当前存在背包或暂停菜单状态时返回 true
+    /// </summary>
+    private static bool IsGameplayInputBlockedByUI()
+    {
+        return StatusController.HasStatus(StatusList.InBackPackStatus)
+            || StatusController.HasStatus(StatusList.InPauseMenuStatus)
+            || StatusController.HasStatus(StatusList.PausedStatus);
+    }
+
+    /// <summary>
+    /// summary: 背包打开时清零刚体的平面速度，避免动态刚体沿用上一帧的惯性继续滑动。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void StopPlanarMotion()
+    {
+        if (targetRigidbody == null || targetRigidbody.isKinematic)
+        {
+            return;
+        }
+
+        Vector3 currentVelocity = targetRigidbody.linearVelocity;
+        if (Mathf.Approximately(currentVelocity.x, 0f) && Mathf.Approximately(currentVelocity.z, 0f))
+        {
+            return;
+        }
+
+        currentVelocity.x = 0f;
+        currentVelocity.z = 0f;
+        targetRigidbody.linearVelocity = currentVelocity;
     }
 }

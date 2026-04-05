@@ -170,6 +170,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     {
         currentHealth = health;
         hasInitializedHealth = true;
+        ResetDeathNotificationState();
     }
 
     /// <summary>
@@ -179,7 +180,14 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     /// </summary>
     private void HandleDeath()
     {
-        Destroy(gameObject);
+        TryNotifyDied();
+        if (Application.isPlaying)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        DestroyImmediate(gameObject);
     }
 
     /// <summary>

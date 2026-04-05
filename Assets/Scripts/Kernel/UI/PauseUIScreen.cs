@@ -37,6 +37,12 @@ namespace Kernel.UI
         protected override void OnInit()
         {
             TryAutoBindReferences();
+            BindButtonCallbacks();
+        }
+
+        private void OnDestroy()
+        {
+            UnbindButtonCallbacks();
         }
 
         private void OnValidate()
@@ -80,6 +86,43 @@ namespace Kernel.UI
             {
                 backButtonText ??= backButton.GetComponentInChildren<TMP_Text>(true);
             }
+        }
+
+        /// <summary>
+        /// summary: 把 PauseUI 中当前已经定义好的按钮事件接到统一的 UI 路由入口。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void BindButtonCallbacks()
+        {
+            if (resumeButton != null)
+            {
+                resumeButton.onClick.RemoveListener(HandleResumeButtonClicked);
+                resumeButton.onClick.AddListener(HandleResumeButtonClicked);
+            }
+        }
+
+        /// <summary>
+        /// summary: 清理 PauseUI 按钮事件，避免对象销毁后残留无效委托。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void UnbindButtonCallbacks()
+        {
+            if (resumeButton != null)
+            {
+                resumeButton.onClick.RemoveListener(HandleResumeButtonClicked);
+            }
+        }
+
+        /// <summary>
+        /// summary: 点击恢复按钮时，通过 UIInputRouter 请求关闭当前暂停菜单。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HandleResumeButtonClicked()
+        {
+            UIInputRouter.Instance?.RequestClosePauseMenu();
         }
 
         /// <summary>

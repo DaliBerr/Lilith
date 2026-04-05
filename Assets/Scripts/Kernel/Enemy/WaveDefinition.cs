@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Kernel.Bullet;
 using VocalithRandom = Vocalith.Random;
 
 /// <summary>
@@ -214,7 +215,31 @@ public sealed class WaveDefinition : ScriptableObject
         config.attackRange = SanitizeValue(config.attackRange, 0f);
         config.attackCooldown = SanitizeValue(config.attackCooldown, 0f);
         config.attackDamage = SanitizeValue(config.attackDamage, 0f);
+        config.tokenDrops = SanitizeTokenDrops(config.tokenDrops);
         return config;
+    }
+
+    /// <summary>
+    /// summary: 修正掉落表里的概率取值，但保留空 token 占位项，避免 Inspector 新增元素后被 OnValidate 立即删掉。
+    /// param: tokenDrops 当前条目上序列化出来的掉落表
+    /// returns: 保留原有条目顺序的掉落表副本
+    /// </summary>
+    private static List<EnemyBulletTokenDropEntry> SanitizeTokenDrops(IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops)
+    {
+        List<EnemyBulletTokenDropEntry> sanitizedDrops = new();
+        if (tokenDrops == null)
+        {
+            return sanitizedDrops;
+        }
+
+        for (int i = 0; i < tokenDrops.Count; i++)
+        {
+            EnemyBulletTokenDropEntry entry = tokenDrops[i];
+            entry.dropChance = Mathf.Clamp01(entry.dropChance);
+            sanitizedDrops.Add(entry);
+        }
+
+        return sanitizedDrops;
     }
 
     /// <summary>

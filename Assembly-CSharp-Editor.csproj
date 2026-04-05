@@ -56,9 +56,13 @@
     <Compile Include="Assets\Editor\WaveManagerTests.cs" />
     <Compile Include="Assets\Editor\AttackFormulaCompilerTests.cs" />
     <Compile Include="Assets\Editor\EnemyMeleeAttackerTests.cs" />
+    <Compile Include="Assets\Editor\WaveDefinitionTests.cs" />
     <Compile Include="Assets\Editor\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\EnemyGeneratorTests.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
+    <Compile Include="Assets\Editor\EnemyBulletTokenDropperTests.cs" />
+    <Compile Include="Assets\Editor\BulletTokenPickupTests.cs" />
+    <Compile Include="Assets\Editor\BackPackInventoryTests.cs" />
     <Compile Include="Assets\Editor\CompileBeforePlay.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringTests.cs" />
     <Compile Include="Assets\Editor\AttackTokenAssetGenerator.cs" />

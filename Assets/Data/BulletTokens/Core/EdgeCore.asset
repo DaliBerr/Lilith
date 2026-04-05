@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: EdgeCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: edge_core
-  displayText: Edge
+  displayText: "\u5203"
   description: Base edge core.
   tokenType: 2
   hasBulletTextOverride: 1

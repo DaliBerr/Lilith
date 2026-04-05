@@ -33,6 +33,12 @@ public sealed class CharEnemyMovement : MonoBehaviour
     /// </summary>
     private void Update()
     {
+        if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
+        {
+            StopMovement();
+            return;
+        }
+
         if (targetRigidbody != null)
         {
             return;
@@ -48,6 +54,12 @@ public sealed class CharEnemyMovement : MonoBehaviour
     /// </summary>
     private void FixedUpdate()
     {
+        if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
+        {
+            StopMovement();
+            return;
+        }
+
         if (targetRigidbody == null)
         {
             return;

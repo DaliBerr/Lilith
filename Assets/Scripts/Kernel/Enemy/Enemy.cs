@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using Kernel.Bullet;
+using Kernel.GameState;
 using UnityEngine;
 
 /// <summary>
@@ -9,6 +13,8 @@ public abstract class Enemy : MonoBehaviour
     [Header("Identity")]
     [SerializeField] private string enemyName = "Enemy";
 
+    private bool hasRaisedDeathNotification;
+
     public string EnemyName => string.IsNullOrWhiteSpace(enemyName) ? GetType().Name : enemyName.Trim();
     public abstract float MoveSpeed { get; }
     public abstract float RotationSpeed { get; }
@@ -19,6 +25,7 @@ public abstract class Enemy : MonoBehaviour
     public abstract float MaxHealth { get; }
     public abstract float CurrentHealth { get; }
     public bool IsDead => CurrentHealth <= 0f;
+    public event Action<Enemy> Died;
 
     /// <summary>
     /// summary: 对当前敌人施加一次伤害，并在生命归零时进入死亡状态。
@@ -28,6 +35,49 @@ public abstract class Enemy : MonoBehaviour
     /// returns: 成功处理本次伤害时返回 true
     /// </summary>
     public abstract bool TryApplyDamage(float damage, out float remainingHealth, out bool isDead);
+
+    /// <summary>
+    /// summary: 在敌人进入新的有效生命周期时，重置一次性死亡通知状态。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    protected void ResetDeathNotificationState()
+    {
+        hasRaisedDeathNotification = false;
+    }
+
+    /// <summary>
+    /// summary: 向外部订阅者广播一次死亡通知；同一生命周期内只会成功发出一次。
+    /// param: 无
+    /// returns: 首次成功广播时返回 true
+    /// </summary>
+    protected bool TryNotifyDied()
+    {
+        if (hasRaisedDeathNotification)
+        {
+            return false;
+        }
+
+        hasRaisedDeathNotification = true;
+        Died?.Invoke(this);
+        return true;
+    }
+}
+
+/// <summary>
+/// 描述单个 Bullet Token 掉落项以及它的独立掉落概率。
+/// </summary>
+[Serializable]
+public struct EnemyBulletTokenDropEntry
+{
+    public BaseTokenData token;
+    [Range(0f, 1f)] public float dropChance;
+
+    public EnemyBulletTokenDropEntry(BaseTokenData token, float dropChance)
+    {
+        this.token = token;
+        this.dropChance = dropChance;
+    }
 }
 
 /// <summary>
@@ -41,14 +91,27 @@ public struct EnemyWaveConfig
     [Min(0f)] public float attackRange;
     [Min(0f)] public float attackCooldown;
     [Min(0f)] public float attackDamage;
+    public List<EnemyBulletTokenDropEntry> tokenDrops;
 
     public EnemyWaveConfig(float maxHealth, float moveSpeed, float attackRange, float attackCooldown, float attackDamage)
+        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, null)
+    {
+    }
+
+    public EnemyWaveConfig(
+        float maxHealth,
+        float moveSpeed,
+        float attackRange,
+        float attackCooldown,
+        float attackDamage,
+        IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
     {
         this.maxHealth = maxHealth;
         this.moveSpeed = moveSpeed;
         this.attackRange = attackRange;
         this.attackCooldown = attackCooldown;
         this.attackDamage = attackDamage;
+        this.tokenDrops = tokenDrops != null ? new List<EnemyBulletTokenDropEntry>(tokenDrops) : new List<EnemyBulletTokenDropEntry>();
     }
 }
 
@@ -89,4 +152,22 @@ public interface IEnemyWaveConfigReceiver
     /// returns: 无
     /// </summary>
     void ApplyWaveConfig(EnemyWaveConfig config);
+}
+
+/// <summary>
+/// 为敌人运行时行为提供统一的 UI/暂停阻断判断，避免移动和攻击各自维护一套条件。
+/// </summary>
+public static class EnemyGameplayPauseGuard
+{
+    /// <summary>
+    /// summary: 判断当前是否存在会暂停敌人行为的 UI 或游戏状态。
+    /// param: 无
+    /// returns: 当暂停菜单、背包或显式 Paused 状态存在时返回 true
+    /// </summary>
+    public static bool ShouldSuspendEnemyActions()
+    {
+        return StatusController.HasStatus(StatusList.InBackPackStatus)
+            || StatusController.HasStatus(StatusList.InPauseMenuStatus)
+            || StatusController.HasStatus(StatusList.PausedStatus);
+    }
 }

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: IceCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: ice_core
-  displayText: Ice
+  displayText: "\u51B0"
   description: Base ice core.
   tokenType: 2
   hasBulletTextOverride: 1

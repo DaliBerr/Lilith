@@ -7,7 +7,7 @@
 - 一个基于 `MapGridAuthoring` 的网格地图编辑工作流
 - 一套基础设施层 `Vocalith`，包含日志、本地化、UI 栈、事件总线、自定义 JSON 存档 `Scribe`
 - 一套轻量游戏状态系统 `Kernel.GameState`
-- 一个业务 UI 示例 `MainMenuScreen`（脚本已写，资源与启动接线尚未完全闭环）
+- 一套已经落地到 prefab 的业务 UI：`MainMenuScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`
 
 这份 README 的目标是说明当前仓库里已经存在什么、在哪里，以及 agent 应该从哪里开始读，同时还有未来的规划。
 
@@ -18,7 +18,8 @@
 - 运行时代码主要分布在：
   - [`Assets/Scripts/Kernel`](Assets/Scripts/Kernel)
   - [`Assets/Scripts/Vocalith`](Assets/Scripts/Vocalith)
-  - [`Assets/Prefabs/UI`](Assets/Prefabs/UI)（当前业务 UI 脚本放在这里）
+  - [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI)（当前业务 UI 运行时代码）
+  - [`Assets/Prefabs/UI`](Assets/Prefabs/UI)（当前业务 UI prefab 资源）
 - Editor 工具与测试位于 [`Assets/Editor`](Assets/Editor)
 - 当前仓库里没有 `asmdef/asmref`
   - 运行时代码默认编进 `Assembly-CSharp`
@@ -58,8 +59,8 @@
    看代码层设计的启动流程：语言初始化、状态初始化、UI 启动、Addressables 初始化。
 4. [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
    看 UI 是怎么被实例化、压栈、出栈和销毁的。
-5. [`Assets/Prefabs/UI/MainMenuUI.cs`](Assets/Prefabs/UI/MainMenuUI.cs)
-   看当前唯一明确写出来的业务 Screen。
+5. [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs) 和 [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
+   看当前战斗 HUD、暂停菜单和背包 Spell Book 的 UI 入口是怎么组织的。
 6. [`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) 和 [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
    看状态机语义和切换规则。
 7. [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) 和 [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
@@ -75,32 +76,34 @@
 | --- | --- | --- |
 | `Kernel` | 当前项目的业务语义层 | [`Assets/Scripts/Kernel`](Assets/Scripts/Kernel) |
 | `Vocalith` | 通用基础设施层：日志、UI、存档、本地化、事件、工具类 | [`Assets/Scripts/Vocalith`](Assets/Scripts/Vocalith) |
-| 业务 UI 脚本 | 具体 Screen/界面逻辑 | [`Assets/Prefabs/UI`](Assets/Prefabs/UI) |
+| 业务 UI 脚本与 prefab | 具体 Screen/界面逻辑与资源 | [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI) + [`Assets/Prefabs/UI`](Assets/Prefabs/UI) |
 | Editor | 网格生成、替换、测试 | [`Assets/Editor`](Assets/Editor) |
 
 当前层次关系可以理解为：
 
 - `Kernel` 负责“游戏里发生什么”
 - `Vocalith` 负责“这些系统用什么基础设施运行”
-- `Assets/Prefabs/UI` 负责“某个具体界面怎么响应按钮和状态”
+- `Assets/Scripts/Kernel/UI` 负责“某个具体界面怎么响应按钮和状态”
+- `Assets/Prefabs/UI` 负责“这些界面的 prefab 资源和默认层级长什么样”
 
 ## 启动链路
 
 ### 代码层设计
 
-[`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 中的 `Kernel.Startup` 表达了当前意图上的启动顺序：
+[`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 中的 `Kernel.Startup` 当前会按这个顺序进入战斗 HUD：
 
 1. `InitLanguage()`
    - 调用 [`LocalizationManager.InitializeAsync`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
 2. `StatusController.Initialize()`
    - 清空状态栈
 3. 若 `isEnableDevMode` 为真，加入 `DevMode`
-4. `UIManager.Instance.PrePushScreenCo<MainMenuScreen>()`
-   - 预压入主菜单
-5. 加入 `Loading` 状态
-6. `InitGlobal()`
+4. 加入 `Loading` 状态
+5. `InitGlobal()`
    - `Addressables.InitializeAsync()`
    - 预留 Def / 数据库加载入口
+6. 移除 `Loading` 状态
+7. `UIManager.Instance.PushScreenAndWait<MainUIScreen>()`
+   - 将 `MainUIScreen` 作为当前战斗 HUD 压到 UI 栈顶
 
 同时，日志系统会在首场景加载前自动初始化：
 
@@ -117,17 +120,20 @@
   - `chunk = 3 x 3`
   - 坐标绑定使用 `CellData.SetCoordinates / GetCoordinates`
 - `UIRoot` 上有 [`UIManager`](Assets/Scripts/Vocalith/UI/UIManager.cs)
-  - 但 `UIRoot` 当前在场景文件里是未激活状态
+  - `UIRoot` 当前在场景文件里是激活状态
   - 序列化类型名仍显示旧命名 `Lonize.UI.UIManager`
 - 场景里存在名为 `Startup` 的根对象
-  - 但当前已提交的 `Start.unity` 中，没有看到 `Kernel.Startup` 组件的序列化记录
+  - 当前场景文件里的这个根对象只有 `Transform`
+  - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 现在会在场景加载后自动补挂 `Kernel.Startup`，因此启动链路不再依赖 scene 上手动接线
 - 场景里存在名为 `EnemyGenerator` 的对象
   - 当前默认敌人 prefab 是 [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
+  - `CharEnemy.prefab` 当前已预挂 [`EnemyBulletTokenDropper`](Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs)，默认使用 [`Assets/Prefabs/Bullet/BulletTokenPickup.prefab`](Assets/Prefabs/Bullet/BulletTokenPickup.prefab) 作为世界掉落物模板
   - 自治随机刷怪循环已关闭，改由波次系统驱动单次生成
 - 场景里存在名为 `WaveManager` 的对象
   - 当前会自动顺序执行挂到场景里的 [`Assets/Data/Waves`](Assets/Data/Waves) 波次资产
-- `Player` 当前除了 [`PlayerPlaneMovement`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs) 外，还挂了 [`PlayerHealth`](Assets/Scripts/Kernel/Player/PlayerHealth.cs)
+- `Player` 当前挂有 [`PlayerPlaneMovement`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)、[`PlayerHealth`](Assets/Scripts/Kernel/Player/PlayerHealth.cs)、[`AttackFormulaLoadout`](Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs) 和 [`PlayerBulletTokenInventory`](Assets/Scripts/Kernel/Player/PlayerBulletTokenInventory.cs)
   - 敌人的近战攻击当前直接结算到这个生命组件上
+  - `PlayerBulletTokenInventory` 当前固定维护 `48` 个背包槽位，允许重复持有 token
 - [`Assets/Prefabs/UI/MainUI.prefab`](Assets/Prefabs/UI/MainUI.prefab) 的 `TopPanel/HP Bar/Bar` 当前挂有 [`PlayerHealthBarController`](Assets/Scripts/Kernel/UI/PlayerHealthBarController.cs)
   - 运行时会按 `20 HP = 1 格` 实例化 [`Health_Prefab`](Assets/Prefabs/UI/Health_Prefab.prefab)
   - 玩家生命变化通过 `PlayerHealthChangedEvent` 经由 `EventBus` 推送到血槽 UI，扣血与回血都走同一套逐格进度动画
@@ -187,8 +193,14 @@
 - [`Assets/Scripts/Vocalith/UI/UIScreen.cs`](Assets/Scripts/Vocalith/UI/UIScreen.cs)
 - [`Assets/Scripts/Vocalith/UI/UIWidget.cs`](Assets/Scripts/Vocalith/UI/UIWidget.cs)
 - [`Assets/Scripts/Vocalith/UI/UIPrefabAttribute.cs`](Assets/Scripts/Vocalith/UI/UIPrefabAttribute.cs)
-- [`Assets/Prefabs/UI/GameUIScreen.cs`](Assets/Prefabs/UI/GameUIScreen.cs)
+- [`Assets/Scripts/Kernel/UI/GameUIScreen.cs`](Assets/Scripts/Kernel/UI/GameUIScreen.cs)
+- [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)
+- [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs)
+- [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
+- [`Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs`](Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs)
 - [`Assets/Prefabs/UI/MainMenuUI.cs`](Assets/Prefabs/UI/MainMenuUI.cs)
+- [`Assets/Prefabs/UI/BackPackUI.prefab`](Assets/Prefabs/UI/BackPackUI.prefab)
+- [`Assets/Prefabs/UI/BackPack Grid Prefab.prefab`](Assets/Prefabs/UI/BackPack%20Grid%20Prefab.prefab)
 
 当前能力：
 
@@ -217,6 +229,19 @@
     - `optionsBtn`
     - `quitBtn`
   - 但实际开始游戏 / 读档 / 设置 / 退出逻辑大多还是注释或 TODO
+- `MainUIScreen`
+  - 作为战斗 HUD 模板，当前暴露血条区和暂停按钮引用
+  - 顶部 `PauseButton` 当前会通过 `UIInputRouter` 打开 `PauseUIScreen`
+- `PauseUIScreen`
+  - 作为暂停菜单模板，当前暴露遮罩、主面板和三个按钮引用
+  - `ResumeButton` 当前会通过 `UIInputRouter` 关闭自身
+- `BackPackUIScreen`
+  - 运行时会在 `BackPack Grid Panel/Grid` 下固定生成 `48` 个背包槽位
+  - `Spell Book` 当前在 prefab 内预放 `5` 个静态槽位，并通过 [`BackPackGridSlotView`](Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs) 接收拖拽
+  - 打开背包时会把 `AttackFormulaLoadout` 的前 `5` 个 token 填入 `Spell Book`
+  - 若历史 loadout 超过 `5` 个 token，超出的部分会尝试回填到玩家背包库存
+  - 每次 `Spell Book` 变更后，会按从左到右压缩非空槽位并实时写回 `AttackFormulaLoadout`
+  - 背包区当前支持格内拖拽换位；拖拽任意非空槽位时会显示一个完整槽位的跟手预览
 
 ### 3. 地图网格 Authoring
 
@@ -457,6 +482,12 @@
   - 默认使用 `W/A/S/D` 输出 `Vector2`
   - `Accelerate` 当前绑定为 `Left Shift`
   - `Fire` 当前绑定为鼠标左键，并按住连续发射
+- 当前 `UI Controls` 已定义 `MainScene UI/Backpack` 与 `MainScene UI/Router`
+  - [`Assets/Scripts/Kernel/Input/InputActionManager.cs`](Assets/Scripts/Kernel/Input/InputActionManager.cs) 统一持有 `UIControls`
+  - [`Assets/Scripts/Kernel/UI/UIInputRouter.cs`](Assets/Scripts/Kernel/UI/UIInputRouter.cs) 负责消费这份输入并执行 UI 路由
+  - 只有当 [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs) 位于栈顶时，按下 `Backpack` 才会打开 [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
+  - 当 `BackPackUIScreen` 位于栈顶时，再次按下 `Backpack` 会直接关闭它
+  - 按下 `Router`（当前默认 `Esc`）会优先关闭顶层 modal，其次关闭 `BackPackUIScreen` / [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs)，或在 `MainUIScreen` 位于栈顶时打开 `PauseUIScreen`
 - `PlayerPlaneMovement` 会把该输入映射到世界坐标 `(x, 0, z)`
   - 挂有动态 `Rigidbody` 时直接写入刚体 `velocity`
   - 挂有 `isKinematic = true` 的 `Rigidbody` 时走 `MovePosition`
@@ -467,6 +498,7 @@
   - `rotationSpeed <= 0` 时会立即转向，否则按给定角速度平滑转向
   - 按住鼠标左键时，会按 `fireInterval` 连续向当前点击地面方向发射 `CharBullet`
   - 子弹瞄准优先使用真实地面/格子碰撞体命中点；命不中时回退到玩家高度平面
+  - 当 `InBackPack` 或 `InPauseMenu` 状态存在时，会暂停移动、转向和开火；动态刚体玩家还会清零平面速度避免继续滑行
 - `PlayerFollowCamera` 当前挂在 `Start.unity` 的 `Main Camera`
   - 只跟随玩家位置，不继承玩家旋转
   - 进入场景时会把正交尺寸恢复到局部战斗视野，不再自动切到“显示整张地图”的 framing
@@ -485,7 +517,12 @@
 - [`Assets/Scripts/Kernel/Bullet/AttackProjectileEmitter.cs`](Assets/Scripts/Kernel/Bullet/AttackProjectileEmitter.cs)
 - [`Assets/Scripts/Kernel/Bullet/TokenData`](Assets/Scripts/Kernel/Bullet/TokenData)
 - [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
+- [`Assets/Scripts/Kernel/Player/PlayerBulletTokenInventory.cs`](Assets/Scripts/Kernel/Player/PlayerBulletTokenInventory.cs)
+- [`Assets/Scripts/Kernel/Bullet/BulletTokenPickup.cs`](Assets/Scripts/Kernel/Bullet/BulletTokenPickup.cs)
+- [`Assets/Scripts/Kernel/UI/BackPackTokenLayoutUtility.cs`](Assets/Scripts/Kernel/UI/BackPackTokenLayoutUtility.cs)
+- [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
 - [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
+- [`Assets/Prefabs/Bullet/BulletTokenPickup.prefab`](Assets/Prefabs/Bullet/BulletTokenPickup.prefab)
 - [`Assets/Editor/AttackTokenAssetGenerator.cs`](Assets/Editor/AttackTokenAssetGenerator.cs)
 
 当前能力：
@@ -530,6 +567,19 @@
   - 编译成功时按 `CompiledAttack` 发射
   - 仅接受来自 `AttackFormulaLoadout` 的 `CompiledAttack`
   - 编译失败时不会发射，并输出编译错误
+- `PlayerBulletTokenInventory` 当前作为玩家“拥有 token”的独立库存层
+  - 固定 `48` 格
+  - 允许重复 token
+  - Inspector 可预置起始 token；运行时会复制到固定槽位数组
+- `BulletTokenPickup` 当前提供最小世界拾取物闭环
+  - 使用 `TMP_Text` 显示当前 token 的 `DisplayText`
+  - 玩家碰到 trigger 后，会尝试把 token 放入 `PlayerBulletTokenInventory`
+  - 背包已满时 pickup 会保留在场景中，不会吞掉掉落
+- `BackPackUIScreen + BackPackTokenLayoutUtility` 当前提供一条战斗中的 Spell Book 编译入口
+  - `BackPackUI.prefab` 的 `Spell Book` 内固定有 `5` 个静态槽位
+  - 运行时会额外生成 `48` 个背包槽位到 `BackPack Grid Panel/Grid`
+  - 背包区与 `Spell Book` 区支持拖拽交换
+  - `Spell Book` 的非空槽位会被压缩成新的 `AttackFormulaLoadout`
 - `CompiledAttack` 除了战斗语义之外，还会承载最终表现修饰
   - `DisplayText`
   - `ScaleMultiplier`
@@ -588,6 +638,7 @@
 - [`Assets/Scripts/Kernel/Enemy/WaveDefinition.cs`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs)
 - [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
 - [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
+- [`Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs`](Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs)
 - [`Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs)
 - [`Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs`](Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs)
 - [`Assets/Data/Waves`](Assets/Data/Waves)
@@ -604,9 +655,10 @@
 - 生成器支持手动指定 `targetMapGrid`，未指定时会自动查找场景中的 `MapGridAuthoring`
 - `EnemyGenerator` 期望默认敌人 prefab 与附加敌人 prefab 都已预挂 `CharEnemyMovement`
   - 当前支持按 `Enemy.EnemyName` 从 prefab 目录中解析目标敌人
-  - 生成后会注入当前玩家目标，并在可用时把波次配置应用到敌人数据
+  - 生成后会注入当前玩家目标，并把同一份 `EnemyWaveConfig` 广播给根节点上的所有 `IEnemyWaveConfigReceiver`
 - `WaveDefinition` 当前采用“每波一个 ScriptableObject” 的配置方式
   - 当前每波可配置统一刷怪间隔，以及多个 `enemyName + spawnCount + EnemyWaveConfig` 条目
+  - `EnemyWaveConfig` 除了生命、移动和近战数值外，还支持一组 `Bullet Token` 掉落项；每项独立配置 token 资产和 `0..1` 概率
   - 勾选 `randomizeEnemySpawns` 后，同一波内会按各条目的剩余数量做加权随机抽取；不勾选时仍按 Inspector 中条目顺序依次刷出
 - `WaveManager` 当前负责“何时刷、刷多少、这一波是什么参数”
   - 首波自动开始
@@ -617,20 +669,25 @@
 - `BaseCharEnemyNorm1` 是当前默认的基础文字敌人类型
   - 支持接收 `EnemyWaveConfig` 作为运行时覆写
   - 应用波次配置时会同步把 `stoppingDistance` 设为 `attackRange`
+  - 敌人死亡时会先广播统一死亡通知，再销毁自身，供掉落组件和其他死亡后行为复用
+- `EnemyBulletTokenDropper` 当前负责敌人的波次掉落逻辑
+  - 只缓存当前波次写入的掉落表，不持有敌人数值逻辑
+  - 每个掉落项都会在敌人死亡时独立判定，因此单只敌人可以同时掉落多个 token
+  - 当前成功判定的 token 会实例化成 [`BulletTokenPickup`](Assets/Scripts/Kernel/Bullet/BulletTokenPickup.cs) 世界拾取物
 - `CharEnemyMovement` 会在 XZ 平面持续朝向并追踪玩家，并从同物体上的 `Enemy` 组件读取移动参数
 - 同时兼容 `Transform` 直驱、`Rigidbody.isKinematic` 和动态 `Rigidbody` 三种移动模式
 - 仅当 `Rigidbody` 挂在敌人自身根节点时才使用刚体驱动；若 prefab 误绑到子刚体，会自动回退到 `Transform` 驱动
 - 进入 `stoppingDistance` 后会停止继续贴近，避免敌人持续抖动穿模
+- 当 `InBackPack`、`InPauseMenu` 或 `Paused` 状态存在时，会立即停止移动并清零动态刚体的平面速度
 - `EnemyMeleeAttacker` 当前提供最小近战攻击闭环
   - 只在进入 `attackRange`、冷却结束且玩家仍存活时结算一次 `attackDamage`
+  - 当 `InBackPack`、`InPauseMenu` 或 `Paused` 状态存在时，不会继续执行近战攻击判定
   - 当前不包含攻击动画、特效、击退或玩家死亡演出
 
 ## 当前未闭环或需要特别注意的点
 
 这些不是“猜测”，而是当前仓库快照里能直接看到的事实：
 
-- [`Assets/Prefabs/UI`](Assets/Prefabs/UI) 当前只有 `MainMenuUI.cs` / `GameUIScreen.cs`，没有实际 `.prefab` 资产
-- `UIManager` 默认通过 Addressables 实例化 UI，因此如果不补 prefab 资产或 Addressables 配置，`MainMenuScreen` 无法按当前设计被创建
 - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 中很多真正的游戏启动内容还是预留：
   - `GameLoading` 压栈
   - `BuildingDatabase.LoadAllAsync`
@@ -641,8 +698,9 @@
   - 只看到了 `Scribe` 基础设施和 `SaveStatus` 适配器
   - 没看到 `PolymorphRegistry.Register<SaveStatus>(...)` 之类的注册调用
 - 当前仓库中没有看到本地化包、Def 数据或 Addressables 组配置资产的明确提交内容
-- `Start.unity` 中的 `Startup` 根对象目前没有明显序列化 `Kernel.Startup` 组件
-- `Start.unity` 中的 `UIRoot` 当前是未激活状态
+- `Start.unity` 中名为 `Startup` 的根对象当前只有 `Transform`
+  - 运行时会由 [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 自动补挂 `Kernel.Startup`
+- `Start.unity` 中的 `UIRoot` 当前是激活状态
 
 ## 常见修改入口
 
@@ -657,7 +715,7 @@
 
 - 改启动流程：[`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) + [`Assets/Scenes/Start.unity`](Assets/Scenes/Start.unity)
 - 改游戏状态：[`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) + [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
-- 加新 UI Screen：[`Assets/Prefabs/UI`](Assets/Prefabs/UI) + [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
+- 加新 UI Screen：[`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI) + [`Assets/Prefabs/UI`](Assets/Prefabs/UI) + [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
 - 改网格生成、格子替换或 Scene Cell Edit：[`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs) + [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
 - 改坐标承载组件或 cell 位移控制：[`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs) + [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)
 - 接存档：[`Assets/Scripts/Vocalith/Scribe`](Assets/Scripts/Vocalith/Scribe) + [`Assets/Scripts/Kernel/StatusSaveData.cs`](Assets/Scripts/Kernel/StatusSaveData.cs)

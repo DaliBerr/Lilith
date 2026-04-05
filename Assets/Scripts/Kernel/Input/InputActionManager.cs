@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
+using Kernel;
 using Kernel.UI;
-using Vocalith;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using Kernel;
 
 /// <summary>
 /// 统一管理多个 InputSystem 自动生成的 *Controls（IInputActionCollection）。
@@ -19,6 +18,7 @@ public sealed class InputActionManager : MonoBehaviour
 
     // ====== 在这里放你的各种 Controls（把类型名替换成你项目里的生成类）======
     public PlayerControls Player { get; private set; }
+    public UIControls UI { get; private set; }
 
     // ====================================================================
 
@@ -106,7 +106,7 @@ public sealed class InputActionManager : MonoBehaviour
         // Map = CreateAndRegister<MapControls>();
         // Save = CreateAndRegister<SaveControls>();
         // Speed = CreateAndRegister<SpeedControls>();
-        // UI = CreateAndRegister<UIControls>();
+        UI = CreateAndRegister<UIControls>();
 
         _initialized = true;
         _unloaded = false;
@@ -212,9 +212,9 @@ public sealed class InputActionManager : MonoBehaviour
 
         // 把引用清空（避免外部误用）
         Player = null;
+        UI = null;
         // Building = null;
         // Factory = null;
-        // UI = null;
         // Camera = null;
         // Whatever = null;
 

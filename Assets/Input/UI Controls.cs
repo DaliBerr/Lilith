@@ -102,17 +102,37 @@ namespace Kernel
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Router"",
+                    ""type"": ""Button"",
+                    ""id"": ""53e2d9cc-9387-47f6-b215-1e013b70183b"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
                 {
                     ""name"": """",
                     ""id"": ""be19fcf1-97d1-43a9-8d4a-72261775e41f"",
-                    ""path"": ""<Keyboard>/tab"",
+                    ""path"": ""<Keyboard>/b"",
                     ""interactions"": """",
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""Backpack"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""436481cd-b79f-4c47-b8f0-9014c6f1aa38"",
+                    ""path"": ""<Keyboard>/escape"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Router"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -124,6 +144,7 @@ namespace Kernel
             // MainScene UI
             m_MainSceneUI = asset.FindActionMap("MainScene UI", throwIfNotFound: true);
             m_MainSceneUI_Backpack = m_MainSceneUI.FindAction("Backpack", throwIfNotFound: true);
+            m_MainSceneUI_Router = m_MainSceneUI.FindAction("Router", throwIfNotFound: true);
         }
 
         ~@UIControls()
@@ -205,6 +226,7 @@ namespace Kernel
         private readonly InputActionMap m_MainSceneUI;
         private List<IMainSceneUIActions> m_MainSceneUIActionsCallbackInterfaces = new List<IMainSceneUIActions>();
         private readonly InputAction m_MainSceneUI_Backpack;
+        private readonly InputAction m_MainSceneUI_Router;
         /// <summary>
         /// Provides access to input actions defined in input action map "MainScene UI".
         /// </summary>
@@ -220,6 +242,10 @@ namespace Kernel
             /// Provides access to the underlying input action "MainSceneUI/Backpack".
             /// </summary>
             public InputAction @Backpack => m_Wrapper.m_MainSceneUI_Backpack;
+            /// <summary>
+            /// Provides access to the underlying input action "MainSceneUI/Router".
+            /// </summary>
+            public InputAction @Router => m_Wrapper.m_MainSceneUI_Router;
             /// <summary>
             /// Provides access to the underlying input action map instance.
             /// </summary>
@@ -249,6 +275,9 @@ namespace Kernel
                 @Backpack.started += instance.OnBackpack;
                 @Backpack.performed += instance.OnBackpack;
                 @Backpack.canceled += instance.OnBackpack;
+                @Router.started += instance.OnRouter;
+                @Router.performed += instance.OnRouter;
+                @Router.canceled += instance.OnRouter;
             }
 
             /// <summary>
@@ -263,6 +292,9 @@ namespace Kernel
                 @Backpack.started -= instance.OnBackpack;
                 @Backpack.performed -= instance.OnBackpack;
                 @Backpack.canceled -= instance.OnBackpack;
+                @Router.started -= instance.OnRouter;
+                @Router.performed -= instance.OnRouter;
+                @Router.canceled -= instance.OnRouter;
             }
 
             /// <summary>
@@ -310,6 +342,13 @@ namespace Kernel
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnBackpack(InputAction.CallbackContext context);
+            /// <summary>
+            /// Method invoked when associated input action "Router" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+            /// </summary>
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+            void OnRouter(InputAction.CallbackContext context);
         }
     }
 }

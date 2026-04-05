@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: FireCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: fire_core
-  displayText: Fire
+  displayText: "\u706B"
   description: Base fire core.
   tokenType: 2
   hasBulletTextOverride: 1

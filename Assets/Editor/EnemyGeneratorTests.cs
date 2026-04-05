@@ -1,12 +1,13 @@
 using System.Collections.Generic;
 using System.Reflection;
+using Kernel.Bullet;
 using Kernel.MapGrid;
 using NUnit.Framework;
 using UnityEngine;
 
 public sealed class EnemyGeneratorTests
 {
-    private readonly List<GameObject> createdObjects = new();
+    private readonly List<Object> createdObjects = new();
 
     [TearDown]
     public void TearDown()
@@ -124,6 +125,48 @@ public sealed class EnemyGeneratorTests
         Assert.That(spawnedEnemy.AttackDamage, Is.EqualTo(9f));
     }
 
+    [Test]
+    public void TrySpawnEnemy_AppliesWaveConfigToAllRootReceivers()
+    {
+        CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        Transform player = CreateGameObject("Player").transform;
+        player.position = new Vector3(32f, 0f, 32f);
+
+        CharEnemyMovement enemyPrefab = CreateEnemyPrefab(100f);
+        DummyWaveConfigReceiver dummyReceiver = enemyPrefab.gameObject.AddComponent<DummyWaveConfigReceiver>();
+        CoreTokenData droppedToken = CreateToken<CoreTokenData>("drop_fire", "Drop Fire");
+        EnemyWaveConfig config = new(
+            180f,
+            95f,
+            14f,
+            0.8f,
+            7f,
+            new[]
+            {
+                new EnemyBulletTokenDropEntry(droppedToken, 0.6f),
+            });
+
+        Assert.That(generator.TrySetTarget(player), Is.True);
+        SetPrivateField(generator, "charEnemyPrefab", enemyPrefab);
+        SetPrivateField(generator, "spawnDistance", 4f);
+        SetPrivateField(generator, "maxGroundSpawnRolls", 8);
+
+        bool success = generator.TrySpawnEnemy(config, out Enemy spawnedEnemy);
+
+        Assert.That(success, Is.True);
+        createdObjects.Add(spawnedEnemy.gameObject);
+
+        DummyWaveConfigReceiver spawnedReceiver = spawnedEnemy.GetComponent<DummyWaveConfigReceiver>();
+        Assert.That(spawnedReceiver, Is.Not.Null);
+        Assert.That(spawnedReceiver.ApplyCount, Is.EqualTo(1));
+        Assert.That(spawnedReceiver.LastConfig.maxHealth, Is.EqualTo(180f));
+        Assert.That(spawnedReceiver.LastConfig.tokenDrops, Has.Count.EqualTo(1));
+        Assert.That(spawnedReceiver.LastConfig.tokenDrops[0].token, Is.SameAs(droppedToken));
+        Assert.That(spawnedReceiver.LastConfig.tokenDrops[0].dropChance, Is.EqualTo(0.6f));
+        Assert.That(dummyReceiver.ApplyCount, Is.EqualTo(0), "Prefab receiver should not be mutated by spawned instance callbacks.");
+    }
+
     private MapGridAuthoring CreateMapAuthoring(int width, int height, Vector2 cellSize, string fillTag)
     {
         GameObject mapRoot = CreateGameObject("MapRoot");
@@ -172,6 +215,16 @@ public sealed class EnemyGeneratorTests
         field.SetValue(target, value);
     }
 
+    private T CreateToken<T>(string tokenId, string displayText) where T : BaseTokenData
+    {
+        T token = ScriptableObject.CreateInstance<T>();
+        token.TokenId = tokenId;
+        token.DisplayText = displayText;
+        token.name = tokenId;
+        createdObjects.Add(token);
+        return token;
+    }
+
     private static FieldInfo FindInstanceField(System.Type type, string fieldName)
     {
         while (type != null)
@@ -186,5 +239,17 @@ public sealed class EnemyGeneratorTests
         }
 
         return null;
+    }
+
+    private sealed class DummyWaveConfigReceiver : MonoBehaviour, IEnemyWaveConfigReceiver
+    {
+        public EnemyWaveConfig LastConfig { get; private set; }
+        public int ApplyCount { get; private set; }
+
+        public void ApplyWaveConfig(EnemyWaveConfig config)
+        {
+            LastConfig = config;
+            ApplyCount++;
+        }
     }
 }

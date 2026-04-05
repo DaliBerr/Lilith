@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: ThunderCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: thunder_core
-  displayText: Thunder
+  displayText: "\u96F7"
   description: Base thunder core.
   tokenType: 2
   hasBulletTextOverride: 1
