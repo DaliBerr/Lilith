@@ -52,14 +52,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 1751406668114500696, guid: e19e371526e657f47a119f1f95594d76, type: 3}
-      propertyPath: m_text
-      value: "\u575A"
-      objectReference: {fileID: 0}
-    - target: {fileID: 1751406668114500696, guid: e19e371526e657f47a119f1f95594d76, type: 3}
-      propertyPath: m_fontSize
-      value: 160
-      objectReference: {fileID: 0}
     - target: {fileID: 2122197172334215060, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Size.x
       value: 16
@@ -76,33 +68,25 @@ PrefabInstance:
       propertyPath: m_IncludeLayers.m_Bits
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
-      propertyPath: m_SizeDelta.x
-      value: 16
-      objectReference: {fileID: 0}
-    - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
-      propertyPath: m_SizeDelta.y
-      value: 16
-      objectReference: {fileID: 0}
-    - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.8191521
-      objectReference: {fileID: 0}
-    - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.5735764
-      objectReference: {fileID: 0}
-    - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 70
-      objectReference: {fileID: 0}
     - target: {fileID: 3209285076295876506, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Layer
       value: 9
       objectReference: {fileID: 0}
+    - target: {fileID: 1176355959639917942, guid: e19e371526e657f47a119f1f95594d76, type: 3}
+      propertyPath: m_Layer
+      value: 9
+      objectReference: {fileID: 0}
+    - target: {fileID: 3517875952802560630, guid: e19e371526e657f47a119f1f95594d76, type: 3}
+      propertyPath: m_text
+      value: "\u575A"
+      objectReference: {fileID: 0}
     - target: {fileID: 3758823520822100445, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Layer
       value: 9
+      objectReference: {fileID: 0}
+    - target: {fileID: 4863808679746211634, guid: e19e371526e657f47a119f1f95594d76, type: 3}
+      propertyPath: defaultDisplayText
+      value: "\u575A"
       objectReference: {fileID: 0}
     - target: {fileID: 5710414337234482614, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Layer

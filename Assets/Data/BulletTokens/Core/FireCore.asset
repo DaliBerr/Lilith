@@ -18,13 +18,15 @@ MonoBehaviour:
   tokenType: 2
   hasBulletTextOverride: 1
   bulletTextOverride: "\u706B"
-  modifiers: []
+  modifiers:
+  - target: 0
+    expression: =Color.red
   coreType: 1
   defaultValueType: 1
   damage: 1
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 320
+  projectileSpeed: 160
   maxLifetime: 2
   maxTravelDistance: 512
   impactMask:

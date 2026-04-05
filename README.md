@@ -517,6 +517,8 @@
 - [`Assets/Scripts/Kernel/Bullet/AttackProjectileEmitter.cs`](Assets/Scripts/Kernel/Bullet/AttackProjectileEmitter.cs)
 - [`Assets/Scripts/Kernel/Bullet/TokenData`](Assets/Scripts/Kernel/Bullet/TokenData)
 - [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
+- [`Assets/Scripts/Kernel/Bullet/CharBulletVisualPresenter.cs`](Assets/Scripts/Kernel/Bullet/CharBulletVisualPresenter.cs)
+- [`Assets/Scripts/Kernel/Bullet/CharBulletVisualLibrary.cs`](Assets/Scripts/Kernel/Bullet/CharBulletVisualLibrary.cs)
 - [`Assets/Scripts/Kernel/Player/PlayerBulletTokenInventory.cs`](Assets/Scripts/Kernel/Player/PlayerBulletTokenInventory.cs)
 - [`Assets/Scripts/Kernel/Bullet/BulletTokenPickup.cs`](Assets/Scripts/Kernel/Bullet/BulletTokenPickup.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackTokenLayoutUtility.cs`](Assets/Scripts/Kernel/UI/BackPackTokenLayoutUtility.cs)
@@ -524,10 +526,16 @@
 - [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)
 - [`Assets/Prefabs/Bullet/BulletTokenPickup.prefab`](Assets/Prefabs/Bullet/BulletTokenPickup.prefab)
 - [`Assets/Editor/AttackTokenAssetGenerator.cs`](Assets/Editor/AttackTokenAssetGenerator.cs)
+- [`Assets/Editor/CharBulletVisualAssetGenerator.cs`](Assets/Editor/CharBulletVisualAssetGenerator.cs)
+- [`Assets/Data/BulletVisuals`](Assets/Data/BulletVisuals)
+- [`Assets/Art/BulletRunes`](Assets/Art/BulletRunes)
 
 当前能力：
 
 - `CharBullet` 面向“文字即元素”的运行时子弹表达，默认使用 `TMP_Text` 作为字形承载
+- 当前子弹视觉已落地为“悬浮符文弹”组织
+  - 主字保持俯视角可读的平放方案
+  - 立体感由阴影字、双层符文底座和短拖尾提供
 - 文字子弹现在分成两层数据：
   - `CompiledAttack` 表达由 token 公式编译出的高层语义结果
   - `AttackSpec` 表达单发子弹真正运行时要消费的底层参数
@@ -573,6 +581,7 @@
   - Inspector 可预置起始 token；运行时会复制到固定槽位数组
 - `BulletTokenPickup` 当前提供最小世界拾取物闭环
   - 使用 `TMP_Text` 显示当前 token 的 `DisplayText`
+  - 当前 prefab 采用 `Root -> Glyph` 的单字形显示组织，根节点脚本持有 `glyphText` 引用并负责刷新文本
   - 玩家碰到 trigger 后，会尝试把 token 放入 `PlayerBulletTokenInventory`
   - 背包已满时 pickup 会保留在场景中，不会吞掉掉落
 - `BackPackUIScreen + BackPackTokenLayoutUtility` 当前提供一条战斗中的 Spell Book 编译入口
@@ -590,6 +599,24 @@
 - `AttackProjectileEmitter` 会根据 `CompiledAttack` 生成一批实际子弹
   - `Straight` 发射 1 发
   - `Spread` 按对称角度发射多发
+- `CharBullet.prefab` 当前也复用了 `BaseCharObject.prefab` 的 `Text/Glyph` 显示契约
+  - `glyphText` 默认绑定到 `Text/Glyph`
+  - `sizeTarget` 默认绑定到 `Text` 容器，供倍率缩放使用
+- `CharBullet.prefab` 当前的显示层级是：
+  - `Text/Glyph` 作为主字
+  - `Text/GlyphShadow` 作为阴影字
+  - `RuneBaseCore` 作为核心底座
+  - `RuneBaseResult` 作为结果覆盖纹样
+  - `Trail` 作为短拖尾锚点
+- `CharBulletVisualPresenter` 当前只负责 secondary visuals
+  - 会同步主字和阴影字的文本、颜色与尺寸
+  - 会按 `CoreType + ResultType` 解析底座 sprite、覆盖纹样、强调色和拖尾渐变
+  - 会给核心底座提供轻微脉冲，给结果覆盖层提供轻微旋转
+- `CharBulletVisualLibrary` 当前以 `ScriptableObject` 保存视觉映射
+  - `CoreVisualEntry` 按 `AttackCoreType` 配置底座 sprite、fallback tint、基础缩放和拖尾渐变
+  - `ResultVisualEntry` 按 `AttackResultType` 配置覆盖纹样 sprite、缩放、透明度、旋转速度和脉冲幅度
+- 若 `CompiledAttack` 带有文字颜色覆盖，主字和核心底座会优先使用该颜色
+  - 若没有颜色覆盖，则回退到 `CharBulletVisualLibrary` 里该核心的 `fallback tint`
 - 默认优先依赖 Inspector 手动拖拽 `glyphText / movementTarget / sizeTarget / movementRigidbody`
   - 如果未手动指定，只会在当前 prefab 层级内做轻量缓存，不会自动新建 GameObject
 - 提供文字与尺寸控制接口
@@ -628,6 +655,8 @@
 - 可通过 Editor 菜单 `Tools/Lilith/Bullet/Generate Default Token Assets` 生成一组默认 token 资产到 `Assets/Data/BulletTokens`
   - `FireCore` 默认把文字设为红色
   - `EdgeCore` 默认会缩小子弹并提高弹速
+- 可通过 Editor 菜单 `Tools/Lilith/Bullet/Generate Char Bullet Visual Assets` 生成默认的符文底座 sprite 与 `CharBulletVisualLibrary`
+  - 当前输出到 `Assets/Art/BulletRunes` 和 `Assets/Data/BulletVisuals`
 
 ### 11. 敌人波次、生成与近战
 
@@ -638,6 +667,7 @@
 - [`Assets/Scripts/Kernel/Enemy/WaveDefinition.cs`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs)
 - [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
 - [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
+- [`Assets/Scripts/Kernel/Enemy/CharGlyphPresenter.cs`](Assets/Scripts/Kernel/Enemy/CharGlyphPresenter.cs)
 - [`Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs`](Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs)
 - [`Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs)
 - [`Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs`](Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs)
@@ -670,6 +700,11 @@
   - 支持接收 `EnemyWaveConfig` 作为运行时覆写
   - 应用波次配置时会同步把 `stoppingDistance` 设为 `attackRange`
   - 敌人死亡时会先广播统一死亡通知，再销毁自身，供掉落组件和其他死亡后行为复用
+- `BaseCharObject.prefab` 当前提供文字角色的统一显示骨架
+  - 根节点挂有 `CharGlyphPresenter`，负责缓存并刷新唯一的 `TMP_Text`
+  - 当前显示层级固定为 `Text/Glyph`；`Text` 是容器节点，`Glyph` 才承载实际的 `TMP_Text`
+- `CharEnemy.prefab` 和 `CharBullet.prefab` 当前都沿用 `BulletTokenPickup` 风格的字形组织
+  - 通过 `CharGlyphPresenter.defaultDisplayText` 覆写默认文字，而不是直接在子节点 `TMP_Text` 上写死展示字符
 - `EnemyBulletTokenDropper` 当前负责敌人的波次掉落逻辑
   - 只缓存当前波次写入的掉落表，不持有敌人数值逻辑
   - 每个掉落项都会在敌人死亡时独立判定，因此单只敌人可以同时掉落多个 token

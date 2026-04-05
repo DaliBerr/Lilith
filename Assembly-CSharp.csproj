@@ -68,10 +68,12 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTokenPickup.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\UIInputRouter.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualLibrary.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackProjectileEmitter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyBulletTokenDropper.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ValueTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\GameUIScreen.cs" />
@@ -123,6 +125,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridAuthoring.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveDefinition.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\CharGlyphPresenter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\Scribe.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeValue.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogForwarder.cs" />

@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using Vocalith.Logging;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 
 namespace Kernel.Bullet
@@ -33,6 +36,10 @@ public sealed class CharBullet : MonoBehaviour
     [SerializeField] private Transform sizeTarget;
     [SerializeField] private Rigidbody movementRigidbody;
     [SerializeField] private SphereCollider impactCollider;
+    [SerializeField] private CharBulletVisualPresenter visualPresenter;
+#if UNITY_EDITOR
+    private bool editorPreviewRefreshQueued;
+#endif
 
     [Header("Combat")]
     [SerializeField] private AttackSpec attackSpec = AttackSpec.CreateDefault();
@@ -218,6 +225,11 @@ public sealed class CharBullet : MonoBehaviour
             CaptureImpactColliderBaseRadius();
         }
 
+        if (overwriteExisting || visualPresenter == null)
+        {
+            visualPresenter = GetComponent<CharBulletVisualPresenter>();
+        }
+
         return IsMovementTargetReferenceValid();
     }
 
@@ -236,7 +248,7 @@ public sealed class CharBullet : MonoBehaviour
         glyphText = text;
         if (!IsSizeTargetReferenceValid())
         {
-            sizeTarget = text.transform;
+            sizeTarget = ResolvePreferredSizeTargetForGlyph(text);
         }
 
         CaptureCurrentScaleAsBase();
@@ -445,6 +457,7 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         glyphText.text = content;
+        NotifyVisualPresenterPreview();
         return true;
     }
 
@@ -461,6 +474,7 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         glyphText.color = color;
+        NotifyVisualPresenterPreview();
         return true;
     }
 
@@ -480,6 +494,7 @@ public sealed class CharBullet : MonoBehaviour
         glyphRectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, sanitizedSize);
         glyphRectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, sanitizedSize);
         ApplyImpactColliderRadiusFromFontSize(sanitizedSize);
+        NotifyVisualPresenterPreview();
         return true;
     }
 
@@ -532,6 +547,7 @@ public sealed class CharBullet : MonoBehaviour
         baseLocalScale = localScale;
         hasBaseScaleSnapshot = true;
         ApplyScaleMultiplier();
+        NotifyVisualPresenterPreview();
         return true;
     }
 
@@ -560,6 +576,7 @@ public sealed class CharBullet : MonoBehaviour
         EnsureBaseScaleSnapshot();
         scaleMultiplier = Mathf.Max(0f, multiplier);
         ApplyScaleMultiplier();
+        NotifyVisualPresenterPreview();
         return true;
     }
 
@@ -577,6 +594,7 @@ public sealed class CharBullet : MonoBehaviour
 
         impactRadiusMultiplier = Mathf.Max(0f, multiplier);
         ApplyImpactColliderScale();
+        NotifyVisualPresenterPreview();
         return true;
     }
 
@@ -888,6 +906,7 @@ public sealed class CharBullet : MonoBehaviour
         CaptureCurrentScaleAsBase();
         CaptureImpactColliderBaseRadius();
         ApplyScaleMultiplier();
+        NotifyVisualPresenterPreview();
     }
 
     private void OnValidate()
@@ -905,6 +924,7 @@ public sealed class CharBullet : MonoBehaviour
 
         CaptureImpactColliderBaseRadius();
         ApplyImpactColliderScale();
+        QueueEditorVisualPresenterPreview();
     }
 
     /// <summary>
@@ -1572,7 +1592,59 @@ public sealed class CharBullet : MonoBehaviour
             float baseFontSize = GetCurrentGlyphSquareSize();
             TrySetFontSize(compiledAttack.ResolveFontSize(baseFontSize));
         }
+
+        if (visualPresenter != null)
+        {
+            visualPresenter.ApplyCompiledAppearance(compiledAttack, this);
+        }
     }
+
+    private void NotifyVisualPresenterPreview()
+    {
+        if (visualPresenter != null)
+        {
+            visualPresenter.RefreshPreview();
+        }
+    }
+
+    /// <summary>
+    /// summary: 在编辑器校验结束后延迟刷新视觉预览，避免在 OnValidate 中直接改 SpriteRenderer。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void QueueEditorVisualPresenterPreview()
+    {
+#if UNITY_EDITOR
+        if (Application.isPlaying)
+        {
+            NotifyVisualPresenterPreview();
+            return;
+        }
+
+        if (editorPreviewRefreshQueued)
+        {
+            return;
+        }
+
+        editorPreviewRefreshQueued = true;
+        EditorApplication.delayCall += FlushQueuedEditorVisualPreview;
+#else
+        NotifyVisualPresenterPreview();
+#endif
+    }
+
+#if UNITY_EDITOR
+    private void FlushQueuedEditorVisualPreview()
+    {
+        editorPreviewRefreshQueued = false;
+        if (this == null)
+        {
+            return;
+        }
+
+        NotifyVisualPresenterPreview();
+    }
+#endif
 
     private bool TryGetGlyphRectTransform(out RectTransform glyphRectTransform)
     {
@@ -1736,6 +1808,12 @@ public sealed class CharBullet : MonoBehaviour
 
     private TMP_Text FindPreferredGlyphText()
     {
+        Transform explicitGlyph = transform.Find("Text/Glyph");
+        if (explicitGlyph != null && explicitGlyph.TryGetComponent(out TMP_Text explicitGlyphText))
+        {
+            return explicitGlyphText;
+        }
+
         TMP_Text selfText = GetComponent<TMP_Text>();
         if (selfText != null)
         {
@@ -1777,9 +1855,15 @@ public sealed class CharBullet : MonoBehaviour
 
     private Transform FindPreferredSizeTarget()
     {
+        Transform explicitTextContainer = FindPreferredTextContainer();
+        if (explicitTextContainer != null)
+        {
+            return explicitTextContainer;
+        }
+
         if (IsGlyphTextReferenceValid())
         {
-            return glyphText.transform;
+            return ResolvePreferredSizeTargetForGlyph(glyphText);
         }
 
         if (IsMovementTargetReferenceValid())
@@ -1788,6 +1872,44 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         return transform;
+    }
+
+    /// <summary>
+    /// summary: 查找当前子弹层级下显式命名的文字容器；新 prefab 契约下优先使用 Text 容器承载统一缩放。
+    /// param: 无
+    /// returns: 找到 Text 容器时返回该节点，否则返回 null
+    /// </summary>
+    private Transform FindPreferredTextContainer()
+    {
+        Transform explicitTextContainer = transform.Find("Text");
+        if (explicitTextContainer != null && IsTransformInsideBullet(explicitTextContainer))
+        {
+            return explicitTextContainer;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// summary: 为给定字形解析最合适的缩放目标；Text/Glyph 结构下优先缩放 Text 容器，旧结构回退到字形本体。
+    /// param: text 需要参与解析的字形文本组件
+    /// returns: 可用于视觉缩放的目标节点
+    /// </summary>
+    private Transform ResolvePreferredSizeTargetForGlyph(TMP_Text text)
+    {
+        if (text == null || !IsTransformInsideBullet(text.transform))
+        {
+            return FindPreferredTextContainer();
+        }
+
+        Transform explicitTextContainer = FindPreferredTextContainer();
+        if (explicitTextContainer != null &&
+            (text.transform == explicitTextContainer || text.transform.IsChildOf(explicitTextContainer)))
+        {
+            return explicitTextContainer;
+        }
+
+        return text.transform;
     }
 
     private Rigidbody FindPreferredMovementRigidbody(Transform target)

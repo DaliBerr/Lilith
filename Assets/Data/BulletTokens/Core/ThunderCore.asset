@@ -26,7 +26,7 @@ MonoBehaviour:
   damage: 1
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 320
+  projectileSpeed: 160
   maxLifetime: 2
   maxTravelDistance: 512
   impactMask:
