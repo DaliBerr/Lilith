@@ -30,7 +30,6 @@ public sealed class WaveManager : MonoBehaviour
         EnsureRandomSource();
         TryResolveEnemyGenerator();
         SanitizeConfiguration();
-        DisableAutonomousEnemyLoop();
     }
 
     private void OnEnable()
@@ -70,7 +69,6 @@ public sealed class WaveManager : MonoBehaviour
             return false;
         }
 
-        DisableAutonomousEnemyLoop();
         aliveEnemies.Clear();
         spawnedCountsPerEntry.Clear();
         currentWaveIndex = -1;
@@ -135,7 +133,7 @@ public sealed class WaveManager : MonoBehaviour
             return;
         }
 
-        if (!enemyGenerator.TrySpawnEnemy(spawnEntry.enemyName, spawnEntry.enemyConfig, out Enemy spawnedEnemy))
+        if (!enemyGenerator.TrySpawnEnemy(spawnEntry.enemyDefinition, spawnEntry.enemyConfig, out Enemy spawnedEnemy))
         {
             return;
         }
@@ -237,19 +235,6 @@ public sealed class WaveManager : MonoBehaviour
         }
 
         return waves[currentWaveIndex];
-    }
-
-    /// <summary>
-    /// summary: 当当前组件接管刷怪流程时，关闭生成器自身的随机循环，避免两套系统重复刷怪。
-    /// param: 无
-    /// returns: 无
-    /// </summary>
-    private void DisableAutonomousEnemyLoop()
-    {
-        if (enemyGenerator != null)
-        {
-            enemyGenerator.SetAutonomousLoop(false);
-        }
     }
 
     /// <summary>

@@ -16,7 +16,7 @@ public sealed class WaveDefinition : ScriptableObject
     [SerializeField] private bool randomizeEnemySpawns;
     [SerializeField] private List<WaveEnemySpawnEntry> enemySpawns = new()
     {
-        new WaveEnemySpawnEntry("CharEnemy", 8, new EnemyWaveConfig(MinimumHealth, 120f, 16f, 0.75f, 5f))
+        new WaveEnemySpawnEntry(null, 1, new EnemyWaveConfig(MinimumHealth, 120f, 16f, 0.75f, 5f))
     };
 
     public float SpawnIntervalSeconds => spawnIntervalSeconds;
@@ -58,7 +58,6 @@ public sealed class WaveDefinition : ScriptableObject
         for (int i = 0; i < enemySpawns.Count; i++)
         {
             WaveEnemySpawnEntry entry = enemySpawns[i];
-            entry.enemyName = entry.enemyName != null ? entry.enemyName.Trim() : string.Empty;
             entry.spawnCount = Mathf.Max(0, entry.spawnCount);
             entry.enemyConfig = SanitizeEnemyConfig(entry.enemyConfig);
             enemySpawns[i] = entry;
@@ -176,13 +175,13 @@ public sealed class WaveDefinition : ScriptableObject
     }
 
     /// <summary>
-    /// summary: 判断一个波次敌人条目是否具备有效的敌人名称和数量。
+    /// summary: 判断一个波次敌人条目是否具备有效的敌人定义和数量。
     /// param: entry 需要检查的波次敌人条目
-    /// returns: 名称非空且数量大于零时返回 true
+    /// returns: 定义非空且数量大于零时返回 true
     /// </summary>
     private static bool IsEntryValid(WaveEnemySpawnEntry entry)
     {
-        return !string.IsNullOrWhiteSpace(entry.enemyName) && entry.spawnCount > 0;
+        return entry.enemyDefinition != null && entry.spawnCount > 0;
     }
 
     /// <summary>

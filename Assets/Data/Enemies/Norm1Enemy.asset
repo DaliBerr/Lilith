@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
+  m_Name: Norm1Enemy
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  enemyId: Norm1
+  displayName: Norm1
+  runtimePrefab: {fileID: 69838, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  movementKind: 1
+  attackKind: 1
+  visual:
+    glyphText: "\u575A"
+    glyphColor: {r: 1, g: 1, b: 1, a: 1}
+    runeBaseSprite: {fileID: 21300000, guid: 102f1e024a95ffd458c822de641b670c, type: 3}
+    runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
+    groundShadowSprite: {fileID: 21300000, guid: 5ef8e7d0a52638c458d6bb43407aa593, type: 3}
+    groundShadowTint: {r: 0, g: 0, b: 0, a: 0.28}

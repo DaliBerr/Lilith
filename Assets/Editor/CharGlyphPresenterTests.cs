@@ -46,7 +46,7 @@ public sealed class CharGlyphPresenterTests
     public void Prefabs_UseSingleGlyphPresenterContract()
     {
         AssertPrefabContract("Assets/Prefabs/BaseCharObject.prefab", "火", expectedLayer: 0);
-        AssertPrefabContract("Assets/Prefabs/Enemy/CharEnemy.prefab", "坚", expectedLayer: 9);
+        AssertPrefabContract("Assets/Prefabs/Enemy/CharEnemy.prefab", "坚", expectedLayer: 9, expectEnemyVisualPresenter: true);
     }
 
     private CharGlyphPresenter CreatePresenter(out TMP_Text glyphText)
@@ -73,7 +73,7 @@ public sealed class CharGlyphPresenterTests
         return gameObject;
     }
 
-    private static void AssertPrefabContract(string prefabPath, string expectedDefaultDisplayText, int expectedLayer)
+    private static void AssertPrefabContract(string prefabPath, string expectedDefaultDisplayText, int expectedLayer, bool expectEnemyVisualPresenter = false)
     {
         GameObject prefabRoot = PrefabUtility.LoadPrefabContents(prefabPath);
 
@@ -86,6 +86,7 @@ public sealed class CharGlyphPresenterTests
             Assert.That(textContainer, Is.Not.Null, $"{prefabPath} is missing Text container.");
             Assert.That(textContainer.GetComponent<RectTransform>(), Is.Not.Null, $"{prefabPath} Text must remain a RectTransform container.");
             Assert.That(textContainer.GetComponent<TMP_Text>(), Is.Null, $"{prefabPath} Text container should not hold TMP_Text directly.");
+            Assert.That(textContainer.GetComponent<GameplayBillboard>(), Is.Not.Null, $"{prefabPath} Text container is missing GameplayBillboard.");
 
             Transform glyph = prefabRoot.transform.Find("Text/Glyph");
             Assert.That(glyph, Is.Not.Null, $"{prefabPath} is missing Text/Glyph.");
@@ -93,6 +94,15 @@ public sealed class CharGlyphPresenterTests
 
             TMP_Text[] texts = prefabRoot.GetComponentsInChildren<TMP_Text>(includeInactive: true);
             Assert.That(texts, Has.Length.EqualTo(1), $"{prefabPath} should expose exactly one TMP_Text.");
+
+            if (expectEnemyVisualPresenter)
+            {
+                Assert.That(prefabRoot.GetComponent<CharEnemyVisualPresenter>(), Is.Not.Null, $"{prefabPath} is missing CharEnemyVisualPresenter.");
+                Assert.That(Quaternion.Angle(textContainer.localRotation, Quaternion.identity), Is.LessThan(0.001f), $"{prefabPath} Text should be locally upright.");
+                Assert.That(Quaternion.Angle(glyph.localRotation, Quaternion.identity), Is.LessThan(0.001f), $"{prefabPath} Glyph should be locally upright.");
+                Assert.That(prefabRoot.transform.Find("RuneBaseCore")?.GetComponent<SpriteRenderer>(), Is.Not.Null, $"{prefabPath} is missing RuneBaseCore SpriteRenderer.");
+                Assert.That(prefabRoot.transform.Find("GroundShadow")?.GetComponent<SpriteRenderer>(), Is.Not.Null, $"{prefabPath} is missing GroundShadow SpriteRenderer.");
+            }
 
             Assert.That(presenter.TryCacheBindings(overwriteExisting: true), Is.True);
             Assert.That(presenter.GlyphText, Is.SameAs(texts[0]));

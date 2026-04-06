@@ -32,6 +32,8 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     public override float AttackCooldown => attackCooldown;
     public override float AttackDamage => attackDamage;
     public override float MaxHealth => health;
+    public EnemyWaveConfig CurrentWaveConfig => currentWaveConfig;
+    public bool HasWaveConfig => hasWaveConfig;
     public override float CurrentHealth
     {
         get
@@ -43,6 +45,8 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
 
     private float currentHealth;
     private bool hasInitializedHealth;
+    private EnemyWaveConfig currentWaveConfig;
+    private bool hasWaveConfig;
 
     private void Awake()
     {
@@ -89,6 +93,8 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     /// </summary>
     public void ApplyWaveConfig(EnemyWaveConfig config)
     {
+        currentWaveConfig = config;
+        hasWaveConfig = true;
         health = SanitizePositiveValue(config.maxHealth, health);
         moveSpeed = SanitizeValue(config.moveSpeed, moveSpeed);
         attackRange = SanitizeValue(config.attackRange, attackRange);
@@ -134,6 +140,8 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     /// </summary>
     private void ApplyDefaultConfiguration()
     {
+        hasWaveConfig = false;
+        currentWaveConfig = default;
         moveSpeed = DefaultMoveSpeed;
         rotationSpeed = DefaultRotationSpeed;
         stoppingDistance = DefaultStoppingDistance;

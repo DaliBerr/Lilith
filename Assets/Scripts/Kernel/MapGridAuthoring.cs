@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 
 namespace Kernel.MapGrid
@@ -34,18 +33,18 @@ namespace Kernel.MapGrid
                 GameObject cellObject,
                 CellData cellData,
                 Collider managedCollider,
-                TMP_Text textComponent)
+                CellData.CellSurfaceType surfaceType)
             {
                 CellObject = cellObject;
                 CellData = cellData;
                 ManagedCollider = managedCollider;
-                TextComponent = textComponent;
+                SurfaceType = surfaceType;
             }
 
             public GameObject CellObject { get; }
             public CellData CellData { get; }
             public Collider ManagedCollider { get; set; }
-            public TMP_Text TextComponent { get; }
+            public CellData.CellSurfaceType SurfaceType { get; set; }
         }
 
         public const string GeneratedContentObjectName = "GeneratedContent";
@@ -66,11 +65,6 @@ namespace Kernel.MapGrid
 
         [Header("Coordinate Binding")]
         [SerializeField] private MapGridCoordinateBinding coordinateBinding = new();
-
-        [Header("Camera")]
-        [SerializeField] private Camera targetCamera;
-        [SerializeField] private float cameraPadding = 0f;
-        [SerializeField] private float cameraDistance = 10f;
 
         [SerializeField] private List<CellEntry> cellEntries = new();
 
@@ -122,30 +116,13 @@ namespace Kernel.MapGrid
             set => coordinateBinding = value ?? new MapGridCoordinateBinding();
         }
 
-        public Camera TargetCamera
-        {
-            get => targetCamera;
-            set => targetCamera = value;
-        }
-
-        public float CameraPadding
-        {
-            get => cameraPadding;
-            set => cameraPadding = Mathf.Max(0f, value);
-        }
-
-        public float CameraDistance
-        {
-            get => cameraDistance;
-            set => cameraDistance = Mathf.Max(0.01f, value);
-        }
-
         public IReadOnlyList<CellEntry> Cells => cellEntries;
         public int IndexedCellCount => cellEntries?.Count ?? 0;
         public int ExpectedCellCount => gridWidth * gridHeight;
         public bool IsCellSurfaceCacheInitialized => isCellSurfaceCacheInitialized;
         public int CellSurfaceCacheCount => cellSurfaceCache.Count;
         public int DirtyCellSurfaceCount => dirtyCellSurfaceCoordinates.Count;
+        public float WorldPlaneY => transform.TransformPoint(Vector3.zero).y;
 
         private void OnEnable()
         {
@@ -161,8 +138,6 @@ namespace Kernel.MapGrid
             chunkHeightInCells = Mathf.Max(1, chunkHeightInCells);
             coordinateBinding ??= new MapGridCoordinateBinding();
             cellEntries ??= new List<CellEntry>();
-            cameraPadding = Mathf.Max(0f, cameraPadding);
-            cameraDistance = Mathf.Max(0.01f, cameraDistance);
             InvalidateCellSurfaceCache();
         }
 
@@ -189,7 +164,7 @@ namespace Kernel.MapGrid
 
         public Vector3 GetCellLocalPosition(int x, int y)
         {
-            return new Vector3(x * cellSize.x, y * cellSize.y, 0f);
+            return new Vector3(x * cellSize.x, 0f, y * cellSize.y);
         }
 
         /// <summary>
@@ -208,7 +183,7 @@ namespace Kernel.MapGrid
             }
 
             var x = Mathf.FloorToInt((localPoint.x / cellSize.x) + 0.5f);
-            var y = Mathf.FloorToInt((localPoint.y / cellSize.y) + 0.5f);
+            var y = Mathf.FloorToInt((localPoint.z / cellSize.y) + 0.5f);
             if (!IsValidGridCoordinate(x, y))
             {
                 return false;
@@ -258,14 +233,14 @@ namespace Kernel.MapGrid
             {
                 return new Vector3(
                     (minCellCenter.x + maxCellCenter.x) * 0.5f,
-                    (minCellCenter.y + maxCellCenter.y) * 0.5f,
-                    0f);
+                    0f,
+                    (minCellCenter.y + maxCellCenter.y) * 0.5f);
             }
 
             return new Vector3(
                 (Mathf.Max(0, gridWidth - 1) * cellSize.x) * 0.5f,
-                (Mathf.Max(0, gridHeight - 1) * cellSize.y) * 0.5f,
-                0f);
+                0f,
+                (Mathf.Max(0, gridHeight - 1) * cellSize.y) * 0.5f);
         }
 
         public Vector3 GetGridWorldCenter()
@@ -280,17 +255,7 @@ namespace Kernel.MapGrid
 
         public float GetGridWorldHeight()
         {
-            return transform.TransformVector(new Vector3(0f, GetGridLocalSize().y, 0f)).magnitude;
-        }
-
-        public Camera ResolveTargetCamera()
-        {
-            if (targetCamera != null)
-            {
-                return targetCamera;
-            }
-
-            return Camera.main != null ? Camera.main : UnityEngine.Object.FindAnyObjectByType<Camera>();
+            return transform.TransformVector(new Vector3(0f, 0f, GetGridLocalSize().y)).magnitude;
         }
 
         private bool TryGetGeneratedCellLocalBounds(out Vector2 minCellCenter, out Vector2 maxCellCenter)
@@ -322,15 +287,15 @@ namespace Kernel.MapGrid
                 if (!hasValue)
                 {
                     minX = maxX = localPosition.x;
-                    minY = maxY = localPosition.y;
+                minY = maxY = localPosition.z;
                     hasValue = true;
                     continue;
                 }
 
                 minX = Mathf.Min(minX, localPosition.x);
-                minY = Mathf.Min(minY, localPosition.y);
+                minY = Mathf.Min(minY, localPosition.z);
                 maxX = Mathf.Max(maxX, localPosition.x);
-                maxY = Mathf.Max(maxY, localPosition.y);
+                maxY = Mathf.Max(maxY, localPosition.z);
             }
 
             if (!hasValue)
@@ -644,12 +609,7 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            if (!TryResolveSingleCellTextComponent(cellObject, out var textComponent, out error))
-            {
-                return false;
-            }
-
-            cacheEntry = new CellSurfaceRuntimeCacheEntry(cellObject, cellData, managedCollider, textComponent);
+            cacheEntry = new CellSurfaceRuntimeCacheEntry(cellObject, cellData, managedCollider, cellData.SurfaceType);
             return true;
         }
 
@@ -692,30 +652,22 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            GetExpectedSurfaceState(cacheEntry.TextComponent, out var targetTag, out var shouldEnableCollider);
-            if (IsSurfaceStateCurrent(cacheEntry, targetTag, shouldEnableCollider))
+            cacheEntry.ManagedCollider = cacheEntry.CellData.ManagedCollider;
+            cacheEntry.SurfaceType = cacheEntry.CellData.SurfaceType;
+
+            if (IsSurfaceStateCurrent(cacheEntry))
             {
                 return true;
             }
 
-            if (!TrySetGameObjectTag(cacheEntry.CellObject, targetTag, out error))
+            if (!cacheEntry.CellData.TryRefreshSurfacePresentation())
             {
-                return false;
-            }
-
-            var colliderObject = cacheEntry.ManagedCollider.gameObject;
-            if (colliderObject != cacheEntry.CellObject && !TrySetGameObjectTag(colliderObject, targetTag, out error))
-            {
-                return false;
-            }
-
-            if (cacheEntry.ManagedCollider.enabled != shouldEnableCollider && !cacheEntry.CellData.SetColliderEnabled(shouldEnableCollider))
-            {
-                error = $"Failed to update the managed Collider on '{cacheEntry.CellObject.name}'.";
+                error = $"Failed to refresh the surface presentation on '{cacheEntry.CellObject.name}'.";
                 return false;
             }
 
             cacheEntry.ManagedCollider = cacheEntry.CellData.ManagedCollider;
+            cacheEntry.SurfaceType = cacheEntry.CellData.SurfaceType;
             changed = true;
             return true;
         }
@@ -738,68 +690,32 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            if (!cellData.TryCacheManagedCollider())
+            if (!cellData.TryCacheSurfaceBindings())
             {
-                error = $"Cell '{cellObject.name}' does not have a managed Collider configured on its CellData component.";
+                error = $"Cell '{cellObject.name}' does not have valid wall/ground surface bindings configured on its CellData component.";
                 return false;
             }
 
             managedCollider = cellData.ManagedCollider;
             if (managedCollider == null)
             {
-                error = $"Cell '{cellObject.name}' does not have a managed Collider configured on its CellData component.";
+                error = $"Cell '{cellObject.name}' does not have a managed Collider configured for surface '{cellData.SurfaceType}'.";
                 return false;
             }
 
             return true;
         }
 
-        private static bool TryResolveSingleCellTextComponent(GameObject cellObject, out TMP_Text textComponent, out string error)
+        private static bool IsSurfaceStateCurrent(CellSurfaceRuntimeCacheEntry cacheEntry)
         {
-            textComponent = null;
-            error = null;
-
-            if (cellObject == null)
-            {
-                error = "Cell object is null.";
-                return false;
-            }
-
-            var textComponents = cellObject.GetComponentsInChildren<TMP_Text>(includeInactive: true);
-            if (textComponents == null || textComponents.Length == 0)
-            {
-                return true;
-            }
-
-            if (textComponents.Length > 1)
-            {
-                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Ground refresh requires zero or one TMP_Text.";
-                return false;
-            }
-
-            textComponent = textComponents[0];
-            return true;
-        }
-
-        private static void GetExpectedSurfaceState(TMP_Text textComponent, out string targetTag, out bool shouldEnableCollider)
-        {
-            shouldEnableCollider = textComponent != null && !string.IsNullOrWhiteSpace(textComponent.text);
-            targetTag = shouldEnableCollider ? WallTagName : GroundTagName;
-        }
-
-        private static bool IsSurfaceStateCurrent(CellSurfaceRuntimeCacheEntry cacheEntry, string targetTag, bool shouldEnableCollider)
-        {
-            if (cacheEntry == null || cacheEntry.CellObject == null || cacheEntry.ManagedCollider == null)
+            if (cacheEntry == null || cacheEntry.CellObject == null || cacheEntry.CellData == null)
             {
                 return false;
             }
 
-            var colliderObject = cacheEntry.ManagedCollider.gameObject;
-            var isCellTagCurrent = string.Equals(cacheEntry.CellObject.tag, targetTag, StringComparison.Ordinal);
-            var isColliderTagCurrent = colliderObject == cacheEntry.CellObject ||
-                                       string.Equals(colliderObject.tag, targetTag, StringComparison.Ordinal);
-            var isColliderStateCurrent = cacheEntry.ManagedCollider.enabled == shouldEnableCollider;
-            return isCellTagCurrent && isColliderTagCurrent && isColliderStateCurrent;
+            return cacheEntry.ManagedCollider != null &&
+                   cacheEntry.SurfaceType == cacheEntry.CellData.SurfaceType &&
+                   cacheEntry.CellData.IsSurfacePresentationCurrent();
         }
 
         private static bool IsCellSurfaceRuntimeCacheEntryValid(GameObject cellObject, CellSurfaceRuntimeCacheEntry cacheEntry)
@@ -807,38 +723,7 @@ namespace Kernel.MapGrid
             return cacheEntry != null &&
                    cacheEntry.CellObject == cellObject &&
                    cacheEntry.CellData != null &&
-                   cacheEntry.CellData.gameObject == cellObject &&
-                   cacheEntry.ManagedCollider != null &&
-                   IsTransformInsideCell(cacheEntry.ManagedCollider.transform, cellObject.transform) &&
-                   (cacheEntry.TextComponent == null || IsTransformInsideCell(cacheEntry.TextComponent.transform, cellObject.transform));
-        }
-
-        private static bool TrySetGameObjectTag(GameObject target, string tagName, out string error)
-        {
-            error = null;
-
-            if (target == null)
-            {
-                error = "Target GameObject is null.";
-                return false;
-            }
-
-            if (target.tag == tagName)
-            {
-                return true;
-            }
-
-            try
-            {
-                target.tag = tagName;
-            }
-            catch (UnityException exception)
-            {
-                error = exception.Message;
-                return false;
-            }
-
-            return true;
+                   cacheEntry.CellData.gameObject == cellObject;
         }
 
         private void InvalidateCellSurfaceCache()
@@ -847,11 +732,6 @@ namespace Kernel.MapGrid
             cellSurfaceCache.Clear();
             dirtyCellSurfaceCoordinates.Clear();
             dirtyCellSurfaceBuffer.Clear();
-        }
-
-        private static bool IsTransformInsideCell(Transform candidate, Transform cellRoot)
-        {
-            return candidate != null && cellRoot != null && (candidate == cellRoot || candidate.IsChildOf(cellRoot));
         }
 
         private static List<CellEntry> CloneEntries(IList<CellEntry> entries)
@@ -882,89 +762,4 @@ namespace Kernel.MapGrid
         }
     }
 
-    public static class MapGridCameraUtility
-    {
-        public static bool TryFrameResolvedCamera(MapGridAuthoring authoring, out string error)
-        {
-            if (authoring == null)
-            {
-                error = "MapGridAuthoring is null.";
-                return false;
-            }
-
-            return TryFrameCamera(
-                authoring,
-                authoring.ResolveTargetCamera(),
-                authoring.CameraPadding,
-                authoring.CameraDistance,
-                out error);
-        }
-
-        public static bool TryFrameCamera(
-            MapGridAuthoring authoring,
-            Camera camera,
-            float padding,
-            float distance,
-            out string error)
-        {
-            error = null;
-
-            if (authoring == null)
-            {
-                error = "MapGridAuthoring is null.";
-                return false;
-            }
-
-            if (camera == null)
-            {
-                error = "No target camera was found. Assign Target Camera or tag a camera as MainCamera.";
-                return false;
-            }
-
-            if (authoring.GridWidth <= 0 || authoring.GridHeight <= 0)
-            {
-                error = "Grid width and height must both be greater than zero.";
-                return false;
-            }
-
-            if (authoring.CellSize.x <= 0f || authoring.CellSize.y <= 0f)
-            {
-                error = "Cell size X and Y must both be greater than zero.";
-                return false;
-            }
-
-            var width = authoring.GetGridWorldWidth() + Mathf.Max(0f, padding) * 2f;
-            var height = authoring.GetGridWorldHeight() + Mathf.Max(0f, padding) * 2f;
-            var aspect = Mathf.Max(0.0001f, camera.aspect);
-
-            camera.orthographic = true;
-            camera.orthographicSize = Mathf.Max(height * 0.5f, width / (2f * aspect));
-
-            var forward = authoring.transform.forward;
-            if (forward.sqrMagnitude < 0.0001f)
-            {
-                forward = Vector3.forward;
-            }
-
-            var up = authoring.transform.up;
-            if (up.sqrMagnitude < 0.0001f)
-            {
-                up = Vector3.up;
-            }
-
-            distance = Mathf.Max(0.01f, distance);
-            var minimumDistance = Mathf.Max(0.31f, camera.nearClipPlane + 0.01f);
-            distance = Mathf.Max(distance, minimumDistance);
-
-            var center = authoring.GetGridWorldCenter();
-            camera.transform.SetPositionAndRotation(
-                center - forward.normalized * distance,
-                Quaternion.LookRotation(forward.normalized, up.normalized));
-
-            camera.nearClipPlane = Mathf.Max(0.01f, Mathf.Min(camera.nearClipPlane, distance - 0.01f));
-            camera.farClipPlane = Mathf.Max(camera.farClipPlane, distance + 100f);
-
-            return true;
-        }
-    }
 }

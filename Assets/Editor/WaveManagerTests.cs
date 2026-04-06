@@ -31,25 +31,23 @@ public sealed class WaveManagerTests
         playerObject.transform.position = new Vector3(32f, 0f, 32f);
 
         GameObject enemyParent = CreateGameObject("SpawnedEnemies");
-        CharEnemyMovement basicEnemyPrefab = CreateEnemyPrefab("BasicEnemy");
-        CharEnemyMovement fastEnemyPrefab = CreateEnemyPrefab("FastEnemy");
+        GameObject sharedEnemyPrefab = CreateEnemyPrefab();
+        EnemyDefinition basicDefinition = CreateEnemyDefinition("BasicEnemy", sharedEnemyPrefab, "甲");
+        EnemyDefinition fastDefinition = CreateEnemyDefinition("FastEnemy", sharedEnemyPrefab, "迅");
 
         EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
         Assert.That(generator.TrySetTarget(playerObject.transform), Is.True);
-        SetPrivateField(generator, "charEnemyPrefab", basicEnemyPrefab);
-        SetPrivateField(generator, "additionalEnemyPrefabs", new List<CharEnemyMovement> { fastEnemyPrefab });
         SetPrivateField(generator, "spawnDistance", 4f);
         SetPrivateField(generator, "maxGroundSpawnRolls", 8);
         SetPrivateField(generator, "spawnedEnemyParent", enemyParent.transform);
-        generator.SetAutonomousLoop(false);
 
         WaveDefinition waveOne = CreateWaveDefinition(
             0.5f,
-            new WaveEnemySpawnEntry("BasicEnemy", 1, new EnemyWaveConfig(40f, 80f, 10f, 1f, 2f)),
-            new WaveEnemySpawnEntry("FastEnemy", 2, new EnemyWaveConfig(60f, 140f, 12f, 0.75f, 4f)));
+            new WaveEnemySpawnEntry(basicDefinition, 1, new EnemyWaveConfig(40f, 80f, 10f, 1f, 2f)),
+            new WaveEnemySpawnEntry(fastDefinition, 2, new EnemyWaveConfig(60f, 140f, 12f, 0.75f, 4f)));
         WaveDefinition waveTwo = CreateWaveDefinition(
             0.5f,
-            new WaveEnemySpawnEntry("FastEnemy", 1, new EnemyWaveConfig(75f, 160f, 14f, 0.5f, 6f)));
+            new WaveEnemySpawnEntry(fastDefinition, 1, new EnemyWaveConfig(75f, 160f, 14f, 0.5f, 6f)));
 
         WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
         SetPrivateField(waveManager, "enemyGenerator", generator);
@@ -124,13 +122,34 @@ public sealed class WaveManagerTests
         return authoring;
     }
 
-    private CharEnemyMovement CreateEnemyPrefab(string enemyName)
+    private GameObject CreateEnemyPrefab()
     {
         GameObject enemyObject = CreateGameObject("EnemyPrefab");
-        CharEnemyMovement movement = enemyObject.AddComponent<CharEnemyMovement>();
-        BaseCharEnemyNorm1 enemy = enemyObject.AddComponent<BaseCharEnemyNorm1>();
-        SetPrivateField(enemy, "enemyName", enemyName);
-        return movement;
+        enemyObject.AddComponent<CharEnemyMovement>();
+        enemyObject.AddComponent<EnemyMeleeAttacker>();
+        enemyObject.AddComponent<EnemyDefinitionBinder>();
+        enemyObject.AddComponent<BaseCharEnemyNorm1>();
+        return enemyObject;
+    }
+
+    private EnemyDefinition CreateEnemyDefinition(string enemyId, GameObject runtimePrefab, string glyphText)
+    {
+        EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        definition.name = enemyId;
+        createdObjects.Add(definition);
+        SetPrivateField(definition, "enemyId", enemyId);
+        SetPrivateField(definition, "displayName", enemyId);
+        SetPrivateField(definition, "runtimePrefab", runtimePrefab);
+        SetPrivateField(definition, "movementKind", EnemyMovementKind.ChaseTarget);
+        SetPrivateField(definition, "attackKind", EnemyAttackKind.MeleeContact);
+        SetPrivateField(definition, "visual", new EnemyDefinition.EnemyVisualDefinition
+        {
+            glyphText = glyphText,
+            glyphColor = Color.white,
+            runeBaseTint = new Color(0.92f, 0.94f, 0.98f, 0.45f),
+            groundShadowTint = new Color(0f, 0f, 0f, 0.28f),
+        });
+        return definition;
     }
 
     private WaveDefinition CreateWaveDefinition(float spawnIntervalSeconds, params WaveEnemySpawnEntry[] enemySpawns)

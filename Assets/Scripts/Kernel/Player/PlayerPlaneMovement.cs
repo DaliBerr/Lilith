@@ -2,6 +2,7 @@ using System;
 using Kernel;
 using Kernel.Bullet;
 using Kernel.GameState;
+using Kernel.MapGrid;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using Vocalith.Logging;
@@ -23,6 +24,10 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     [SerializeField, Min(0f)] private float rotationSpeed = 720f;
     [SerializeField] private Rigidbody targetRigidbody;
     [SerializeField] private Camera targetCamera;
+
+    [Header("Grounding")]
+    [SerializeField] private MapGridAuthoring targetMapGrid;
+    [SerializeField] private Collider groundingReferenceCollider;
 
     [Header("Bullet")]
     [SerializeField] private CharBullet bulletPrefab;
@@ -50,6 +55,10 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             targetCamera = Camera.main;
         }
 
+        TryResolveTargetMapGrid();
+        TryResolveGroundingReferenceCollider();
+        EnsureGroundedRigidbodyConfiguration();
+        TrySnapToGameplayPlane();
         SanitizeConfiguration();
     }
 
@@ -244,13 +253,11 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return true;
         }
 
-        Plane fallbackPlane = new(Vector3.up, GetRotationOrigin());
-        if (!fallbackPlane.Raycast(ray, out float hitDistance))
+        if (!TryProjectRayOntoGameplayPlane(ray, out aimPoint))
         {
             return false;
         }
 
-        aimPoint = ray.GetPoint(hitDistance);
         return true;
     }
 
@@ -355,14 +362,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return false;
         }
 
-        Plane movementPlane = new(Vector3.up, GetRotationOrigin());
-        if (!movementPlane.Raycast(ray, out float hitDistance))
-        {
-            return false;
-        }
-
-        mouseWorldPoint = ray.GetPoint(hitDistance);
-        return true;
+        return TryProjectRayOntoGameplayPlane(ray, out mouseWorldPoint);
     }
 
     /// <summary>
@@ -410,6 +410,96 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 当 Inspector 未显式绑定地图时，尝试自动解析当前场景中的 MapGridAuthoring。
+    /// param: 无
+    /// returns: 成功拿到地图平面来源时返回 true
+    /// </summary>
+    private bool TryResolveTargetMapGrid()
+    {
+        if (targetMapGrid != null)
+        {
+            return true;
+        }
+
+        targetMapGrid = FindFirstObjectByType<MapGridAuthoring>();
+        return targetMapGrid != null;
+    }
+
+    /// <summary>
+    /// summary: 当 Inspector 未显式绑定 grounded 参考 Collider 时，尝试自动在玩家层级内解析一个可用碰撞体。
+    /// param: 无
+    /// returns: 成功拿到 grounded 参考 Collider 时返回 true
+    /// </summary>
+    private bool TryResolveGroundingReferenceCollider()
+    {
+        if (groundingReferenceCollider != null && !groundingReferenceCollider.isTrigger)
+        {
+            return true;
+        }
+
+        return WorldHeightUtility.TryFindGroundingReferenceCollider(this, out groundingReferenceCollider);
+    }
+
+    /// <summary>
+    /// summary: 统一规范 grounded 玩家刚体，确保角色始终停留在地图平面对应的世界高度上。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void EnsureGroundedRigidbodyConfiguration()
+    {
+        if (targetRigidbody == null)
+        {
+            return;
+        }
+
+        WorldHeightUtility.TryConfigureGroundedRigidbody(targetRigidbody);
+    }
+
+    /// <summary>
+    /// summary: 按 grounded 根节点契约把玩家抬到当前地图平面高度上。
+    /// param: 无
+    /// returns: 成功完成 grounded snap 时返回 true
+    /// </summary>
+    private bool TrySnapToGameplayPlane()
+    {
+        float planeY = GetGameplayPlaneY();
+        if (TryResolveGroundingReferenceCollider() &&
+            WorldHeightUtility.TryGetGroundedRootPosition(transform, groundingReferenceCollider, planeY, out Vector3 groundedPosition))
+        {
+            transform.position = groundedPosition;
+            if (targetRigidbody != null)
+            {
+                targetRigidbody.position = groundedPosition;
+            }
+
+            return true;
+        }
+
+        return WorldHeightUtility.TrySnapTransformToPlaneHeight(transform, planeY);
+    }
+
+    /// <summary>
+    /// summary: 获取当前移动、瞄准和 grounded 逻辑应该使用的共享地图平面高度。
+    /// param: 无
+    /// returns: 共享地图平面的世界 Y；找不到地图时回退到玩家当前根节点高度
+    /// </summary>
+    private float GetGameplayPlaneY()
+    {
+        return TryResolveTargetMapGrid() ? targetMapGrid.WorldPlaneY : GetRotationOrigin().y;
+    }
+
+    /// <summary>
+    /// summary: 用共享地图平面高度投影一条世界射线，供鼠标瞄准和回退平面命中使用。
+    /// param: ray 当前需要投影的世界射线
+    /// param: worldPoint 输出的命中世界坐标
+    /// returns: 成功命中共享地图平面时返回 true
+    /// </summary>
+    private bool TryProjectRayOntoGameplayPlane(Ray ray, out Vector3 worldPoint)
+    {
+        return WorldHeightUtility.TryProjectRayOntoPlaneY(ray, GetGameplayPlaneY(), out worldPoint);
+    }
+
+    /// <summary>
     /// summary: 依据旋转速度上限，计算当前帧应该采用的朝向。
     /// param: currentRotation 当前朝向
     /// param: targetRotation 目标朝向
@@ -439,6 +529,10 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private void OnValidate()
     {
         TryAutoAssignLoadout();
+        TryResolveTargetMapGrid();
+        TryResolveGroundingReferenceCollider();
+        EnsureGroundedRigidbodyConfiguration();
+        TrySnapToGameplayPlane();
         SanitizeConfiguration();
     }
 

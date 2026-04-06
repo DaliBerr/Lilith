@@ -28,11 +28,12 @@ public sealed class WaveDefinitionTests
         WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
         createdObjects.Add(waveDefinition);
 
+        EnemyDefinition enemyDefinition = CreateEnemyDefinition("Norm1");
         CoreTokenData keptLowChanceToken = CreateToken<CoreTokenData>("keep_low", "Keep Low");
         CoreTokenData keptHighChanceToken = CreateToken<CoreTokenData>("keep_high", "Keep High");
 
         WaveEnemySpawnEntry entry = new(
-            "CharEnemy",
+            enemyDefinition,
             2,
             new EnemyWaveConfig(
                 40f,
@@ -51,6 +52,7 @@ public sealed class WaveDefinitionTests
         InvokePrivateMethod(waveDefinition, "OnValidate");
 
         Assert.That(waveDefinition.TryGetSpawnEntryAt(0, out WaveEnemySpawnEntry sanitizedEntry), Is.True);
+        Assert.That(sanitizedEntry.enemyDefinition, Is.SameAs(enemyDefinition));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops, Is.Not.Null);
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops, Has.Count.EqualTo(3));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[0].token, Is.Null);
@@ -59,6 +61,36 @@ public sealed class WaveDefinitionTests
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[1].dropChance, Is.EqualTo(0f));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[2].token, Is.SameAs(keptHighChanceToken));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[2].dropChance, Is.EqualTo(1f));
+    }
+
+    [Test]
+    public void TryGetSpawnEntryAt_IgnoresEntriesWithoutEnemyDefinition()
+    {
+        WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
+        createdObjects.Add(waveDefinition);
+
+        EnemyDefinition validDefinition = CreateEnemyDefinition("Norm1");
+        SetPrivateField(waveDefinition, "enemySpawns", new List<WaveEnemySpawnEntry>
+        {
+            new(null, 3, new EnemyWaveConfig(10f, 10f, 1f, 1f, 1f)),
+            new(validDefinition, 2, new EnemyWaveConfig(20f, 20f, 2f, 2f, 2f)),
+        });
+        InvokePrivateMethod(waveDefinition, "OnValidate");
+
+        Assert.That(waveDefinition.TotalSpawnCount, Is.EqualTo(2));
+        Assert.That(waveDefinition.TryGetSpawnEntryAt(0, out WaveEnemySpawnEntry entry, out int entryIndex), Is.True);
+        Assert.That(entry.enemyDefinition, Is.SameAs(validDefinition));
+        Assert.That(entryIndex, Is.EqualTo(1));
+    }
+
+    private EnemyDefinition CreateEnemyDefinition(string enemyId)
+    {
+        EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        definition.name = enemyId;
+        createdObjects.Add(definition);
+        SetPrivateField(definition, "enemyId", enemyId);
+        SetPrivateField(definition, "displayName", enemyId);
+        return definition;
     }
 
     private T CreateToken<T>(string tokenId, string displayText) where T : BaseTokenData

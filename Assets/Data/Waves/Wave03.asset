@@ -15,7 +15,7 @@ MonoBehaviour:
   spawnIntervalSeconds: 0.8
   randomizeEnemySpawns: 1
   enemySpawns:
-  - enemyName: CharEnemy
+  - enemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
     spawnCount: 8
     enemyConfig:
       maxHealth: 120

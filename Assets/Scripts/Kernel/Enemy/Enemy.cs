@@ -11,11 +11,12 @@ using UnityEngine;
 public abstract class Enemy : MonoBehaviour
 {
     [Header("Identity")]
-    [SerializeField] private string enemyName = "Enemy";
+    [SerializeField] private EnemyDefinition enemyDefinition;
 
     private bool hasRaisedDeathNotification;
 
-    public string EnemyName => string.IsNullOrWhiteSpace(enemyName) ? GetType().Name : enemyName.Trim();
+    public EnemyDefinition Definition => enemyDefinition;
+    public string EnemyName => enemyDefinition != null ? enemyDefinition.EnemyId : GetType().Name;
     public abstract float MoveSpeed { get; }
     public abstract float RotationSpeed { get; }
     public abstract float StoppingDistance { get; }
@@ -35,6 +36,22 @@ public abstract class Enemy : MonoBehaviour
     /// returns: 成功处理本次伤害时返回 true
     /// </summary>
     public abstract bool TryApplyDamage(float damage, out float remainingHealth, out bool isDead);
+
+    /// <summary>
+    /// summary: 把当前敌人实例绑定到一个敌人定义资产上，供行为与调试读取稳定标识。
+    /// param: definition 当前实例应持有的敌人定义
+    /// returns: 传入定义有效时返回 true
+    /// </summary>
+    public bool TryBindDefinition(EnemyDefinition definition)
+    {
+        if (definition == null)
+        {
+            return false;
+        }
+
+        enemyDefinition = definition;
+        return true;
+    }
 
     /// <summary>
     /// summary: 在敌人进入新的有效生命周期时，重置一次性死亡通知状态。
@@ -121,13 +138,13 @@ public struct EnemyWaveConfig
 [System.Serializable]
 public struct WaveEnemySpawnEntry
 {
-    public string enemyName;
+    public EnemyDefinition enemyDefinition;
     [Min(0)] public int spawnCount;
     public EnemyWaveConfig enemyConfig;
 
-    public WaveEnemySpawnEntry(string enemyName, int spawnCount, EnemyWaveConfig enemyConfig)
+    public WaveEnemySpawnEntry(EnemyDefinition enemyDefinition, int spawnCount, EnemyWaveConfig enemyConfig)
     {
-        this.enemyName = enemyName;
+        this.enemyDefinition = enemyDefinition;
         this.spawnCount = spawnCount;
         this.enemyConfig = enemyConfig;
     }

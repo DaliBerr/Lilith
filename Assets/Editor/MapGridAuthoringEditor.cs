@@ -7,8 +7,8 @@ namespace Kernel.MapGrid.Editor
 {
     internal enum MapGridCellBrushMode
     {
-        FillText,
-        EraseText,
+        PaintGround,
+        PaintWall,
         SetColliderState,
     }
 
@@ -31,8 +31,7 @@ namespace Kernel.MapGrid.Editor
         private GameObject replacementPrefab;
         private bool sceneCellEditEnabled;
         private MapGridSceneCellSelectionMode sceneCellSelectionMode = MapGridSceneCellSelectionMode.Paint;
-        private MapGridCellBrushMode cellBrushMode = MapGridCellBrushMode.FillText;
-        private string brushText = string.Empty;
+        private MapGridCellBrushMode cellBrushMode = MapGridCellBrushMode.PaintGround;
         private bool colliderBrushEnabled = true;
         private bool isStrokeActive;
         private int activeStrokeUndoGroup = -1;
@@ -51,10 +50,6 @@ namespace Kernel.MapGrid.Editor
         private SerializedProperty chunkHeightProperty;
         private SerializedProperty defaultCellPrefabProperty;
         private SerializedProperty coordinateBindingProperty;
-        private SerializedProperty targetCameraProperty;
-        private SerializedProperty cameraPaddingProperty;
-        private SerializedProperty cameraDistanceProperty;
-
         private void OnEnable()
         {
             gridWidthProperty = serializedObject.FindProperty("gridWidth");
@@ -64,9 +59,6 @@ namespace Kernel.MapGrid.Editor
             chunkHeightProperty = serializedObject.FindProperty("chunkHeightInCells");
             defaultCellPrefabProperty = serializedObject.FindProperty("defaultCellPrefab");
             coordinateBindingProperty = serializedObject.FindProperty("coordinateBinding");
-            targetCameraProperty = serializedObject.FindProperty("targetCamera");
-            cameraPaddingProperty = serializedObject.FindProperty("cameraPadding");
-            cameraDistanceProperty = serializedObject.FindProperty("cameraDistance");
         }
 
         private void OnDisable()
@@ -104,8 +96,7 @@ namespace Kernel.MapGrid.Editor
                 return;
             }
 
-            var requiresBrushText = cellBrushMode == MapGridCellBrushMode.FillText;
-            if (!MapGridEditorUtility.TryValidateSceneCellEditing(authoring, requiresBrushText, brushText, out var error))
+            if (!MapGridEditorUtility.TryValidateSceneCellEditing(authoring, out var error))
             {
                 SetSceneCellEditMessage(error, MessageType.Warning);
                 FinishSceneCellEdit(commitChanges: true);
@@ -127,11 +118,6 @@ namespace Kernel.MapGrid.Editor
             EditorGUILayout.PropertyField(chunkHeightProperty);
             EditorGUILayout.PropertyField(defaultCellPrefabProperty);
             EditorGUILayout.PropertyField(coordinateBindingProperty, includeChildren: true);
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Camera Settings", EditorStyles.boldLabel);
-            EditorGUILayout.PropertyField(targetCameraProperty);
-            EditorGUILayout.PropertyField(cameraPaddingProperty);
-            EditorGUILayout.PropertyField(cameraDistanceProperty);
         }
 
         private static void DrawStatus(MapGridAuthoring authoring)
@@ -178,20 +164,15 @@ namespace Kernel.MapGrid.Editor
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Frame Camera"))
+                if (GUILayout.Button("Sync Surface State"))
                 {
-                    ExecuteAction((out string error) => MapGridEditorUtility.FrameCamera(authoring, out error));
-                }
-
-                if (GUILayout.Button("Disable Empty Text Colliders"))
-                {
-                    ExecuteAction((out string error) => MapGridEditorUtility.DisableEmptyTextColliders(authoring, out error));
+                    ExecuteAction((out string error) => MapGridEditorUtility.SyncSurfaceState(authoring, out error));
                 }
             }
 
-            if (GUILayout.Button("Sync Ground/Wall From Text"))
+            if (GUILayout.Button("Normalize Cell Presentation"))
             {
-                ExecuteAction((out string error) => MapGridEditorUtility.SyncGroundWallFromText(authoring, out error));
+                ExecuteAction((out string error) => MapGridEditorUtility.NormalizeCellPresentation(authoring, out error));
             }
         }
 
@@ -203,11 +184,7 @@ namespace Kernel.MapGrid.Editor
             sceneCellEditEnabled = EditorGUILayout.Toggle("Enable Scene Edit", sceneCellEditEnabled);
             sceneCellSelectionMode = (MapGridSceneCellSelectionMode)EditorGUILayout.EnumPopup("Selection Mode", sceneCellSelectionMode);
             cellBrushMode = (MapGridCellBrushMode)EditorGUILayout.EnumPopup("Operation", cellBrushMode);
-            if (cellBrushMode == MapGridCellBrushMode.FillText)
-            {
-                brushText = EditorGUILayout.TextField("Brush Text", brushText);
-            }
-            else if (cellBrushMode == MapGridCellBrushMode.SetColliderState)
+            if (cellBrushMode == MapGridCellBrushMode.SetColliderState)
             {
                 colliderBrushEnabled = EditorGUILayout.Toggle("Enable Collider", colliderBrushEnabled);
             }
@@ -223,8 +200,7 @@ namespace Kernel.MapGrid.Editor
                 "With MapRoot selected, use Paint to apply while left-dragging, or Rectangle to drag out a boxed area and apply it on mouse release. Alt / Right Mouse / Middle Mouse keep Scene navigation.",
                 MessageType.Info);
 
-            var requiresBrushText = cellBrushMode == MapGridCellBrushMode.FillText;
-            if (!MapGridEditorUtility.TryValidateSceneCellEditing(authoring, requiresBrushText, brushText, out var validationError))
+            if (!MapGridEditorUtility.TryValidateSceneCellEditing(authoring, out var validationError))
             {
                 EditorGUILayout.HelpBox(validationError, MessageType.Warning);
             }
@@ -506,10 +482,10 @@ namespace Kernel.MapGrid.Editor
 
             switch (cellBrushMode)
             {
-                case MapGridCellBrushMode.FillText:
-                    return MapGridEditorUtility.TrySetCellText(authoring, coordinate, brushText, out _, out error);
-                case MapGridCellBrushMode.EraseText:
-                    return MapGridEditorUtility.TrySetCellText(authoring, coordinate, string.Empty, out _, out error);
+                case MapGridCellBrushMode.PaintGround:
+                    return MapGridEditorUtility.TrySetCellSurfaceType(authoring, coordinate, CellData.CellSurfaceType.Ground, out _, out error);
+                case MapGridCellBrushMode.PaintWall:
+                    return MapGridEditorUtility.TrySetCellSurfaceType(authoring, coordinate, CellData.CellSurfaceType.Wall, out _, out error);
                 case MapGridCellBrushMode.SetColliderState:
                     return MapGridEditorUtility.TrySetCellColliderEnabled(authoring, coordinate, colliderBrushEnabled, out _, out error);
                 default:
@@ -577,7 +553,7 @@ namespace Kernel.MapGrid.Editor
             }
 
             var ray = HandleUtility.GUIPointToWorldRay(mousePosition);
-            var plane = new Plane(authoring.transform.forward, authoring.transform.position);
+            var plane = new Plane(authoring.transform.up, authoring.transform.position);
             if (!plane.Raycast(ray, out var hitDistance))
             {
                 return false;
@@ -591,8 +567,8 @@ namespace Kernel.MapGrid.Editor
         {
             return cellBrushMode switch
             {
-                MapGridCellBrushMode.FillText => new Color(0.2f, 0.85f, 1f, 1f),
-                MapGridCellBrushMode.EraseText => new Color(1f, 0.4f, 0.2f, 1f),
+                MapGridCellBrushMode.PaintGround => new Color(0.25f, 0.9f, 0.35f, 1f),
+                MapGridCellBrushMode.PaintWall => new Color(0.95f, 0.35f, 0.2f, 1f),
                 MapGridCellBrushMode.SetColliderState when colliderBrushEnabled => new Color(0.25f, 0.9f, 0.35f, 1f),
                 MapGridCellBrushMode.SetColliderState => new Color(0.95f, 0.2f, 0.2f, 1f),
                 _ => Color.white,
@@ -621,10 +597,10 @@ namespace Kernel.MapGrid.Editor
             var halfHeight = authoring.CellSize.y * 0.5f;
             var vertices = new[]
             {
-                new Vector3(minCenter.x - halfWidth, minCenter.y - halfHeight, 0f),
-                new Vector3(minCenter.x - halfWidth, maxCenter.y + halfHeight, 0f),
-                new Vector3(maxCenter.x + halfWidth, maxCenter.y + halfHeight, 0f),
-                new Vector3(maxCenter.x + halfWidth, minCenter.y - halfHeight, 0f),
+                new Vector3(minCenter.x - halfWidth, 0f, minCenter.z - halfHeight),
+                new Vector3(minCenter.x - halfWidth, 0f, maxCenter.z + halfHeight),
+                new Vector3(maxCenter.x + halfWidth, 0f, maxCenter.z + halfHeight),
+                new Vector3(maxCenter.x + halfWidth, 0f, minCenter.z - halfHeight),
             };
 
             using (new Handles.DrawingScope(authoring.transform.localToWorldMatrix))

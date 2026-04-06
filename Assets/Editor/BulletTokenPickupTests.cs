@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 public sealed class BulletTokenPickupTests
@@ -77,6 +78,27 @@ public sealed class BulletTokenPickupTests
         Assert.That(pickup != null, Is.True);
         Assert.That(pickup.IsCollected, Is.False);
         Assert.That(pickup.Token, Is.SameAs(token));
+    }
+
+    [Test]
+    public void Prefab_GlyphAndShadowCarryGameplayBillboards()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/Bullet/BulletTokenPickup.prefab");
+
+        try
+        {
+            Transform glyph = prefabRoot.transform.Find("Glyph");
+            Transform shadow = prefabRoot.transform.Find("Shadow");
+
+            Assert.That(glyph, Is.Not.Null);
+            Assert.That(shadow, Is.Not.Null);
+            Assert.That(glyph.GetComponent<GameplayBillboard>(), Is.Not.Null);
+            Assert.That(shadow.GetComponent<GameplayBillboard>(), Is.Not.Null);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
     }
 
     private PlayerBulletTokenInventory CreateInventory()

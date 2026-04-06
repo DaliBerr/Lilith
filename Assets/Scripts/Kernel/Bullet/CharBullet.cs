@@ -1225,7 +1225,8 @@ public sealed class CharBullet : MonoBehaviour
             return false;
         }
 
-        if (!IsImpactLayerIncluded(other.gameObject.layer) ||
+        if (IsGroundSurfaceImpact(other) ||
+            !IsImpactLayerIncluded(other.gameObject.layer) ||
             IsOwnedTransform(other.transform) ||
             other.GetComponentInParent<CharBullet>() != null)
         {
@@ -1491,6 +1492,7 @@ public sealed class CharBullet : MonoBehaviour
             if (overlap == null ||
                 overlap == impactCollider ||
                 overlap.isTrigger ||
+                IsGroundSurfaceImpact(overlap) ||
                 IsOwnedTransform(overlap.transform) ||
                 overlap.GetComponentInParent<CharBullet>() != null)
             {
@@ -1750,6 +1752,32 @@ public sealed class CharBullet : MonoBehaviour
         return ownerRoot != null &&
                candidate != null &&
                (candidate == ownerRoot || candidate.IsChildOf(ownerRoot));
+    }
+
+    /// <summary>
+    /// summary: 判断当前命中是否来自地图 Ground 表面；地面只用于承载角色，不应让平面射击子弹立刻掉命。
+    /// param: other 当前检测到的碰撞体
+    /// returns: 命中的碰撞体属于 Ground surface 时返回 true
+    /// </summary>
+    private static bool IsGroundSurfaceImpact(Collider other)
+    {
+        if (other == null)
+        {
+            return false;
+        }
+
+        if (other.CompareTag(Kernel.MapGrid.MapGridAuthoring.GroundTagName))
+        {
+            return true;
+        }
+
+        if (other.transform.root != null && other.transform.root.CompareTag(Kernel.MapGrid.MapGridAuthoring.GroundTagName))
+        {
+            return true;
+        }
+
+        CellData cellData = other.GetComponentInParent<CellData>();
+        return cellData != null && cellData.SurfaceType == CellData.CellSurfaceType.Ground;
     }
 
     private bool IsGlyphTextReferenceValid()

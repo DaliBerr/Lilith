@@ -59,6 +59,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Log\GameDebug.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealthChangedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyMeleeAttacker.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDefinitionBinder.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScreen.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeDeep.cs" />
@@ -67,6 +68,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCrossRefs.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTokenPickup.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Camera\CameraOcclusionFader.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\UIInputRouter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualLibrary.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
@@ -83,6 +85,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScrobePolymorph.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCollections.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\GlobalTextInputGuard.cs" />
@@ -97,6 +100,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenModifierExpressionUtility.cs" />
+    <Compile Include="Assets\Scripts\Kernel\WorldHeightUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\CoreTokenData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UI.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\StatusController.cs" />
@@ -109,6 +113,7 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\BaseCharEnemyNorm1.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\CodeC.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\IsaveItem.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Camera\GameplayBillboard.cs" />
     <Compile Include="Assets\Prefabs\UI\MainMenuUI.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaLoadout.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogBootStrap.cs" />
@@ -118,6 +123,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackGridSlotView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeBootstrap.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDefinition.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\MainUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyMovement.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PauseUIScreen.cs" />

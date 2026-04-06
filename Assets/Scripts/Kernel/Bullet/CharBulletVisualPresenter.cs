@@ -418,9 +418,9 @@ public sealed class CharBulletVisualPresenter : MonoBehaviour
 
     private Color BuildShadowColor(Color primaryColor)
     {
-        Color darkened = Color.Lerp(primaryColor, Color.black, 0.7f);
-        darkened.a = shadowTint.a;
-        return darkened;
+        Color tinted = Color.Lerp(primaryColor, shadowTint, 0.8f);
+        tinted.a = shadowTint.a;
+        return tinted;
     }
 
     private static Color BuildCoreBaseColor(Color primaryColor)

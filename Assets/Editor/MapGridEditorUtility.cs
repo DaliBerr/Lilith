@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Kernel.MapGrid;
-using TMPro;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -40,7 +39,8 @@ namespace Kernel.MapGrid.Editor
     public static class MapGridEditorUtility
     {
         private const string SceneCellEditUndoName = "Scene Cell Edit";
-        private const string SyncGroundWallUndoName = "Sync Ground/Wall From Text";
+        private const string SyncSurfaceStateUndoName = "Sync Surface State";
+
         private delegate bool UndoableOperation(MapGridAuthoring authoring, int undoGroup, out string error);
 
         public static string BuildChunkRowName(int chunkY) => $"ChunkRow_{chunkY}";
@@ -127,22 +127,15 @@ namespace Kernel.MapGrid.Editor
             return true;
         }
 
-        public static bool TryValidateSceneCellEditing(MapGridAuthoring authoring, bool requireBrushText, string brushText, out string error)
+        public static bool TryValidateSceneCellEditing(MapGridAuthoring authoring, out string error)
         {
-            error = null;
-
             if (!TryValidateIndexedGeneratedCells(authoring, out error))
             {
                 return false;
             }
 
-            if (requireBrushText && string.IsNullOrEmpty(brushText))
-            {
-                error = "Brush Text cannot be empty while Fill Text mode is active.";
-                return false;
-            }
-
-            return true;
+            return TryValidateRequiredTag(MapGridAuthoring.GroundTagName, out error) &&
+                   TryValidateRequiredTag(MapGridAuthoring.WallTagName, out error);
         }
 
         public static bool GenerateGrid(MapGridAuthoring authoring, out string error)
@@ -165,25 +158,14 @@ namespace Kernel.MapGrid.Editor
             return ExecuteUndoable("Rebuild Index", authoring, RebuildIndexInternal, out error);
         }
 
-        public static bool FrameCamera(MapGridAuthoring authoring, out string error)
+        public static bool SyncSurfaceState(MapGridAuthoring authoring, out string error)
         {
-            return ExecuteUndoable("Frame Camera", authoring, FrameCameraInternal, out error);
+            return ExecuteUndoable(SyncSurfaceStateUndoName, authoring, SyncSurfaceStateInternal, out error);
         }
 
-        public static bool DisableEmptyTextColliders(MapGridAuthoring authoring, out string error)
+        public static bool NormalizeCellPresentation(MapGridAuthoring authoring, out string error)
         {
-            return ExecuteUndoable("Disable Empty Text Colliders", authoring, DisableEmptyTextCollidersInternal, out error);
-        }
-
-        /// <summary>
-        /// Scans the indexed map cells and classifies them as Ground or Wall from TMP text content.
-        /// </summary>
-        /// <param name="authoring">Current map authoring component.</param>
-        /// <param name="error">Validation or processing error.</param>
-        /// <returns>True when every indexed cell was synchronized successfully.</returns>
-        public static bool SyncGroundWallFromText(MapGridAuthoring authoring, out string error)
-        {
-            return ExecuteUndoable(SyncGroundWallUndoName, authoring, SyncGroundWallFromTextInternal, out error);
+            return SyncSurfaceState(authoring, out error);
         }
 
         public static bool ReplaceSelectedCell(MapGridAuthoring authoring, GameObject replacementPrefab, GameObject selectedObject, out string error)
@@ -212,21 +194,21 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
-            var generatedRoot = authoring.FindGeneratedContentRoot();
+            Transform generatedRoot = authoring.FindGeneratedContentRoot();
             if (generatedRoot == null)
             {
                 error = "GeneratedContent was not found under the current MapRoot.";
                 return false;
             }
 
-            var cellTransform = FindSelectedCellRoot(authoring, selectedObject.transform, generatedRoot);
+            Transform cellTransform = FindSelectedCellRoot(authoring, selectedObject.transform, generatedRoot);
             if (cellTransform == null)
             {
                 error = "The current selection is not a valid generated cell.";
                 return false;
             }
 
-            if (!authoring.CoordinateBinding.TryGetCoordinates(cellTransform.gameObject, out var coordinates, out error))
+            if (!authoring.CoordinateBinding.TryGetCoordinates(cellTransform.gameObject, out Vector2Int coordinates, out error))
             {
                 error = $"Unable to read coordinates from '{cellTransform.name}'. {error}";
                 return false;
@@ -255,36 +237,50 @@ namespace Kernel.MapGrid.Editor
             return true;
         }
 
-        public static bool TrySetCellText(
+        public static bool TrySetCellSurfaceType(
             MapGridAuthoring authoring,
             Vector2Int coordinates,
-            string newText,
+            CellData.CellSurfaceType surfaceType,
             out bool changed,
             out string error)
         {
             changed = false;
             error = null;
 
-            if (!TryResolveCellText(authoring, coordinates, out _, out _, out var textComponent, out error))
+            if (!TryResolveCellData(authoring, coordinates, out GameObject cellObject, out CellData cellData, out error))
             {
                 return false;
             }
 
-            var textChanged = textComponent.text != newText;
-            if (textChanged)
-            {
-                Undo.RecordObject(textComponent, SceneCellEditUndoName);
-                textComponent.text = newText;
-                UnityEditor.EditorUtility.SetDirty(textComponent);
-            }
-
-            var shouldEnableCollider = !string.IsNullOrEmpty(newText);
-            if (!TrySetCellColliderEnabled(authoring, coordinates, shouldEnableCollider, out var colliderChanged, out error))
+            if (!TryCollectCellDirtyTargets(cellObject, cellData, out List<UnityEngine.Object> dirtyTargets, out error))
             {
                 return false;
             }
 
-            changed = textChanged || colliderChanged;
+            bool wasCurrent = cellData.IsSurfacePresentationCurrent();
+            bool alreadyTargetSurface = cellData.SurfaceType == surfaceType;
+            if (alreadyTargetSurface && wasCurrent)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < dirtyTargets.Count; i++)
+            {
+                Undo.RecordObject(dirtyTargets[i], SceneCellEditUndoName);
+            }
+
+            if (!cellData.TrySetSurfaceType(surfaceType))
+            {
+                error = $"Failed to switch '{cellObject.name}' to surface '{surfaceType}'.";
+                return false;
+            }
+
+            for (int i = 0; i < dirtyTargets.Count; i++)
+            {
+                UnityEditor.EditorUtility.SetDirty(dirtyTargets[i]);
+            }
+
+            changed = true;
             return true;
         }
 
@@ -298,12 +294,12 @@ namespace Kernel.MapGrid.Editor
             changed = false;
             error = null;
 
-            if (!TryResolveCellData(authoring, coordinates, out var cellObject, out var cellData, out error))
+            if (!TryResolveCellData(authoring, coordinates, out GameObject cellObject, out CellData cellData, out error))
             {
                 return false;
             }
 
-            if (!TryResolveManagedCollider(cellObject, cellData, out var managedCollider, out error))
+            if (!TryResolveManagedCollider(cellObject, cellData, out Collider managedCollider, out error))
             {
                 return false;
             }
@@ -313,14 +309,19 @@ namespace Kernel.MapGrid.Editor
                 return true;
             }
 
+            Undo.RecordObject(cellData, SceneCellEditUndoName);
             Undo.RecordObject(managedCollider, SceneCellEditUndoName);
+            Undo.RecordObject(managedCollider.gameObject, SceneCellEditUndoName);
+
             if (!cellData.SetColliderEnabled(enabled))
             {
                 error = $"Failed to update the managed Collider on '{cellObject.name}'.";
                 return false;
             }
 
+            UnityEditor.EditorUtility.SetDirty(cellData);
             UnityEditor.EditorUtility.SetDirty(managedCollider);
+            UnityEditor.EditorUtility.SetDirty(managedCollider.gameObject);
             changed = true;
             return true;
         }
@@ -341,7 +342,7 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
-            if (!cellObject.TryGetComponent<CellData>(out cellData) || cellData == null)
+            if (!cellObject.TryGetComponent(out cellData) || cellData == null)
             {
                 error = $"Cell '{cellObject.name}' does not contain a CellData component.";
                 return false;
@@ -350,47 +351,19 @@ namespace Kernel.MapGrid.Editor
             return true;
         }
 
-        public static bool TryGetUniqueCellText(GameObject cellObject, out TMP_Text textComponent, out string error)
-        {
-            textComponent = null;
-            error = null;
-
-            if (cellObject == null)
-            {
-                error = "Cell object is null.";
-                return false;
-            }
-
-            var textComponents = cellObject.GetComponentsInChildren<TMP_Text>(includeInactive: true);
-            if (textComponents == null || textComponents.Length == 0)
-            {
-                error = $"Cell '{cellObject.name}' does not contain a TMP_Text component.";
-                return false;
-            }
-
-            if (textComponents.Length > 1)
-            {
-                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Scene cell editing requires exactly one.";
-                return false;
-            }
-
-            textComponent = textComponents[0];
-            return true;
-        }
-
         public static List<Vector2Int> BuildStrokeCoordinates(Vector2Int start, Vector2Int end)
         {
             var coordinates = new List<Vector2Int>();
 
-            var x0 = start.x;
-            var y0 = start.y;
-            var x1 = end.x;
-            var y1 = end.y;
-            var dx = Mathf.Abs(x1 - x0);
-            var dy = Mathf.Abs(y1 - y0);
-            var stepX = x0 < x1 ? 1 : -1;
-            var stepY = y0 < y1 ? 1 : -1;
-            var error = dx - dy;
+            int x0 = start.x;
+            int y0 = start.y;
+            int x1 = end.x;
+            int y1 = end.y;
+            int dx = Mathf.Abs(x1 - x0);
+            int dy = Mathf.Abs(y1 - y0);
+            int stepX = x0 < x1 ? 1 : -1;
+            int stepY = y0 < y1 ? 1 : -1;
+            int error = dx - dy;
 
             while (true)
             {
@@ -400,7 +373,7 @@ namespace Kernel.MapGrid.Editor
                     break;
                 }
 
-                var doubledError = error * 2;
+                int doubledError = error * 2;
                 if (doubledError > -dy)
                 {
                     error -= dy;
@@ -417,23 +390,17 @@ namespace Kernel.MapGrid.Editor
             return coordinates;
         }
 
-        /// <summary>
-        /// Builds the inclusive rectangle defined by two corner coordinates.
-        /// </summary>
-        /// <param name="start">One corner of the rectangle.</param>
-        /// <param name="end">The opposite corner of the rectangle.</param>
-        /// <returns>All coordinates inside the normalized rectangle, ordered by Y then X.</returns>
         public static List<Vector2Int> BuildRectangleCoordinates(Vector2Int start, Vector2Int end)
         {
-            var minX = Mathf.Min(start.x, end.x);
-            var maxX = Mathf.Max(start.x, end.x);
-            var minY = Mathf.Min(start.y, end.y);
-            var maxY = Mathf.Max(start.y, end.y);
+            int minX = Mathf.Min(start.x, end.x);
+            int maxX = Mathf.Max(start.x, end.x);
+            int minY = Mathf.Min(start.y, end.y);
+            int maxY = Mathf.Max(start.y, end.y);
             var coordinates = new List<Vector2Int>((maxX - minX + 1) * (maxY - minY + 1));
 
-            for (var y = minY; y <= maxY; y++)
+            for (int y = minY; y <= maxY; y++)
             {
-                for (var x = minX; x <= maxX; x++)
+                for (int x = minX; x <= maxX; x++)
                 {
                     coordinates.Add(new Vector2Int(x, y));
                 }
@@ -469,10 +436,8 @@ namespace Kernel.MapGrid.Editor
         private static bool ExecuteUndoable(string actionName, MapGridAuthoring authoring, UndoableOperation operation, out string error)
         {
             error = null;
-            var shouldRebuildLookup = actionName != "Frame Camera";
-
             Undo.IncrementCurrentGroup();
-            var undoGroup = Undo.GetCurrentGroup();
+            int undoGroup = Undo.GetCurrentGroup();
             Undo.SetCurrentGroupName(actionName);
 
             try
@@ -483,14 +448,7 @@ namespace Kernel.MapGrid.Editor
                     return false;
                 }
 
-                if (shouldRebuildLookup && !authoring.TryRebuildLookupFromEntries(out error))
-                {
-                    Undo.RevertAllDownToGroup(undoGroup);
-                    return false;
-                }
-
-                if (actionName == "Frame Camera" &&
-                    !TryFrameCameraForUndo(authoring, actionName, out error))
+                if (!authoring.TryRebuildLookupFromEntries(out error))
                 {
                     Undo.RevertAllDownToGroup(undoGroup);
                     return false;
@@ -523,34 +481,34 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
-            var generatedRoot = GetOrCreateChild(authoring.transform, MapGridAuthoring.GeneratedContentObjectName, "Generate Grid");
+            Transform generatedRoot = GetOrCreateChild(authoring.transform, MapGridAuthoring.GeneratedContentObjectName, "Generate Grid");
             var entries = new List<CellEntry>(authoring.ExpectedCellCount);
 
-            for (var chunkY = 0; chunkY < authoring.GetChunkCountY(); chunkY++)
+            for (int chunkY = 0; chunkY < authoring.GetChunkCountY(); chunkY++)
             {
-                var chunkRow = GetOrCreateChild(generatedRoot, BuildChunkRowName(chunkY), "Generate Grid");
-                var rowStartY = chunkY * authoring.ChunkHeightInCells;
-                var rowEndY = Mathf.Min(rowStartY + authoring.ChunkHeightInCells, authoring.GridHeight);
+                Transform chunkRow = GetOrCreateChild(generatedRoot, BuildChunkRowName(chunkY), "Generate Grid");
+                int rowStartY = chunkY * authoring.ChunkHeightInCells;
+                int rowEndY = Mathf.Min(rowStartY + authoring.ChunkHeightInCells, authoring.GridHeight);
 
-                for (var chunkX = 0; chunkX < authoring.GetChunkCountX(); chunkX++)
+                for (int chunkX = 0; chunkX < authoring.GetChunkCountX(); chunkX++)
                 {
-                    var chunk = GetOrCreateChild(chunkRow, BuildChunkName(chunkX, chunkY), "Generate Grid");
-                    var columnStartX = chunkX * authoring.ChunkWidthInCells;
-                    var columnEndX = Mathf.Min(columnStartX + authoring.ChunkWidthInCells, authoring.GridWidth);
+                    Transform chunk = GetOrCreateChild(chunkRow, BuildChunkName(chunkX, chunkY), "Generate Grid");
+                    int columnStartX = chunkX * authoring.ChunkWidthInCells;
+                    int columnEndX = Mathf.Min(columnStartX + authoring.ChunkWidthInCells, authoring.GridWidth);
 
-                    for (var y = rowStartY; y < rowEndY; y++)
+                    for (int y = rowStartY; y < rowEndY; y++)
                     {
-                        var localY = authoring.GetLocalRowInChunk(y);
-                        var row = GetOrCreateChild(chunk, BuildRowName(localY), "Generate Grid");
+                        int localY = authoring.GetLocalRowInChunk(y);
+                        Transform row = GetOrCreateChild(chunk, BuildRowName(localY), "Generate Grid");
 
-                        for (var x = columnStartX; x < columnEndX; x++)
+                        for (int x = columnStartX; x < columnEndX; x++)
                         {
-                            if (!InstantiateCell(authoring.DefaultCellPrefab, row, "Generate Grid", out var cellObject, out error))
+                            if (!InstantiateCell(authoring.DefaultCellPrefab, row, "Generate Grid", out GameObject cellObject, out error))
                             {
                                 return false;
                             }
 
-                            var cellTransform = cellObject.transform;
+                            Transform cellTransform = cellObject.transform;
                             cellObject.name = BuildCellName(x, y);
                             cellTransform.localPosition = authoring.GetCellLocalPosition(x, y);
                             cellTransform.localRotation = Quaternion.identity;
@@ -559,6 +517,12 @@ namespace Kernel.MapGrid.Editor
                             if (!authoring.CoordinateBinding.TrySetCoordinates(cellObject, x, y, out error))
                             {
                                 error = $"Failed to write coordinates to '{cellObject.name}'. {error}";
+                                return false;
+                            }
+
+                            if (cellObject.TryGetComponent(out CellData cellData) && !cellData.TryRefreshSurfacePresentation())
+                            {
+                                error = $"Failed to initialize surface presentation on '{cellObject.name}'.";
                                 return false;
                             }
 
@@ -621,7 +585,7 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
-            if (!TryCollectIndexEntries(authoring, out var entries, out error))
+            if (!TryCollectIndexEntries(authoring, out List<CellEntry> entries, out error))
             {
                 return false;
             }
@@ -631,62 +595,7 @@ namespace Kernel.MapGrid.Editor
             return true;
         }
 
-        private static bool FrameCameraInternal(MapGridAuthoring authoring, int undoGroup, out string error)
-        {
-            error = null;
-            if (authoring == null)
-            {
-                error = "MapGridAuthoring is null.";
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool DisableEmptyTextCollidersInternal(MapGridAuthoring authoring, int undoGroup, out string error)
-        {
-            error = null;
-
-            if (!TryValidateIndexedGeneratedCells(authoring, out error))
-            {
-                return false;
-            }
-
-            var cells = authoring.Cells;
-            for (var i = 0; i < cells.Count; i++)
-            {
-                var entry = cells[i];
-                if (entry == null)
-                {
-                    error = $"Cell entry at index {i} is null.";
-                    return false;
-                }
-
-                if (!TryResolveCellData(authoring, entry.Position, out var cellObject, out _, out error))
-                {
-                    return false;
-                }
-
-                if (!TryHasCellTextContent(cellObject, out var hasTextContent, out error))
-                {
-                    return false;
-                }
-
-                if (hasTextContent)
-                {
-                    continue;
-                }
-
-                if (!TrySetCellColliderEnabled(authoring, entry.Position, false, out _, out error))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool SyncGroundWallFromTextInternal(MapGridAuthoring authoring, int undoGroup, out string error)
+        private static bool SyncSurfaceStateInternal(MapGridAuthoring authoring, int undoGroup, out string error)
         {
             error = null;
 
@@ -701,14 +610,14 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
-            if (!TryCollectGroundWallRefreshTargets(authoring, out var dirtyTargets, out error))
+            if (!TryCollectSurfaceRefreshTargets(authoring, out List<UnityEngine.Object> dirtyTargets, out error))
             {
                 return false;
             }
 
-            for (var i = 0; i < dirtyTargets.Count; i++)
+            for (int i = 0; i < dirtyTargets.Count; i++)
             {
-                Undo.RecordObject(dirtyTargets[i], SyncGroundWallUndoName);
+                Undo.RecordObject(dirtyTargets[i], SyncSurfaceStateUndoName);
             }
 
             if (!authoring.TryRefreshGroundWallState(out error))
@@ -716,7 +625,7 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
-            for (var i = 0; i < dirtyTargets.Count; i++)
+            for (int i = 0; i < dirtyTargets.Count; i++)
             {
                 UnityEditor.EditorUtility.SetDirty(dirtyTargets[i]);
             }
@@ -756,17 +665,17 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
-            if (!TryGetSelectedCellContext(authoring, selectedObject, out var selectedCell, out error))
+            if (!TryGetSelectedCellContext(authoring, selectedObject, out SelectedCellContext selectedCell, out error))
             {
                 return false;
             }
 
-            if (!InstantiateCell(replacementPrefab, selectedCell.Parent, "Replace Cell", out var newCellObject, out error))
+            if (!InstantiateCell(replacementPrefab, selectedCell.Parent, "Replace Cell", out GameObject newCellObject, out error))
             {
                 return false;
             }
 
-            var newCellTransform = newCellObject.transform;
+            Transform newCellTransform = newCellObject.transform;
             newCellObject.name = BuildCellName(selectedCell.Coordinates.x, selectedCell.Coordinates.y);
             newCellTransform.SetSiblingIndex(selectedCell.SiblingIndex);
             newCellTransform.localPosition = selectedCell.LocalPosition;
@@ -779,9 +688,15 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
+            if (newCellObject.TryGetComponent(out CellData newCellData) && !newCellData.TryRefreshSurfacePresentation())
+            {
+                error = $"Failed to initialize the replacement cell presentation on '{newCellObject.name}'.";
+                return false;
+            }
+
             Undo.DestroyObjectImmediate(selectedCell.CellObject);
 
-            if (!TryCollectIndexEntries(authoring, out var entries, out error))
+            if (!TryCollectIndexEntries(authoring, out List<CellEntry> entries, out error))
             {
                 return false;
             }
@@ -797,7 +712,7 @@ namespace Kernel.MapGrid.Editor
             entries = new List<CellEntry>();
             error = null;
 
-            var generatedRoot = authoring.FindGeneratedContentRoot();
+            Transform generatedRoot = authoring.FindGeneratedContentRoot();
             if (generatedRoot == null)
             {
                 error = "GeneratedContent was not found under the current MapRoot.";
@@ -811,20 +726,20 @@ namespace Kernel.MapGrid.Editor
 
             var seenPositions = new Dictionary<Vector2Int, GameObject>();
             var processedObjects = new HashSet<int>();
-            var allTransforms = generatedRoot.GetComponentsInChildren<Transform>(includeInactive: true);
+            Transform[] allTransforms = generatedRoot.GetComponentsInChildren<Transform>(includeInactive: true);
 
-            for (var i = 0; i < allTransforms.Length; i++)
+            for (int i = 0; i < allTransforms.Length; i++)
             {
-                var transform = allTransforms[i];
+                Transform transform = allTransforms[i];
                 if (transform == generatedRoot || !transform.name.StartsWith("Row_", StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                for (var childIndex = 0; childIndex < transform.childCount; childIndex++)
+                for (int childIndex = 0; childIndex < transform.childCount; childIndex++)
                 {
-                    var cellTransform = transform.GetChild(childIndex);
-                    var instanceId = cellTransform.gameObject.GetInstanceID();
+                    Transform cellTransform = transform.GetChild(childIndex);
+                    int instanceId = cellTransform.gameObject.GetInstanceID();
                     if (!processedObjects.Add(instanceId))
                     {
                         continue;
@@ -843,15 +758,15 @@ namespace Kernel.MapGrid.Editor
                 }
             }
 
-            for (var i = 0; i < allTransforms.Length; i++)
+            for (int i = 0; i < allTransforms.Length; i++)
             {
-                var transform = allTransforms[i];
+                Transform transform = allTransforms[i];
                 if (transform == generatedRoot)
                 {
                     continue;
                 }
 
-                var instanceId = transform.gameObject.GetInstanceID();
+                int instanceId = transform.gameObject.GetInstanceID();
                 if (processedObjects.Contains(instanceId))
                 {
                     continue;
@@ -883,7 +798,7 @@ namespace Kernel.MapGrid.Editor
 
             entries.Sort(static (left, right) =>
             {
-                var yCompare = left.Y.CompareTo(right.Y);
+                int yCompare = left.Y.CompareTo(right.Y);
                 return yCompare != 0 ? yCompare : left.X.CompareTo(right.X);
             });
             return true;
@@ -913,38 +828,6 @@ namespace Kernel.MapGrid.Editor
             if (!authoring.TryGetCell(coordinates, out cellObject) || cellObject == null)
             {
                 error = $"No indexed cell exists at ({coordinates.x}, {coordinates.y}). Rebuild Index or Rebuild Grid before editing cells.";
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool TryResolveCellText(
-            MapGridAuthoring authoring,
-            Vector2Int coordinates,
-            out GameObject cellObject,
-            out CellData cellData,
-            out TMP_Text textComponent,
-            out string error)
-        {
-            cellObject = null;
-            cellData = null;
-            textComponent = null;
-            error = null;
-
-            if (!TryResolveCellData(authoring, coordinates, out cellObject, out cellData, out error))
-            {
-                return false;
-            }
-
-            if (!TryResolveManagedCollider(cellObject, cellData, out _, out error))
-            {
-                return false;
-            }
-
-            if (!TryGetUniqueCellText(cellObject, out textComponent, out error))
-            {
-                error = $"Failed to resolve the TMP_Text for '{cellObject.name}'. {error}";
                 return false;
             }
 
@@ -982,64 +865,72 @@ namespace Kernel.MapGrid.Editor
             return true;
         }
 
-        private static bool TryHasCellTextContent(GameObject cellObject, out bool hasTextContent, out string error)
-        {
-            hasTextContent = false;
-            error = null;
-
-            if (cellObject == null)
-            {
-                error = "Cell object is null.";
-                return false;
-            }
-
-            var textComponents = cellObject.GetComponentsInChildren<TMP_Text>(includeInactive: true);
-            if (textComponents == null || textComponents.Length == 0)
-            {
-                return true;
-            }
-
-            if (textComponents.Length > 1)
-            {
-                error = $"Cell '{cellObject.name}' contains {textComponents.Length} TMP_Text components. Text-based map actions require zero or one TMP_Text.";
-                return false;
-            }
-
-            hasTextContent = !string.IsNullOrWhiteSpace(textComponents[0].text);
-            return true;
-        }
-
-        private static bool TryCollectGroundWallRefreshTargets(MapGridAuthoring authoring, out List<UnityEngine.Object> dirtyTargets, out string error)
+        private static bool TryCollectSurfaceRefreshTargets(MapGridAuthoring authoring, out List<UnityEngine.Object> dirtyTargets, out string error)
         {
             dirtyTargets = new List<UnityEngine.Object>();
             error = null;
 
             var seenInstanceIds = new HashSet<int>();
             var cells = authoring.Cells;
-            for (var i = 0; i < cells.Count; i++)
+            for (int i = 0; i < cells.Count; i++)
             {
-                var entry = cells[i];
+                CellEntry entry = cells[i];
                 if (entry == null)
                 {
                     error = $"Cell entry at index {i} is null.";
                     return false;
                 }
 
-                if (!TryResolveCellData(authoring, entry.Position, out var cellObject, out var cellData, out error))
+                if (!TryResolveCellData(authoring, entry.Position, out GameObject cellObject, out CellData cellData, out error))
                 {
                     return false;
                 }
 
-                if (!TryResolveManagedCollider(cellObject, cellData, out var managedCollider, out error))
+                if (!TryCollectCellDirtyTargets(cellObject, cellData, dirtyTargets, seenInstanceIds, out error))
                 {
                     return false;
                 }
-
-                TryAddUndoTarget(cellObject, dirtyTargets, seenInstanceIds);
-                TryAddUndoTarget(managedCollider, dirtyTargets, seenInstanceIds);
-                TryAddUndoTarget(managedCollider.gameObject, dirtyTargets, seenInstanceIds);
             }
 
+            return true;
+        }
+
+        private static bool TryCollectCellDirtyTargets(GameObject cellObject, CellData cellData, out List<UnityEngine.Object> dirtyTargets, out string error)
+        {
+            dirtyTargets = new List<UnityEngine.Object>();
+            error = null;
+            return TryCollectCellDirtyTargets(cellObject, cellData, dirtyTargets, new HashSet<int>(), out error);
+        }
+
+        private static bool TryCollectCellDirtyTargets(
+            GameObject cellObject,
+            CellData cellData,
+            ICollection<UnityEngine.Object> dirtyTargets,
+            ISet<int> seenInstanceIds,
+            out string error)
+        {
+            error = null;
+
+            if (cellObject == null || cellData == null)
+            {
+                error = "Cell presentation targets are null.";
+                return false;
+            }
+
+            if (!cellData.TryCacheSurfaceBindings())
+            {
+                error = $"Cell '{cellObject.name}' does not have valid wall/ground surface bindings configured on its CellData component.";
+                return false;
+            }
+
+            TryAddDirtyTarget(cellObject, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(cellData, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(cellData.WallCollider, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(cellData.GroundCollider, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(cellData.WallCollider != null ? cellData.WallCollider.gameObject : null, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(cellData.GroundCollider != null ? cellData.GroundCollider.gameObject : null, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(cellData.WallModelRoot != null ? cellData.WallModelRoot.gameObject : null, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(cellData.GroundModelRoot != null ? cellData.GroundModelRoot.gameObject : null, dirtyTargets, seenInstanceIds);
             return true;
         }
 
@@ -1052,8 +943,8 @@ namespace Kernel.MapGrid.Editor
                 return false;
             }
 
-            var tags = InternalEditorUtility.tags;
-            for (var i = 0; i < tags.Length; i++)
+            string[] tags = InternalEditorUtility.tags;
+            for (int i = 0; i < tags.Length; i++)
             {
                 if (string.Equals(tags[i], tagName, StringComparison.Ordinal))
                 {
@@ -1065,14 +956,14 @@ namespace Kernel.MapGrid.Editor
             return false;
         }
 
-        private static void TryAddUndoTarget(UnityEngine.Object target, ICollection<UnityEngine.Object> dirtyTargets, ISet<int> seenInstanceIds)
+        private static void TryAddDirtyTarget(UnityEngine.Object target, ICollection<UnityEngine.Object> dirtyTargets, ISet<int> seenInstanceIds)
         {
             if (target == null)
             {
                 return;
             }
 
-            var instanceId = target.GetInstanceID();
+            int instanceId = target.GetInstanceID();
             if (!seenInstanceIds.Add(instanceId))
             {
                 return;
@@ -1090,7 +981,7 @@ namespace Kernel.MapGrid.Editor
         {
             error = null;
 
-            if (!authoring.CoordinateBinding.TryGetCoordinates(cellObject, out var coordinates, out error))
+            if (!authoring.CoordinateBinding.TryGetCoordinates(cellObject, out Vector2Int coordinates, out error))
             {
                 error = $"Unable to read coordinates from '{GetHierarchyPath(cellObject.transform)}'. {error}";
                 return false;
@@ -1131,7 +1022,7 @@ namespace Kernel.MapGrid.Editor
         private static bool ClearGeneratedContent(MapGridAuthoring authoring, out string error)
         {
             error = null;
-            var generatedRoot = authoring.FindGeneratedContentRoot();
+            Transform generatedRoot = authoring.FindGeneratedContentRoot();
             if (generatedRoot != null)
             {
                 Undo.DestroyObjectImmediate(generatedRoot.gameObject);
@@ -1142,7 +1033,7 @@ namespace Kernel.MapGrid.Editor
 
         private static Transform GetOrCreateChild(Transform parent, string name, string undoAction)
         {
-            var child = parent.Find(name);
+            Transform child = parent.Find(name);
             if (child != null)
             {
                 return child;
@@ -1155,41 +1046,6 @@ namespace Kernel.MapGrid.Editor
             childObject.transform.localRotation = Quaternion.identity;
             childObject.transform.localScale = Vector3.one;
             return childObject.transform;
-        }
-
-        private static bool TryFrameCameraForUndo(MapGridAuthoring authoring, string undoAction, out string error)
-        {
-            error = null;
-
-            if (authoring == null)
-            {
-                error = "MapGridAuthoring is null.";
-                return false;
-            }
-
-            var camera = authoring.ResolveTargetCamera();
-            if (camera == null)
-            {
-                error = "No target camera was found. Assign Target Camera or tag a camera as MainCamera.";
-                return false;
-            }
-
-            Undo.RecordObject(camera, undoAction);
-            Undo.RecordObject(camera.transform, undoAction);
-
-            if (!Kernel.MapGrid.MapGridCameraUtility.TryFrameCamera(
-                    authoring,
-                    camera,
-                    authoring.CameraPadding,
-                    authoring.CameraDistance,
-                    out error))
-            {
-                return false;
-            }
-
-            UnityEditor.EditorUtility.SetDirty(camera);
-            UnityEditor.EditorUtility.SetDirty(camera.transform);
-            return true;
         }
 
         private static bool InstantiateCell(GameObject prefab, Transform parent, string undoAction, out GameObject cellObject, out string error)
@@ -1218,7 +1074,7 @@ namespace Kernel.MapGrid.Editor
                 return null;
             }
 
-            for (var current = selection; current != null && current != generatedRoot; current = current.parent)
+            for (Transform current = selection; current != null && current != generatedRoot; current = current.parent)
             {
                 if (authoring.CoordinateBinding.HasCoordinateComponent(current.gameObject))
                 {
@@ -1237,7 +1093,7 @@ namespace Kernel.MapGrid.Editor
             }
 
             var names = new Stack<string>();
-            for (var current = transform; current != null; current = current.parent)
+            for (Transform current = transform; current != null; current = current.parent)
             {
                 names.Push(current.name);
             }

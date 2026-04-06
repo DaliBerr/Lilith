@@ -1,3 +1,5 @@
+using Kernel;
+using Kernel.MapGrid;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -12,6 +14,8 @@ public sealed class CharEnemyMovement : MonoBehaviour
     [SerializeField] private Enemy enemyData;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private Rigidbody targetRigidbody;
+    [SerializeField] private MapGridAuthoring targetMapGrid;
+    [SerializeField] private Collider groundingReferenceCollider;
     [SerializeField, HideInInspector, FormerlySerializedAs("moveSpeed")] private float legacyMoveSpeed = 120f;
     [SerializeField, HideInInspector, FormerlySerializedAs("rotationSpeed")] private float legacyRotationSpeed = 540f;
     [SerializeField, HideInInspector, FormerlySerializedAs("stoppingDistance")] private float legacyStoppingDistance = 1f;
@@ -24,6 +28,10 @@ public sealed class CharEnemyMovement : MonoBehaviour
         TryResolveEnemyData();
         MigrateLegacyMovementDataIfNeeded();
         TryResolveTargetPlayer();
+        TryResolveTargetMapGrid();
+        TryResolveGroundingReferenceCollider();
+        EnsureGroundedRigidbodyConfiguration();
+        TrySnapToGameplayPlane();
     }
 
     /// <summary>
@@ -111,6 +119,10 @@ public sealed class CharEnemyMovement : MonoBehaviour
         ResolveMovementRigidbody();
         TryResolveEnemyData();
         MigrateLegacyMovementDataIfNeeded();
+        TryResolveTargetMapGrid();
+        TryResolveGroundingReferenceCollider();
+        EnsureGroundedRigidbodyConfiguration();
+        TrySnapToGameplayPlane();
     }
 
     /// <summary>
@@ -242,6 +254,80 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
         Rigidbody selfRigidbody = GetComponent<Rigidbody>();
         targetRigidbody = selfRigidbody != null && selfRigidbody.transform == transform ? selfRigidbody : null;
+    }
+
+    /// <summary>
+    /// summary: 当 Inspector 未显式绑定地图时，尝试自动解析当前场景中的 MapGridAuthoring。
+    /// param: 无
+    /// returns: 成功拿到地图平面来源时返回 true
+    /// </summary>
+    private bool TryResolveTargetMapGrid()
+    {
+        if (targetMapGrid != null)
+        {
+            return true;
+        }
+
+        targetMapGrid = FindFirstObjectByType<MapGridAuthoring>();
+        return targetMapGrid != null;
+    }
+
+    /// <summary>
+    /// summary: 当 Inspector 未显式绑定 grounded 参考 Collider 时，尝试自动在敌人层级内解析一个可用碰撞体。
+    /// param: 无
+    /// returns: 成功拿到 grounded 参考 Collider 时返回 true
+    /// </summary>
+    private bool TryResolveGroundingReferenceCollider()
+    {
+        if (groundingReferenceCollider != null && !groundingReferenceCollider.isTrigger)
+        {
+            return true;
+        }
+
+        return WorldHeightUtility.TryFindGroundingReferenceCollider(this, out groundingReferenceCollider);
+    }
+
+    /// <summary>
+    /// summary: 统一规范 grounded 敌人刚体，确保角色始终停留在地图平面对应的世界高度上。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void EnsureGroundedRigidbodyConfiguration()
+    {
+        if (targetRigidbody == null)
+        {
+            return;
+        }
+
+        WorldHeightUtility.TryConfigureGroundedRigidbody(targetRigidbody);
+    }
+
+    /// <summary>
+    /// summary: 按 grounded 根节点契约把敌人抬到当前地图平面高度上。
+    /// param: 无
+    /// returns: 成功完成 grounded snap 时返回 true
+    /// </summary>
+    private bool TrySnapToGameplayPlane()
+    {
+        if (!TryResolveTargetMapGrid())
+        {
+            return false;
+        }
+
+        float planeY = targetMapGrid.WorldPlaneY;
+        if (TryResolveGroundingReferenceCollider() &&
+            WorldHeightUtility.TryGetGroundedRootPosition(transform, groundingReferenceCollider, planeY, out Vector3 groundedPosition))
+        {
+            transform.position = groundedPosition;
+            if (targetRigidbody != null)
+            {
+                targetRigidbody.position = groundedPosition;
+            }
+
+            return true;
+        }
+
+        return WorldHeightUtility.TrySnapTransformToPlaneHeight(transform, planeY);
     }
 
     /// <summary>

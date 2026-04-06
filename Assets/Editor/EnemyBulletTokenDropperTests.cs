@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
+using Kernel.MapGrid;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -85,11 +86,51 @@ public sealed class EnemyBulletTokenDropperTests
         Assert.That(pickupParent.transform.childCount, Is.EqualTo(0));
     }
 
+    [Test]
+    public void EnemyDeath_SpawnsPickupRelativeToMapPlaneHeight()
+    {
+        GameObject pickupParent = CreateGameObject("PickupParent");
+        CreateMapAuthoring(10f);
+        BulletTokenPickup pickupPrefab = CreatePickupPrefab();
+        BaseCharEnemyNorm1 enemy = CreateEnemy();
+        enemy.transform.position = new Vector3(4f, 30f, 6f);
+        EnemyBulletTokenDropper dropper = enemy.gameObject.AddComponent<EnemyBulletTokenDropper>();
+
+        Assert.That(dropper.TrySetPickupPrefab(pickupPrefab), Is.True);
+        SetPrivateField(dropper, "pickupParent", pickupParent.transform);
+
+        CoreTokenData guaranteed = CreateToken<CoreTokenData>("drop_a", "Drop A");
+        dropper.ApplyWaveConfig(new EnemyWaveConfig(
+            100f,
+            120f,
+            3f,
+            0.5f,
+            1f,
+            new[]
+            {
+                new EnemyBulletTokenDropEntry(guaranteed, 1f),
+            }));
+
+        Assert.That(enemy.TryApplyDamage(enemy.CurrentHealth, out _, out bool isDead), Is.True);
+        Assert.That(isDead, Is.True);
+        Assert.That(pickupParent.transform.childCount, Is.EqualTo(1));
+
+        Transform spawnedPickup = pickupParent.transform.GetChild(0);
+        Assert.That(spawnedPickup.position.y, Is.EqualTo(16f));
+    }
+
     private BaseCharEnemyNorm1 CreateEnemy()
     {
         GameObject enemyObject = CreateGameObject("Enemy");
         BaseCharEnemyNorm1 enemy = enemyObject.AddComponent<BaseCharEnemyNorm1>();
         return enemy;
+    }
+
+    private MapGridAuthoring CreateMapAuthoring(float planeY)
+    {
+        GameObject mapRoot = CreateGameObject("MapRoot");
+        mapRoot.transform.position = new Vector3(0f, planeY, 0f);
+        return mapRoot.AddComponent<MapGridAuthoring>();
     }
 
     private BulletTokenPickup CreatePickupPrefab()

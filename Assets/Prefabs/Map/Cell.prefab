@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 2267268721599664268}
   m_Layer: 0
   m_Name: Collider
-  m_TagString: Untagged
+  m_TagString: Ground
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -305,7 +305,7 @@ GameObject:
   - component: {fileID: 2031941370098169453}
   m_Layer: 0
   m_Name: Cell
-  m_TagString: Untagged
+  m_TagString: Ground
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -342,6 +342,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CellData
   gridX: 0
   gridY: 0
-  managedCollider: {fileID: 2267268721599664268}
+  surfaceType: 0
+  wallCollider: {fileID: 2267268721599664268}
+  groundCollider: {fileID: 0}
+  wallModelRoot: {fileID: 0}
+  groundModelRoot: {fileID: 0}
   movementTarget: {fileID: 70904860241870535}
-  movementRigidbody: {fileID: 5820781434413891951}
+  movementRigidbody: {fileID: 0}

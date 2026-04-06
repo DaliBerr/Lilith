@@ -68,22 +68,23 @@ public sealed class EnemyGeneratorTests
         Transform player = CreateGameObject("Player").transform;
         player.position = new Vector3(32f, 0f, 32f);
 
-        CharEnemyMovement enemyPrefab = CreateEnemyPrefab(100f);
+        GameObject enemyPrefab = CreateEnemyPrefab(100f);
         BaseCharEnemyNorm1 prefabEnemy = enemyPrefab.GetComponent<BaseCharEnemyNorm1>();
+        EnemyDefinition definition = CreateEnemyDefinition("BasicEnemy", enemyPrefab);
         Assert.That(generator.TrySetTarget(player), Is.True);
-        SetPrivateField(generator, "charEnemyPrefab", enemyPrefab);
         SetPrivateField(generator, "spawnDistance", 4f);
         SetPrivateField(generator, "maxGroundSpawnRolls", 8);
 
         EnemyWaveConfig config = new(250f, 90f, 18f, 0.75f, 12f);
 
-        bool success = generator.TrySpawnEnemy(config, out Enemy spawnedEnemy);
+        bool success = generator.TrySpawnEnemy(definition, config, out Enemy spawnedEnemy);
 
         Assert.That(success, Is.True);
         Assert.That(spawnedEnemy, Is.TypeOf<BaseCharEnemyNorm1>());
 
         createdObjects.Add(spawnedEnemy.gameObject);
         BaseCharEnemyNorm1 spawnedBaseEnemy = (BaseCharEnemyNorm1)spawnedEnemy;
+        Assert.That(spawnedBaseEnemy.EnemyName, Is.EqualTo("BasicEnemy"));
         Assert.That(spawnedBaseEnemy.MaxHealth, Is.EqualTo(250f));
         Assert.That(spawnedBaseEnemy.CurrentHealth, Is.EqualTo(250f));
         Assert.That(spawnedBaseEnemy.MoveSpeed, Is.EqualTo(90f));
@@ -100,29 +101,32 @@ public sealed class EnemyGeneratorTests
     }
 
     [Test]
-    public void TrySpawnEnemy_ByEnemyName_UsesMatchingPrefabFromCatalog()
+    public void TrySpawnEnemy_UsesProvidedDefinitionRuntimePrefab()
     {
         CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);
         EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
         Transform player = CreateGameObject("Player").transform;
         player.position = new Vector3(32f, 0f, 32f);
 
-        CharEnemyMovement basicPrefab = CreateEnemyPrefab(100f, "BasicEnemy");
-        CharEnemyMovement fastPrefab = CreateEnemyPrefab(80f, "FastEnemy");
+        GameObject basicPrefab = CreateEnemyPrefab(100f);
+        GameObject fastPrefab = CreateEnemyPrefab(80f);
+        EnemyDefinition fastDefinition = CreateEnemyDefinition("FastEnemy", fastPrefab, glyphText: "迅");
+
         Assert.That(generator.TrySetTarget(player), Is.True);
-        SetPrivateField(generator, "charEnemyPrefab", basicPrefab);
-        SetPrivateField(generator, "additionalEnemyPrefabs", new List<CharEnemyMovement> { fastPrefab });
         SetPrivateField(generator, "spawnDistance", 4f);
         SetPrivateField(generator, "maxGroundSpawnRolls", 8);
 
         EnemyWaveConfig config = new(120f, 160f, 12f, 0.4f, 9f);
 
-        bool success = generator.TrySpawnEnemy("FastEnemy", config, out Enemy spawnedEnemy);
+        bool success = generator.TrySpawnEnemy(fastDefinition, config, out Enemy spawnedEnemy);
 
         Assert.That(success, Is.True);
         Assert.That(spawnedEnemy.EnemyName, Is.EqualTo("FastEnemy"));
+        Assert.That(spawnedEnemy.Definition, Is.SameAs(fastDefinition));
         Assert.That(spawnedEnemy.MoveSpeed, Is.EqualTo(160f));
         Assert.That(spawnedEnemy.AttackDamage, Is.EqualTo(9f));
+        Assert.That(spawnedEnemy.gameObject.name, Does.Contain("EnemyPrefab"));
+        Assert.That(spawnedEnemy.gameObject, Is.Not.SameAs(basicPrefab));
     }
 
     [Test]
@@ -133,8 +137,9 @@ public sealed class EnemyGeneratorTests
         Transform player = CreateGameObject("Player").transform;
         player.position = new Vector3(32f, 0f, 32f);
 
-        CharEnemyMovement enemyPrefab = CreateEnemyPrefab(100f);
-        DummyWaveConfigReceiver dummyReceiver = enemyPrefab.gameObject.AddComponent<DummyWaveConfigReceiver>();
+        GameObject enemyPrefab = CreateEnemyPrefab(100f);
+        DummyWaveConfigReceiver dummyReceiver = enemyPrefab.AddComponent<DummyWaveConfigReceiver>();
+        EnemyDefinition definition = CreateEnemyDefinition("DropEnemy", enemyPrefab);
         CoreTokenData droppedToken = CreateToken<CoreTokenData>("drop_fire", "Drop Fire");
         EnemyWaveConfig config = new(
             180f,
@@ -148,11 +153,10 @@ public sealed class EnemyGeneratorTests
             });
 
         Assert.That(generator.TrySetTarget(player), Is.True);
-        SetPrivateField(generator, "charEnemyPrefab", enemyPrefab);
         SetPrivateField(generator, "spawnDistance", 4f);
         SetPrivateField(generator, "maxGroundSpawnRolls", 8);
 
-        bool success = generator.TrySpawnEnemy(config, out Enemy spawnedEnemy);
+        bool success = generator.TrySpawnEnemy(definition, config, out Enemy spawnedEnemy);
 
         Assert.That(success, Is.True);
         createdObjects.Add(spawnedEnemy.gameObject);
@@ -167,9 +171,50 @@ public sealed class EnemyGeneratorTests
         Assert.That(dummyReceiver.ApplyCount, Is.EqualTo(0), "Prefab receiver should not be mutated by spawned instance callbacks.");
     }
 
-    private MapGridAuthoring CreateMapAuthoring(int width, int height, Vector2 cellSize, string fillTag)
+    [Test]
+    public void TrySpawnEnemy_SnapsSpawnedEnemyRootToMapPlaneHeight()
+    {
+        CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName, 10f);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        Transform player = CreateGameObject("Player").transform;
+        player.position = new Vector3(32f, 40f, 32f);
+
+        GameObject enemyPrefab = CreateEnemyPrefab(100f);
+        EnemyDefinition definition = CreateEnemyDefinition("GroundedEnemy", enemyPrefab);
+        Assert.That(generator.TrySetTarget(player), Is.True);
+        SetPrivateField(generator, "spawnDistance", 4f);
+        SetPrivateField(generator, "maxGroundSpawnRolls", 8);
+
+        bool success = generator.TrySpawnEnemy(definition, new EnemyWaveConfig(100f, 120f, 3f, 0.5f, 1f), out Enemy spawnedEnemy);
+
+        Assert.That(success, Is.True);
+        createdObjects.Add(spawnedEnemy.gameObject);
+        Assert.That(spawnedEnemy.transform.position.y, Is.EqualTo(15f).Within(0.001f));
+    }
+
+    [Test]
+    public void TrySpawnEnemy_ReturnsFalseWhenDefinitionHasNoRuntimePrefab()
+    {
+        CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        Transform player = CreateGameObject("Player").transform;
+        player.position = new Vector3(32f, 0f, 32f);
+        EnemyDefinition definition = CreateEnemyDefinition("BrokenEnemy", runtimePrefab: null);
+
+        Assert.That(generator.TrySetTarget(player), Is.True);
+        SetPrivateField(generator, "spawnDistance", 4f);
+        SetPrivateField(generator, "maxGroundSpawnRolls", 8);
+
+        bool success = generator.TrySpawnEnemy(definition, new EnemyWaveConfig(100f, 120f, 3f, 0.5f, 1f), out Enemy spawnedEnemy);
+
+        Assert.That(success, Is.False);
+        Assert.That(spawnedEnemy, Is.Null);
+    }
+
+    private MapGridAuthoring CreateMapAuthoring(int width, int height, Vector2 cellSize, string fillTag, float planeY = 0f)
     {
         GameObject mapRoot = CreateGameObject("MapRoot");
+        mapRoot.transform.position = new Vector3(0f, planeY, 0f);
         MapGridAuthoring authoring = mapRoot.AddComponent<MapGridAuthoring>();
         authoring.GridWidth = width;
         authoring.GridHeight = height;
@@ -198,21 +243,38 @@ public sealed class EnemyGeneratorTests
         return gameObject;
     }
 
-    private CharEnemyMovement CreateEnemyPrefab(float maxHealth, string enemyName = "EnemyPrefab")
+    private GameObject CreateEnemyPrefab(float maxHealth)
     {
         GameObject enemyObject = CreateGameObject("EnemyPrefab");
-        CharEnemyMovement movement = enemyObject.AddComponent<CharEnemyMovement>();
+        enemyObject.AddComponent<Rigidbody>();
+        BoxCollider collider = enemyObject.AddComponent<BoxCollider>();
+        collider.size = new Vector3(10f, 10f, 10f);
+        enemyObject.AddComponent<CharEnemyMovement>();
+        enemyObject.AddComponent<EnemyMeleeAttacker>();
+        enemyObject.AddComponent<EnemyDefinitionBinder>();
         BaseCharEnemyNorm1 enemyData = enemyObject.AddComponent<BaseCharEnemyNorm1>();
-        SetPrivateField(enemyData, "enemyName", enemyName);
         SetPrivateField(enemyData, "health", maxHealth);
-        return movement;
+        return enemyObject;
     }
 
-    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    private EnemyDefinition CreateEnemyDefinition(string enemyId, GameObject runtimePrefab, string glyphText = "坚")
     {
-        FieldInfo field = FindInstanceField(target.GetType(), fieldName);
-        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
-        field.SetValue(target, value);
+        EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        definition.name = enemyId;
+        createdObjects.Add(definition);
+        SetPrivateField(definition, "enemyId", enemyId);
+        SetPrivateField(definition, "displayName", enemyId);
+        SetPrivateField(definition, "runtimePrefab", runtimePrefab);
+        SetPrivateField(definition, "movementKind", EnemyMovementKind.ChaseTarget);
+        SetPrivateField(definition, "attackKind", EnemyAttackKind.MeleeContact);
+        SetPrivateField(definition, "visual", new EnemyDefinition.EnemyVisualDefinition
+        {
+            glyphText = glyphText,
+            glyphColor = Color.white,
+            runeBaseTint = new Color(0.92f, 0.94f, 0.98f, 0.45f),
+            groundShadowTint = new Color(0f, 0f, 0f, 0.28f),
+        });
+        return definition;
     }
 
     private T CreateToken<T>(string tokenId, string displayText) where T : BaseTokenData
@@ -223,6 +285,13 @@ public sealed class EnemyGeneratorTests
         token.name = tokenId;
         createdObjects.Add(token);
         return token;
+    }
+
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    {
+        FieldInfo field = FindInstanceField(target.GetType(), fieldName);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        field.SetValue(target, value);
     }
 
     private static FieldInfo FindInstanceField(System.Type type, string fieldName)

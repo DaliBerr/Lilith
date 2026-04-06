@@ -72,6 +72,7 @@ public sealed class CharBulletPrefabTests
             Assert.That(presenter, Is.Not.Null);
             Assert.That(visualPresenter, Is.Not.Null);
             Assert.That(textContainer, Is.Not.Null);
+            Assert.That(textContainer.GetComponent<GameplayBillboard>(), Is.Not.Null);
             Assert.That(glyphText, Is.Not.Null);
             Assert.That(glyphShadow, Is.Not.Null);
             Assert.That(glyphShadow.GetComponent<TMP_Text>(), Is.Not.Null);

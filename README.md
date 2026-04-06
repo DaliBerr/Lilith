@@ -115,10 +115,16 @@
 `Start.unity` 里当前能确认到的事实：
 
 - `MapRoot` 上挂了 [`MapGridAuthoring`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
-  - 当前配置是 `96 x 54`
-  - `cellSize = (8, 8)`
+  - 当前配置是 `64 x 36`
+  - `cellSize = (24, 24)`
   - `chunk = 3 x 3`
+  - `MapRoot` 当前保持 `rotation = identity`，网格直接铺在 `XZ` 平面，`Cell (0, 0)` 的中心位于世界原点
+  - 默认 cell prefab 使用 [`Assets/Prefabs/Map/Cell3D.prefab`](Assets/Prefabs/Map/Cell3D.prefab)
   - 坐标绑定使用 `CellData.SetCoordinates / GetCoordinates`
+- `Main Camera` 当前挂有 [`PlayerFollowCamera`](Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs) 和 [`CameraOcclusionFader`](Assets/Scripts/Kernel/Camera/CameraOcclusionFader.cs)
+  - 当前使用固定斜俯角透视跟随，`pitch = 55`，`yaw = 35`，`distance = 260`，`fieldOfView = 35`
+  - 关键 gameplay 视觉通过 [`GameplayBillboard`](Assets/Scripts/Kernel/Camera/GameplayBillboard.cs) 面向相机
+  - 相机与玩家焦点之间的墙体会临时切到幽灵材质，降低透视遮挡
 - `UIRoot` 上有 [`UIManager`](Assets/Scripts/Vocalith/UI/UIManager.cs)
   - `UIRoot` 当前在场景文件里是激活状态
   - 序列化类型名仍显示旧命名 `Lonize.UI.UIManager`
@@ -252,6 +258,7 @@
 - [`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs)
 - [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
 - [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
+- [`Assets/Editor/MapGridMigrationUtility.cs`](Assets/Editor/MapGridMigrationUtility.cs)
 - [`Assets/Editor/MapGridAuthoringTests.cs`](Assets/Editor/MapGridAuthoringTests.cs)
 
 当前能力：
@@ -261,54 +268,66 @@
   - `cellSize`
   - chunk 切分尺寸
   - 默认 cell prefab
-  - 手动 `Frame Camera` 使用的相机 framing 参数
   - `cellEntries`
   - 运行时 `cellLookup`
+  - 网格坐标直接工作在 `XZ` 平面
+    - `GetCellLocalPosition(x, y)` 返回 `(x * cellSize.x, 0, y * cellSize.y)`
+    - `TryGetCellCoordinateFromLocalPoint()` 读取 `localPoint.x / localPoint.z`
+  - `WorldPlaneY`
+    - 暴露当前地图统一的世界平面高度，供 grounded 角色落地、鼠标投影、刷怪点和 pickup 生成共用
   - `TryRefreshGroundWallState()`
-    - 可在运行时或 Editor Action 中扫描已索引 cell；空白或无文字的格子会被标记为 `Ground` 并禁用 Collider，非空白格子会被标记为 `Wall` 并启用 Collider
+    - 可在运行时或 Editor Action 中按 `CellData.SurfaceType` 同步 cell 的 tag、模型显示与当前激活 Collider
   - `TryInitializeCellSurfaceCache() / TryMarkCellSurfaceDirty() / TryRefreshDirtyGroundWallState()`
-    - 支持先做一次全量引用缓存，再在运行时只刷新被标脏的格子，避免每次都重扫整张地图
+    - 支持先做一次全量 `CellData + SurfaceType + ManagedCollider` 缓存，再在运行时只刷新被标脏的格子，避免每次都重扫整张地图
 - `MapGridCoordinateBinding` 通过反射把“任意组件上的坐标字段/属性/方法”接到网格系统
   - 当前场景配置使用 `CellData`
   - 既支持 `SetCoordinates(int, int)`，也支持 `SetCoordinates(Vector2Int)`
   - 既支持 `GetCoordinates()`，也支持直接读成员
 - `CellData` 当前还负责：
-  - 缓存并开关 cell 子物体上的主 3D `Collider`
+  - 显式保存 `CellSurfaceType { Ground, Wall }`
+  - 缓存 `wallCollider / groundCollider / wallModelRoot / groundModelRoot`
+  - 将 `ManagedCollider` 定义为“当前激活表面对应的 Collider”
+  - 在 `Ground/Wall` 切换时同步模型、Collider 与 tag
   - 暴露 cell 根节点或指定子节点的移动控制接口
   - 在绑定了目标 `Transform/Rigidbody` 后，支持位置、平移、速度与停止控制
-- `MapGridCameraUtility` 能按网格尺寸手动框住目标相机
 - Editor 侧已经支持：
   - `Generate Grid`
   - `Clear Grid`
   - `Rebuild Grid`
   - `Rebuild Index`
-  - `Frame Camera`
-  - `Disable Empty Text Colliders`
-    - 遍历所有已索引 cell；若没有 `TMP_Text` 或文字为空白，则禁用该 cell 的 Collider
-  - `Sync Ground/Wall From Text`
-    - 遍历所有已索引 cell；若没有 `TMP_Text` 或文字为空白，则将 cell 根节点与受控 Collider 物体标记为 `Ground`，并禁用 Collider
-    - 若文字非空白，则将 cell 根节点与受控 Collider 物体标记为 `Wall`，并启用 Collider
+  - `Sync Surface State`
+    - 遍历所有已索引 cell，按 `CellData.SurfaceType` 统一刷新 tag、模型与当前表面 Collider
+  - `Normalize Cell Presentation`
+    - 当前等价于一次显式 `Sync Surface State`
   - `Replace Selected Cell`
+  - `Tools/Lilith/Map/Migrate Start Scene To Cell3D`
+    - 规范 [`Assets/Prefabs/Map/Cell3D.prefab`](Assets/Prefabs/Map/Cell3D.prefab) 的 `CellData` 和根 `Rigidbody`
+    - 把 `Start.unity` 的 `MapRoot` 迁移到 `XZ` 平面并重建整张 grid
   - `Scene Cell Edit`
     - 在 Scene 视图里支持两种选择模式：
       - `Paint`：左键拖刷路径上的格子
       - `Rectangle`：点击一个起点后拖到另一个点，松开鼠标时对包围矩形内所有格子应用操作
-    - `FillText`：把刷过的格子文字改成当前输入字符串，并启用 Collider
-    - `EraseText`：把刷过的格子文字清空为 `string.Empty`，并禁用 Collider
-    - `SetColliderState`：按当前 `Enable Collider` 选项，批量启用或禁用 Collider
+    - `PaintGround`：把刷过的格子切到地面状态，并同步地面模型/Collider
+    - `PaintWall`：把刷过的格子切到墙体状态，并同步墙体模型/Collider
+    - `SetColliderState`：按当前 `Enable Collider` 选项，仅对当前激活表面 Collider 做调试开关
 - 已有编辑器测试覆盖：
-  - 局部坐标换算
+  - `XZ` 平面的局部坐标换算
   - chunk 计算
   - 网格中心计算
   - 索引查询
   - 重复坐标/越界坐标报错
-  - Scene Cell Edit 的路径插值、矩形框选坐标、唯一 `TMP_Text` 校验与 Collider 联动
+  - `CellData` 的表面切换、模型/Collider/tag 同步
+  - Scene Cell Edit 的路径插值、矩形框选坐标与墙地绘制
 
 ### 4. 基础战斗交互
 
 关键文件：
 
 - [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)
+- [`Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs`](Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs)
+- [`Assets/Scripts/Kernel/Camera/GameplayBillboard.cs`](Assets/Scripts/Kernel/Camera/GameplayBillboard.cs)
+- [`Assets/Scripts/Kernel/Camera/CameraOcclusionFader.cs`](Assets/Scripts/Kernel/Camera/CameraOcclusionFader.cs)
+- [`Assets/Scripts/Kernel/WorldHeightUtility.cs`](Assets/Scripts/Kernel/WorldHeightUtility.cs)
 - [`Assets/Scripts/Kernel/Bullet/AttackSpec.cs`](Assets/Scripts/Kernel/Bullet/AttackSpec.cs)
 - [`Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs)
 - [`Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs)
@@ -318,6 +337,10 @@
 
 当前能力：
 
+- `WorldHeightUtility` 当前负责统一高度契约：
+  - grounded 对象通过“地图平面高度 + 参考 Collider”计算根节点 `Y`
+  - floating 对象通过“地图平面高度 + 显式偏移”计算生成高度
+  - 鼠标射线和其他平面投影统一按指定 `planeY` 处理，不再要求 gameplay 代码写死 `y = 0`
 - `AttackSpec` 仍然是单发子弹的底层运行时配置，负责速度、生命周期、命中层级和基础伤害等参数
 - `AttackFormulaLoadout` 持有当前装备的有序词元列表，并缓存最新 `CompiledAttack`
 - `AttackFormulaCompiler` 负责把 `Pre? + Core + Behavior? + Value? + Result? + Value? + Post?` 编译成 `CompiledAttack`
@@ -488,20 +511,31 @@
   - 只有当 [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs) 位于栈顶时，按下 `Backpack` 才会打开 [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
   - 当 `BackPackUIScreen` 位于栈顶时，再次按下 `Backpack` 会直接关闭它
   - 按下 `Router`（当前默认 `Esc`）会优先关闭顶层 modal，其次关闭 `BackPackUIScreen` / [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs)，或在 `MainUIScreen` 位于栈顶时打开 `PauseUIScreen`
-- `PlayerPlaneMovement` 会把该输入映射到世界坐标 `(x, 0, z)`
+- `PlayerPlaneMovement` 会把该输入映射到世界坐标 `(x, currentY, z)`，其中 grounded 根节点高度由 `MapGridAuthoring.WorldPlaneY` 和参考 `Collider` 共同决定
+  - 会优先解析 `targetMapGrid` 和 `groundingReferenceCollider`
+  - `Awake / OnValidate` 时会尝试把玩家 root snap 到地图平面，并把参考 `Collider` 的底部贴到地面
+  - 挂有 `Rigidbody` 时会统一配置为 `useGravity = false` 并冻结 `Y` 轴位置，避免重新沉回地面
   - 挂有动态 `Rigidbody` 时直接写入刚体 `velocity`
   - 挂有 `isKinematic = true` 的 `Rigidbody` 时走 `MovePosition`
   - 没有 `Rigidbody` 时直接改 `transform.position` 的 `XZ`
   - `transform.position.y` 保持不变
   - 按住加速键时，移动速度会乘以 `1.5`
-  - 同时会基于主相机（或显式指定相机）把鼠标屏幕坐标投影到角色所在水平面，并让角色沿 Y 轴朝向该点
+  - 同时会基于主相机（或显式指定相机）把鼠标屏幕坐标投影到 `MapGridAuthoring.WorldPlaneY` 对应的 gameplay plane，并让角色沿 Y 轴朝向该点
   - `rotationSpeed <= 0` 时会立即转向，否则按给定角速度平滑转向
   - 按住鼠标左键时，会按 `fireInterval` 连续向当前点击地面方向发射 `CharBullet`
-  - 子弹瞄准优先使用真实地面/格子碰撞体命中点；命不中时回退到玩家高度平面
+  - 子弹瞄准优先使用真实地面/格子碰撞体命中点；命不中时回退到地图 gameplay plane，而不是玩家当前 root 高度
   - 当 `InBackPack` 或 `InPauseMenu` 状态存在时，会暂停移动、转向和开火；动态刚体玩家还会清零平面速度避免继续滑行
 - `PlayerFollowCamera` 当前挂在 `Start.unity` 的 `Main Camera`
-  - 只跟随玩家位置，不继承玩家旋转
-  - 进入场景时会把正交尺寸恢复到局部战斗视野，不再自动切到“显示整张地图”的 framing
+  - 当前使用固定斜俯角透视跟随，不继承玩家旋转
+  - 当前参数固定为 `focusOffset = (0, 8, 0)`、`distance = 260`、`pitch = 55`、`yaw = 35`、`fieldOfView = 35`
+  - `Camera.orthographic` 会被强制关闭，改为透视镜头
+- `GameplayBillboard` 当前用于关键 gameplay 视觉层
+  - `BaseCharObject/Text`、`CharBullet/Text`、`BulletTokenPickup/Glyph` 和 `BulletTokenPickup/Shadow` 都会对齐主相机朝向
+  - 环境文字和 `Cell3D` 墙地模型不使用 billboard
+- `CameraOcclusionFader` 当前挂在 `Main Camera`
+  - 每帧检测相机与玩家焦点之间的遮挡
+  - 只处理 `CellData.SurfaceType == Wall` 的墙体模型
+  - 被遮挡的墙体会临时切到幽灵材质，离开遮挡后恢复原材质
 - `PlayerHealth` 当前提供最小生命值与受伤入口
   - 当前只负责维护 `maxHealth / currentHealth` 和 `TryApplyDamage`
   - 当前还没有 UI 血条、死亡演出、复活或状态机接线
@@ -667,27 +701,38 @@
 - [`Assets/Scripts/Kernel/Enemy/WaveDefinition.cs`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs)
 - [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
 - [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
+- [`Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs`](Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs)
+- [`Assets/Scripts/Kernel/Enemy/EnemyDefinitionBinder.cs`](Assets/Scripts/Kernel/Enemy/EnemyDefinitionBinder.cs)
 - [`Assets/Scripts/Kernel/Enemy/CharGlyphPresenter.cs`](Assets/Scripts/Kernel/Enemy/CharGlyphPresenter.cs)
+- [`Assets/Scripts/Kernel/Enemy/CharEnemyVisualPresenter.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyVisualPresenter.cs)
 - [`Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs`](Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs)
 - [`Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs)
 - [`Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs`](Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs)
+- [`Assets/Data/Enemies`](Assets/Data/Enemies)
 - [`Assets/Data/Waves`](Assets/Data/Waves)
 - [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
 
 当前能力：
 
-- `EnemyGenerator` 仍然负责“刷在哪里”和“实例化谁”
-  - 可按随机区间 `spawnIntervalRange` 持续刷新敌人
-  - 也支持在外部关闭自治循环后，由波次系统显式调用单次生成接口
-- 刷怪位置以玩家为圆心，在 XZ 平面上按 `spawnDistance` 固定半径随机采样
+- `EnemyGenerator` 当前是纯生成服务
+  - 只负责“刷在哪里”和“实例化哪个 `EnemyDefinition`”
+  - 不再维护自治随机刷怪循环，也不再持有默认 / 附加 prefab 目录
+- 刷怪位置以玩家为圆心，在 `XZ` 平面上按 `spawnDistance` 固定半径随机采样
+  - 候选点的 `Y` 会统一落到 `targetMapGrid.WorldPlaneY`
 - 每次刷怪会校验候选点是否落在 tag 为 `Ground` 的格子上；若命中非地面或越界区域，会在 `maxGroundSpawnRolls` 次数内继续重 roll
 - 生成器支持手动指定 `targetPlayer`，未指定时会自动查找场景中的 `PlayerPlaneMovement`
 - 生成器支持手动指定 `targetMapGrid`，未指定时会自动查找场景中的 `MapGridAuthoring`
-- `EnemyGenerator` 期望默认敌人 prefab 与附加敌人 prefab 都已预挂 `CharEnemyMovement`
-  - 当前支持按 `Enemy.EnemyName` 从 prefab 目录中解析目标敌人
-  - 生成后会注入当前玩家目标，并把同一份 `EnemyWaveConfig` 广播给根节点上的所有 `IEnemyWaveConfigReceiver`
+- `EnemyGenerator` 当前直接接收 `EnemyDefinition`
+  - 会从 `EnemyDefinition.runtimePrefab` 实例化敌人壳
+  - 会在生成后调用 `EnemyDefinitionBinder` 把定义写回根节点上的行为与视觉组件
+  - 仍会注入当前玩家目标，并把同一份 `EnemyWaveConfig` 广播给根节点上的所有 `IEnemyWaveConfigReceiver`
+  - 实例化完成后会尝试按敌人的参考 `Collider` 重新 snap 到地图平面，避免 prefab 自身根节点高度与当前地面契约不一致
+- `EnemyDefinition` 当前是“敌人种类”的唯一真源
+  - 定义稳定 `enemyId`、运行时 prefab、内建移动方式、内建攻击方式和视觉表现
+  - 当前 v1 只支持 `None / ChaseTarget` 两种移动方式，以及 `None / MeleeContact` 两种攻击方式
+  - 当前不承载具体数值；生命、移动速度、攻击距离、攻击伤害和掉落概率仍全部由 wave 提供
 - `WaveDefinition` 当前采用“每波一个 ScriptableObject” 的配置方式
-  - 当前每波可配置统一刷怪间隔，以及多个 `enemyName + spawnCount + EnemyWaveConfig` 条目
+  - 当前每波可配置统一刷怪间隔，以及多个 `enemyDefinition + spawnCount + EnemyWaveConfig` 条目
   - `EnemyWaveConfig` 除了生命、移动和近战数值外，还支持一组 `Bullet Token` 掉落项；每项独立配置 token 资产和 `0..1` 概率
   - 勾选 `randomizeEnemySpawns` 后，同一波内会按各条目的剩余数量做加权随机抽取；不勾选时仍按 Inspector 中条目顺序依次刷出
 - `WaveManager` 当前负责“何时刷、刷多少、这一波是什么参数”
@@ -697,6 +742,7 @@
   - 最后一波完成后停止，不循环
 - `Enemy` 现在统一暴露名称、移动、生命和攻击只读契约
 - `BaseCharEnemyNorm1` 是当前默认的基础文字敌人类型
+  - 当前持有运行时 `EnemyDefinition` 绑定与本波 `EnemyWaveConfig`
   - 支持接收 `EnemyWaveConfig` 作为运行时覆写
   - 应用波次配置时会同步把 `stoppingDistance` 设为 `attackRange`
   - 敌人死亡时会先广播统一死亡通知，再销毁自身，供掉落组件和其他死亡后行为复用
@@ -705,11 +751,23 @@
   - 当前显示层级固定为 `Text/Glyph`；`Text` 是容器节点，`Glyph` 才承载实际的 `TMP_Text`
 - `CharEnemy.prefab` 和 `CharBullet.prefab` 当前都沿用 `BulletTokenPickup` 风格的字形组织
   - 通过 `CharGlyphPresenter.defaultDisplayText` 覆写默认文字，而不是直接在子节点 `TMP_Text` 上写死展示字符
+  - `CharEnemy.prefab` 当前还预挂了 `EnemyDefinitionBinder`，作为定义驱动的运行时壳
+  - `CharEnemy.prefab` 当前额外挂有 `CharEnemyVisualPresenter`
+  - 当前 prefab 合同固定为 `Text`、`Text/Glyph`、`Collider`、`RuneBaseCore`、`GroundShadow`
+  - `Text` 和 `Text/Glyph` 都保持局部 `identity`；`Text` 继续挂 `GameplayBillboard`，负责让主字始终面向主相机
+  - `RuneBaseCore` 和 `GroundShadow` 使用 `SpriteRenderer` 平放在 `XZ` 地面，并按 grounded 参考 `BoxCollider` 的底边自动重排
+  - `CharEnemyVisualPresenter` 只负责主字高度、底座和地影的布局，不参与移动、碰撞或敌人数值逻辑
+  - `EnemyDefinitionBinder` 会根据 `EnemyDefinition` 启停 `CharEnemyMovement` / `EnemyMeleeAttacker`，并把主字与底座 / 地影素材写给 `CharGlyphPresenter` / `CharEnemyVisualPresenter`
 - `EnemyBulletTokenDropper` 当前负责敌人的波次掉落逻辑
   - 只缓存当前波次写入的掉落表，不持有敌人数值逻辑
   - 每个掉落项都会在敌人死亡时独立判定，因此单只敌人可以同时掉落多个 token
   - 当前成功判定的 token 会实例化成 [`BulletTokenPickup`](Assets/Scripts/Kernel/Bullet/BulletTokenPickup.cs) 世界拾取物
-- `CharEnemyMovement` 会在 XZ 平面持续朝向并追踪玩家，并从同物体上的 `Enemy` 组件读取移动参数
+  - pickup 的根节点高度当前按 `targetMapGrid.WorldPlaneY + pickupHeightOffset` 计算，不再相对敌人 root 高度二次抬升
+- `CharEnemyMovement` 会在 `XZ` 平面持续朝向并追踪玩家，并从同物体上的 `Enemy` 组件读取移动参数
+- `CharEnemyMovement` 当前也采用 grounded 根节点规则：
+  - 会优先解析 `targetMapGrid` 和 `groundingReferenceCollider`
+  - `Awake / OnValidate` 时会按参考 `Collider` 把敌人 root snap 到 `MapGridAuthoring.WorldPlaneY`
+  - 挂有 `Rigidbody` 时会统一配置为 `useGravity = false` 并冻结 `Y` 轴位置
 - 同时兼容 `Transform` 直驱、`Rigidbody.isKinematic` 和动态 `Rigidbody` 三种移动模式
 - 仅当 `Rigidbody` 挂在敌人自身根节点时才使用刚体驱动；若 prefab 误绑到子刚体，会自动回退到 `Transform` 驱动
 - 进入 `stoppingDistance` 后会停止继续贴近，避免敌人持续抖动穿模
@@ -752,10 +810,14 @@
 - 改游戏状态：[`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) + [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
 - 加新 UI Screen：[`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI) + [`Assets/Prefabs/UI`](Assets/Prefabs/UI) + [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
 - 改网格生成、格子替换或 Scene Cell Edit：[`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs) + [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
+- 改主相机透视跟随、关键视觉 billboard 或墙体遮挡淡出：[`Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs`](Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs) + [`Assets/Scripts/Kernel/Camera/GameplayBillboard.cs`](Assets/Scripts/Kernel/Camera/GameplayBillboard.cs) + [`Assets/Scripts/Kernel/Camera/CameraOcclusionFader.cs`](Assets/Scripts/Kernel/Camera/CameraOcclusionFader.cs)
+- 改统一高度契约或 grounded / floating / projectile 的根节点高度规则：[`Assets/Scripts/Kernel/WorldHeightUtility.cs`](Assets/Scripts/Kernel/WorldHeightUtility.cs) + [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs) + [`Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs) + [`Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs`](Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs) + [`Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs`](Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs)
 - 改坐标承载组件或 cell 位移控制：[`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs) + [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)
 - 接存档：[`Assets/Scripts/Vocalith/Scribe`](Assets/Scripts/Vocalith/Scribe) + [`Assets/Scripts/Kernel/StatusSaveData.cs`](Assets/Scripts/Kernel/StatusSaveData.cs)
 - 改本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
 - 查日志：[`Assets/Scripts/Vocalith/Log`](Assets/Scripts/Vocalith/Log)
 - 改玩家输入或平面移动：[`Assets/Scripts/Kernel/Input`](Assets/Scripts/Kernel/Input) + [`Assets/Scripts/Kernel/Player`](Assets/Scripts/Kernel/Player) + [`Assets/Input/Player Controls.cs`](Assets/Input/Player%20Controls.cs)
 - 改敌人生成、波次、敌人数据或追踪：[`Assets/Scripts/Kernel/Enemy`](Assets/Scripts/Kernel/Enemy) + [`Assets/Data/Waves`](Assets/Data/Waves) + [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
+  - 改敌人种类定义或默认敌人资产：[`Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs`](Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs) + [`Assets/Scripts/Kernel/Enemy/EnemyDefinitionBinder.cs`](Assets/Scripts/Kernel/Enemy/EnemyDefinitionBinder.cs) + [`Assets/Data/Enemies`](Assets/Data/Enemies)
+  - 改敌人主字贴地、底座或地影布局：[`Assets/Scripts/Kernel/Enemy/CharEnemyVisualPresenter.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyVisualPresenter.cs) + [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
 - 改文字子弹或文字法术表现：[`Assets/Scripts/Kernel/Bullet`](Assets/Scripts/Kernel/Bullet) + [`Assets/Prefabs/Bullet/CharBullet.prefab`](Assets/Prefabs/Bullet/CharBullet.prefab)

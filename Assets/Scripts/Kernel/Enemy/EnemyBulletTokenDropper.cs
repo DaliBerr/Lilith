@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Kernel.Bullet;
+using Kernel.MapGrid;
 using UnityEngine;
 using Vocalith.Logging;
 using VocalithRandom = Vocalith.Random;
@@ -13,6 +14,7 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
     [Header("Pickup")]
     [SerializeField] private BulletTokenPickup pickupPrefab;
     [SerializeField] private Transform pickupParent;
+    [SerializeField] private MapGridAuthoring targetMapGrid;
     [SerializeField, Min(0f)] private float pickupHeightOffset = 6f;
     [SerializeField, Min(0f)] private float pickupSpreadRadius = 6f;
 
@@ -26,6 +28,7 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
     private void Awake()
     {
         TryResolveEnemy();
+        TryResolveMapGrid();
         EnsureRandomSource();
         SanitizeConfiguration();
         EnsureDeathSubscription();
@@ -140,7 +143,10 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
         EnsureRandomSource();
         Transform resolvedParent = pickupParent != null ? pickupParent : ownerEnemy.transform.parent;
         float baseAngleDegrees = randomSource.NextFloat01() * 360f;
-        Vector3 basePosition = ownerEnemy.transform.position + Vector3.up * pickupHeightOffset;
+        Vector3 basePosition = Kernel.WorldHeightUtility.GetPositionAtPlaneHeight(
+            ownerEnemy.transform.position,
+            GetPickupPlaneY(),
+            pickupHeightOffset);
 
         for (int i = 0; i < rolledDrops.Count; i++)
         {
@@ -213,6 +219,22 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
     }
 
     /// <summary>
+    /// summary: 当 Inspector 未显式绑定地图时，尝试自动解析当前场景中的 MapGridAuthoring。
+    /// param: 无
+    /// returns: 成功拿到地图平面来源时返回 true
+    /// </summary>
+    private bool TryResolveMapGrid()
+    {
+        if (targetMapGrid != null)
+        {
+            return true;
+        }
+
+        targetMapGrid = FindFirstObjectByType<MapGridAuthoring>();
+        return targetMapGrid != null;
+    }
+
+    /// <summary>
     /// summary: 统一确保当前组件已经订阅到敌人的死亡事件，避免 EditMode 或动态挂载时漏掉生命周期回调。
     /// param: 无
     /// returns: 成功建立订阅时返回 true
@@ -270,5 +292,15 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
     {
         pickupHeightOffset = Mathf.Max(0f, pickupHeightOffset);
         pickupSpreadRadius = Mathf.Max(0f, pickupSpreadRadius);
+    }
+
+    /// <summary>
+    /// summary: 获取当前 pickup 生成逻辑应该使用的共享地图平面高度。
+    /// param: 无
+    /// returns: 共享地图平面的世界 Y；找不到地图时回退到敌人当前根节点高度
+    /// </summary>
+    private float GetPickupPlaneY()
+    {
+        return TryResolveMapGrid() ? targetMapGrid.WorldPlaneY : ownerEnemy.transform.position.y;
     }
 }

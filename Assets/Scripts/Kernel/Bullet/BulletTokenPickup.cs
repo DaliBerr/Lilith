@@ -12,6 +12,7 @@ namespace Kernel.Bullet
         [SerializeField] private BaseTokenData token;
         [SerializeField] private TMP_Text glyphText;
         [SerializeField] private Collider triggerCollider;
+        [SerializeField, Min(0f)] private float ySpinDegreesPerSecond = 90f;
 
         private bool isCollected;
 
@@ -30,6 +31,16 @@ namespace Kernel.Bullet
             TryCacheBindings();
             EnsureTriggerColliderConfiguration();
             RefreshDisplay();
+        }
+
+        private void Update()
+        {
+            if (!Application.isPlaying || isCollected)
+            {
+                return;
+            }
+
+            RotateAroundYAxis(Time.deltaTime);
         }
 
         /// <summary>
@@ -108,6 +119,21 @@ namespace Kernel.Bullet
             }
 
             glyphText.text = token != null ? token.GetResolvedDisplayText() : string.Empty;
+        }
+
+        /// <summary>
+        /// summary: 让掉落 pickup 在运行时持续绕世界 Y 轴旋转，增加悬浮展示感。
+        /// param: deltaTime 本次刷新使用的时间步长
+        /// returns: 无
+        /// </summary>
+        private void RotateAroundYAxis(float deltaTime)
+        {
+            if (ySpinDegreesPerSecond <= 0f)
+            {
+                return;
+            }
+
+            transform.Rotate(Vector3.up, ySpinDegreesPerSecond * Mathf.Max(0f, deltaTime), Space.World);
         }
 
         /// <summary>
