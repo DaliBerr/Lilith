@@ -59,7 +59,7 @@ public sealed class EnemyGenerator : MonoBehaviour
     public bool TrySpawnEnemy(EnemyDefinition definition, EnemyWaveConfig config, out Enemy spawnedEnemy)
     {
         spawnedEnemy = null;
-        if (definition == null || definition.RuntimePrefab == null)
+        if (definition == null || definition.RuntimePrefabBinder == null)
         {
             return false;
         }
@@ -70,10 +70,10 @@ public sealed class EnemyGenerator : MonoBehaviour
         }
 
         Quaternion spawnRotation = GetSpawnRotation(spawnPosition, targetPlayer.position);
-        GameObject spawnedRoot = Instantiate(definition.RuntimePrefab, spawnPosition, spawnRotation, spawnedEnemyParent);
-        if (!TryInitializeSpawnedEnemy(spawnedRoot, definition, config, out spawnedEnemy))
+        EnemyDefinitionBinder spawnedBinder = Instantiate(definition.RuntimePrefabBinder, spawnPosition, spawnRotation, spawnedEnemyParent);
+        if (!TryInitializeSpawnedEnemy(spawnedBinder, definition, config, out spawnedEnemy))
         {
-            DestroySpawnedObject(spawnedRoot);
+            DestroySpawnedObject(spawnedBinder != null ? spawnedBinder.gameObject : null);
             spawnedEnemy = null;
             return false;
         }
@@ -209,20 +209,20 @@ public sealed class EnemyGenerator : MonoBehaviour
     /// param: spawnedEnemy 输出的 Enemy 运行时组件
     /// returns: 成功完成定义绑定与初始化时返回 true
     /// </summary>
-    private bool TryInitializeSpawnedEnemy(GameObject spawnedRoot, EnemyDefinition definition, EnemyWaveConfig config, out Enemy spawnedEnemy)
+    private bool TryInitializeSpawnedEnemy(EnemyDefinitionBinder spawnedBinder, EnemyDefinition definition, EnemyWaveConfig config, out Enemy spawnedEnemy)
     {
         spawnedEnemy = null;
-        if (spawnedRoot == null || definition == null)
+        if (spawnedBinder == null || definition == null)
         {
             return false;
         }
 
-        EnemyDefinitionBinder binder = spawnedRoot.GetComponent<EnemyDefinitionBinder>();
-        if (binder == null || !binder.ApplyDefinition(definition))
+        if (!spawnedBinder.ApplyDefinition(definition))
         {
             return false;
         }
 
+        GameObject spawnedRoot = spawnedBinder.gameObject;
         spawnedEnemy = spawnedRoot.GetComponent<Enemy>();
         if (spawnedEnemy == null)
         {

@@ -59,6 +59,26 @@ public sealed class CharBulletImpactTests
         Assert.That(bullet.RemainingLife, Is.EqualTo(1));
     }
 
+    [Test]
+    public void CheckImpactContacts_DamagesEnemyWhenChildColliderStillCarriesGroundTag()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(Vector3.zero, 6f);
+        BaseCharEnemyNorm1 enemy = CreateEnemyWithTaggedChildCollider(MapGridAuthoring.GroundTagName);
+        SetPrivateField(enemy, "health", 5f);
+
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 2);
+        attackSpec.damage = 1f;
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, null);
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(bullet, "CheckImpactContacts");
+
+        Assert.That(enemy, Is.Not.Null);
+        Assert.That(enemy.CurrentHealth, Is.EqualTo(4f));
+        Assert.That(bullet.RemainingLife, Is.EqualTo(1));
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);
@@ -92,6 +112,21 @@ public sealed class CharBulletImpactTests
         return collider;
     }
 
+    private BaseCharEnemyNorm1 CreateEnemyWithTaggedChildCollider(string childColliderTag)
+    {
+        GameObject enemyRoot = CreateGameObject("Enemy");
+        enemyRoot.tag = "Enemy_Object";
+        BaseCharEnemyNorm1 enemy = enemyRoot.AddComponent<BaseCharEnemyNorm1>();
+
+        GameObject colliderObject = CreateGameObject("Collider");
+        colliderObject.tag = childColliderTag;
+        colliderObject.transform.SetParent(enemyRoot.transform, false);
+        BoxCollider collider = colliderObject.AddComponent<BoxCollider>();
+        collider.size = new Vector3(8f, 8f, 8f);
+        collider.center = Vector3.zero;
+        return enemy;
+    }
+
     private static AttackSpec CreateAttackSpec(int projectileLife)
     {
         AttackSpec attackSpec = AttackSpec.CreateDefault();
@@ -106,5 +141,12 @@ public sealed class CharBulletImpactTests
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
         method.Invoke(target, null);
+    }
+
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        field.SetValue(target, value);
     }
 }

@@ -1,0 +1,244 @@
+using System.Collections;
+using Kernel.GameState;
+using Kernel.UI;
+using Vocalith.Localization;
+using Vocalith.Logging;
+using Vocalith.UI;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.SceneManagement;
+
+namespace Kernel
+{
+    /// <summary>
+    /// 启动场景的全局启动器，负责初始化跨场景系统并把流程切到 Main 场景。
+    /// </summary>
+    public sealed class GlobalStartup : MonoBehaviour
+    {
+        public static GlobalStartup Instance { get; private set; }
+
+        private const string MainSceneName = "Main";
+
+        [SerializeField] private bool isEnableDevMode = true;
+
+        private bool isBootCompleted;
+        private bool isLoadingMainScene;
+        private bool hasHandedOffToMainScene;
+
+        public bool IsBootCompleted => isBootCompleted;
+
+        public static class LoggingInit
+        {
+            [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+            public static void Init()
+            {
+                LogBootstrap.EnsureInitialized();
+                Log.Info("Log bootstrap ok (pid={0})", System.Diagnostics.Process.GetCurrentProcess().Id);
+            }
+        }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+        }
+
+        private IEnumerator Start()
+        {
+            yield return StartCoroutine(Boot());
+        }
+
+        /// <summary>
+        /// summary: 初始化全局系统，并在启动菜单场景中通过 UIManager 压入启动菜单。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator Boot()
+        {
+            isBootCompleted = false;
+
+            yield return InitLanguage();
+            StatusController.Initialize();
+
+            if (isEnableDevMode)
+            {
+                StatusController.AddStatus(StatusList.DevModeStatus);
+            }
+
+            StatusController.AddStatus(StatusList.GameLoadingStatus);
+            yield return StartCoroutine(InitGlobal());
+
+            if (StatusController.HasStatus(StatusList.GameLoadingStatus))
+            {
+                StatusController.RemoveStatus(StatusList.GameLoadingStatus);
+            }
+
+            yield return StartCoroutine(ShowStartUpMenu());
+            isBootCompleted = true;
+        }
+
+        /// <summary>
+        /// summary: 通过持久化 UIManager 压入启动菜单界面，让菜单状态由 StartUpMenuUI 自己维护。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator ShowStartUpMenu()
+        {
+            if (UIManager.Instance == null)
+            {
+                GameDebug.LogError("[GlobalStartup] UIManager is missing. StartUp menu cannot be pushed.");
+                yield break;
+            }
+
+            if (UIManager.Instance.GetTopScreen() is StartUpMenuUI)
+            {
+                yield break;
+            }
+
+            yield return UIManager.Instance.PushScreenAndWait<StartUpMenuUI>();
+        }
+
+        /// <summary>
+        /// summary: 响应启动菜单的开始请求，卸载启动菜单后切到 Main 场景。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void RequestEnterMainScene()
+        {
+            if (!isBootCompleted || isLoadingMainScene || hasHandedOffToMainScene)
+            {
+                return;
+            }
+
+            StartCoroutine(LoadMainSceneCo());
+        }
+
+        /// <summary>
+        /// summary: 由 Main 场景的 Startup 在场景内容启动完成后回调，通知全局启动器结束交接。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void NotifyMainSceneStartupComplete()
+        {
+            if (hasHandedOffToMainScene)
+            {
+                return;
+            }
+
+            hasHandedOffToMainScene = true;
+            Destroy(gameObject);
+        }
+
+        /// <summary>
+        /// summary: 初始化本地化管理器，等待异步加载完成。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator InitLanguage()
+        {
+            var task = LocalizationManager.InitializeAsync();
+            while (!task.IsCompleted)
+            {
+                yield return null;
+            }
+
+            if (task.IsFaulted)
+            {
+                GameDebug.LogError($"InitLanguage failed: {task.Exception}");
+            }
+        }
+
+        /// <summary>
+        /// summary: 初始化跨场景保留的全局系统，例如 Addressables 与 Def 预加载。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator InitGlobal()
+        {
+            var initHandle = Addressables.InitializeAsync();
+            yield return initHandle;
+
+            yield return StartCoroutine(LoadAllDefsCoroutine());
+        }
+
+        /// <summary>
+        /// summary: 预留所有 Def 与数据库的统一加载入口。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator LoadAllDefsCoroutine()
+        {
+            yield return null;
+        }
+
+        /// <summary>
+        /// summary: 从启动菜单切到 Main 场景，并等待 Main 场景自己的 Startup 接手。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator LoadMainSceneCo()
+        {
+            isLoadingMainScene = true;
+
+            if (StatusController.HasStatus(StatusList.InMainMenuStatus))
+            {
+                StatusController.RemoveStatus(StatusList.InMainMenuStatus);
+            }
+
+            if (!StatusController.HasStatus(StatusList.GameLoadingStatus))
+            {
+                StatusController.AddStatus(StatusList.GameLoadingStatus);
+            }
+
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ClearAllScreensAndModals();
+                while (UIManager.Instance.IsNavigating())
+                {
+                    yield return null;
+                }
+            }
+
+            AsyncOperation loadOperation = SceneManager.LoadSceneAsync(MainSceneName, LoadSceneMode.Single);
+            if (loadOperation == null)
+            {
+                GameDebug.LogError($"[GlobalStartup] Failed to load scene '{MainSceneName}'.");
+                StatusController.RemoveStatus(StatusList.GameLoadingStatus);
+                isLoadingMainScene = false;
+                yield break;
+            }
+
+            while (!loadOperation.isDone)
+            {
+                yield return null;
+            }
+
+            for (int frame = 0; frame < 120 && Startup.Instance == null; frame++)
+            {
+                yield return null;
+            }
+
+            if (Startup.Instance == null)
+            {
+                GameDebug.LogError("[GlobalStartup] Main scene Startup is missing.");
+                StatusController.RemoveStatus(StatusList.GameLoadingStatus);
+            }
+
+            isLoadingMainScene = false;
+        }
+    }
+}

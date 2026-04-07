@@ -32,8 +32,8 @@ public sealed class WaveManagerTests
 
         GameObject enemyParent = CreateGameObject("SpawnedEnemies");
         GameObject sharedEnemyPrefab = CreateEnemyPrefab();
-        EnemyDefinition basicDefinition = CreateEnemyDefinition("BasicEnemy", sharedEnemyPrefab, "甲");
-        EnemyDefinition fastDefinition = CreateEnemyDefinition("FastEnemy", sharedEnemyPrefab, "迅");
+        EnemyDefinition basicDefinition = CreateEnemyDefinition("BasicEnemy", sharedEnemyPrefab.GetComponent<EnemyDefinitionBinder>(), "甲");
+        EnemyDefinition fastDefinition = CreateEnemyDefinition("FastEnemy", sharedEnemyPrefab.GetComponent<EnemyDefinitionBinder>(), "迅");
 
         EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
         Assert.That(generator.TrySetTarget(playerObject.transform), Is.True);
@@ -132,7 +132,7 @@ public sealed class WaveManagerTests
         return enemyObject;
     }
 
-    private EnemyDefinition CreateEnemyDefinition(string enemyId, GameObject runtimePrefab, string glyphText)
+    private EnemyDefinition CreateEnemyDefinition(string enemyId, EnemyDefinitionBinder runtimePrefab, string glyphText)
     {
         EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
         definition.name = enemyId;

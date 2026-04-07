@@ -7,14 +7,15 @@
 - 一个基于 `MapGridAuthoring` 的网格地图编辑工作流
 - 一套基础设施层 `Vocalith`，包含日志、本地化、UI 栈、事件总线、自定义 JSON 存档 `Scribe`
 - 一套轻量游戏状态系统 `Kernel.GameState`
-- 一套已经落地到 prefab 的业务 UI：`MainMenuScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`
+- 一套已经落地到 prefab 的业务 UI：`StartUpMenuUI`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`
 
 这份 README 的目标是说明当前仓库里已经存在什么、在哪里，以及 agent 应该从哪里开始读，同时还有未来的规划。
 
 ## 工程事实
 
 - Unity 版本：`6000.3.9f1`
-- 主场景：[`Assets/Scenes/Start.unity`](Assets/Scenes/Start.unity)
+- 启动场景：[`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity)
+- 主 gameplay 场景：[`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
 - 运行时代码主要分布在：
   - [`Assets/Scripts/Kernel`](Assets/Scripts/Kernel)
   - [`Assets/Scripts/Vocalith`](Assets/Scripts/Vocalith)
@@ -53,21 +54,25 @@
 如果 agent 需要快速建立上下文，建议按这个顺序读：
 
 1. 若 `Unity MCP` 可用，先看 `mcpforunity://editor/state`、`manage_scene(action="get_active")`，并用 `find_gameobjects` 确认 `Startup`、`UIRoot`、`EnemyGenerator`、`WaveManager` 等对象是否实际存在
-2. [`Assets/Scenes/Start.unity`](Assets/Scenes/Start.unity)
-   先看当前场景里有哪些根对象：`MapRoot`、`UIRoot`、`Startup`、`Main Camera`、各 UI Layer。
-3. [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
-   看代码层设计的启动流程：语言初始化、状态初始化、UI 启动、Addressables 初始化。
-4. [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
-   看 UI 是怎么被实例化、压栈、出栈和销毁的。
-5. [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs) 和 [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
+2. [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity)
+   先看当前启动菜单场景里的根对象：`Main Camera`、`Directional Light`、`UIRoot`、`GlobalStartup`。
+3. [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs)
+   看启动场景的全局启动流程：语言初始化、状态初始化、Addressables 初始化，以及从启动菜单切到 `Main` 场景。
+4. [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
+   看 `Main` 场景自己的本地启动流程：校验全局引导已完成，并在场景内容准备后 push `MainUIScreen`。
+5. [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
+   看 UI 是怎么被实例化、压栈、出栈、跨场景保留和销毁的。
+6. [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs)
+   看启动菜单四个按钮当前的绑定方式，以及 `Start` / `Load` / `Settings` / `Quit` 的入口。
+7. [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs) 和 [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
    看当前战斗 HUD、暂停菜单和背包 Spell Book 的 UI 入口是怎么组织的。
-6. [`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) 和 [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
+8. [`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) 和 [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
    看状态机语义和切换规则。
-7. [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) 和 [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
+9. [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) 和 [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
    看地图网格的运行时数据结构与 Editor 生成逻辑。
-8. [`Assets/Scripts/Vocalith/Localization/LocalizationManager.cs`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
+10. [`Assets/Scripts/Vocalith/Localization/LocalizationManager.cs`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
    看语言包、JSON 补丁和 Addressables 读取。
-9. [`Assets/Scripts/Vocalith/Scribe/Scribe.cs`](Assets/Scripts/Vocalith/Scribe/Scribe.cs)
+11. [`Assets/Scripts/Vocalith/Scribe/Scribe.cs`](Assets/Scripts/Vocalith/Scribe/Scribe.cs)
    看当前自定义存档系统的底层协议与读写入口。
 
 ## 代码分层
@@ -90,7 +95,12 @@
 
 ### 代码层设计
 
-[`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 中的 `Kernel.Startup` 当前会按这个顺序进入战斗 HUD：
+当前仓库把启动链路拆成两个启动器：
+
+- [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 负责 `StartUp` 场景的全局系统初始化与场景切换
+- [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 负责 `Main` 场景的本地内容启动
+
+[`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 当前会按这个顺序进入启动菜单：
 
 1. `InitLanguage()`
    - 调用 [`LocalizationManager.InitializeAsync`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
@@ -102,8 +112,19 @@
    - `Addressables.InitializeAsync()`
    - 预留 Def / 数据库加载入口
 6. 移除 `Loading` 状态
-7. `UIManager.Instance.PushScreenAndWait<MainUIScreen>()`
-   - 将 `MainUIScreen` 作为当前战斗 HUD 压到 UI 栈顶
+7. 通过 [`UIManager.PushScreenAndWait<StartUpMenuUI>()`](Assets/Scripts/Vocalith/UI/UIManager.cs) 压入启动菜单
+   - [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 通过 `[UIPrefab("Assets/Prefabs/UI/StartUp UI Prefab")]` 实例化 [`Assets/Prefabs/UI/StartUp UI Prefab.prefab`](Assets/Prefabs/UI/StartUp%20UI%20Prefab.prefab)
+   - `StartUpMenuUI` 自己维护 `InMainMenu` 状态，并接管开始 / 加载 / 设置 / 退出按钮
+8. 点击 `Start`
+   - [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 会调用 [`GlobalStartup.RequestEnterMainScene()`](Assets/Scripts/GlobalStartup.cs)
+   - 先清理当前 UI 栈并卸载启动菜单，再切到 [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
+
+[`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 当前在 `Main` 场景里只负责：
+
+1. 校验 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 已经存在且完成全局引导
+2. 通过持久化的 [`UIManager`](Assets/Scripts/Vocalith/UI/UIManager.cs) 压入 [`MainUIScreen`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)
+3. 在场景内容准备完成后移除 `Loading` 状态
+4. 回调 `GlobalStartup.NotifyMainSceneStartupComplete()` 结束全局启动器交接
 
 同时，日志系统会在首场景加载前自动初始化：
 
@@ -112,42 +133,32 @@
 
 ### 当前场景实际接线
 
-`Start.unity` 里当前能确认到的事实：
+`StartUp.unity` 里当前能确认到的事实：
 
-- `MapRoot` 上挂了 [`MapGridAuthoring`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
-  - 当前配置是 `64 x 36`
-  - `cellSize = (24, 24)`
-  - `chunk = 3 x 3`
-  - `MapRoot` 当前保持 `rotation = identity`，网格直接铺在 `XZ` 平面，`Cell (0, 0)` 的中心位于世界原点
-  - 默认 cell prefab 使用 [`Assets/Prefabs/Map/Cell3D.prefab`](Assets/Prefabs/Map/Cell3D.prefab)
-  - 坐标绑定使用 `CellData.SetCoordinates / GetCoordinates`
 - `Main Camera` 当前挂有 [`PlayerFollowCamera`](Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs) 和 [`CameraOcclusionFader`](Assets/Scripts/Kernel/Camera/CameraOcclusionFader.cs)
-  - 当前使用固定斜俯角透视跟随，`pitch = 55`，`yaw = 35`，`distance = 260`，`fieldOfView = 35`
+  - 当前使用斜俯角透视跟随，默认参数为 `pitch = 55`、`yaw = 35`、`distance = 260`、`fieldOfView = 35`，按住鼠标中键拖拽可绕 `Y` 轴旋转镜头
   - 关键 gameplay 视觉通过 [`GameplayBillboard`](Assets/Scripts/Kernel/Camera/GameplayBillboard.cs) 面向相机
   - 相机与玩家焦点之间的墙体会临时切到幽灵材质，降低透视遮挡
 - `UIRoot` 上有 [`UIManager`](Assets/Scripts/Vocalith/UI/UIManager.cs)
   - `UIRoot` 当前在场景文件里是激活状态
-  - 序列化类型名仍显示旧命名 `Lonize.UI.UIManager`
-- 场景里存在名为 `Startup` 的根对象
-  - 当前场景文件里的这个根对象只有 `Transform`
-  - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 现在会在场景加载后自动补挂 `Kernel.Startup`，因此启动链路不再依赖 scene 上手动接线
-- 场景里存在名为 `EnemyGenerator` 的对象
-  - 当前默认敌人 prefab 是 [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
-  - `CharEnemy.prefab` 当前已预挂 [`EnemyBulletTokenDropper`](Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs)，默认使用 [`Assets/Prefabs/Bullet/BulletTokenPickup.prefab`](Assets/Prefabs/Bullet/BulletTokenPickup.prefab) 作为世界掉落物模板
-  - 自治随机刷怪循环已关闭，改由波次系统驱动单次生成
-- 场景里存在名为 `WaveManager` 的对象
-  - 当前会自动顺序执行挂到场景里的 [`Assets/Data/Waves`](Assets/Data/Waves) 波次资产
-- `Player` 当前挂有 [`PlayerPlaneMovement`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs)、[`PlayerHealth`](Assets/Scripts/Kernel/Player/PlayerHealth.cs)、[`AttackFormulaLoadout`](Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs) 和 [`PlayerBulletTokenInventory`](Assets/Scripts/Kernel/Player/PlayerBulletTokenInventory.cs)
-  - 敌人的近战攻击当前直接结算到这个生命组件上
-  - `PlayerBulletTokenInventory` 当前固定维护 `48` 个背包槽位，允许重复持有 token
-- [`Assets/Prefabs/UI/MainUI.prefab`](Assets/Prefabs/UI/MainUI.prefab) 的 `TopPanel/HP Bar/Bar` 当前挂有 [`PlayerHealthBarController`](Assets/Scripts/Kernel/UI/PlayerHealthBarController.cs)
-  - 运行时会按 `20 HP = 1 格` 实例化 [`Health_Prefab`](Assets/Prefabs/UI/Health_Prefab.prefab)
-  - 玩家生命变化通过 `PlayerHealthChangedEvent` 经由 `EventBus` 推送到血槽 UI，扣血与回血都走同一套逐格进度动画
+- 场景里存在名为 `GlobalStartup` 的根对象
+  - 当前显式挂有 [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs)
+  - `GlobalStartup` 会跨场景保留，直到 `Main` 场景自己的 [`Startup`](Assets/Scripts/StartUp.cs) 完成交接
+- 启动菜单不是场景静态对象，而是由 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 通过 [`UIManager`](Assets/Scripts/Vocalith/UI/UIManager.cs) 动态压入的 [`Assets/Prefabs/UI/StartUp UI Prefab.prefab`](Assets/Prefabs/UI/StartUp%20UI%20Prefab.prefab)
+  - 根节点当前挂的是 [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs)
+  - 该界面通过 `[UIPrefab("Assets/Prefabs/UI/StartUp UI Prefab")]` 进入 UI 栈
+  - 四个按钮分别对应 `Start`、`Load`、`Option`、`Quit`
+  - `Start` 当前会调用 `GlobalStartup.RequestEnterMainScene()`，并在切场景前随 UI 栈清空一起卸载
+  - `Load` 和 `Option` 当前保留占位，只输出未实现日志
+  - `Quit` 当前会在构建中直接退出应用，在 Unity Editor 中停止 Play
+- `Main.unity` 当前保留一个显式 `Startup` 根对象
+  - 当前挂的是 [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
+  - 若直接单独打开 `Main` 场景运行，会明确报错要求先从 `StartUp` 进入
 
 这意味着：
 
 - 代码层已经有“启动器设计”
-- 但当前仓库快照的场景接线并不保证这条启动链真的会自动跑通
+- 当前启动链路已经拆成“全局启动器 + Main 场景本地启动器”的两段流程
 
 如果后续 agent 在排查“为什么没有进主菜单 / 为什么 UIManager 是空 / 为什么 Boot 没执行”，先看场景挂载，不要只看 `StartUp.cs`。
 
@@ -199,12 +210,15 @@
 - [`Assets/Scripts/Vocalith/UI/UIScreen.cs`](Assets/Scripts/Vocalith/UI/UIScreen.cs)
 - [`Assets/Scripts/Vocalith/UI/UIWidget.cs`](Assets/Scripts/Vocalith/UI/UIWidget.cs)
 - [`Assets/Scripts/Vocalith/UI/UIPrefabAttribute.cs`](Assets/Scripts/Vocalith/UI/UIPrefabAttribute.cs)
+- [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs)
 - [`Assets/Scripts/Kernel/UI/GameUIScreen.cs`](Assets/Scripts/Kernel/UI/GameUIScreen.cs)
 - [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)
 - [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
+- [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs`](Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs)
 - [`Assets/Prefabs/UI/MainMenuUI.cs`](Assets/Prefabs/UI/MainMenuUI.cs)
+- [`Assets/Prefabs/UI/StartUp UI Prefab.prefab`](Assets/Prefabs/UI/StartUp%20UI%20Prefab.prefab)
 - [`Assets/Prefabs/UI/BackPackUI.prefab`](Assets/Prefabs/UI/BackPackUI.prefab)
 - [`Assets/Prefabs/UI/BackPack Grid Prefab.prefab`](Assets/Prefabs/UI/BackPack%20Grid%20Prefab.prefab)
 
@@ -215,6 +229,8 @@
   - `Modal`
   - `Overlay`
   - `Toast`
+- `UIRoot` 与 `EventSystem` 会跨场景保留，因此启动菜单切到 `Main` 时可以继续复用同一个 `UIManager`
+- `UIManager` 现在会在运行时保证只保留一个兼容 Input System 的 `EventSystem`
 - 内部维护 `screenStack` 和 `modalStack`
 - 使用导航锁 `_isNavigating`，避免 Push/Pop 并发打乱栈
 - 通过 `Addressables.InstantiateAsync` 创建 UI 实例
@@ -227,20 +243,24 @@
 
 当前业务 UI：
 
-- `MainMenuScreen`
-  - 声明自己的状态是 `InMainMenu`
-  - 已绑定四个按钮：
-    - `startBtn`
-    - `loadBtn`
-    - `optionsBtn`
-    - `quitBtn`
-  - 但实际开始游戏 / 读档 / 设置 / 退出逻辑大多还是注释或 TODO
+- `StartUpMenuUI`
+  - 挂在 [`Assets/Prefabs/UI/StartUp UI Prefab.prefab`](Assets/Prefabs/UI/StartUp%20UI%20Prefab.prefab) 根节点
+  - 会自动绑定四个按钮：
+    - `Start`
+    - `Load`
+    - `Option`
+    - `Quit`
+  - `Start` 会调用 [`GlobalStartup.RequestEnterMainScene()`](Assets/Scripts/GlobalStartup.cs)
+  - `Load` 和 `Option` 当前是保留占位
+  - `Quit` 当前直接退出游戏（Editor 下停止 Play）
 - `MainUIScreen`
   - 作为战斗 HUD 模板，当前暴露血条区和暂停按钮引用
   - 顶部 `PauseButton` 当前会通过 `UIInputRouter` 打开 `PauseUIScreen`
 - `PauseUIScreen`
   - 作为暂停菜单模板，当前暴露遮罩、主面板和三个按钮引用
-  - `ResumeButton` 当前会通过 `UIInputRouter` 关闭自身
+  - `Resume` 当前会通过 [`UIInputRouter`](Assets/Scripts/Kernel/UI/UIInputRouter.cs) 关闭暂停菜单
+  - `Option` 当前保留占位，只输出未实现日志
+  - `Back` 当前会清空战斗 UI 栈并切回 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity)
 - `BackPackUIScreen`
   - 运行时会在 `BackPack Grid Panel/Grid` 下固定生成 `48` 个背包槽位
   - `Spell Book` 当前在 prefab 内预放 `5` 个静态槽位，并通过 [`BackPackGridSlotView`](Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs) 接收拖拽
@@ -511,7 +531,7 @@
   - 只有当 [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs) 位于栈顶时，按下 `Backpack` 才会打开 [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
   - 当 `BackPackUIScreen` 位于栈顶时，再次按下 `Backpack` 会直接关闭它
   - 按下 `Router`（当前默认 `Esc`）会优先关闭顶层 modal，其次关闭 `BackPackUIScreen` / [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs)，或在 `MainUIScreen` 位于栈顶时打开 `PauseUIScreen`
-- `PlayerPlaneMovement` 会把该输入映射到世界坐标 `(x, currentY, z)`，其中 grounded 根节点高度由 `MapGridAuthoring.WorldPlaneY` 和参考 `Collider` 共同决定
+- `PlayerPlaneMovement` 会把该输入映射到当前主相机视角对应的 gameplay plane 方向，其中 grounded 根节点高度由 `MapGridAuthoring.WorldPlaneY` 和参考 `Collider` 共同决定
   - 会优先解析 `targetMapGrid` 和 `groundingReferenceCollider`
   - `Awake / OnValidate` 时会尝试把玩家 root snap 到地图平面，并把参考 `Collider` 的底部贴到地面
   - 挂有 `Rigidbody` 时会统一配置为 `useGravity = false` 并冻结 `Y` 轴位置，避免重新沉回地面
@@ -520,14 +540,15 @@
   - 没有 `Rigidbody` 时直接改 `transform.position` 的 `XZ`
   - `transform.position.y` 保持不变
   - 按住加速键时，移动速度会乘以 `1.5`
+  - 前后左右会基于当前主相机投影到水平面的 `forward/right` 重映射，因此旋转镜头后，移动方向会跟着当前视角变化
   - 同时会基于主相机（或显式指定相机）把鼠标屏幕坐标投影到 `MapGridAuthoring.WorldPlaneY` 对应的 gameplay plane，并让角色沿 Y 轴朝向该点
   - `rotationSpeed <= 0` 时会立即转向，否则按给定角速度平滑转向
   - 按住鼠标左键时，会按 `fireInterval` 连续向当前点击地面方向发射 `CharBullet`
   - 子弹瞄准优先使用真实地面/格子碰撞体命中点；命不中时回退到地图 gameplay plane，而不是玩家当前 root 高度
   - 当 `InBackPack` 或 `InPauseMenu` 状态存在时，会暂停移动、转向和开火；动态刚体玩家还会清零平面速度避免继续滑行
 - `PlayerFollowCamera` 当前挂在 `Start.unity` 的 `Main Camera`
-  - 当前使用固定斜俯角透视跟随，不继承玩家旋转
-  - 当前参数固定为 `focusOffset = (0, 8, 0)`、`distance = 260`、`pitch = 55`、`yaw = 35`、`fieldOfView = 35`
+  - 当前使用斜俯角透视跟随，不继承玩家旋转，并支持按住鼠标中键拖拽绕 `Y` 轴调整镜头偏航
+  - 当前默认参数为 `focusOffset = (0, 8, 0)`、`distance = 260`、`pitch = 55`、`yaw = 35`、`fieldOfView = 35`
   - `Camera.orthographic` 会被强制关闭，改为透视镜头
 - `GameplayBillboard` 当前用于关键 gameplay 视觉层
   - `BaseCharObject/Text`、`CharBullet/Text`、`BulletTokenPickup/Glyph` 和 `BulletTokenPickup/Shadow` 都会对齐主相机朝向
@@ -723,12 +744,13 @@
 - 生成器支持手动指定 `targetPlayer`，未指定时会自动查找场景中的 `PlayerPlaneMovement`
 - 生成器支持手动指定 `targetMapGrid`，未指定时会自动查找场景中的 `MapGridAuthoring`
 - `EnemyGenerator` 当前直接接收 `EnemyDefinition`
-  - 会从 `EnemyDefinition.runtimePrefab` 实例化敌人壳
+  - 会从 `EnemyDefinition.runtimePrefab` 上绑定的 `EnemyDefinitionBinder` 实例化敌人壳
   - 会在生成后调用 `EnemyDefinitionBinder` 把定义写回根节点上的行为与视觉组件
   - 仍会注入当前玩家目标，并把同一份 `EnemyWaveConfig` 广播给根节点上的所有 `IEnemyWaveConfigReceiver`
   - 实例化完成后会尝试按敌人的参考 `Collider` 重新 snap 到地图平面，避免 prefab 自身根节点高度与当前地面契约不一致
 - `EnemyDefinition` 当前是“敌人种类”的唯一真源
-  - 定义稳定 `enemyId`、运行时 prefab、内建移动方式、内建攻击方式和视觉表现
+  - 定义稳定 `enemyId`、运行时敌人壳、内建移动方式、内建攻击方式和视觉表现
+  - `runtimePrefab` 当前不是裸 `GameObject`，而是一个根节点带 `EnemyDefinitionBinder` 的可生成 prefab 壳；现有 [`CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab) 可以直接作为这类引用
   - 当前 v1 只支持 `None / ChaseTarget` 两种移动方式，以及 `None / MeleeContact` 两种攻击方式
   - 当前不承载具体数值；生命、移动速度、攻击距离、攻击伤害和掉落概率仍全部由 wave 提供
 - `WaveDefinition` 当前采用“每波一个 ScriptableObject” 的配置方式
@@ -786,14 +808,16 @@
   - `BuildingDatabase.LoadAllAsync`
   - `ItemDatabase.LoadAllAsync`
   - 其他全局系统初始化
-- `MainMenuScreen` 的按钮逻辑目前大多还是空实现或注释
+- [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 当前只真正实现了 `Start` 和 `Quit`
+  - `Load` / `Option` 仍是预留入口
 - 当前仓库中没有看到顶层 Save/Load 管理器
   - 只看到了 `Scribe` 基础设施和 `SaveStatus` 适配器
   - 没看到 `PolymorphRegistry.Register<SaveStatus>(...)` 之类的注册调用
 - 当前仓库中没有看到本地化包、Def 数据或 Addressables 组配置资产的明确提交内容
-- `Start.unity` 中名为 `Startup` 的根对象当前只有 `Transform`
-  - 运行时会由 [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 自动补挂 `Kernel.Startup`
-- `Start.unity` 中的 `UIRoot` 当前是激活状态
+- `StartUp.unity` 当前主要承担启动菜单展示，不再直接承载战斗地图与敌人逻辑
+- `Main.unity` 当前不能作为独立入口单场景运行
+  - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 会明确要求必须先经过 [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 的全局引导
+- `StartUp.unity` 中的 `UIRoot` 当前是激活状态
 
 ## 常见修改入口
 
@@ -806,7 +830,7 @@
 - 查编译报错和运行期告警：`read_console`
 - 跑 EditMode / PlayMode 测试：`run_tests` + `get_test_job`
 
-- 改启动流程：[`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) + [`Assets/Scenes/Start.unity`](Assets/Scenes/Start.unity)
+- 改启动流程：[`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) + [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) + [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) + [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
 - 改游戏状态：[`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) + [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
 - 加新 UI Screen：[`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI) + [`Assets/Prefabs/UI`](Assets/Prefabs/UI) + [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
 - 改网格生成、格子替换或 Scene Cell Edit：[`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs) + [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)

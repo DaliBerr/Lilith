@@ -1,10 +1,10 @@
 using System.Collections;
-using Kernel;
 using Kernel.GameState;
 using Vocalith.Logging;
 using Vocalith.UI;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace Kernel.UI
 {
@@ -16,10 +16,13 @@ namespace Kernel.UI
     {
         public static UIInputRouter Instance { get; private set; }
 
+        private const string StartUpSceneName = "StartUp";
+
         private UIControls boundControls;
         private bool callbacksBound;
         private bool isHandlingBack;
         private bool isHandlingBackpack;
+        private bool isReturningToStartUpScene;
 
         /// <summary>
         /// summary: 在首个场景加载前确保场景中存在 UI 输入路由实例。
@@ -132,6 +135,36 @@ namespace Kernel.UI
             }
 
             StartCoroutine(HandlePauseMenuClose());
+        }
+
+        /// <summary>
+        /// summary: 供 PauseUI 的设置按钮调用；当前先保留统一的未实现提示入口。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void RequestOpenPauseOptions()
+        {
+            if (isHandlingBack || isReturningToStartUpScene)
+            {
+                return;
+            }
+
+            GameDebug.LogWarning("[UIInputRouter] Pause options is not implemented yet.");
+        }
+
+        /// <summary>
+        /// summary: 供 PauseUI 的返回按钮调用，请求清空当前战斗 UI 并切回 StartUp 场景。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void RequestReturnToStartUpScene()
+        {
+            if (isHandlingBack || isReturningToStartUpScene)
+            {
+                return;
+            }
+
+            StartCoroutine(HandleReturnToStartUpScene());
         }
 
         /// <summary>
@@ -316,6 +349,63 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 从暂停菜单直接返回 StartUp 场景；先清理当前 UI 栈，再触发场景切换。
+        /// param: 无
+        /// returns: 用于协程等待的枚举器
+        /// </summary>
+        private IEnumerator HandleReturnToStartUpScene()
+        {
+            isHandlingBack = true;
+            isReturningToStartUpScene = true;
+
+            try
+            {
+                if (!CanReturnToStartUpScene(out UIManager uiManager))
+                {
+                    yield break;
+                }
+
+                if (StatusController.HasStatus(StatusList.InPauseMenuStatus))
+                {
+                    StatusController.RemoveStatus(StatusList.InPauseMenuStatus);
+                }
+
+                if (!StatusController.HasStatus(StatusList.GameLoadingStatus))
+                {
+                    StatusController.AddStatus(StatusList.GameLoadingStatus);
+                }
+
+                uiManager.ClearAllScreensAndModals();
+                while (uiManager.IsNavigating())
+                {
+                    yield return null;
+                }
+
+                AsyncOperation loadOperation = SceneManager.LoadSceneAsync(StartUpSceneName, LoadSceneMode.Single);
+                if (loadOperation == null)
+                {
+                    GameDebug.LogError($"[UIInputRouter] Failed to load scene '{StartUpSceneName}'.");
+                    if (StatusController.HasStatus(StatusList.GameLoadingStatus))
+                    {
+                        StatusController.RemoveStatus(StatusList.GameLoadingStatus);
+                    }
+
+                    yield break;
+                }
+
+                while (!loadOperation.isDone)
+                {
+                    yield return null;
+                }
+            }
+            finally
+            {
+                isReturningToStartUpScene = false;
+                isHandlingBack = false;
+            }
+        }
+
+        /// <summary>
         /// summary: 判断当前是否允许处理背包快捷键，并返回可用的 UIManager。
         /// param: uiManager 输出当前可用的 UI 管理器
         /// returns: 满足战斗态切换背包条件时返回 true
@@ -389,6 +479,26 @@ namespace Kernel.UI
         private static bool CanClosePauseMenu(out UIManager uiManager)
         {
             if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            return uiManager.GetTopScreen() is PauseUIScreen;
+        }
+
+        /// <summary>
+        /// summary: 判断当前是否允许从暂停菜单直接返回 StartUp 场景。
+        /// param: uiManager 输出当前可用的 UI 管理器
+        /// returns: 只有当 PauseUIScreen 位于栈顶且没有 modal 遮挡时返回 true
+        /// </summary>
+        private static bool CanReturnToStartUpScene(out UIManager uiManager)
+        {
+            if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            if (uiManager.GetTopModal() != null)
             {
                 return false;
             }

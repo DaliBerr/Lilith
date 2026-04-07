@@ -35,7 +35,7 @@ public sealed class EnemyDefinition : ScriptableObject
 
     [SerializeField] private string enemyId = string.Empty;
     [SerializeField] private string displayName = string.Empty;
-    [SerializeField] private GameObject runtimePrefab;
+    [SerializeField] private EnemyDefinitionBinder runtimePrefab;
     [SerializeField] private EnemyMovementKind movementKind = EnemyMovementKind.ChaseTarget;
     [SerializeField] private EnemyAttackKind attackKind = EnemyAttackKind.MeleeContact;
     [SerializeField] private EnemyVisualDefinition visual = new()
@@ -48,7 +48,8 @@ public sealed class EnemyDefinition : ScriptableObject
 
     public string EnemyId => string.IsNullOrWhiteSpace(enemyId) ? name : enemyId.Trim();
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? EnemyId : displayName.Trim();
-    public GameObject RuntimePrefab => runtimePrefab;
+    public EnemyDefinitionBinder RuntimePrefabBinder => runtimePrefab;
+    public GameObject RuntimePrefab => runtimePrefab != null ? runtimePrefab.gameObject : null;
     public EnemyMovementKind MovementKind => movementKind;
     public EnemyAttackKind AttackKind => attackKind;
     public EnemyVisualDefinition Visual => visual;

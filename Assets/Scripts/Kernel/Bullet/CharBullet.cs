@@ -1766,6 +1766,12 @@ public sealed class CharBullet : MonoBehaviour
             return false;
         }
 
+        Enemy enemy = other.GetComponentInParent<Enemy>();
+        if (enemy != null || HasEnemyTag(other.transform) || HasEnemyTag(other.transform.root))
+        {
+            return false;
+        }
+
         if (other.CompareTag(Kernel.MapGrid.MapGridAuthoring.GroundTagName))
         {
             return true;

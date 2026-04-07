@@ -1,7 +1,8 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>
-/// 固定使用斜俯视透视参数跟随玩家焦点，不继承玩家旋转。
+/// 使用斜俯视透视参数跟随玩家焦点，可通过中键拖拽绕 Y 轴调整偏航，不继承玩家旋转。
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Camera))]
@@ -18,6 +19,7 @@ public sealed class PlayerFollowCamera : MonoBehaviour
     [SerializeField, Min(MinimumDistance)] private float distance = 260f;
     [SerializeField] private float pitch = 55f;
     [SerializeField] private float yaw = 35f;
+    [SerializeField, Min(0f)] private float yawDragSensitivity = 0.2f;
     [SerializeField, Range(MinimumFieldOfView, MaximumFieldOfView)] private float fieldOfView = 35f;
     [SerializeField, Min(MinimumNearClipPlane)] private float nearClipPlane = 0.3f;
     [SerializeField, Min(MinimumNearClipPlane + MinimumClipPlaneGap)] private float farClipPlane = 4000f;
@@ -45,6 +47,7 @@ public sealed class PlayerFollowCamera : MonoBehaviour
 
     private void LateUpdate()
     {
+        HandleYawRotationInput();
         if (!TryGetCameraPose(out Vector3 position, out Quaternion rotation))
         {
             return;
@@ -59,8 +62,30 @@ public sealed class PlayerFollowCamera : MonoBehaviour
         fieldOfView = Mathf.Clamp(fieldOfView, MinimumFieldOfView, MaximumFieldOfView);
         nearClipPlane = Mathf.Max(MinimumNearClipPlane, nearClipPlane);
         farClipPlane = Mathf.Max(nearClipPlane + MinimumClipPlaneGap, farClipPlane);
+        yawDragSensitivity = Mathf.Max(0f, yawDragSensitivity);
         EnsureCameraReference();
         ApplyCameraSettings();
+    }
+
+    /// <summary>
+    /// summary: 按住鼠标中键拖拽时累加水平偏航，让主相机绕玩家焦点沿 Y 轴旋转。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void HandleYawRotationInput()
+    {
+        if (Mouse.current == null || !Mouse.current.middleButton.isPressed)
+        {
+            return;
+        }
+
+        float horizontalDelta = Mouse.current.delta.ReadValue().x;
+        if (Mathf.Approximately(horizontalDelta, 0f))
+        {
+            return;
+        }
+
+        yaw = Mathf.Repeat(yaw + (horizontalDelta * yawDragSensitivity), 360f);
     }
 
     /// <summary>
@@ -111,7 +136,7 @@ public sealed class PlayerFollowCamera : MonoBehaviour
         {
             return false;
         }
-
+ 
         Vector3 focusPoint = ResolveFocusWorldPoint();
         rotation = Quaternion.Euler(pitch, yaw, 0f);
         position = focusPoint - (rotation * Vector3.forward * distance);

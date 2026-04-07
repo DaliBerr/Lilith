@@ -38,7 +38,7 @@ public sealed class EnemyDefinitionBinderTests
         Sprite groundShadowSprite = CreateSprite("GroundShadowSprite");
         EnemyDefinition definition = CreateEnemyDefinition(
             "Norm1",
-            binder.gameObject,
+            binder,
             EnemyMovementKind.ChaseTarget,
             EnemyAttackKind.MeleeContact,
             new EnemyDefinition.EnemyVisualDefinition
@@ -77,7 +77,7 @@ public sealed class EnemyDefinitionBinderTests
             out _);
         EnemyDefinition definition = CreateEnemyDefinition(
             "PassiveEnemy",
-            binder.gameObject,
+            binder,
             EnemyMovementKind.None,
             EnemyAttackKind.None,
             new EnemyDefinition.EnemyVisualDefinition
@@ -112,6 +112,18 @@ public sealed class EnemyDefinitionBinderTests
         {
             PrefabUtility.UnloadPrefabContents(prefabRoot);
         }
+    }
+
+    [Test]
+    public void Norm1EnemyAsset_ReferencesBindableCharEnemyPrefab()
+    {
+        EnemyDefinition definition = AssetDatabase.LoadAssetAtPath<EnemyDefinition>("Assets/Data/Enemies/Norm1Enemy.asset");
+
+        Assert.That(definition, Is.Not.Null);
+        Assert.That(definition.RuntimePrefabBinder, Is.Not.Null);
+        Assert.That(definition.RuntimePrefab, Is.Not.Null);
+        Assert.That(definition.RuntimePrefab.GetComponent<EnemyDefinitionBinder>(), Is.SameAs(definition.RuntimePrefabBinder));
+        Assert.That(definition.RuntimePrefab.GetComponent<Enemy>(), Is.Not.Null);
     }
 
     private EnemyDefinitionBinder CreateBoundEnemyShell(
@@ -161,7 +173,7 @@ public sealed class EnemyDefinitionBinderTests
 
     private EnemyDefinition CreateEnemyDefinition(
         string enemyId,
-        GameObject runtimePrefab,
+        EnemyDefinitionBinder runtimePrefab,
         EnemyMovementKind movementKind,
         EnemyAttackKind attackKind,
         EnemyDefinition.EnemyVisualDefinition visual)

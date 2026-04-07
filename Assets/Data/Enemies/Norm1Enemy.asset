@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: Norm1
   displayName: Norm1
-  runtimePrefab: {fileID: 69838, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 1
   attackKind: 1
   visual:

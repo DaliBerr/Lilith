@@ -8,7 +8,7 @@ using UnityEngine.InputSystem;
 using Vocalith.Logging;
 
 /// <summary>
-/// 使用 PlayerControls 的 Movement 输入在世界 XZ 平面移动玩家，并让玩家朝向鼠标投影点。
+/// 使用 PlayerControls 的 Movement 输入在当前相机视角对应的 gameplay plane 上移动玩家，并让玩家朝向鼠标投影点。
 /// 同时负责根据点击地面的方向连续发射 CharBullet。
 /// </summary>
 [DisallowMultipleComponent]
@@ -135,7 +135,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 把输入系统的二维向量转换成世界 XZ 平面的平面速度。
+    /// summary: 把输入系统的二维向量转换成当前相机视角对应的世界平面速度。
     /// param: 无
     /// returns: 当前期望的世界平面速度
     /// </summary>
@@ -143,9 +143,56 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     {
         Vector2 input = ReadMoveInput();
         input = Vector2.ClampMagnitude(input, 1f);
+        if (input.sqrMagnitude <= 0f)
+        {
+            return Vector3.zero;
+        }
 
         float currentMoveSpeed = moveSpeed * (IsAccelerating() ? AcceleratedSpeedMultiplier : 1f);
-        return new Vector3(input.x, 0f, input.y) * currentMoveSpeed;
+        Vector3 planarDirection = GetPlanarMovementDirection(input);
+        return planarDirection * currentMoveSpeed;
+    }
+
+    /// <summary>
+    /// summary: 把二维移动输入重映射到当前相机在 gameplay plane 上的 forward/right 基向量。
+    /// param: input 已归一化或截断后的二维移动输入
+    /// returns: 对应当前相机视角的世界平面方向；拿不到相机时回退到世界 XZ 方向
+    /// </summary>
+    private Vector3 GetPlanarMovementDirection(Vector2 input)
+    {
+        if (!TryGetPlanarCameraAxes(out Vector3 cameraRight, out Vector3 cameraForward))
+        {
+            return new Vector3(input.x, 0f, input.y);
+        }
+
+        Vector3 moveDirection = (cameraRight * input.x) + (cameraForward * input.y);
+        return Vector3.ClampMagnitude(moveDirection, 1f);
+    }
+
+    /// <summary>
+    /// summary: 解析当前相机投影到水平面后的 right/forward，用于把移动输入转换成相对镜头的平面方向。
+    /// param: cameraRight 输出的相机平面右方向
+    /// param: cameraForward 输出的相机平面前方向
+    /// returns: 成功从当前相机得到有效平面基向量时返回 true
+    /// </summary>
+    private bool TryGetPlanarCameraAxes(out Vector3 cameraRight, out Vector3 cameraForward)
+    {
+        cameraRight = Vector3.right;
+        cameraForward = Vector3.forward;
+        if (!TryGetTargetCamera(out Camera camera))
+        {
+            return false;
+        }
+
+        cameraForward = Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up);
+        if (cameraForward.sqrMagnitude <= MinimumLookDirectionSqrMagnitude)
+        {
+            return false;
+        }
+
+        cameraForward.Normalize();
+        cameraRight = Vector3.Cross(Vector3.up, cameraForward).normalized;
+        return true;
     }
 
     /// <summary>

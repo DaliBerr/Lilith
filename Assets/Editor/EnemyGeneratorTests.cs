@@ -70,7 +70,7 @@ public sealed class EnemyGeneratorTests
 
         GameObject enemyPrefab = CreateEnemyPrefab(100f);
         BaseCharEnemyNorm1 prefabEnemy = enemyPrefab.GetComponent<BaseCharEnemyNorm1>();
-        EnemyDefinition definition = CreateEnemyDefinition("BasicEnemy", enemyPrefab);
+        EnemyDefinition definition = CreateEnemyDefinition("BasicEnemy", enemyPrefab.GetComponent<EnemyDefinitionBinder>());
         Assert.That(generator.TrySetTarget(player), Is.True);
         SetPrivateField(generator, "spawnDistance", 4f);
         SetPrivateField(generator, "maxGroundSpawnRolls", 8);
@@ -110,7 +110,7 @@ public sealed class EnemyGeneratorTests
 
         GameObject basicPrefab = CreateEnemyPrefab(100f);
         GameObject fastPrefab = CreateEnemyPrefab(80f);
-        EnemyDefinition fastDefinition = CreateEnemyDefinition("FastEnemy", fastPrefab, glyphText: "迅");
+        EnemyDefinition fastDefinition = CreateEnemyDefinition("FastEnemy", fastPrefab.GetComponent<EnemyDefinitionBinder>(), glyphText: "迅");
 
         Assert.That(generator.TrySetTarget(player), Is.True);
         SetPrivateField(generator, "spawnDistance", 4f);
@@ -139,7 +139,7 @@ public sealed class EnemyGeneratorTests
 
         GameObject enemyPrefab = CreateEnemyPrefab(100f);
         DummyWaveConfigReceiver dummyReceiver = enemyPrefab.AddComponent<DummyWaveConfigReceiver>();
-        EnemyDefinition definition = CreateEnemyDefinition("DropEnemy", enemyPrefab);
+        EnemyDefinition definition = CreateEnemyDefinition("DropEnemy", enemyPrefab.GetComponent<EnemyDefinitionBinder>());
         CoreTokenData droppedToken = CreateToken<CoreTokenData>("drop_fire", "Drop Fire");
         EnemyWaveConfig config = new(
             180f,
@@ -180,7 +180,7 @@ public sealed class EnemyGeneratorTests
         player.position = new Vector3(32f, 40f, 32f);
 
         GameObject enemyPrefab = CreateEnemyPrefab(100f);
-        EnemyDefinition definition = CreateEnemyDefinition("GroundedEnemy", enemyPrefab);
+        EnemyDefinition definition = CreateEnemyDefinition("GroundedEnemy", enemyPrefab.GetComponent<EnemyDefinitionBinder>());
         Assert.That(generator.TrySetTarget(player), Is.True);
         SetPrivateField(generator, "spawnDistance", 4f);
         SetPrivateField(generator, "maxGroundSpawnRolls", 8);
@@ -257,7 +257,7 @@ public sealed class EnemyGeneratorTests
         return enemyObject;
     }
 
-    private EnemyDefinition CreateEnemyDefinition(string enemyId, GameObject runtimePrefab, string glyphText = "坚")
+    private EnemyDefinition CreateEnemyDefinition(string enemyId, EnemyDefinitionBinder runtimePrefab, string glyphText = "坚")
     {
         EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
         definition.name = enemyId;

@@ -7,7 +7,7 @@ using Vocalith.UI;
 namespace Kernel.UI
 {
     /// <summary>
-    /// PauseUI 的运行时模板脚本，只负责暴露暂停菜单引用与状态入口。
+    /// PauseUI 的运行时模板脚本，负责绑定暂停菜单按钮并维护暂停菜单状态入口。
     /// </summary>
     [DisallowMultipleComponent]
     [UIPrefab("Assets/Prefabs/UI/PauseUI")]
@@ -40,9 +40,15 @@ namespace Kernel.UI
             BindButtonCallbacks();
         }
 
+        protected override void OnAfterHide()
+        {
+            RemoveCurrentStatus();
+        }
+
         private void OnDestroy()
         {
             UnbindButtonCallbacks();
+            RemoveCurrentStatus();
         }
 
         private void OnValidate()
@@ -69,19 +75,19 @@ namespace Kernel.UI
                 return;
             }
 
-            resumeButton ??= ResolveButton(mainPanel, "Button Prefab", 0);
+            resumeButton ??= ResolveButton(mainPanel, "Resume Button", 0);
             if (resumeButton != null)
             {
                 resumeButtonText ??= resumeButton.GetComponentInChildren<TMP_Text>(true);
             }
 
-            optionsButton ??= ResolveButton(mainPanel, "Button Prefab (1)", 1);
+            optionsButton ??= ResolveButton(mainPanel, "Option Button", 1);
             if (optionsButton != null)
             {
                 optionsButtonText ??= optionsButton.GetComponentInChildren<TMP_Text>(true);
             }
 
-            backButton ??= ResolveButton(mainPanel, "Button Prefab (2)", 2);
+            backButton ??= ResolveButton(mainPanel, "Quit Button", 2);
             if (backButton != null)
             {
                 backButtonText ??= backButton.GetComponentInChildren<TMP_Text>(true);
@@ -95,11 +101,9 @@ namespace Kernel.UI
         /// </summary>
         private void BindButtonCallbacks()
         {
-            if (resumeButton != null)
-            {
-                resumeButton.onClick.RemoveListener(HandleResumeButtonClicked);
-                resumeButton.onClick.AddListener(HandleResumeButtonClicked);
-            }
+            BindButton(resumeButton, HandleResumeButtonClicked);
+            BindButton(optionsButton, HandleOptionsButtonClicked);
+            BindButton(backButton, HandleBackButtonClicked);
         }
 
         /// <summary>
@@ -109,10 +113,9 @@ namespace Kernel.UI
         /// </summary>
         private void UnbindButtonCallbacks()
         {
-            if (resumeButton != null)
-            {
-                resumeButton.onClick.RemoveListener(HandleResumeButtonClicked);
-            }
+            UnbindButton(resumeButton, HandleResumeButtonClicked);
+            UnbindButton(optionsButton, HandleOptionsButtonClicked);
+            UnbindButton(backButton, HandleBackButtonClicked);
         }
 
         /// <summary>
@@ -123,6 +126,26 @@ namespace Kernel.UI
         private void HandleResumeButtonClicked()
         {
             UIInputRouter.Instance?.RequestClosePauseMenu();
+        }
+
+        /// <summary>
+        /// summary: 点击设置按钮时，走统一的 UI 路由入口；当前先保留未实现提示。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HandleOptionsButtonClicked()
+        {
+            UIInputRouter.Instance?.RequestOpenPauseOptions();
+        }
+
+        /// <summary>
+        /// summary: 点击返回按钮时，清空当前战斗 UI 并回到 StartUp 场景。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HandleBackButtonClicked()
+        {
+            UIInputRouter.Instance?.RequestReturnToStartUpScene();
         }
 
         /// <summary>
@@ -152,6 +175,52 @@ namespace Kernel.UI
 
             int clampedIndex = Mathf.Clamp(fallbackIndex, 0, panel.childCount - 1);
             return panel.GetChild(clampedIndex).GetComponentInChildren<Button>(true);
+        }
+
+        /// <summary>
+        /// summary: 为单个按钮安全绑定点击事件，避免重复注册。
+        /// param name="button": 目标按钮
+        /// param name="callback": 目标回调
+        /// returns: 无
+        /// </summary>
+        private static void BindButton(Button button, UnityEngine.Events.UnityAction callback)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.onClick.RemoveListener(callback);
+            button.onClick.AddListener(callback);
+        }
+
+        /// <summary>
+        /// summary: 为单个按钮安全移除点击事件。
+        /// param name="button": 目标按钮
+        /// param name="callback": 目标回调
+        /// returns: 无
+        /// </summary>
+        private static void UnbindButton(Button button, UnityEngine.Events.UnityAction callback)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.onClick.RemoveListener(callback);
+        }
+
+        /// <summary>
+        /// summary: 在暂停菜单关闭或销毁时移除 InPauseMenu 状态，避免状态残留。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void RemoveCurrentStatus()
+        {
+            if (StatusController.HasStatus(currentStatus))
+            {
+                StatusController.RemoveStatus(currentStatus);
+            }
         }
     }
 }

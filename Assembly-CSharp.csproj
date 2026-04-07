@@ -53,6 +53,7 @@
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerFollowCamera.cs" />
     <Compile Include="Assets\Input\UI Controls.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationManager.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\StartUpMenuUI.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationJsonUtility.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\localizationPack.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PlayerHealthBarController.cs" />
@@ -123,6 +124,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackGridSlotView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeBootstrap.cs" />
+    <Compile Include="Assets\Scripts\GlobalStartup.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDefinition.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\MainUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyMovement.cs" />

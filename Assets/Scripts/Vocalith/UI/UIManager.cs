@@ -6,8 +6,13 @@ using System.Reflection;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.AddressableAssets;
+using UnityEngine.SceneManagement;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using Vocalith.Logging;
+using UnityEventSystem = UnityEngine.EventSystems.EventSystem;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem.UI;
+#endif
 
 
 namespace Vocalith.UI
@@ -39,12 +44,104 @@ namespace Vocalith.UI
             if (Instance && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
-            // 防呆：确保有 EventSystem
-            if (!FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>())
+            EnsureEventSystem();
+            SceneManager.sceneLoaded += HandleSceneLoaded;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this)
             {
-                var go = new GameObject("EventSystem", typeof(UnityEngine.EventSystems.EventSystem), typeof(StandaloneInputModule));
-                DontDestroyOnLoad(go);
+                SceneManager.sceneLoaded -= HandleSceneLoaded;
             }
+        }
+
+        /// <summary>
+        /// summary: 在切场景后统一收敛 EventSystem，避免持久化 UIManager 与场景内 EventSystem 重复。
+        /// param name="scene": 刚完成加载的场景
+        /// param name="mode": 场景加载模式
+        /// returns: 无
+        /// </summary>
+        private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            EnsureEventSystem();
+        }
+
+        /// <summary>
+        /// summary: 确保场景内始终只有一个兼容当前输入后端的 EventSystem。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private static void EnsureEventSystem()
+        {
+            var eventSystems = FindObjectsByType<UnityEventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            UnityEventSystem primary = null;
+
+            foreach (var eventSystem in eventSystems)
+            {
+                if (eventSystem == null)
+                {
+                    continue;
+                }
+
+                if (primary == null)
+                {
+                    primary = eventSystem;
+                    continue;
+                }
+
+                Destroy(eventSystem.gameObject);
+            }
+
+            if (primary == null)
+            {
+                primary = CreateEventSystem();
+            }
+
+            ConfigureInputModule(primary.gameObject);
+            DontDestroyOnLoad(primary.gameObject);
+        }
+
+        /// <summary>
+        /// summary: 创建一个新的 EventSystem 根对象，供没有场景级 EventSystem 的启动场景兜底。
+        /// param: 无
+        /// returns: 新创建的 EventSystem 组件
+        /// </summary>
+        private static UnityEventSystem CreateEventSystem()
+        {
+            var go = new GameObject("EventSystem", typeof(UnityEventSystem));
+            return go.GetComponent<UnityEventSystem>();
+        }
+
+        /// <summary>
+        /// summary: 按当前项目启用的输入方案配置 EventSystem 模块，避免旧输入模块在 Input System 下抛异常。
+        /// param name="eventSystemObject": EventSystem 根对象
+        /// returns: 无
+        /// </summary>
+        private static void ConfigureInputModule(GameObject eventSystemObject)
+        {
+            if (eventSystemObject == null)
+            {
+                return;
+            }
+
+            var standaloneModule = eventSystemObject.GetComponent<StandaloneInputModule>();
+#if ENABLE_INPUT_SYSTEM
+            if (standaloneModule != null)
+            {
+                Destroy(standaloneModule);
+            }
+
+            if (eventSystemObject.GetComponent<InputSystemUIInputModule>() == null)
+            {
+                eventSystemObject.AddComponent<InputSystemUIInputModule>();
+            }
+#else
+            if (standaloneModule == null)
+            {
+                eventSystemObject.AddComponent<StandaloneInputModule>();
+            }
+#endif
         }
         private bool _isNavigating;
 
