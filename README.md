@@ -154,6 +154,10 @@
 - `Main.unity` 当前保留一个显式 `Startup` 根对象
   - 当前挂的是 [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
   - 若直接单独打开 `Main` 场景运行，会明确报错要求先从 `StartUp` 进入
+- `Main.unity` 里的 `Player` 当前使用“主字 + 地面尖角影子”的视觉合同
+  - 根节点挂有 [`Assets/Scripts/Kernel/Enemy/CharGlyphPresenter.cs`](Assets/Scripts/Kernel/Enemy/CharGlyphPresenter.cs) 与 [`Assets/Scripts/Kernel/Player/PlayerVisualPresenter.cs`](Assets/Scripts/Kernel/Player/PlayerVisualPresenter.cs)
+  - `Text/Glyph` 使用 `TMP_Text` 作为 billboard 主字，默认显示 `"火"`
+  - `GroundShadow` 使用单张尖角地影 sprite 平放在 `XZ` 地面，并复用玩家根节点已有的朝鼠标旋转来指向目标方向
 
 这意味着：
 
@@ -551,8 +555,12 @@
   - 当前默认参数为 `focusOffset = (0, 8, 0)`、`distance = 260`、`pitch = 55`、`yaw = 35`、`fieldOfView = 35`
   - `Camera.orthographic` 会被强制关闭，改为透视镜头
 - `GameplayBillboard` 当前用于关键 gameplay 视觉层
-  - `BaseCharObject/Text`、`CharBullet/Text`、`BulletTokenPickup/Glyph` 和 `BulletTokenPickup/Shadow` 都会对齐主相机朝向
+  - `Player/Text`、`BaseCharObject/Text`、`CharBullet/Text`、`BulletTokenPickup/Glyph` 和 `BulletTokenPickup/Shadow` 都会对齐主相机朝向
   - 环境文字和 `Cell3D` 墙地模型不使用 billboard
+- [`Assets/Scripts/Kernel/Player/PlayerVisualPresenter.cs`](Assets/Scripts/Kernel/Player/PlayerVisualPresenter.cs) 当前负责玩家主字与尖角地影布局
+  - `Player/Text` 只负责 billboard，`Player/Text/Glyph` 承载主字显示
+  - `Player/GroundShadow` 使用 `SpriteRenderer` 平放在 `XZ` 地面，并按玩家根 `BoxCollider` 底边自动重排
+  - 主字不会跟着玩家朝向一起转动；尖角地影会跟随玩家根节点 yaw 指向当前鼠标方向
 - `CameraOcclusionFader` 当前挂在 `Main Camera`
   - 每帧检测相机与玩家焦点之间的遮挡
   - 只处理 `CellData.SurfaceType == Wall` 的墙体模型

@@ -81,6 +81,7 @@
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\GameUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveManager.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\PlayerVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CompiledAttack.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
