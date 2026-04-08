@@ -27,6 +27,7 @@ namespace Kernel.UI
         [SerializeField] private RectTransform backPackGridPanel;
         [SerializeField] private RectTransform backPackGrid;
         [SerializeField] private BackPackGridSlotView slotPrefab;
+        [SerializeField] private BackPackAttackPreviewController attackPreviewController;
 
         private readonly List<BackPackGridSlotView> inventorySlots = new(InventorySlotCount);
         private readonly List<BackPackGridSlotView> spellBookSlots = new(SpellBookSlotCount);
@@ -93,12 +94,14 @@ namespace Kernel.UI
             if (!TryResolvePlayerBindings())
             {
                 ClearAllSlots();
+                attackPreviewController?.ClearPreview();
                 return;
             }
 
             currentInventory.EnsureInitialized();
             RefreshInventorySlots();
             PopulateSpellBookFromLoadout();
+            RefreshAttackPreview();
         }
 
         /// <summary>
@@ -369,6 +372,7 @@ namespace Kernel.UI
             backPackGridPanel ??= mainContent.Find("BackPack Grid Panel") as RectTransform;
             backPackGrid ??= backPackGridPanel?.Find("Grid") as RectTransform;
             slotPrefab ??= ResolveTemplateSlot();
+            attackPreviewController ??= GetComponent<BackPackAttackPreviewController>();
         }
 
         /// <summary>
@@ -546,6 +550,7 @@ namespace Kernel.UI
             }
 
             currentLoadout.SetTokens(nextTokens);
+            RefreshAttackPreview();
         }
 
         /// <summary>
@@ -657,6 +662,7 @@ namespace Kernel.UI
         private void ReleaseBindings()
         {
             CancelActiveDragSession();
+            attackPreviewController?.ClearPreview();
             if (currentInventory != null)
             {
                 currentInventory.Changed -= HandleInventoryChanged;
@@ -698,6 +704,7 @@ namespace Kernel.UI
         private void ClearAllSlots()
         {
             CancelActiveDragSession();
+            attackPreviewController?.ClearPreview();
             for (int i = 0; i < inventorySlots.Count; i++)
             {
                 inventorySlots[i].SetToken(null);
@@ -729,6 +736,22 @@ namespace Kernel.UI
             {
                 DestroyImmediate(child);
             }
+        }
+
+        /// <summary>
+        /// summary: 用当前绑定的玩家子弹 prefab 与最新编译结果刷新 Left Panel 里的离屏攻击预览。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void RefreshAttackPreview()
+        {
+            if (attackPreviewController == null)
+            {
+                return;
+            }
+
+            CompiledAttack compiledAttack = currentLoadout != null ? currentLoadout.CurrentCompiledAttack : null;
+            attackPreviewController.RefreshPreview(currentPlayer, compiledAttack);
         }
     }
 }

@@ -64,6 +64,7 @@
     <Compile Include="Assets\Editor\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\CharEnemyVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\CharBulletVisualPresenterTests.cs" />
+    <Compile Include="Assets\Editor\BackPackAttackPreviewControllerTests.cs" />
     <Compile Include="Assets\Editor\EnemyGeneratorTests.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
     <Compile Include="Assets\Editor\EnemyBulletTokenDropperTests.cs" />

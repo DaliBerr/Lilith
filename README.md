@@ -158,6 +158,9 @@
   - 根节点挂有 [`Assets/Scripts/Kernel/Enemy/CharGlyphPresenter.cs`](Assets/Scripts/Kernel/Enemy/CharGlyphPresenter.cs) 与 [`Assets/Scripts/Kernel/Player/PlayerVisualPresenter.cs`](Assets/Scripts/Kernel/Player/PlayerVisualPresenter.cs)
   - `Text/Glyph` 使用 `TMP_Text` 作为 billboard 主字，默认显示 `"火"`
   - `GroundShadow` 使用单张尖角地影 sprite 平放在 `XZ` 地面，并复用玩家根节点已有的朝鼠标旋转来指向目标方向
+- `Main.unity` 当前额外放置了一个正式的 `BackPackAttackPreviewRig`
+  - 根节点挂有 [`Assets/Scripts/Kernel/UI/BackPackAttackPreviewRig.cs`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewRig.cs)
+  - 当前位于远离主玩法区域的位置，作为背包左侧预览的唯一运行时 rig 真源；背包打开时会临时启用其 `PreviewCamera` 并把输出绑定到 UI 的 `RawImage`
 
 这意味着：
 
@@ -219,11 +222,15 @@
 - [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)
 - [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
+- [`Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs)
+- [`Assets/Scripts/Kernel/UI/BackPackAttackPreviewRig.cs`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewRig.cs)
+- [`Assets/Scripts/Kernel/UI/BackPackPreviewDummyEnemy.cs`](Assets/Scripts/Kernel/UI/BackPackPreviewDummyEnemy.cs)
 - [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs`](Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs)
 - [`Assets/Prefabs/UI/MainMenuUI.cs`](Assets/Prefabs/UI/MainMenuUI.cs)
 - [`Assets/Prefabs/UI/StartUp UI Prefab.prefab`](Assets/Prefabs/UI/StartUp%20UI%20Prefab.prefab)
 - [`Assets/Prefabs/UI/BackPackUI.prefab`](Assets/Prefabs/UI/BackPackUI.prefab)
+- [`Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab`](Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab)
 - [`Assets/Prefabs/UI/BackPack Grid Prefab.prefab`](Assets/Prefabs/UI/BackPack%20Grid%20Prefab.prefab)
 
 当前能力：
@@ -272,6 +279,11 @@
   - 若历史 loadout 超过 `5` 个 token，超出的部分会尝试回填到玩家背包库存
   - 每次 `Spell Book` 变更后，会按从左到右压缩非空槽位并实时写回 `AttackFormulaLoadout`
   - 背包区当前支持格内拖拽换位；拖拽任意非空槽位时会显示一个完整槽位的跟手预览
+  - `Left Panel/Preview Animation` 当前会显示一个离屏攻击预览；它复用玩家当前的 `CharBullet` prefab 和 `CompiledAttack`
+  - 预览通过 [`BackPackAttackPreviewController`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs) 解析 `Main` 场景里唯一的 [`BackPackAttackPreviewRig`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewRig.cs)，并把该 rig 的 `PreviewCamera` 输出直接绑定到 `Preview Render`
+  - 机位、地板、伪玩家、伪敌人编队、爆炸圈等布局由 [`Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab`](Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab) authoring，并由 `Main` 场景中的静态实例在运行时直接复用；控制器不会重写相机位置、旋转或 `orthographicSize`
+  - 左侧预览会循环演示 `Straight / Spread / Explosion` 的实际表现，并让 rig 内全部 [`BackPackPreviewDummyEnemy`](Assets/Scripts/Kernel/UI/BackPackPreviewDummyEnemy.cs) 一起参与重置、命中反馈和爆炸提示；主瞄准点默认优先取 `PreviewDummy-M`
+  - 当公式缺少 `Core` 或当前玩家缺少子弹 prefab 时，左侧会显示状态文案，而不是尝试发射无效预览
 
 ### 3. 地图网格 Authoring
 
@@ -548,6 +560,7 @@
   - 同时会基于主相机（或显式指定相机）把鼠标屏幕坐标投影到 `MapGridAuthoring.WorldPlaneY` 对应的 gameplay plane，并让角色沿 Y 轴朝向该点
   - `rotationSpeed <= 0` 时会立即转向，否则按给定角速度平滑转向
   - 按住鼠标左键时，会按 `fireInterval` 连续向当前点击地面方向发射 `CharBullet`
+  - 当前通过 `BulletPrefab` 只读属性暴露实际发射使用的子弹 prefab，供背包攻击预览复用同一份表现资源
   - 子弹瞄准优先使用真实地面/格子碰撞体命中点；命不中时回退到地图 gameplay plane，而不是玩家当前 root 高度
   - 当 `InBackPack` 或 `InPauseMenu` 状态存在时，会暂停移动、转向和开火；动态刚体玩家还会清零平面速度避免继续滑行
 - `PlayerFollowCamera` 当前挂在 `Start.unity` 的 `Main Camera`
@@ -652,6 +665,7 @@
   - 运行时会额外生成 `48` 个背包槽位到 `BackPack Grid Panel/Grid`
   - 背包区与 `Spell Book` 区支持拖拽交换
   - `Spell Book` 的非空槽位会被压缩成新的 `AttackFormulaLoadout`
+- `Left Panel` 会把最新 `AttackFormulaLoadout` 编译结果同步到 `Main` 场景里的静态 preview rig；进入 Prefab Mode 调整 [`BackPackAttackPreviewRig.prefab`](Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab) 后，运行时会复用同一套地板、伪玩家、伪敌人编队和正交相机布局
 - `CompiledAttack` 除了战斗语义之外，还会承载最终表现修饰
   - `DisplayText`
   - `ScaleMultiplier`

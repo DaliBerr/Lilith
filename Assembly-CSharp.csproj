@@ -97,6 +97,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PreTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Cell\CellData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackSpec.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewRig.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaCompiler.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
@@ -116,7 +117,6 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\CodeC.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\IsaveItem.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\GameplayBillboard.cs" />
-    <Compile Include="Assets\Prefabs\UI\MainMenuUI.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaLoadout.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogBootStrap.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerBulletTokenInventory.cs" />
@@ -136,6 +136,8 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveDefinition.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharGlyphPresenter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\Scribe.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BackPackPreviewDummyEnemy.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewController.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeValue.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogForwarder.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\InputActionManager.cs" />

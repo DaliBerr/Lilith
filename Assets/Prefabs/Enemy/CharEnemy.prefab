@@ -302,6 +302,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 9
       objectReference: {fileID: 0}
+    - target: {fileID: 4194609742540283869, guid: e19e371526e657f47a119f1f95594d76, type: 3}
+      propertyPath: targetCamera
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 4863808679746211634, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: defaultDisplayText
       value: "\u575A"

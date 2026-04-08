@@ -42,6 +42,13 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private int compiledAttackRevision = -1;
     private int lastLoggedCompileFailureRevision = int.MinValue;
 
+    /// <summary>
+    /// summary: 暴露当前玩家实际发射所使用的文字子弹 prefab，供背包预览等系统复用同一份表现资源。
+    /// param: 无
+    /// returns: 当前配置的文字子弹 prefab；未绑定时返回 null
+    /// </summary>
+    public CharBullet BulletPrefab => bulletPrefab;
+
     private void Awake()
     {
         TryAutoAssignLoadout();
