@@ -93,7 +93,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 响应开始按钮，通知 GlobalStartup 切到 Main 场景。
+        /// summary: 响应开始按钮，通知 GlobalStartup 进入“剧情介绍 -> Main 场景”的开始流程。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -116,29 +116,40 @@ namespace Kernel.UI
                 return;
             }
 
+            if (!GlobalStartup.Instance.RequestStartGame())
+            {
+                GameDebug.LogWarning("[StartUpMenuUI] Start request was ignored.");
+                return;
+            }
+
             hasRequestedStart = true;
             SetButtonsInteractable(false);
-            GlobalStartup.Instance.RequestEnterMainScene();
         }
 
         /// <summary>
-        /// summary: 响应加载按钮，当前仅保留占位并输出未实现提示。
+        /// summary: 响应加载按钮，弹出统一的“功能未实现”提示窗口。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void HandleLoadButtonClicked()
         {
-            GameDebug.LogWarning("[StartUpMenuUI] Load button clicked, but loading is not implemented yet.");
+            StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                ui,
+                nameof(StartUpMenuUI),
+                "加载功能暂未实现，后续会在这里接入存档读取流程。"));
         }
 
         /// <summary>
-        /// summary: 响应设置按钮，当前仅保留占位并输出未实现提示。
+        /// summary: 响应设置按钮，弹出统一的“功能未实现”提示窗口。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void HandleSettingsButtonClicked()
         {
-            GameDebug.LogWarning("[StartUpMenuUI] Settings button clicked, but options are not implemented yet.");
+            StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                ui,
+                nameof(StartUpMenuUI),
+                "设置功能暂未实现，后续会在这里接入选项配置。"));
         }
 
         /// <summary>

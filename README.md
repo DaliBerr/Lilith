@@ -7,7 +7,7 @@
 - 一个基于 `MapGridAuthoring` 的网格地图编辑工作流
 - 一套基础设施层 `Vocalith`，包含日志、本地化、UI 栈、事件总线、自定义 JSON 存档 `Scribe`
 - 一套轻量游戏状态系统 `Kernel.GameState`
-- 一套已经落地到 prefab 的业务 UI：`StartUpMenuUI`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`
+- 一套已经落地到 prefab 的业务 UI：`StartUpMenuUI`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`PopUpUIScreen`
 
 这份 README 的目标是说明当前仓库里已经存在什么、在哪里，以及 agent 应该从哪里开始读，同时还有未来的规划。
 
@@ -21,7 +21,7 @@
   - [`Assets/Scripts/Vocalith`](Assets/Scripts/Vocalith)
   - [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI)（当前业务 UI 运行时代码）
   - [`Assets/Prefabs/UI`](Assets/Prefabs/UI)（当前业务 UI prefab 资源）
-- Editor 工具与测试位于 [`Assets/Editor`](Assets/Editor)
+- Editor 工具位于 [`Assets/Editor`](Assets/Editor)，EditMode 测试位于 [`Assets/Editor/Test`](Assets/Editor/Test)
 - 当前仓库里没有 `asmdef/asmref`
   - 运行时代码默认编进 `Assembly-CSharp`
   - Editor 代码默认编进 `Assembly-CSharp-Editor`
@@ -32,7 +32,7 @@
 
 - 涉及 `Scene`、`Prefab`、`GameObject`、`Component`、`Console`、`Test`、`Screenshot`、`Build`、`Package`、`Editor` 状态时，优先调用 `Unity MCP`
 - 先读 `mcpforunity://editor/state`，确认 `ready_for_tools`、编译状态、活动场景，再决定读哪些文件
-- 不要为了确认对象是否存在、组件是否挂载、场景是否激活、Console 是否报错，优先去手读 `.unity` / `.prefab` YAML 文本
+- 不要为了确认对象是否存在、组件是否挂载、场景是否激活、Console 是否报错而不必要的使用`unity MCP`，优先去手读 `.unity` / `.prefab` YAML 文本
 - 纯 C# 业务逻辑修改仍以 `Assets/**/Scripts` 源码为主；修改后再通过 `Unity MCP` 检查编译、Console 和场景接线结果
 - 只有在 `Unity MCP` 不可用，或要处理 `GUID` / `Missing Script` / `Missing Reference` / YAML merge / 文本级 diff 时，才回退到直接读 `.unity`、`.prefab`、`.meta`
 
@@ -46,8 +46,6 @@
 - 场景截图与视觉自检：`manage_camera`
 - 批量执行编辑器操作：`batch_execute`
 
-## 未来规划
-- 这个项目未来希望发展成一款基于文字构筑的俯视角肉鸽射击游戏。核心思路是把“文字”本身作为战斗系统的一部分，而不是单纯的视觉表现：玩家在战斗中击败敌人后，可以收集掉落的文字词元或预组好的词包，并按照固定语法将它们组合成自己的攻击方式。例如，不同的核心词、行为词和数值词可以共同决定子弹的属性、飞行方式和攻击范围，从而形成明显不同的 build。整体目标是让玩家在每一局中不断通过拾取、替换和重组文字来“写出”自己的战斗风格，并在局外通过永久解锁来逐步扩展可用词元、构筑深度和开局选择，使游戏兼具即时战斗的爽感、组合发现的乐趣，以及肉鸽式的成长循环。
 
 ## 建议阅读顺序
 
@@ -82,7 +80,7 @@
 | `Kernel` | 当前项目的业务语义层 | [`Assets/Scripts/Kernel`](Assets/Scripts/Kernel) |
 | `Vocalith` | 通用基础设施层：日志、UI、存档、本地化、事件、工具类 | [`Assets/Scripts/Vocalith`](Assets/Scripts/Vocalith) |
 | 业务 UI 脚本与 prefab | 具体 Screen/界面逻辑与资源 | [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI) + [`Assets/Prefabs/UI`](Assets/Prefabs/UI) |
-| Editor | 网格生成、替换、测试 | [`Assets/Editor`](Assets/Editor) |
+| Editor | 网格生成、替换工具与 EditMode 测试 | [`Assets/Editor`](Assets/Editor) + [`Assets/Editor/Test`](Assets/Editor/Test) |
 
 当前层次关系可以理解为：
 
@@ -116,8 +114,10 @@
    - [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 通过 `[UIPrefab("Assets/Prefabs/UI/StartUp UI Prefab")]` 实例化 [`Assets/Prefabs/UI/StartUp UI Prefab.prefab`](Assets/Prefabs/UI/StartUp%20UI%20Prefab.prefab)
    - `StartUpMenuUI` 自己维护 `InMainMenu` 状态，并接管开始 / 加载 / 设置 / 退出按钮
 8. 点击 `Start`
-   - [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 会调用 [`GlobalStartup.RequestEnterMainScene()`](Assets/Scripts/GlobalStartup.cs)
-   - 先清理当前 UI 栈并卸载启动菜单，再切到 [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
+   - [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 会调用 [`GlobalStartup.RequestStartGame()`](Assets/Scripts/GlobalStartup.cs)
+   - [`Assets/Scripts/Kernel/UI/StoryTellerUIScreen.cs`](Assets/Scripts/Kernel/UI/StoryTellerUIScreen.cs) 会实例化 [`Assets/Prefabs/UI/Storyteller Panel.prefab`](Assets/Prefabs/UI/Storyteller%20Panel.prefab)，只负责订阅剧情快照并显示正文
+   - [`Assets/Scripts/Kernel/UI/StorySequenceParser.cs`](Assets/Scripts/Kernel/UI/StorySequenceParser.cs) 会作为持久化运行时服务，从 Addressables 地址 `Assets/Data/Story/Introduction` 读取剧情 JSON，按 `entries[].text` 或带可选 `speakerId/displayName/displayMode/text` 的协议逐句逐字播放；按空格只会立刻补完当前句，句末停留后自动进入下一句
+   - 最后一条文本播放完成后，才会调用 [`GlobalStartup.RequestEnterMainScene()`](Assets/Scripts/GlobalStartup.cs) 清理当前 UI 栈并切到 [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
 
 [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 当前在 `Main` 场景里只负责：
 
@@ -148,8 +148,8 @@
   - 根节点当前挂的是 [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs)
   - 该界面通过 `[UIPrefab("Assets/Prefabs/UI/StartUp UI Prefab")]` 进入 UI 栈
   - 四个按钮分别对应 `Start`、`Load`、`Option`、`Quit`
-  - `Start` 当前会调用 `GlobalStartup.RequestEnterMainScene()`，并在切场景前随 UI 栈清空一起卸载
-  - `Load` 和 `Option` 当前保留占位，只输出未实现日志
+  - `Start` 当前会调用 `GlobalStartup.RequestStartGame()`，先显示 [`Assets/Prefabs/UI/Storyteller Panel.prefab`](Assets/Prefabs/UI/Storyteller%20Panel.prefab)，再由 [`Assets/Scripts/Kernel/UI/StorySequenceParser.cs`](Assets/Scripts/Kernel/UI/StorySequenceParser.cs) 播放世界观介绍，播放结束后切到 `Main`
+  - `Load` 和 `Option` 当前会弹出通用信息弹窗，提示对应功能尚未实现
   - `Quit` 当前会在构建中直接退出应用，在 Unity Editor 中停止 Play
 - `Main.unity` 当前保留一个显式 `Startup` 根对象
   - 当前挂的是 [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
@@ -222,6 +222,7 @@
 - [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)
 - [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)
+- [`Assets/Scripts/Kernel/UI/PopUpUIScreen.cs`](Assets/Scripts/Kernel/UI/PopUpUIScreen.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackAttackPreviewRig.cs`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewRig.cs)
 - [`Assets/Scripts/Kernel/UI/BackPackPreviewDummyEnemy.cs`](Assets/Scripts/Kernel/UI/BackPackPreviewDummyEnemy.cs)
@@ -230,6 +231,7 @@
 - [`Assets/Prefabs/UI/MainMenuUI.cs`](Assets/Prefabs/UI/MainMenuUI.cs)
 - [`Assets/Prefabs/UI/StartUp UI Prefab.prefab`](Assets/Prefabs/UI/StartUp%20UI%20Prefab.prefab)
 - [`Assets/Prefabs/UI/BackPackUI.prefab`](Assets/Prefabs/UI/BackPackUI.prefab)
+- [`Assets/Prefabs/UI/Info Popup.prefab`](Assets/Prefabs/UI/Info%20Popup.prefab)
 - [`Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab`](Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab)
 - [`Assets/Prefabs/UI/BackPack Grid Prefab.prefab`](Assets/Prefabs/UI/BackPack%20Grid%20Prefab.prefab)
 
@@ -261,17 +263,34 @@
     - `Load`
     - `Option`
     - `Quit`
-  - `Start` 会调用 [`GlobalStartup.RequestEnterMainScene()`](Assets/Scripts/GlobalStartup.cs)
-  - `Load` 和 `Option` 当前是保留占位
+  - `Start` 会调用 [`GlobalStartup.RequestStartGame()`](Assets/Scripts/GlobalStartup.cs)
+  - `Load` 和 `Option` 当前会弹出 [`PopUpUIScreen`](Assets/Scripts/Kernel/UI/PopUpUIScreen.cs) 提示功能尚未实现
   - `Quit` 当前直接退出游戏（Editor 下停止 Play）
+- `StoryTellerUIScreen`
+  - 挂在 [`Assets/Prefabs/UI/Storyteller Panel.prefab`](Assets/Prefabs/UI/Storyteller%20Panel.prefab) 根节点
+  - 当前只负责绑定 `TMP_Text`、订阅 [`Assets/Scripts/Kernel/UI/StorySequenceParser.cs`](Assets/Scripts/Kernel/UI/StorySequenceParser.cs) 的剧情快照，并按 `text + maxVisibleCharacters` 刷新正文显示
+- `StorySequenceParser`
+  - 作为跨场景保留的运行时剧情播放服务，负责 Addressables 文本加载、JSON 解析、逐字播放、空格补完当前句、句间停留和完成回调
+  - 默认会从 Addressables 地址 `Assets/Data/Story/Introduction` 读取 [`Assets/Data/Story/Introduction.json`](Assets/Data/Story/Introduction.json)
+  - 文本协议当前支持 `{ "entries": [{ "text": "..." }] }`，也兼容可选 `speakerId/displayName/displayMode/text` 字段，为后续多人对话扩展预留数据位
+  - `displayMode` 当前支持 `replace` 和 `append`
+  - `replace` 会从当前句开始覆盖显示；`append` 会保留上一段已完成文本，并在下一行继续逐字显示当前句，便于在 JSON 里显式控制“何时开始清屏重写”
+  - 播放失败、解析失败或资源缺失时会记日志并直接继续进入 `Main`
 - `MainUIScreen`
-  - 作为战斗 HUD 模板，当前暴露血条区和暂停按钮引用
+  - 作为战斗 HUD 模板，当前暴露血条区、顶部 `Spell Panel` 和暂停按钮引用
+  - `TopPanel/Spell Panel` 会复用 prefab 中已有的 `BackPack Grid Prefab` 子节点作为模板，并在运行时按 `AttackFormulaLoadout` 的非空 token 顺序生成只读展示槽位
   - 顶部 `PauseButton` 当前会通过 `UIInputRouter` 打开 `PauseUIScreen`
 - `PauseUIScreen`
   - 作为暂停菜单模板，当前暴露遮罩、主面板和三个按钮引用
   - `Resume` 当前会通过 [`UIInputRouter`](Assets/Scripts/Kernel/UI/UIInputRouter.cs) 关闭暂停菜单
-  - `Option` 当前保留占位，只输出未实现日志
+  - `Option` 当前会弹出 [`PopUpUIScreen`](Assets/Scripts/Kernel/UI/PopUpUIScreen.cs) 提示功能尚未实现
   - `Back` 当前会清空战斗 UI 栈并切回 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity)
+- `PopUpUIScreen`
+  - 挂在 [`Assets/Prefabs/UI/Info Popup.prefab`](Assets/Prefabs/UI/Info%20Popup.prefab) 根节点
+  - 当前会自动绑定正文文本、顶部关闭按钮和底部 `Confirm / Close` 两个按钮
+  - 对外提供统一 `Configure` / `SetInfoText` / `SetConfirmButton` / `SetCloseButton` 接口，便于复用成通用信息弹窗
+  - [`Assets/Scripts/Kernel/UI/PopUpUIUtility.cs`](Assets/Scripts/Kernel/UI/PopUpUIUtility.cs) 当前统一封装了弹窗复用与提示文案写入逻辑，供启动菜单和暂停菜单复用
+  - 关闭时会兼容自己被作为 `Screen` 或 `Modal` 打开两种情况，并清理 `PopUp` 状态
 - `BackPackUIScreen`
   - 运行时会在 `BackPack Grid Panel/Grid` 下固定生成 `48` 个背包槽位
   - `Spell Book` 当前在 prefab 内预放 `5` 个静态槽位，并通过 [`BackPackGridSlotView`](Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs) 接收拖拽
@@ -295,7 +314,7 @@
 - [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
 - [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
 - [`Assets/Editor/MapGridMigrationUtility.cs`](Assets/Editor/MapGridMigrationUtility.cs)
-- [`Assets/Editor/MapGridAuthoringTests.cs`](Assets/Editor/MapGridAuthoringTests.cs)
+- [`Assets/Editor/Test/MapGridAuthoringTests.cs`](Assets/Editor/Test/MapGridAuthoringTests.cs)
 
 当前能力：
 
@@ -830,8 +849,8 @@
   - `BuildingDatabase.LoadAllAsync`
   - `ItemDatabase.LoadAllAsync`
   - 其他全局系统初始化
-- [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 当前只真正实现了 `Start` 和 `Quit`
-  - `Load` / `Option` 仍是预留入口
+- [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 的 `Load` / `Option` 当前只提供未实现提示弹窗
+  - 还没有真正接入读档流程或设置界面
 - 当前仓库中没有看到顶层 Save/Load 管理器
   - 只看到了 `Scribe` 基础设施和 `SaveStatus` 适配器
   - 没看到 `PolymorphRegistry.Register<SaveStatus>(...)` 之类的注册调用

@@ -15,13 +15,19 @@ namespace Kernel
     /// </summary>
     public sealed class GlobalStartup : MonoBehaviour
     {
+        private const string DefaultStartStoryAddress = "Assets/Data/Story/Introduction";
         public static GlobalStartup Instance { get; private set; }
 
         private const string MainSceneName = "Main";
 
         [SerializeField] private bool isEnableDevMode = true;
+        [Header("Start Story")]
+        [SerializeField] private string startStoryAddress = DefaultStartStoryAddress;
+        [SerializeField] [Min(0f)] private float startStoryCharactersPerSecond = 24f;
+        [SerializeField] [Min(0f)] private float startStoryLineHoldSeconds = 1.2f;
 
         private bool isBootCompleted;
+        private bool isStartGameFlowRequested;
         private bool isLoadingMainScene;
         private bool hasHandedOffToMainScene;
 
@@ -51,6 +57,8 @@ namespace Kernel
 
         private void OnDestroy()
         {
+            UnsubscribeFromStartStorySequence();
+
             if (Instance == this)
             {
                 Instance = null;
@@ -113,6 +121,23 @@ namespace Kernel
         }
 
         /// <summary>
+        /// summary: 响应启动菜单的开始请求，先显示剧情介绍界面并启动剧情服务；若任一步失败则直接回退到 Main 场景。
+        /// param: 无
+        /// returns: 请求被接受并开始执行时返回 true，否则返回 false
+        /// </summary>
+        public bool RequestStartGame()
+        {
+            if (!isBootCompleted || isStartGameFlowRequested || isLoadingMainScene || hasHandedOffToMainScene)
+            {
+                return false;
+            }
+
+            isStartGameFlowRequested = true;
+            StartCoroutine(StartGameFlowCo());
+            return true;
+        }
+
+        /// <summary>
         /// summary: 响应启动菜单的开始请求，卸载启动菜单后切到 Main 场景。
         /// param: 无
         /// returns: 无
@@ -125,6 +150,56 @@ namespace Kernel
             }
 
             StartCoroutine(LoadMainSceneCo());
+        }
+
+        /// <summary>
+        /// summary: 在 StartUp 菜单后压入剧情介绍界面，并交给 StorySequenceParser 播放默认开场剧情。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator StartGameFlowCo()
+        {
+            if (UIManager.Instance == null)
+            {
+                GameDebug.LogError("[GlobalStartup] UIManager is missing. Story intro will be skipped.");
+                RequestEnterMainScene();
+                yield break;
+            }
+
+            yield return UIManager.Instance.PushScreenAndWait<StoryTellerUIScreen>();
+
+            if (UIManager.Instance.GetTopScreen() is not StoryTellerUIScreen)
+            {
+                GameDebug.LogWarning("[GlobalStartup] StoryTellerUIScreen could not be shown. Falling back to Main scene.");
+                RequestEnterMainScene();
+                yield break;
+            }
+
+            StorySequenceParser parser = StorySequenceParser.Instance;
+            if (parser == null)
+            {
+                GameDebug.LogError("[GlobalStartup] StorySequenceParser is missing. Story intro will be skipped.");
+                RequestEnterMainScene();
+                yield break;
+            }
+
+            UnsubscribeFromStartStorySequence();
+            parser.SequenceCompleted += HandleStartStorySequenceCompleted;
+
+            StorySequenceRequest request = new()
+            {
+                Address = string.IsNullOrWhiteSpace(startStoryAddress) ? DefaultStartStoryAddress : startStoryAddress.Trim(),
+                CharactersPerSecond = startStoryCharactersPerSecond,
+                LineHoldSeconds = startStoryLineHoldSeconds,
+                AllowDefaultSkipInput = true
+            };
+
+            if (!parser.TryPlay(request, out string errorMessage))
+            {
+                GameDebug.LogWarning($"[GlobalStartup] Failed to start story intro: {errorMessage}");
+                UnsubscribeFromStartStorySequence();
+                RequestEnterMainScene();
+            }
         }
 
         /// <summary>
@@ -193,6 +268,7 @@ namespace Kernel
         private IEnumerator LoadMainSceneCo()
         {
             isLoadingMainScene = true;
+            UnsubscribeFromStartStorySequence();
 
             if (StatusController.HasStatus(StatusList.InMainMenuStatus))
             {
@@ -239,6 +315,49 @@ namespace Kernel
             }
 
             isLoadingMainScene = false;
+        }
+
+        /// <summary>
+        /// summary: 接收开场剧情的完成结果；当前只要剧情正常结束、失败或取消，都会继续进入 Main 场景。
+        /// param name="result": 开场剧情的结束结果
+        /// returns: 无
+        /// </summary>
+        private void HandleStartStorySequenceCompleted(StorySequenceResult result)
+        {
+            UnsubscribeFromStartStorySequence();
+
+            if (result.Status == StorySequenceCompletionStatus.Failed)
+            {
+                GameDebug.LogWarning($"[GlobalStartup] Story intro failed: {result.ErrorMessage}");
+            }
+            else if (result.Status == StorySequenceCompletionStatus.Cancelled)
+            {
+                GameDebug.LogWarning("[GlobalStartup] Story intro was cancelled. Falling back to Main scene.");
+            }
+
+            RequestEnterMainScene();
+        }
+
+        /// <summary>
+        /// summary: 清理对开场剧情完成事件的订阅，避免 GlobalStartup 销毁后残留委托。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private static void UnsubscribeFromStartStorySequence()
+        {
+            GlobalStartup startup = Instance;
+            if (startup == null)
+            {
+                return;
+            }
+
+            StorySequenceParser parser = StorySequenceParser.Instance;
+            if (parser == null)
+            {
+                return;
+            }
+
+            parser.SequenceCompleted -= startup.HandleStartStorySequenceCompleted;
         }
     }
 }

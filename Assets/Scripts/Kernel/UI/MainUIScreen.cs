@@ -1,13 +1,16 @@
+using System.Collections.Generic;
+using Kernel.Bullet;
 using Kernel.GameState;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Vocalith.Logging;
 using Vocalith.UI;
 
 namespace Kernel.UI
 {
     /// <summary>
-    /// MainUI 的运行时模板脚本，只负责暴露 HUD 常用引用与状态入口。
+    /// MainUI 的运行时模板脚本，负责暴露 HUD 常用引用，并同步顶部 spell panel 的只读展示。
     /// </summary>
     [DisallowMultipleComponent]
     [UIPrefab("Assets/Prefabs/UI/MainUI")]
@@ -19,9 +22,16 @@ namespace Kernel.UI
         [SerializeField] private TMP_Text healthTitleText;
         [SerializeField] private RectTransform healthBarRoot;
         [SerializeField] private PlayerHealthBarController healthBarController;
+        [SerializeField] private RectTransform spellPanel;
+        [SerializeField] private BackPackGridSlotView spellSlotTemplate;
         [SerializeField] private RectTransform pauseButtonRoot;
         [SerializeField] private Button pauseButton;
         [SerializeField] private TMP_Text pauseButtonText;
+
+        private readonly List<BackPackGridSlotView> runtimeSpellSlots = new();
+        private PlayerPlaneMovement currentPlayer;
+        private AttackFormulaLoadout currentLoadout;
+        private bool hasLoggedMissingSpellTemplate;
 
         public override Status currentStatus { get; } = StatusList.PlayingStatus;
 
@@ -30,6 +40,8 @@ namespace Kernel.UI
         public TMP_Text HealthTitleText => healthTitleText;
         public RectTransform HealthBarRoot => healthBarRoot;
         public PlayerHealthBarController HealthBarController => healthBarController;
+        public RectTransform SpellPanel => spellPanel;
+        public BackPackGridSlotView SpellSlotTemplate => spellSlotTemplate;
         public RectTransform PauseButtonRoot => pauseButtonRoot;
         public Button PauseButton => pauseButton;
         public TMP_Text PauseButtonText => pauseButtonText;
@@ -38,11 +50,25 @@ namespace Kernel.UI
         {
             TryAutoBindReferences();
             BindButtonCallbacks();
+            RefreshSpellPanel();
+        }
+
+        protected override void OnBeforeShow()
+        {
+            RefreshSpellPanel();
+        }
+
+        protected override void OnAfterHide()
+        {
+            ReleaseLoadoutBinding();
+            ClearRuntimeSpellSlots();
         }
 
         private void OnDestroy()
         {
             UnbindButtonCallbacks();
+            ReleaseLoadoutBinding();
+            ClearRuntimeSpellSlots();
         }
 
         private void OnValidate()
@@ -79,16 +105,20 @@ namespace Kernel.UI
                 }
             }
 
-            pauseButtonRoot ??= ResolvePauseButtonRoot(topPanel);
-            if (pauseButtonRoot == null)
+            spellPanel ??= topPanel.Find("Spell Panel") as RectTransform;
+            if (spellPanel != null && (spellSlotTemplate == null || !spellSlotTemplate.transform.IsChildOf(spellPanel)))
             {
-                return;
+                spellSlotTemplate = ResolveSpellSlotTemplate(spellPanel);
             }
 
-            pauseButton ??= pauseButtonRoot.GetComponentInChildren<Button>(true);
-            if (pauseButton != null)
+            pauseButtonRoot ??= ResolvePauseButtonRoot(topPanel);
+            if (pauseButtonRoot != null)
             {
-                pauseButtonText ??= pauseButton.GetComponentInChildren<TMP_Text>(true);
+                pauseButton ??= pauseButtonRoot.GetComponentInChildren<Button>(true);
+                if (pauseButton != null)
+                {
+                    pauseButtonText ??= pauseButton.GetComponentInChildren<TMP_Text>(true);
+                }
             }
         }
 
@@ -134,6 +164,180 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 重新解析玩家 loadout，并按当前 token 顺序刷新 HUD 顶部的 Spell Panel。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void RefreshSpellPanel()
+        {
+            TryAutoBindReferences();
+            if (!PrepareSpellSlotTemplate())
+            {
+                ClearRuntimeSpellSlots();
+                return;
+            }
+
+            if (!TryResolveLoadoutBinding())
+            {
+                ClearRuntimeSpellSlots();
+                return;
+            }
+
+            RebuildSpellSlots();
+        }
+
+        /// <summary>
+        /// summary: 使用 MainUI prefab 中预放的首个 BackPack Grid Prefab 作为 runtime 克隆模板。
+        /// param: 无
+        /// returns: 找到并完成初始化时返回 true
+        /// </summary>
+        private bool PrepareSpellSlotTemplate()
+        {
+            if (spellPanel == null)
+            {
+                return false;
+            }
+
+            spellSlotTemplate ??= ResolveSpellSlotTemplate(spellPanel);
+            if (spellSlotTemplate == null)
+            {
+                if (!hasLoggedMissingSpellTemplate)
+                {
+                    GameDebug.LogWarning("[MainUIScreen] Spell Panel is missing a BackPackGridSlotView template child.");
+                    hasLoggedMissingSpellTemplate = true;
+                }
+
+                return false;
+            }
+
+            hasLoggedMissingSpellTemplate = false;
+            spellSlotTemplate.InitializeDisplayOnly(BackPackSlotArea.SpellBook);
+            spellSlotTemplate.SetToken(null);
+            if (spellSlotTemplate.gameObject.activeSelf)
+            {
+                spellSlotTemplate.gameObject.SetActive(false);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 解析场景中的玩家与 AttackFormulaLoadout，并维护 HUD 订阅的事件绑定。
+        /// param: 无
+        /// returns: 成功拿到可观察的 loadout 时返回 true
+        /// </summary>
+        private bool TryResolveLoadoutBinding()
+        {
+            PlayerPlaneMovement resolvedPlayer = FindAnyObjectByType<PlayerPlaneMovement>();
+            if (resolvedPlayer == null)
+            {
+                ReleaseLoadoutBinding();
+                return false;
+            }
+
+            AttackFormulaLoadout resolvedLoadout = resolvedPlayer.GetComponent<AttackFormulaLoadout>();
+            if (resolvedLoadout == null)
+            {
+                ReleaseLoadoutBinding();
+                return false;
+            }
+
+            currentPlayer = resolvedPlayer;
+            if (currentLoadout == resolvedLoadout)
+            {
+                return true;
+            }
+
+            if (currentLoadout != null)
+            {
+                currentLoadout.Changed -= HandleLoadoutChanged;
+            }
+
+            currentLoadout = resolvedLoadout;
+            currentLoadout.Changed += HandleLoadoutChanged;
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 释放当前 loadout 事件订阅，避免界面销毁后继续收到刷新回调。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ReleaseLoadoutBinding()
+        {
+            if (currentLoadout != null)
+            {
+                currentLoadout.Changed -= HandleLoadoutChanged;
+            }
+
+            currentPlayer = null;
+            currentLoadout = null;
+        }
+
+        /// <summary>
+        /// summary: 按当前 loadout 中的非空 token 顺序重建 Spell Panel 的可见槽位，不显示空占位。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void RebuildSpellSlots()
+        {
+            ClearRuntimeSpellSlots();
+            if (spellPanel == null || spellSlotTemplate == null || currentLoadout == null)
+            {
+                return;
+            }
+
+            IReadOnlyList<BaseTokenData> tokens = currentLoadout.Tokens;
+            if (tokens == null)
+            {
+                return;
+            }
+
+            int visibleIndex = 0;
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                BaseTokenData token = tokens[i];
+                if (token == null)
+                {
+                    continue;
+                }
+
+                BackPackGridSlotView slotView = Instantiate(spellSlotTemplate, spellPanel);
+                slotView.gameObject.SetActive(true);
+                slotView.name = $"Spell Slot {visibleIndex + 1:D2}";
+                slotView.InitializeDisplayOnly(BackPackSlotArea.SpellBook);
+                slotView.SetToken(token);
+                runtimeSpellSlots.Add(slotView);
+                visibleIndex++;
+            }
+        }
+
+        /// <summary>
+        /// summary: 清理 Spell Panel 下当前由 MainUIScreen 运行时克隆出的槽位实例。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ClearRuntimeSpellSlots()
+        {
+            for (int i = runtimeSpellSlots.Count - 1; i >= 0; i--)
+            {
+                DestroyChild(runtimeSpellSlots[i] != null ? runtimeSpellSlots[i].gameObject : null);
+            }
+
+            runtimeSpellSlots.Clear();
+        }
+
+        /// <summary>
+        /// summary: 当 loadout 内容被背包或其他系统改写后，立即刷新 HUD 顶部展示。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HandleLoadoutChanged()
+        {
+            RefreshSpellPanel();
+        }
+
+        /// <summary>
         /// 兼容当前 MainUI prefab 中已有的暂停按钮节点命名。
         /// </summary>
         /// <param name="root">顶部面板根节点。</param>
@@ -147,6 +351,52 @@ namespace Kernel.UI
 
             return root.Find("Pause Btn") as RectTransform
                 ?? root.Find("Pause Button") as RectTransform;
+        }
+
+        /// <summary>
+        /// summary: 解析 Spell Panel 下首个带 BackPackGridSlotView 的子节点，作为运行时模板来源。
+        /// param: root Spell Panel 根节点
+        /// returns: 可复用的模板槽位；未找到时返回 null
+        /// </summary>
+        private static BackPackGridSlotView ResolveSpellSlotTemplate(Transform root)
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < root.childCount; i++)
+            {
+                BackPackGridSlotView slotView = root.GetChild(i).GetComponent<BackPackGridSlotView>();
+                if (slotView != null)
+                {
+                    return slotView;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// summary: 统一销毁一个运行时 spell 槽位实例，兼容 Play Mode 与 Edit Mode。
+        /// param: child 需要销毁的子节点对象
+        /// returns: 无
+        /// </summary>
+        private static void DestroyChild(GameObject child)
+        {
+            if (child == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(child);
+            }
+            else
+            {
+                DestroyImmediate(child);
+            }
         }
     }
 }

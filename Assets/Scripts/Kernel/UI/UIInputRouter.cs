@@ -138,7 +138,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 供 PauseUI 的设置按钮调用；当前先保留统一的未实现提示入口。
+        /// summary: 供 PauseUI 的设置按钮调用；当前弹出统一的未实现提示窗口。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -149,7 +149,15 @@ namespace Kernel.UI
                 return;
             }
 
-            GameDebug.LogWarning("[UIInputRouter] Pause options is not implemented yet.");
+            if (!TryGetAvailableUIManager(out UIManager uiManager))
+            {
+                return;
+            }
+
+            StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                uiManager,
+                nameof(UIInputRouter),
+                "设置功能暂未实现，后续会在这里接入暂停菜单选项配置。"));
         }
 
         /// <summary>

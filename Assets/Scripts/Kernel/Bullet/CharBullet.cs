@@ -1278,12 +1278,13 @@ public sealed class CharBullet : MonoBehaviour
             return false;
         }
 
+        string targetName = targetRoot != null ? targetRoot.name : "<destroyed>";
         float previousHealth = enemy.CurrentHealth;
         if (!enemy.TryApplyDamage(Damage, out float remainingHealth, out bool isDead))
         {
             GameDebug.LogFormat(
                 "[CharBullet] Enemy target='{0}' ignored {1} damage={2} health={3}/{4}",
-                targetRoot.name,
+                targetName,
                 damageSource,
                 Damage,
                 previousHealth,
@@ -1302,7 +1303,7 @@ public sealed class CharBullet : MonoBehaviour
 
         if (isDead)
         {
-            GameDebug.LogFormat("[CharBullet] Enemy target='{0}' died from {1}.", targetRoot.name, damageSource);
+            GameDebug.LogFormat("[CharBullet] Enemy target='{0}' died from {1}.", targetName, damageSource);
         }
 
         return true;

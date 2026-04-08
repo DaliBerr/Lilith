@@ -73,6 +73,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\UIInputRouter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualLibrary.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\PopUpUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackProjectileEmitter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyBulletTokenDropper.cs" />
@@ -100,6 +101,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewRig.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaCompiler.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\StorySequenceParser.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenModifierExpressionUtility.cs" />
@@ -139,7 +141,9 @@
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackPreviewDummyEnemy.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewController.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeValue.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\PopUpUIUtility.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogForwarder.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\StoryTellerUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\InputActionManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\StatusSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScale.cs" />

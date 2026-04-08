@@ -18,22 +18,38 @@ MonoBehaviour:
   - m_GUID: 4a42d39cd166bb84e84f9e40ef030262
     m_Address: Assets/Prefabs/UI/BackPackUI
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b774ac9e1a27d54d8a0597f14c48db6
+    m_Address: Assets/Prefabs/UI/Storyteller Panel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 66817302c64824a449ca5dbe744683bc
     m_Address: Assets/Prefabs/UI/MainUI
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 82408dff0a3e3ff448f8f37cea4da3da
+    m_Address: Assets/Prefabs/UI/Info Popup
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3e902a6fc9d0054f9222a9300dffe8b
     m_Address: Assets/Prefabs/UI/PauseUI
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - UI
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d56f5ebd3341ee44a9db06a9fc20aec1
     m_Address: Assets/Prefabs/UI/StartUp UI Prefab
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - UI
     FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: a97f81f4f974e444f9502500f16d9321, type: 2}

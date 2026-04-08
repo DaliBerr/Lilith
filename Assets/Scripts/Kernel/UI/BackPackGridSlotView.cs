@@ -34,6 +34,7 @@ namespace Kernel.UI
         private BackPackUIScreen owner;
         private BaseTokenData token;
         private bool isDragging;
+        private bool isDisplayOnly;
         private BackPackSlotArea area;
         private int slotIndex;
         private RectTransform rectTransform;
@@ -46,13 +47,13 @@ namespace Kernel.UI
         private void Awake()
         {
             EnsureLocalReferences();
+            SetRaycastBlocking(true);
             ApplyVisualState();
         }
 
         private void OnValidate()
         {
             EnsureLocalReferences();
-            ApplyVisualState();
         }
 
         /// <summary>
@@ -64,9 +65,30 @@ namespace Kernel.UI
         /// </summary>
         public void Initialize(BackPackUIScreen ownerScreen, BackPackSlotArea slotArea, int index)
         {
+            EnsureLocalReferences();
             owner = ownerScreen;
             area = slotArea;
             slotIndex = index;
+            isDisplayOnly = false;
+            isDragging = false;
+            SetRaycastBlocking(true);
+            ApplyVisualState();
+        }
+
+        /// <summary>
+        /// summary: 把槽位切到只读展示模式，供 Main HUD 等非拖拽场景复用同一份 prefab。
+        /// param: slotArea 当前槽位需要显示成的区域风格
+        /// returns: 无
+        /// </summary>
+        public void InitializeDisplayOnly(BackPackSlotArea slotArea)
+        {
+            EnsureLocalReferences();
+            owner = null;
+            area = slotArea;
+            slotIndex = -1;
+            isDisplayOnly = true;
+            isDragging = false;
+            SetRaycastBlocking(false);
             ApplyVisualState();
         }
 
@@ -77,6 +99,7 @@ namespace Kernel.UI
         /// </summary>
         public void SetToken(BaseTokenData value)
         {
+            EnsureLocalReferences();
             token = value;
             RefreshText();
             ApplyVisualState();
@@ -84,7 +107,7 @@ namespace Kernel.UI
 
         public void OnBeginDrag(PointerEventData eventData)
         {
-            if (owner == null || token == null)
+            if (isDisplayOnly || owner == null || token == null)
             {
                 return;
             }
@@ -97,17 +120,32 @@ namespace Kernel.UI
 
         public void OnDrag(PointerEventData eventData)
         {
+            if (isDisplayOnly)
+            {
+                return;
+            }
+
             owner?.NotifySlotDrag(this, eventData);
         }
 
         public void OnEndDrag(PointerEventData eventData)
         {
+            if (isDisplayOnly)
+            {
+                return;
+            }
+
             ResetDragPresentation();
             owner?.NotifySlotEndDrag(this);
         }
 
         public void OnDrop(PointerEventData eventData)
         {
+            if (isDisplayOnly)
+            {
+                return;
+            }
+
             owner?.NotifySlotDrop(this);
         }
 
@@ -118,6 +156,7 @@ namespace Kernel.UI
         /// </summary>
         public void ResetDragPresentation()
         {
+            EnsureLocalReferences();
             isDragging = false;
             SetRaycastBlocking(true);
             ApplyVisualState();
@@ -193,7 +232,15 @@ namespace Kernel.UI
                 return;
             }
 
+            if (isDisplayOnly)
+            {
+                canvasGroup.blocksRaycasts = false;
+                canvasGroup.interactable = false;
+                return;
+            }
+
             canvasGroup.blocksRaycasts = shouldBlock;
+            canvasGroup.interactable = true;
         }
     }
 

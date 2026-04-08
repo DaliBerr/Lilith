@@ -88,7 +88,7 @@ namespace Kernel
 
             return true;
         }
-
+        
         /// <summary>
         /// summary: 在 Main 场景内容启动完成后，把 MainUIScreen 压到持久化 UIManager 的栈顶。
         /// param: 无

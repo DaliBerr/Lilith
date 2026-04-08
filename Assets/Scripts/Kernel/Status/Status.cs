@@ -144,6 +144,7 @@ namespace Kernel.GameState
             Register(InMainMenuStatus);
             Register(InMenuStatus);
             Register(InBackPackStatus);
+            Register(PopUpStatus);
         }
 
         /// <summary>

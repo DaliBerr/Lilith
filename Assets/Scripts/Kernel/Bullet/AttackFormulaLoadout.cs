@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 // using UnityEditor.ShaderGraph;
 using UnityEngine;
@@ -15,6 +16,8 @@ namespace Kernel.Bullet
         private CompiledAttack compiledAttack;
         private bool isDirty = true;
         private int revision;
+
+        public event Action Changed;
 
         public IReadOnlyList<BaseTokenData> Tokens => tokens;
         public int Revision => revision;
@@ -48,6 +51,7 @@ namespace Kernel.Bullet
         {
             isDirty = true;
             revision++;
+            NotifyChanged();
         }
 
         /// <summary>
@@ -87,6 +91,16 @@ namespace Kernel.Bullet
             compiledAttack = AttackFormulaCompiler.Compile(tokens);
             isDirty = false;
             return compiledAttack;
+        }
+
+        /// <summary>
+        /// summary: 统一广播 loadout 内容已变化，供 HUD 和其他只读观察者实时刷新。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void NotifyChanged()
+        {
+            Changed?.Invoke();
         }
 
         private CompiledAttack EnsureCompiled()

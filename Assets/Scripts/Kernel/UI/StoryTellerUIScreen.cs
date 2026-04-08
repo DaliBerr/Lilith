@@ -1,0 +1,162 @@
+using Kernel.GameState;
+using TMPro;
+using UnityEngine;
+using Vocalith.UI;
+
+namespace Kernel.UI
+{
+    /// <summary>
+    /// Startup 菜单后的世界观介绍面板，只负责显示 StorySequenceParser 推送的剧情快照。
+    /// </summary>
+    [DisallowMultipleComponent]
+    [UIPrefab("Assets/Prefabs/UI/Storyteller Panel")]
+    public sealed class StoryTellerUIScreen : GameUIScreen
+    {
+        [Header("Bindings")]
+        [SerializeField] private TMP_Text storyText;
+
+        public override Status currentStatus { get; } = StatusList.InMainMenuStatus;
+
+        protected override void OnInit()
+        {
+            TryAutoBindReferences();
+            ResetStoryDisplay();
+        }
+
+        protected override void OnAfterShow()
+        {
+            SubscribeToStorySequence();
+        }
+
+        protected override void OnAfterHide()
+        {
+            UnsubscribeFromStorySequence();
+            RemoveCurrentStatus();
+            ResetStoryDisplay();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromStorySequence();
+            RemoveCurrentStatus();
+            ResetStoryDisplay();
+        }
+
+        private void OnValidate()
+        {
+            TryAutoBindReferences();
+        }
+
+        [ContextMenu("Auto Bind StoryTeller Panel")]
+        private void AutoBindTemplate()
+        {
+            TryAutoBindReferences();
+        }
+
+        /// <summary>
+        /// summary: 自动绑定剧情文本组件，优先使用 prefab 约定的 Text 子节点。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void TryAutoBindReferences()
+        {
+            storyText ??= transform.Find("Text")?.GetComponent<TMP_Text>();
+            storyText ??= GetComponentInChildren<TMP_Text>(true);
+        }
+
+        /// <summary>
+        /// summary: 订阅剧情播放器的快照事件，并在已有快照时立即同步当前显示。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void SubscribeToStorySequence()
+        {
+            StorySequenceParser parser = StorySequenceParser.Instance;
+            if (parser == null)
+            {
+                return;
+            }
+
+            parser.SnapshotChanged -= HandleStorySnapshotChanged;
+            parser.SnapshotChanged += HandleStorySnapshotChanged;
+
+            if (parser.TryGetCurrentSnapshot(out StorySequenceSnapshot snapshot))
+            {
+                ApplyStorySnapshot(snapshot);
+            }
+        }
+
+        /// <summary>
+        /// summary: 取消订阅剧情播放器快照，避免界面隐藏后继续收到显示更新。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void UnsubscribeFromStorySequence()
+        {
+            StorySequenceParser parser = StorySequenceParser.Instance;
+            if (parser == null)
+            {
+                return;
+            }
+
+            parser.SnapshotChanged -= HandleStorySnapshotChanged;
+        }
+
+        /// <summary>
+        /// summary: 接收剧情播放器的快照广播，并刷新当前文本显示。
+        /// param name="snapshot": 当前剧情显示快照
+        /// returns: 无
+        /// </summary>
+        private void HandleStorySnapshotChanged(StorySequenceSnapshot snapshot)
+        {
+            ApplyStorySnapshot(snapshot);
+        }
+
+        /// <summary>
+        /// summary: 将剧情快照应用到当前 TMP 文本组件，只负责正文与可见字符数的显示。
+        /// param name="snapshot": 当前剧情显示快照
+        /// returns: 无
+        /// </summary>
+        private void ApplyStorySnapshot(StorySequenceSnapshot snapshot)
+        {
+            if (storyText == null)
+            {
+                return;
+            }
+
+            storyText.text = snapshot.FullText ?? string.Empty;
+            storyText.maxVisibleCharacters = snapshot.IsEntryFullyRevealed
+                ? int.MaxValue
+                : Mathf.Max(0, snapshot.VisibleCharacterCount);
+        }
+
+        /// <summary>
+        /// summary: 清空当前文本显示状态，避免界面下次显示时残留上一轮内容。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ResetStoryDisplay()
+        {
+            if (storyText == null)
+            {
+                return;
+            }
+
+            storyText.text = string.Empty;
+            storyText.maxVisibleCharacters = int.MaxValue;
+        }
+
+        /// <summary>
+        /// summary: 在剧情面板关闭或销毁时移除 InMainMenu 状态，避免状态残留影响后续场景。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void RemoveCurrentStatus()
+        {
+            if (StatusController.HasStatus(currentStatus))
+            {
+                StatusController.RemoveStatus(currentStatus);
+            }
+        }
+    }
+}
