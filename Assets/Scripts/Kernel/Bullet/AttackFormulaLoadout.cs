@@ -11,17 +11,19 @@ namespace Kernel.Bullet
     [DisallowMultipleComponent]
     public sealed class AttackFormulaLoadout : MonoBehaviour
     {
-        [SerializeField] private List<BaseTokenData> tokens = new();
+        [SerializeField] private List<PlaceableTokenData> items = new();
 
         private CompiledAttack compiledAttack;
+        private readonly List<BaseTokenData> expandedTokens = new();
         private bool isDirty = true;
         private int revision;
 
         public event Action Changed;
 
-        public IReadOnlyList<BaseTokenData> Tokens => tokens;
+        public IReadOnlyList<PlaceableTokenData> Items => items;
+        public IReadOnlyList<BaseTokenData> Tokens => expandedTokens;
         public int Revision => revision;
-        public bool HasTokens => tokens != null && tokens.Count > 0;
+        public bool HasTokens => expandedTokens.Count > 0;
 
         public CompiledAttack CurrentCompiledAttack
         {
@@ -34,11 +36,13 @@ namespace Kernel.Bullet
 
         private void Awake()
         {
+            RebuildExpandedTokens();
             EnsureCompiled();
         }
 
         private void OnValidate()
         {
+            RebuildExpandedTokens();
             MarkDirty();
         }
 
@@ -49,22 +53,51 @@ namespace Kernel.Bullet
         /// </summary>
         public void MarkDirty()
         {
+            RebuildExpandedTokens();
             isDirty = true;
             revision++;
             NotifyChanged();
         }
 
         /// <summary>
-        /// summary: 用新的有序词元列表替换当前 loadout，并立即标记为待重新编译。
-        /// param: orderedTokens 新的词元顺序
+        /// summary: 用新的有序可放置 token 物件列表替换当前 loadout，并立即标记为待重新编译。
+        /// param: orderedItems 新的物件顺序
+        /// returns: 无
+        /// </summary>
+        public void SetItems(IEnumerable<PlaceableTokenData> orderedItems)
+        {
+            items.Clear();
+            if (orderedItems != null)
+            {
+                foreach (PlaceableTokenData item in orderedItems)
+                {
+                    if (item != null)
+                    {
+                        items.Add(item);
+                    }
+                }
+            }
+
+            MarkDirty();
+        }
+
+        /// <summary>
+        /// summary: 用单格基础 token 顺序替换当前 loadout，供旧调用方继续复用。
+        /// param: orderedTokens 新的单格 token 顺序
         /// returns: 无
         /// </summary>
         public void SetTokens(IEnumerable<BaseTokenData> orderedTokens)
         {
-            tokens.Clear();
+            items.Clear();
             if (orderedTokens != null)
             {
-                tokens.AddRange(orderedTokens);
+                foreach (BaseTokenData token in orderedTokens)
+                {
+                    if (token != null)
+                    {
+                        items.Add(token);
+                    }
+                }
             }
 
             MarkDirty();
@@ -88,7 +121,7 @@ namespace Kernel.Bullet
         /// </summary>
         public CompiledAttack Recompile()
         {
-            compiledAttack = AttackFormulaCompiler.Compile(tokens);
+            compiledAttack = AttackFormulaCompiler.Compile(items);
             isDirty = false;
             return compiledAttack;
         }
@@ -101,6 +134,24 @@ namespace Kernel.Bullet
         private void NotifyChanged()
         {
             Changed?.Invoke();
+        }
+
+        private void RebuildExpandedTokens()
+        {
+            expandedTokens.Clear();
+            if (items == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                PlaceableTokenData item = items[i];
+                if (item != null)
+                {
+                    item.AppendCompileTokens(expandedTokens);
+                }
+            }
         }
 
         private CompiledAttack EnsureCompiled()

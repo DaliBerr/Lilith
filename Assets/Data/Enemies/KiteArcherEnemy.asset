@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
+  m_Name: KiteArcherEnemy
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  enemyId: KiteArcher
+  displayName: KiteArcher
+  runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  movementKind: 3
+  attackKind: 2
+  dashMovement:
+    triggerDistance: 24
+    windupSeconds: 0.25
+    dashSpeedMultiplier: 3
+    dashDurationSeconds: 0.3
+    dashCooldownSeconds: 1
+  keepDistanceMovement:
+    preferredDistance: 16
+    distanceTolerance: 3
+  aggroOnHitMovement:
+    aggroSpeedMultiplier: 1.5
+  visual:
+    glyphText: "\u8FDC"
+    glyphColor: {r: 0.35, g: 0.82, b: 1, a: 1}
+    runeBaseSprite: {fileID: 0}
+    runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
+    groundShadowSprite: {fileID: 0}
+    groundShadowTint: {r: 0, g: 0, b: 0, a: 0.28}
+  rangedBulletAttack:
+    bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
+    formulaItems:
+    - {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
+    targetPolicy: 1
+  summonAttack:
+    summonedEnemyDefinition: {fileID: 0}
+    summonedEnemyConfig:
+      maxHealth: 1
+      moveSpeed: 0
+      attackRange: 0
+      attackCooldown: 0
+      attackDamage: 0
+      tokenDrops: []
+    summonCountPerCast: 1
+    summonRadius: 8
+    maxAliveSummons: 2

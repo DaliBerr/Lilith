@@ -264,19 +264,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.8459573
+      value: 0.8811196
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0.44037747
+      value: 0.36497164
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.26672933
+      value: 0.27781588
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.13885047
+      value: -0.11507509
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -296,7 +296,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3517875952802560630, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_text
-      value: "\u575A"
+      value: "\u6838"
       objectReference: {fileID: 0}
     - target: {fileID: 3758823520822100445, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Layer
@@ -308,7 +308,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4863808679746211634, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: defaultDisplayText
-      value: "\u575A"
+      value: "\u6838"
       objectReference: {fileID: 0}
     - target: {fileID: 5710414337234482614, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_Layer
@@ -362,6 +362,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 9040077734227831188, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       insertIndex: -1
       addedObject: {fileID: 443256865960667020}
+    - targetCorrespondingSourceObject: {fileID: 9040077734227831188, guid: e19e371526e657f47a119f1f95594d76, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6273754938378585078}
+    - targetCorrespondingSourceObject: {fileID: 9040077734227831188, guid: e19e371526e657f47a119f1f95594d76, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6915695943104612265}
   m_SourcePrefab: {fileID: 100100000, guid: e19e371526e657f47a119f1f95594d76, type: 3}
 --- !u!65 &823031084670450595 stripped
 BoxCollider:
@@ -525,5 +531,40 @@ MonoBehaviour:
   enemyData: {fileID: 2777352532888450817}
   movement: {fileID: -1434170183942207670}
   meleeAttacker: {fileID: 6645123987412301111}
+  rangedTokenAttacker: {fileID: 6273754938378585078}
+  summoner: {fileID: 6915695943104612265}
   glyphPresenter: {fileID: 6154108714737421061}
   visualPresenter: {fileID: 4250128577034327836}
+--- !u!114 &6273754938378585078
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7740772627045821859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f217381e7f5f0ef408950f947b5c706e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyRangedTokenAttacker
+  enemyData: {fileID: 2777352532888450817}
+  targetPlayer: {fileID: 0}
+  targetPlayerHealth: {fileID: 0}
+  bulletSpawnOrigin: {fileID: 0}
+  bulletSpawnLocalOffset: {x: 0, y: 0, z: 18}
+--- !u!114 &6915695943104612265
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7740772627045821859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a81b64b5d5041904eae31e4f9773e3fd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySummoner
+  enemyData: {fileID: 2777352532888450817}
+  targetPlayer: {fileID: 0}
+  targetPlayerHealth: {fileID: 0}
+  enemyGenerator: {fileID: 0}

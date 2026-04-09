@@ -16,16 +16,59 @@ namespace Kernel.Bullet
             Result = 2,
         }
 
+        private sealed class CompileItemInstance
+        {
+            public PlaceableTokenData item;
+            public int totalTokenCount;
+            public int acceptedTokenCount;
+        }
+
+        private readonly struct CompileTokenEntry
+        {
+            public CompileTokenEntry(BaseTokenData token, CompileItemInstance itemInstance)
+            {
+                Token = token;
+                ItemInstance = itemInstance;
+            }
+
+            public BaseTokenData Token { get; }
+            public CompileItemInstance ItemInstance { get; }
+        }
+
         /// <summary>
-        /// summary: 从左到右编译一组词元，尽力生成一个可执行的攻击结果。
+        /// summary: 从左到右编译一组单格基础词元，兼容旧调用方。
         /// param: tokens 当前装备槽中的有序词元列表
         /// returns: 编译后的攻击结果；缺少核心词元时会返回不可发射状态
         /// </summary>
         public static CompiledAttack Compile(IReadOnlyList<BaseTokenData> tokens)
         {
-            var compiledAttack = new CompiledAttack();
-            var acceptedDisplays = new List<string>();
-            var acceptedTokens = new List<BaseTokenData>();
+            if (tokens == null)
+            {
+                return Compile((IReadOnlyList<PlaceableTokenData>)null);
+            }
+
+            List<PlaceableTokenData> items = new(tokens.Count);
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                items.Add(tokens[i]);
+            }
+
+            return Compile(items);
+        }
+
+        /// <summary>
+        /// summary: 从左到右编译一组可放置 token 物件，尽力生成一个可执行的攻击结果。
+        /// param: items 当前装备槽中的有序可放置 token 物件列表
+        /// returns: 编译后的攻击结果；缺少核心词元时会返回不可发射状态
+        /// </summary>
+        public static CompiledAttack Compile(IReadOnlyList<PlaceableTokenData> items)
+        {
+            CompiledAttack compiledAttack = new();
+            List<string> acceptedDisplays = new();
+            List<BaseTokenData> acceptedTokens = new();
+
+            List<CompileItemInstance> itemInstances = new();
+            List<CompileTokenEntry> tokens = ExpandItems(items, compiledAttack, itemInstances);
 
             CoreTokenData coreToken = null;
             BehaviorTokenData behaviorToken = null;
@@ -37,146 +80,144 @@ namespace Kernel.Bullet
             float spreadAngleStep = 0f;
             float explosionRadius = 0f;
 
-            if (tokens != null)
+            for (int i = 0; i < tokens.Count; i++)
             {
-                for (int i = 0; i < tokens.Count; i++)
+                CompileTokenEntry entry = tokens[i];
+                BaseTokenData token = entry.Token;
+                if (token == null)
                 {
-                    BaseTokenData token = tokens[i];
-                    if (token == null)
-                    {
-                        compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored null token in formula.");
-                        continue;
-                    }
+                    compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored null token in formula.");
+                    continue;
+                }
 
-                    switch (token.TokenType)
-                    {
-                        case TokenType.Pre:
-                            if (coreToken != null)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored pre token that appears after the core token.", token);
-                                break;
-                            }
-
-                            compiledAttack.AddPreToken(token);
-                            AcceptToken(token, acceptedDisplays, acceptedTokens);
+                switch (token.TokenType)
+                {
+                    case TokenType.Pre:
+                        if (coreToken != null)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored pre token that appears after the core token.", token);
                             break;
+                        }
 
-                        case TokenType.Core:
-                            if (token is not CoreTokenData candidateCore)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored core token with an unexpected asset type.", token);
-                                break;
-                            }
+                        compiledAttack.AddPreToken(token);
+                        AcceptToken(entry, acceptedDisplays, acceptedTokens);
+                        break;
 
-                            if (coreToken != null)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored duplicate core token; the first core token already established the attack base.", token);
-                                break;
-                            }
-
-                            coreToken = candidateCore;
-                            AcceptToken(token, acceptedDisplays, acceptedTokens);
+                    case TokenType.Core:
+                        if (token is not CoreTokenData candidateCore)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored core token with an unexpected asset type.", token);
                             break;
+                        }
 
-                        case TokenType.Behavior:
-                            if (token is not BehaviorTokenData candidateBehavior)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored behavior token with an unexpected asset type.", token);
-                                break;
-                            }
-
-                            if (coreToken == null)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored behavior token that appears before the core token.", token);
-                                break;
-                            }
-
-                            if (hasExplicitResult)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored behavior token that appears after the result token.", token);
-                                break;
-                            }
-
-                            if (behaviorToken != null)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored duplicate behavior token; the first behavior token already decided the projectile pattern.", token);
-                                break;
-                            }
-
-                            behaviorToken = candidateBehavior;
-                            pendingValueTarget = candidateBehavior.AcceptsNumericValue ? PendingValueTarget.Behavior : PendingValueTarget.None;
-                            spreadProjectileCount = Mathf.Max(1, candidateBehavior.DefaultProjectileCount);
-                            spreadAngleStep = Mathf.Max(0f, candidateBehavior.SpreadAngleStep);
-                            AcceptToken(token, acceptedDisplays, acceptedTokens);
+                        if (coreToken != null)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored duplicate core token; the first core token already established the attack base.", token);
                             break;
+                        }
 
-                        case TokenType.Value:
-                            if (token is not ValueTokenData valueToken)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored value token with an unexpected asset type.", token);
-                                break;
-                            }
+                        coreToken = candidateCore;
+                        AcceptToken(entry, acceptedDisplays, acceptedTokens);
+                        break;
 
-                            if (pendingValueTarget == PendingValueTarget.Behavior && behaviorToken != null)
-                            {
-                                ApplyBehaviorValue(behaviorToken, valueToken, ref spreadProjectileCount);
-                                pendingValueTarget = PendingValueTarget.None;
-                                AcceptToken(token, acceptedDisplays, acceptedTokens);
-                                break;
-                            }
-
-                            if (pendingValueTarget == PendingValueTarget.Result && resultToken != null)
-                            {
-                                ApplyResultValue(resultToken, valueToken, ref explosionRadius);
-                                pendingValueTarget = PendingValueTarget.None;
-                                AcceptToken(token, acceptedDisplays, acceptedTokens);
-                                break;
-                            }
-
-                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored value token because no behavior or result token is waiting for a numeric parameter.", token);
+                    case TokenType.Behavior:
+                        if (token is not BehaviorTokenData candidateBehavior)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored behavior token with an unexpected asset type.", token);
                             break;
+                        }
 
-                        case TokenType.Result:
-                            if (token is not ResultTokenData candidateResult)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored result token with an unexpected asset type.", token);
-                                break;
-                            }
-
-                            if (coreToken == null)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored result token that appears before the core token.", token);
-                                break;
-                            }
-
-                            if (resultToken != null)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored duplicate result token; the first result token already decided the impact effect.", token);
-                                break;
-                            }
-
-                            resultToken = candidateResult;
-                            hasExplicitResult = true;
-                            pendingValueTarget = candidateResult.AcceptsNumericValue ? PendingValueTarget.Result : PendingValueTarget.None;
-                            explosionRadius = Mathf.Max(0f, candidateResult.DefaultExplosionRadius);
-                            AcceptToken(token, acceptedDisplays, acceptedTokens);
+                        if (coreToken == null)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored behavior token that appears before the core token.", token);
                             break;
+                        }
 
-                        case TokenType.Post:
-                            if (!hasExplicitResult)
-                            {
-                                compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored post token that appears before an explicit result token.", token);
-                                break;
-                            }
-
-                            compiledAttack.AddPostToken(token);
-                            AcceptToken(token, acceptedDisplays, acceptedTokens);
+                        if (hasExplicitResult)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored behavior token that appears after the result token.", token);
                             break;
+                        }
 
-                        default:
-                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored token with an unknown token type.", token);
+                        if (behaviorToken != null)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored duplicate behavior token; the first behavior token already decided the projectile pattern.", token);
                             break;
-                    }
+                        }
+
+                        behaviorToken = candidateBehavior;
+                        pendingValueTarget = candidateBehavior.AcceptsNumericValue ? PendingValueTarget.Behavior : PendingValueTarget.None;
+                        spreadProjectileCount = Mathf.Max(1, candidateBehavior.DefaultProjectileCount);
+                        spreadAngleStep = Mathf.Max(0f, candidateBehavior.SpreadAngleStep);
+                        AcceptToken(entry, acceptedDisplays, acceptedTokens);
+                        break;
+
+                    case TokenType.Value:
+                        if (token is not ValueTokenData valueToken)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored value token with an unexpected asset type.", token);
+                            break;
+                        }
+
+                        if (pendingValueTarget == PendingValueTarget.Behavior && behaviorToken != null)
+                        {
+                            ApplyBehaviorValue(behaviorToken, valueToken, ref spreadProjectileCount);
+                            pendingValueTarget = PendingValueTarget.None;
+                            AcceptToken(entry, acceptedDisplays, acceptedTokens);
+                            break;
+                        }
+
+                        if (pendingValueTarget == PendingValueTarget.Result && resultToken != null)
+                        {
+                            ApplyResultValue(resultToken, valueToken, ref explosionRadius);
+                            pendingValueTarget = PendingValueTarget.None;
+                            AcceptToken(entry, acceptedDisplays, acceptedTokens);
+                            break;
+                        }
+
+                        compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored value token because no behavior or result token is waiting for a numeric parameter.", token);
+                        break;
+
+                    case TokenType.Result:
+                        if (token is not ResultTokenData candidateResult)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored result token with an unexpected asset type.", token);
+                            break;
+                        }
+
+                        if (coreToken == null)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored result token that appears before the core token.", token);
+                            break;
+                        }
+
+                        if (resultToken != null)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored duplicate result token; the first result token already decided the impact effect.", token);
+                            break;
+                        }
+
+                        resultToken = candidateResult;
+                        hasExplicitResult = true;
+                        pendingValueTarget = candidateResult.AcceptsNumericValue ? PendingValueTarget.Result : PendingValueTarget.None;
+                        explosionRadius = Mathf.Max(0f, candidateResult.DefaultExplosionRadius);
+                        AcceptToken(entry, acceptedDisplays, acceptedTokens);
+                        break;
+
+                    case TokenType.Post:
+                        if (!hasExplicitResult)
+                        {
+                            compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored post token that appears before an explicit result token.", token);
+                            break;
+                        }
+
+                        compiledAttack.AddPostToken(token);
+                        AcceptToken(entry, acceptedDisplays, acceptedTokens);
+                        break;
+
+                    default:
+                        compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored token with an unknown token type.", token);
+                        break;
                 }
             }
 
@@ -240,8 +281,60 @@ namespace Kernel.Bullet
 
             ApplyAcceptedTokenTextOverrides(compiledAttack, acceptedTokens);
             ApplyAcceptedTokenModifiers(compiledAttack, acceptedTokens);
+            ApplyAcceptedItemDamageMultipliers(compiledAttack, itemInstances);
             compiledAttack.AttackSpec = compiledAttack.AttackSpec.GetSanitized();
             return compiledAttack;
+        }
+
+        private static List<CompileTokenEntry> ExpandItems(
+            IReadOnlyList<PlaceableTokenData> items,
+            CompiledAttack compiledAttack,
+            ICollection<CompileItemInstance> itemInstances)
+        {
+            List<CompileTokenEntry> expandedTokens = new();
+            if (items == null)
+            {
+                return expandedTokens;
+            }
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                PlaceableTokenData item = items[i];
+                if (item == null)
+                {
+                    compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored null item in formula.");
+                    continue;
+                }
+
+                List<BaseTokenData> itemTokens = new();
+                item.AppendCompileTokens(itemTokens);
+                if (itemTokens.Count <= 0)
+                {
+                    compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, $"Ignored item '{item.name}' because it does not contribute any compile tokens.");
+                    continue;
+                }
+
+                CompileItemInstance itemInstance = new()
+                {
+                    item = item,
+                    totalTokenCount = itemTokens.Count,
+                    acceptedTokenCount = 0,
+                };
+                itemInstances?.Add(itemInstance);
+
+                for (int j = 0; j < itemTokens.Count; j++)
+                {
+                    if (itemTokens[j] == null)
+                    {
+                        compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, $"Ignored null member token inside item '{item.name}'.");
+                        continue;
+                    }
+
+                    expandedTokens.Add(new CompileTokenEntry(itemTokens[j], itemInstance));
+                }
+            }
+
+            return expandedTokens;
         }
 
         private static void ApplyBehaviorValue(BehaviorTokenData behaviorToken, ValueTokenData valueToken, ref int spreadProjectileCount)
@@ -264,7 +357,7 @@ namespace Kernel.Bullet
         {
             if (acceptedDisplays != null && acceptedDisplays.Count > 0)
             {
-                var builder = new StringBuilder();
+                StringBuilder builder = new();
                 for (int i = 0; i < acceptedDisplays.Count; i++)
                 {
                     string entry = acceptedDisplays[i];
@@ -283,15 +376,19 @@ namespace Kernel.Bullet
             return coreToken != null ? coreToken.GetResolvedDisplayText() : string.Empty;
         }
 
-        private static void AcceptToken(BaseTokenData token, ICollection<string> acceptedDisplays, ICollection<BaseTokenData> acceptedTokens)
+        private static void AcceptToken(CompileTokenEntry entry, ICollection<string> acceptedDisplays, ICollection<BaseTokenData> acceptedTokens)
         {
-            if (token == null)
+            if (entry.Token == null)
             {
                 return;
             }
 
-            acceptedDisplays?.Add(token.GetResolvedDisplayText());
-            acceptedTokens?.Add(token);
+            acceptedDisplays?.Add(entry.Token.GetResolvedDisplayText());
+            acceptedTokens?.Add(entry.Token);
+            if (entry.ItemInstance != null)
+            {
+                entry.ItemInstance.acceptedTokenCount++;
+            }
         }
 
         private static void ApplyAcceptedTokenModifiers(CompiledAttack compiledAttack, IReadOnlyList<BaseTokenData> acceptedTokens)
@@ -337,6 +434,42 @@ namespace Kernel.Bullet
                 {
                     compiledAttack.DisplayText = token.BulletTextOverride;
                 }
+            }
+        }
+
+        private static void ApplyAcceptedItemDamageMultipliers(CompiledAttack compiledAttack, IReadOnlyList<CompileItemInstance> itemInstances)
+        {
+            if (compiledAttack == null || itemInstances == null)
+            {
+                return;
+            }
+
+            AttackSpec spec = compiledAttack.AttackSpec;
+            bool hasChanged = false;
+            for (int i = 0; i < itemInstances.Count; i++)
+            {
+                CompileItemInstance itemInstance = itemInstances[i];
+                if (itemInstance == null ||
+                    itemInstance.item == null ||
+                    itemInstance.totalTokenCount <= 0 ||
+                    itemInstance.acceptedTokenCount != itemInstance.totalTokenCount)
+                {
+                    continue;
+                }
+
+                float multiplier = Mathf.Max(1f, itemInstance.item.DamageMultiplier);
+                if (Mathf.Approximately(multiplier, 1f))
+                {
+                    continue;
+                }
+
+                spec.damage *= multiplier;
+                hasChanged = true;
+            }
+
+            if (hasChanged)
+            {
+                compiledAttack.AttackSpec = spec;
             }
         }
     }

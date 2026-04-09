@@ -24,7 +24,9 @@ MonoBehaviour:
       attackCooldown: 0.9
       attackDamage: 5
       tokenDrops:
-      - token: {fileID: 11400000, guid: 60ae7cfbc364cfd42be3310cae27c72d, type: 2}
+      - token: {fileID: 11400000, guid: 29b3f0bc5983cf741b89c9df972f21ab, type: 2}
+        dropChance: 1
+      - token: {fileID: 11400000, guid: 29b3f0bc5983cf741b89c9df972f21ab, type: 2}
         dropChance: 1
   - enemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
     spawnCount: 4

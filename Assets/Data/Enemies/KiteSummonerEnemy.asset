@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
+  m_Name: KiteSummonerEnemy
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  enemyId: KiteSummoner
+  displayName: KiteSummoner
+  runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  movementKind: 3
+  attackKind: 3
+  dashMovement:
+    triggerDistance: 24
+    windupSeconds: 0.25
+    dashSpeedMultiplier: 3
+    dashDurationSeconds: 0.3
+    dashCooldownSeconds: 1
+  keepDistanceMovement:
+    preferredDistance: 14
+    distanceTolerance: 3
+  aggroOnHitMovement:
+    aggroSpeedMultiplier: 1.5
+  visual:
+    glyphText: "\u53EC"
+    glyphColor: {r: 0.86, g: 0.42, b: 1, a: 1}
+    runeBaseSprite: {fileID: 0}
+    runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
+    groundShadowSprite: {fileID: 0}
+    groundShadowTint: {r: 0, g: 0, b: 0, a: 0.28}
+  rangedBulletAttack:
+    bulletPrefab: {fileID: 0}
+    formulaItems: []
+    targetPolicy: 1
+  summonAttack:
+    summonedEnemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
+    summonedEnemyConfig:
+      maxHealth: 14
+      moveSpeed: 110
+      attackRange: 3
+      attackCooldown: 0.8
+      attackDamage: 4
+      tokenDrops: []
+    summonCountPerCast: 1
+    summonRadius: 8
+    maxAliveSummons: 2

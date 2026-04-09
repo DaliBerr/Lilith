@@ -10,6 +10,7 @@ public static class AttackTokenAssetGenerator
     private const string BehaviorFolder = RootFolder + "/Behavior";
     private const string ResultFolder = RootFolder + "/Result";
     private const string ValueFolder = RootFolder + "/Value";
+    private const string LinkedFolder = RootFolder + "/Linked";
 
     [MenuItem("Tools/Lilith/Bullet/Generate Default Token Assets")]
     public static void GenerateDefaultAssets()
@@ -18,6 +19,7 @@ public static class AttackTokenAssetGenerator
         EnsureFolderChain(BehaviorFolder);
         EnsureFolderChain(ResultFolder);
         EnsureFolderChain(ValueFolder);
+        EnsureFolderChain(LinkedFolder);
 
         CreateOrUpdateAsset<CoreTokenData>(CoreFolder + "/FireCore.asset", token =>
         {
@@ -163,12 +165,27 @@ public static class AttackTokenAssetGenerator
             token.SetModifiers(Array.Empty<TokenModifierDefinition>());
         });
 
+        CoreTokenData fireCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(CoreFolder + "/FireCore.asset");
+        ResultTokenData directDamage = AssetDatabase.LoadAssetAtPath<ResultTokenData>(ResultFolder + "/DirectDamage.asset");
+        CreateOrUpdateAsset<LinkedTokenData>(LinkedFolder + "/FireDirectChain.asset", item =>
+        {
+            item.ItemId = "linked_fire_direct";
+            item.Description = "A linked Fire Core + Direct Damage chain piece.";
+            item.ConfiguredDamageMultiplier = 1.5f;
+            item.PickupDisplayTextOverride = "FireHit";
+            item.SetLinkedTokens(new BaseTokenData[]
+            {
+                fireCore,
+                directDamage,
+            });
+        });
+
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         Debug.Log("[AttackTokenAssetGenerator] Default bullet token assets are ready under Assets/Data/BulletTokens.");
     }
 
-    private static void CreateOrUpdateAsset<T>(string assetPath, Action<T> configure) where T : BaseTokenData
+    private static void CreateOrUpdateAsset<T>(string assetPath, Action<T> configure) where T : ScriptableObject
     {
         T asset = AssetDatabase.LoadAssetAtPath<T>(assetPath);
         if (asset == null)

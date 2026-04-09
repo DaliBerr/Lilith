@@ -30,6 +30,8 @@ public sealed class EnemyDefinitionBinderTests
             out BaseCharEnemyNorm1 enemy,
             out CharEnemyMovement movement,
             out EnemyMeleeAttacker meleeAttacker,
+            out EnemyRangedTokenAttacker rangedTokenAttacker,
+            out EnemySummoner summoner,
             out TMP_Text glyphText,
             out SpriteRenderer runeBaseRenderer,
             out SpriteRenderer groundShadowRenderer);
@@ -57,6 +59,8 @@ public sealed class EnemyDefinitionBinderTests
         Assert.That(enemy.EnemyName, Is.EqualTo("Norm1"));
         Assert.That(movement.enabled, Is.True);
         Assert.That(meleeAttacker.enabled, Is.True);
+        Assert.That(rangedTokenAttacker.enabled, Is.False);
+        Assert.That(summoner.enabled, Is.False);
         Assert.That(glyphText.text, Is.EqualTo("坚"));
         Assert.That(glyphText.color, Is.EqualTo(Color.cyan));
         Assert.That(runeBaseRenderer.sprite, Is.SameAs(runeBaseSprite));
@@ -72,6 +76,8 @@ public sealed class EnemyDefinitionBinderTests
             out BaseCharEnemyNorm1 enemy,
             out CharEnemyMovement movement,
             out EnemyMeleeAttacker meleeAttacker,
+            out EnemyRangedTokenAttacker rangedTokenAttacker,
+            out EnemySummoner summoner,
             out _,
             out _,
             out _);
@@ -91,6 +97,54 @@ public sealed class EnemyDefinitionBinderTests
         Assert.That(enemy.EnemyName, Is.EqualTo("PassiveEnemy"));
         Assert.That(movement.enabled, Is.False);
         Assert.That(meleeAttacker.enabled, Is.False);
+        Assert.That(rangedTokenAttacker.enabled, Is.False);
+        Assert.That(summoner.enabled, Is.False);
+    }
+
+    [Test]
+    public void ApplyDefinition_EnablesOnlyConfiguredExtendedAttackComponent()
+    {
+        EnemyDefinitionBinder binder = CreateBoundEnemyShell(
+            out _,
+            out CharEnemyMovement movement,
+            out EnemyMeleeAttacker meleeAttacker,
+            out EnemyRangedTokenAttacker rangedTokenAttacker,
+            out EnemySummoner summoner,
+            out _,
+            out _,
+            out _);
+        EnemyDefinition rangedDefinition = CreateEnemyDefinition(
+            "ArcherEnemy",
+            binder,
+            EnemyMovementKind.KeepDistance,
+            EnemyAttackKind.RangedBulletToken,
+            new EnemyDefinition.EnemyVisualDefinition
+            {
+                glyphText = "远",
+                glyphColor = Color.yellow,
+            });
+        EnemyDefinition summonDefinition = CreateEnemyDefinition(
+            "SummonerEnemy",
+            binder,
+            EnemyMovementKind.AggroOnHit,
+            EnemyAttackKind.SummonEnemy,
+            new EnemyDefinition.EnemyVisualDefinition
+            {
+                glyphText = "召",
+                glyphColor = Color.magenta,
+            });
+
+        Assert.That(binder.ApplyDefinition(rangedDefinition), Is.True);
+        Assert.That(movement.enabled, Is.True);
+        Assert.That(meleeAttacker.enabled, Is.False);
+        Assert.That(rangedTokenAttacker.enabled, Is.True);
+        Assert.That(summoner.enabled, Is.False);
+
+        Assert.That(binder.ApplyDefinition(summonDefinition), Is.True);
+        Assert.That(movement.enabled, Is.True);
+        Assert.That(meleeAttacker.enabled, Is.False);
+        Assert.That(rangedTokenAttacker.enabled, Is.False);
+        Assert.That(summoner.enabled, Is.True);
     }
 
     [Test]
@@ -105,6 +159,8 @@ public sealed class EnemyDefinitionBinderTests
             Assert.That(prefabRoot.GetComponent<Enemy>(), Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<CharEnemyMovement>(), Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<EnemyMeleeAttacker>(), Is.Not.Null);
+            Assert.That(prefabRoot.GetComponent<EnemyRangedTokenAttacker>(), Is.Not.Null);
+            Assert.That(prefabRoot.GetComponent<EnemySummoner>(), Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<CharGlyphPresenter>(), Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<CharEnemyVisualPresenter>(), Is.Not.Null);
         }
@@ -130,6 +186,8 @@ public sealed class EnemyDefinitionBinderTests
         out BaseCharEnemyNorm1 enemy,
         out CharEnemyMovement movement,
         out EnemyMeleeAttacker meleeAttacker,
+        out EnemyRangedTokenAttacker rangedTokenAttacker,
+        out EnemySummoner summoner,
         out TMP_Text glyphText,
         out SpriteRenderer runeBaseRenderer,
         out SpriteRenderer groundShadowRenderer)
@@ -137,6 +195,8 @@ public sealed class EnemyDefinitionBinderTests
         GameObject root = CreateGameObject("EnemyRoot");
         movement = root.AddComponent<CharEnemyMovement>();
         meleeAttacker = root.AddComponent<EnemyMeleeAttacker>();
+        rangedTokenAttacker = root.AddComponent<EnemyRangedTokenAttacker>();
+        summoner = root.AddComponent<EnemySummoner>();
         CharGlyphPresenter glyphPresenter = root.AddComponent<CharGlyphPresenter>();
         CharEnemyVisualPresenter visualPresenter = root.AddComponent<CharEnemyVisualPresenter>();
         enemy = root.AddComponent<BaseCharEnemyNorm1>();

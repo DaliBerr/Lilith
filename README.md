@@ -4,7 +4,7 @@
 
 当前仓库是一个 Unity 6 原型项目。已经明确落地的部分，主要是：
 
-- 一个基于 `MapGridAuthoring` 的网格地图编辑工作流
+- 一个固定网格 + Seed 布局生成预览复用的地图工作流
 - 一套基础设施层 `Vocalith`，包含日志、本地化、UI 栈、事件总线、自定义 JSON 存档 `Scribe`
 - 一套轻量游戏状态系统 `Kernel.GameState`
 - 一套已经落地到 prefab 的业务 UI：`StartUpMenuUI`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`PopUpUIScreen`
@@ -66,8 +66,8 @@
    看当前战斗 HUD、暂停菜单和背包 Spell Book 的 UI 入口是怎么组织的。
 8. [`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) 和 [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
    看状态机语义和切换规则。
-9. [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) 和 [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
-   看地图网格的运行时数据结构与 Editor 生成逻辑。
+9. [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)、[`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs) 和 [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
+   看地图网格的运行时契约、Seed 布局生成和 Editor 预览入口。
 10. [`Assets/Scripts/Vocalith/Localization/LocalizationManager.cs`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
    看语言包、JSON 补丁和 Addressables 读取。
 11. [`Assets/Scripts/Vocalith/Scribe/Scribe.cs`](Assets/Scripts/Vocalith/Scribe/Scribe.cs)
@@ -283,7 +283,8 @@
   - 播放失败、解析失败或资源缺失时会记日志并直接继续进入 `Main`
 - `MainUIScreen`
   - 作为战斗 HUD 模板，当前暴露血条区、顶部 `Spell Panel` 和暂停按钮引用
-  - `TopPanel/Spell Panel` 会复用 prefab 中已有的 `BackPack Grid Prefab` 子节点作为模板，并在运行时按 `AttackFormulaLoadout` 的非空 token 顺序生成只读展示槽位
+  - `TopPanel/Spell Panel` 会复用 prefab 中已有的 `BackPack Grid Prefab` 子节点作为模板，并在运行时按 `AttackFormulaLoadout` 的展开占格结果生成只读展示槽位；连锁件会按自身跨度显示为多个相邻 HUD 槽位
+  - `Spell Panel` 当前还会通过独立 overlay layer 给多格连锁件绘制整件外框，保持与背包内的连锁提示一致
   - 顶部 `PauseButton` 当前会通过 `UIInputRouter` 打开 `PauseUIScreen`
 - `PauseUIScreen`
   - 作为暂停菜单模板，当前暴露遮罩、主面板和三个按钮引用
@@ -297,12 +298,13 @@
   - [`Assets/Scripts/Kernel/UI/PopUpUIUtility.cs`](Assets/Scripts/Kernel/UI/PopUpUIUtility.cs) 当前统一封装了弹窗复用与提示文案写入逻辑，供启动菜单和暂停菜单复用
   - 关闭时会兼容自己被作为 `Screen` 或 `Modal` 打开两种情况，并清理 `PopUp` 状态
 - `BackPackUIScreen`
-  - 运行时会在 `BackPack Grid Panel/Grid` 下固定生成 `48` 个背包槽位
+  - `BackPack Grid Panel/Grid` 当前固定为 `8` 列，并在运行时生成 `48` 个背包槽位
   - `Spell Book` 当前在 prefab 内预放 `5` 个静态槽位，并通过 [`BackPackGridSlotView`](Assets/Scripts/Kernel/UI/BackPackGridSlotView.cs) 接收拖拽
-  - 打开背包时会把 `AttackFormulaLoadout` 的前 `5` 个 token 填入 `Spell Book`
-  - 若历史 loadout 超过 `5` 个 token，超出的部分会尝试回填到玩家背包库存
-  - 每次 `Spell Book` 变更后，会按从左到右压缩非空槽位并实时写回 `AttackFormulaLoadout`
-  - 背包区当前支持格内拖拽换位；拖拽任意非空槽位时会显示一个完整槽位的跟手预览
+  - 打开背包时会把 `AttackFormulaLoadout` 的有序 `PlaceableTokenData` 逐件映射到 `Spell Book`；连锁件会占用多个相邻格
+  - 若历史 loadout 的总宽度超过 `5` 格，超出的整件会尝试回填到玩家背包库存；若背包不存在同一行连续空位，则该整件会被丢弃并记录 warning
+  - 每次 `Spell Book` 变更后，会按从左到右压缩整件锚点并实时写回 `AttackFormulaLoadout`
+  - 背包区与 `Spell Book` 区当前支持整件拖拽；拖拽连锁件任一 segment 时都会移动整件，且不允许拆开、旋转、跨行放置或与其他占格部分重叠
+  - 背包区、`Spell Book` 区和拖拽预览当前都会通过独立 overlay layer 给多格连锁件绘制整件外框；开始拖拽连锁件时，源区域外框会临时隐藏，`DragPreviewLayer` 里的白色拖拽预览框也会扩展到整件跨度并保持鼠标抓取点不变
   - `Left Panel/Preview Animation` 当前会显示一个离屏攻击预览；它复用玩家当前的 `CharBullet` prefab 和 `CompiledAttack`
   - 预览通过 [`BackPackAttackPreviewController`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs) 解析 `Main` 场景里唯一的 [`BackPackAttackPreviewRig`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewRig.cs)，并把该 rig 的 `PreviewCamera` 输出直接绑定到 `Preview Render`
   - 机位、地板、伪玩家、伪敌人编队、爆炸圈等布局由 [`Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab`](Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab) authoring，并由 `Main` 场景中的静态实例在运行时直接复用；控制器不会重写相机位置、旋转或 `orthographicSize`
@@ -314,12 +316,15 @@
 关键文件：
 
 - [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
+- [`Assets/Scripts/Kernel/ArenaSeedLayoutBuilder.cs`](Assets/Scripts/Kernel/ArenaSeedLayoutBuilder.cs)
+- [`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs)
 - [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)
 - [`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs)
 - [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs)
 - [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
 - [`Assets/Editor/MapGridMigrationUtility.cs`](Assets/Editor/MapGridMigrationUtility.cs)
 - [`Assets/Editor/Test/MapGridAuthoringTests.cs`](Assets/Editor/Test/MapGridAuthoringTests.cs)
+- [`Assets/Editor/Test/ArenaSeedMapGenerationTests.cs`](Assets/Editor/Test/ArenaSeedMapGenerationTests.cs)
 
 当前能力：
 
@@ -337,8 +342,18 @@
     - 暴露当前地图统一的世界平面高度，供 grounded 角色落地、鼠标投影、刷怪点和 pickup 生成共用
   - `TryRefreshGroundWallState()`
     - 可在运行时或 Editor Action 中按 `CellData.SurfaceType` 同步 cell 的 tag、模型显示与当前激活 Collider
+  - `TryApplySurfaceLayout(layout, out error)`
+    - 接收一份按 `y` 外层、`x` 内层排列的 row-major 墙地布局，并只通过现有 `CellData` 批量刷新整张地图的表面状态
   - `TryInitializeCellSurfaceCache() / TryMarkCellSurfaceDirty() / TryRefreshDirtyGroundWallState()`
     - 支持先做一次全量 `CellData + SurfaceType + ManagedCollider` 缓存，再在运行时只刷新被标脏的格子，避免每次都重扫整张地图
+- `ArenaSeedLayoutBuilder` 负责纯布局算法：
+  - 从固定 grid size、seed、玩家参考格和可选刷怪环半径，生成一份确定性的 row-major `Ground/Wall` 布局
+  - 当前算法会保留边界墙、玩家安全区和刷怪环，并在放置矩形障碍时保证保留区仍然可达
+- `ArenaSeedMapGenerator` 负责把 seed 布局接到场景：
+  - 可挂在 `MapRoot` 上，复用 `MapGridAuthoring` 作为运行时唯一地图契约
+  - `Awake` 时可按当前 seed 一次性重写整张地图的墙地表面
+  - 可在生成后把玩家一次性 snap 到最近的合法地面格子
+  - 会读取场景中首个 `EnemyGenerator.spawnDistance`，把默认刷怪环一起保留为可生成区域
 - `MapGridCoordinateBinding` 通过反射把“任意组件上的坐标字段/属性/方法”接到网格系统
   - 当前场景配置使用 `CellData`
   - 既支持 `SetCoordinates(int, int)`，也支持 `SetCoordinates(Vector2Int)`
@@ -359,6 +374,10 @@
     - 遍历所有已索引 cell，按 `CellData.SurfaceType` 统一刷新 tag、模型与当前表面 Collider
   - `Normalize Cell Presentation`
     - 当前等价于一次显式 `Sync Surface State`
+  - `Seed Generation`
+    - `Preview From Seed`：调用与运行时相同的 seed 生成路径，直接覆写当前场景里的墙地布局
+    - `Randomize Seed`：生成新 seed 并立即预览
+    - `Snap Player To Generated Cell`：把当前玩家一次性对齐到最近的地面格子
   - `Replace Selected Cell`
   - `Tools/Lilith/Map/Migrate Start Scene To Cell3D`
     - 规范 [`Assets/Prefabs/Map/Cell3D.prefab`](Assets/Prefabs/Map/Cell3D.prefab) 的 `CellData` 和根 `Rigidbody`
@@ -370,6 +389,7 @@
     - `PaintGround`：把刷过的格子切到地面状态，并同步地面模型/Collider
     - `PaintWall`：把刷过的格子切到墙体状态，并同步墙体模型/Collider
     - `SetColliderState`：按当前 `Enable Collider` 选项，仅对当前激活表面 Collider 做调试开关
+    - 当前仍保留为手动调试 / 特殊修图入口，但不再是主地图 authoring 工作流
 - 已有编辑器测试覆盖：
   - `XZ` 平面的局部坐标换算
   - chunk 计算
@@ -378,6 +398,7 @@
   - 重复坐标/越界坐标报错
   - `CellData` 的表面切换、模型/Collider/tag 同步
   - Scene Cell Edit 的路径插值、矩形框选坐标与墙地绘制
+  - seed 布局的稳定性、边界墙、玩家安全区、刷怪环、障碍拒绝规则、批量 surface 应用和玩家 snap
 
 ### 4. 基础战斗交互
 
@@ -391,6 +412,8 @@
 - [`Assets/Scripts/Kernel/Bullet/AttackSpec.cs`](Assets/Scripts/Kernel/Bullet/AttackSpec.cs)
 - [`Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs)
 - [`Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaLoadout.cs)
+- [`Assets/Scripts/Kernel/Bullet/AttackProjectileEmitter.cs`](Assets/Scripts/Kernel/Bullet/AttackProjectileEmitter.cs)
+- [`Assets/Scripts/Kernel/Bullet/BulletTargetPolicy.cs`](Assets/Scripts/Kernel/Bullet/BulletTargetPolicy.cs)
 - [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
 - [`Assets/Scripts/Kernel/Enemy/Enemy.cs`](Assets/Scripts/Kernel/Enemy/Enemy.cs)
 - [`Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs`](Assets/Scripts/Kernel/Enemy/BaseCharEnemyNorm1.cs)
@@ -402,14 +425,16 @@
   - floating 对象通过“地图平面高度 + 显式偏移”计算生成高度
   - 鼠标射线和其他平面投影统一按指定 `planeY` 处理，不再要求 gameplay 代码写死 `y = 0`
 - `AttackSpec` 仍然是单发子弹的底层运行时配置，负责速度、生命周期、命中层级和基础伤害等参数
-- `AttackFormulaLoadout` 持有当前装备的有序词元列表，并缓存最新 `CompiledAttack`
-- `AttackFormulaCompiler` 负责把 `Pre? + Core + Behavior? + Value? + Result? + Value? + Post?` 编译成 `CompiledAttack`
+- `AttackFormulaLoadout` 持有当前装备的有序 `PlaceableTokenData` 列表，并缓存最新 `CompiledAttack`
+  - 对旧调用方仍保留展开后的 `BaseTokenData` 只读视图
+- `AttackFormulaCompiler` 负责先把 `PlaceableTokenData` 展开成成员 token，再按 `Pre? + Core + Behavior? + Value? + Result? + Value? + Post?` 编译成 `CompiledAttack`
   - 缺少 `Core` 时为硬失败
   - 其他非法顺序默认给出 warning 并尽力继续编译
   - `Behavior` 缺失时默认 `Straight`
   - `Result` 缺失时默认 `DirectDamage`
   - token 还可以直接声明最终子弹文本覆盖；这部分不走 DSL，按被接受 token 的顺序最后一个生效
   - 已被编译器接受的 token 还会按顺序回放自己的修饰 DSL
+  - `LinkedTokenData` 只有在其全部成员 token 都被接受时，才会按配置对最终 `AttackSpec.damage` 乘上 `damageMultiplier`
   - 当前 DSL 支持 `= / += / -= / *= / /=`
   - 当前可修饰目标包括 `TextColor / FontSize / ScaleMultiplier / ProjectileSpeed / MaxLifetime / MaxTravelDistance / ImpactRadiusMultiplier`
   - `FontSize` 当前不再直接写 TMP 字号，而是驱动文字节点 `RectTransform` 的宽高，默认保持宽高一致，并在运行时基于当前文字容器尺寸执行 `+= / -= / *= / /=`
@@ -418,10 +443,14 @@
 - `AttackProjectileEmitter` 会把 `CompiledAttack` 落地成实际子弹批次
   - 当前支持 `Straight`
   - 当前支持 `Spread`
-- `CharBullet` 会从 `AttackSpec` 读取伤害、弹速、命中消耗和飞行回收参数，并从 `CompiledAttack` 读取最终表现修饰；命中带有 `Enemy_Object` 标签的对象时，会尝试从碰撞体父级解析 `Enemy` 组件并调用统一受伤接口
+- `AttackProjectileEmitter` 当前还会把 `BulletTargetPolicy` 一并下发给每发 `CharBullet`
+- `CharBullet` 会从 `AttackSpec` 读取伤害、弹速、命中消耗和飞行回收参数，并从 `CompiledAttack` 读取最终表现修饰
+  - 当前目标策略支持 `EnemiesOnly / PlayerOnly / Both`
+  - 命中合法目标时会尝试从碰撞体父级解析 `Enemy` 或 `PlayerHealth` 并调用统一受伤接口
+  - 命中墙体等环境仍会消耗子弹生命；命中不在当前目标策略内的 actor 不会结算伤害，也不会消耗生命
   - 当前支持 `DirectDamage`
   - 当前支持 `Explosion`，并按“直击 + 爆炸 AoE”两段结算主目标
-- `Enemy` 统一暴露 `MaxHealth`、`CurrentHealth`、`IsDead` 和 `TryApplyDamage`
+- `Enemy` 统一暴露 `MaxHealth`、`CurrentHealth`、`IsDead`、`TryApplyDamage`，并提供 `Damaged / Died` 两类运行时通知
 - `BaseCharEnemyNorm1` 当前维护运行时生命值，并在生命归零后销毁自身
 
 这是当前仓库里完成度最高、闭环最好的一组逻辑。
@@ -639,12 +668,9 @@
 - 文字子弹现在分成两层数据：
   - `CompiledAttack` 表达由 token 公式编译出的高层语义结果
   - `AttackSpec` 表达单发子弹真正运行时要消费的底层参数
-- 当前 token 资产全部继承自 `BaseTokenData : ScriptableObject`
-  - `CoreTokenData`
-  - `BehaviorTokenData`
-  - `ValueTokenData`
-  - `ResultTokenData`
-  - 以及预留的 `PreTokenData / PostTokenData`
+- 当前可放置 token 资产全部继承自 `PlaceableTokenData : ScriptableObject`
+  - `BaseTokenData` 表示单格 item，同时继续作为 `Core / Behavior / Value / Result / Pre / Post` 的基础类型
+  - `LinkedTokenData` 表示横向连续的多格 item，内部持有有序 `BaseTokenData` 成员列表
 - 每个 token 资产都可以挂一组有序修饰表达式
   - 例如 `=Color.red` `#FF0000`
   - 例如 `+=10f`
@@ -652,6 +678,11 @@
 - 每个 token 资产也可以直接设置最终子弹文本覆盖
   - 这部分不走表达式解析
   - 若多个已接受 token 都设置了文本覆盖，则按公式顺序最后一个生效
+- `LinkedTokenData` 额外支持：
+  - 固定横向跨度 `2..N`
+  - `pickupDisplayTextOverride`
+  - `damageMultiplier`
+  - 内部成员按顺序展开参与公式编译，但在背包与 `Spell Book` 中始终作为不可拆整件移动
 - `AttackFormulaCompiler` 当前支持从左到右编译：
   - `Core`
   - `Behavior`
@@ -676,19 +707,21 @@
   - 仅接受来自 `AttackFormulaLoadout` 的 `CompiledAttack`
   - 编译失败时不会发射，并输出编译错误
 - `PlayerBulletTokenInventory` 当前作为玩家“拥有 token”的独立库存层
-  - 固定 `48` 格
+  - 固定 `48` 格、`8` 列
   - 允许重复 token
-  - Inspector 可预置起始 token；运行时会复制到固定槽位数组
+  - Inspector 可预置起始 `PlaceableTokenData`；运行时会复制到固定占格数组
+  - 连锁件只能放入同一行的连续空格，不能跨行、拆开或自动重排
 - `BulletTokenPickup` 当前提供最小世界拾取物闭环
-  - 使用 `TMP_Text` 显示当前 token 的 `DisplayText`
+  - 使用 `TMP_Text` 显示当前 item 的拾取文本；优先使用 `LinkedTokenData.pickupDisplayTextOverride`，否则按成员 token 文本拼接
   - 当前 prefab 采用 `Root -> Glyph` 的单字形显示组织，根节点脚本持有 `glyphText` 引用并负责刷新文本
-  - 玩家碰到 trigger 后，会尝试把 token 放入 `PlayerBulletTokenInventory`
-  - 背包已满时 pickup 会保留在场景中，不会吞掉掉落
+  - 玩家碰到 trigger 后，会尝试把 item 放入 `PlayerBulletTokenInventory`
+  - 缺少连续空位或背包已满时 pickup 会保留在场景中，不会吞掉掉落
 - `BackPackUIScreen + BackPackTokenLayoutUtility` 当前提供一条战斗中的 Spell Book 编译入口
   - `BackPackUI.prefab` 的 `Spell Book` 内固定有 `5` 个静态槽位
-  - 运行时会额外生成 `48` 个背包槽位到 `BackPack Grid Panel/Grid`
-  - 背包区与 `Spell Book` 区支持拖拽交换
-  - `Spell Book` 的非空槽位会被压缩成新的 `AttackFormulaLoadout`
+  - `BackPackUI.prefab` 的背包网格固定为 `8` 列，运行时会额外生成 `48` 个背包槽位到 `BackPack Grid Panel/Grid`
+  - 背包区与 `Spell Book` 区支持整件拖拽；连锁件从任意占用格开始拖拽都会移动整件
+  - 背包区、`Spell Book` 区和拖拽预览会额外绘制独立连锁外框，用于高亮整件范围；连锁件拖拽时，白色预览框本身也会扩成整件宽度
+  - `Spell Book` 会按整件锚点压缩成新的 `AttackFormulaLoadout`
 - `Left Panel` 会把最新 `AttackFormulaLoadout` 编译结果同步到 `Main` 场景里的静态 preview rig；进入 Prefab Mode 调整 [`BackPackAttackPreviewRig.prefab`](Assets/Prefabs/UI/BackPackAttackPreviewRig.prefab) 后，运行时会复用同一套地板、伪玩家、伪敌人编队和正交相机布局
 - `CompiledAttack` 除了战斗语义之外，还会承载最终表现修饰
   - `DisplayText`
@@ -756,10 +789,11 @@
 - 可通过 Editor 菜单 `Tools/Lilith/Bullet/Generate Default Token Assets` 生成一组默认 token 资产到 `Assets/Data/BulletTokens`
   - `FireCore` 默认把文字设为红色
   - `EdgeCore` 默认会缩小子弹并提高弹速
+  - 当前还会额外生成一个示例连锁件 `Linked/FireDirectChain.asset`，内容为 `FireCore + DirectDamage`，默认 `damageMultiplier = 1.5`
 - 可通过 Editor 菜单 `Tools/Lilith/Bullet/Generate Char Bullet Visual Assets` 生成默认的符文底座 sprite 与 `CharBulletVisualLibrary`
   - 当前输出到 `Assets/Art/BulletRunes` 和 `Assets/Data/BulletVisuals`
 
-### 11. 敌人波次、生成与近战
+### 11. 敌人波次、生成与行为
 
 关键文件：
 
@@ -775,6 +809,8 @@
 - [`Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs`](Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs)
 - [`Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs)
 - [`Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs`](Assets/Scripts/Kernel/Enemy/EnemyMeleeAttacker.cs)
+- [`Assets/Scripts/Kernel/Enemy/EnemyRangedTokenAttacker.cs`](Assets/Scripts/Kernel/Enemy/EnemyRangedTokenAttacker.cs)
+- [`Assets/Scripts/Kernel/Enemy/EnemySummoner.cs`](Assets/Scripts/Kernel/Enemy/EnemySummoner.cs)
 - [`Assets/Data/Enemies`](Assets/Data/Enemies)
 - [`Assets/Data/Waves`](Assets/Data/Waves)
 - [`Assets/Prefabs/Enemy/CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab)
@@ -787,21 +823,26 @@
 - 刷怪位置以玩家为圆心，在 `XZ` 平面上按 `spawnDistance` 固定半径随机采样
   - 候选点的 `Y` 会统一落到 `targetMapGrid.WorldPlaneY`
 - 每次刷怪会校验候选点是否落在 tag 为 `Ground` 的格子上；若命中非地面或越界区域，会在 `maxGroundSpawnRolls` 次数内继续重 roll
+- `EnemyGenerator` 当前同时支持两类显式入口
+  - `TrySpawnEnemyAt(...)` 可直接在给定世界坐标生成敌人
+  - `TryGetSpawnPositionAround(...)` 可在任意中心点附近抽样一个合法地面出生点，供召唤类行为复用
 - 生成器支持手动指定 `targetPlayer`，未指定时会自动查找场景中的 `PlayerPlaneMovement`
 - 生成器支持手动指定 `targetMapGrid`，未指定时会自动查找场景中的 `MapGridAuthoring`
 - `EnemyGenerator` 当前直接接收 `EnemyDefinition`
   - 会从 `EnemyDefinition.runtimePrefab` 上绑定的 `EnemyDefinitionBinder` 实例化敌人壳
   - 会在生成后调用 `EnemyDefinitionBinder` 把定义写回根节点上的行为与视觉组件
-  - 仍会注入当前玩家目标，并把同一份 `EnemyWaveConfig` 广播给根节点上的所有 `IEnemyWaveConfigReceiver`
+  - 仍会注入当前玩家目标，并同步给 `CharEnemyMovement`、`EnemyMeleeAttacker`、`EnemyRangedTokenAttacker`、`EnemySummoner`
+  - 会把同一份 `EnemyWaveConfig` 广播给根节点上的所有 `IEnemyWaveConfigReceiver`
   - 实例化完成后会尝试按敌人的参考 `Collider` 重新 snap 到地图平面，避免 prefab 自身根节点高度与当前地面契约不一致
 - `EnemyDefinition` 当前是“敌人种类”的唯一真源
   - 定义稳定 `enemyId`、运行时敌人壳、内建移动方式、内建攻击方式和视觉表现
   - `runtimePrefab` 当前不是裸 `GameObject`，而是一个根节点带 `EnemyDefinitionBinder` 的可生成 prefab 壳；现有 [`CharEnemy.prefab`](Assets/Prefabs/Enemy/CharEnemy.prefab) 可以直接作为这类引用
-  - 当前 v1 只支持 `None / ChaseTarget` 两种移动方式，以及 `None / MeleeContact` 两种攻击方式
-  - 当前不承载具体数值；生命、移动速度、攻击距离、攻击伤害和掉落概率仍全部由 wave 提供
+  - 当前支持 `None / ChaseTarget / ChaseThenDash / KeepDistance / AggroOnHit` 五种移动方式，以及 `None / MeleeContact / RangedBulletToken / SummonEnemy` 四种攻击方式
+  - 当前还按敌人类型保存冲刺、风筝、受击仇恨、远程 BulletToken、召唤等专属配置块；这些配置不走 wave override
+  - 当前不承载基础生命和移动等通用数值；生命、移动速度、攻击距离、攻击伤害和掉落概率仍全部由 wave 提供
 - `WaveDefinition` 当前采用“每波一个 ScriptableObject” 的配置方式
   - 当前每波可配置统一刷怪间隔，以及多个 `enemyDefinition + spawnCount + EnemyWaveConfig` 条目
-  - `EnemyWaveConfig` 除了生命、移动和近战数值外，还支持一组 `Bullet Token` 掉落项；每项独立配置 token 资产和 `0..1` 概率
+  - `EnemyWaveConfig` 除了生命、移动和近战数值外，还支持一组 `Bullet Token` 掉落项；每项独立配置 `PlaceableTokenData` 资产和 `0..1` 概率
   - 勾选 `randomizeEnemySpawns` 后，同一波内会按各条目的剩余数量做加权随机抽取；不勾选时仍按 Inspector 中条目顺序依次刷出
 - `WaveManager` 当前负责“何时刷、刷多少、这一波是什么参数”
   - 首波自动开始
@@ -812,7 +853,7 @@
 - `BaseCharEnemyNorm1` 是当前默认的基础文字敌人类型
   - 当前持有运行时 `EnemyDefinition` 绑定与本波 `EnemyWaveConfig`
   - 支持接收 `EnemyWaveConfig` 作为运行时覆写
-  - 应用波次配置时会同步把 `stoppingDistance` 设为 `attackRange`
+  - 应用波次配置时不再强制把 `stoppingDistance` 改写为 `attackRange`，避免不同 movement kind 互相覆盖
   - 敌人死亡时会先广播统一死亡通知，再销毁自身，供掉落组件和其他死亡后行为复用
 - `BaseCharObject.prefab` 当前提供文字角色的统一显示骨架
   - 根节点挂有 `CharGlyphPresenter`，负责缓存并刷新唯一的 `TMP_Text`
@@ -820,30 +861,43 @@
 - `CharEnemy.prefab` 和 `CharBullet.prefab` 当前都沿用 `BulletTokenPickup` 风格的字形组织
   - 通过 `CharGlyphPresenter.defaultDisplayText` 覆写默认文字，而不是直接在子节点 `TMP_Text` 上写死展示字符
   - `CharEnemy.prefab` 当前还预挂了 `EnemyDefinitionBinder`，作为定义驱动的运行时壳
-  - `CharEnemy.prefab` 当前额外挂有 `CharEnemyVisualPresenter`
+  - `CharEnemy.prefab` 当前额外挂有 `CharEnemyVisualPresenter`、`EnemyRangedTokenAttacker`、`EnemySummoner`
   - 当前 prefab 合同固定为 `Text`、`Text/Glyph`、`Collider`、`RuneBaseCore`、`GroundShadow`
   - `Text` 和 `Text/Glyph` 都保持局部 `identity`；`Text` 继续挂 `GameplayBillboard`，负责让主字始终面向主相机
   - `RuneBaseCore` 和 `GroundShadow` 使用 `SpriteRenderer` 平放在 `XZ` 地面，并按 grounded 参考 `BoxCollider` 的底边自动重排
   - `CharEnemyVisualPresenter` 只负责主字高度、底座和地影的布局，不参与移动、碰撞或敌人数值逻辑
-  - `EnemyDefinitionBinder` 会根据 `EnemyDefinition` 启停 `CharEnemyMovement` / `EnemyMeleeAttacker`，并把主字与底座 / 地影素材写给 `CharGlyphPresenter` / `CharEnemyVisualPresenter`
+  - `EnemyDefinitionBinder` 会根据 `EnemyDefinition` 启停 `CharEnemyMovement`、`EnemyMeleeAttacker`、`EnemyRangedTokenAttacker`、`EnemySummoner`，并把主字与底座 / 地影素材写给 `CharGlyphPresenter` / `CharEnemyVisualPresenter`
 - `EnemyBulletTokenDropper` 当前负责敌人的波次掉落逻辑
   - 只缓存当前波次写入的掉落表，不持有敌人数值逻辑
-  - 每个掉落项都会在敌人死亡时独立判定，因此单只敌人可以同时掉落多个 token
-  - 当前成功判定的 token 会实例化成 [`BulletTokenPickup`](Assets/Scripts/Kernel/Bullet/BulletTokenPickup.cs) 世界拾取物
+  - 每个掉落项都会在敌人死亡时独立判定，因此单只敌人可以同时掉落多个 token / 连锁件
+  - 当前成功判定的 item 会实例化成 [`BulletTokenPickup`](Assets/Scripts/Kernel/Bullet/BulletTokenPickup.cs) 世界拾取物
   - pickup 的根节点高度当前按 `targetMapGrid.WorldPlaneY + pickupHeightOffset` 计算，不再相对敌人 root 高度二次抬升
-- `CharEnemyMovement` 会在 `XZ` 平面持续朝向并追踪玩家，并从同物体上的 `Enemy` 组件读取移动参数
+- `CharEnemyMovement` 当前会按 `EnemyDefinition.MovementKind` 进入统一状态机
+  - `ChaseTarget` 和 `AggroOnHit` 当前会通过 [`Assets/Scripts/Kernel/MapGrid/GridPathfinder.cs`](Assets/Scripts/Kernel/MapGrid/GridPathfinder.cs) 计算格子路径，再沿路径点绕开墙体追踪玩家；同一格内才会回退到直接贴近
+  - `ChaseThenDash` 会按“追踪 -> 蓄力 -> 冲刺 -> 冷却”循环，并优先复用当前路径方向来生成 dash 朝向
+  - `KeepDistance` 在地图格可解析时会沿网格路径接近或撤离玩家：过远时追近到距离带外缘，过近时先寻找可达退让点再绕开墙体后退；只有地图或格子无法解析时才回退到直接位移
+  - `AggroOnHit` 会在首次受击前保持静止，受击后切到与 `ChaseTarget` 相同的路径追踪逻辑，只是速度倍率更高
 - `CharEnemyMovement` 当前也采用 grounded 根节点规则：
   - 会优先解析 `targetMapGrid` 和 `groundingReferenceCollider`
   - `Awake / OnValidate` 时会按参考 `Collider` 把敌人 root snap 到 `MapGridAuthoring.WorldPlaneY`
   - 挂有 `Rigidbody` 时会统一配置为 `useGravity = false` 并冻结 `Y` 轴位置
 - 同时兼容 `Transform` 直驱、`Rigidbody.isKinematic` 和动态 `Rigidbody` 三种移动模式
 - 仅当 `Rigidbody` 挂在敌人自身根节点时才使用刚体驱动；若 prefab 误绑到子刚体，会自动回退到 `Transform` 驱动
-- 进入 `stoppingDistance` 后会停止继续贴近，避免敌人持续抖动穿模
 - 当 `InBackPack`、`InPauseMenu` 或 `Paused` 状态存在时，会立即停止移动并清零动态刚体的平面速度
 - `EnemyMeleeAttacker` 当前提供最小近战攻击闭环
   - 只在进入 `attackRange`、冷却结束且玩家仍存活时结算一次 `attackDamage`
   - 当 `InBackPack`、`InPauseMenu` 或 `Paused` 状态存在时，不会继续执行近战攻击判定
   - 当前不包含攻击动画、特效、击退或玩家死亡演出
+- `EnemyRangedTokenAttacker` 当前复用玩家同一条 `Compile -> Emit -> CharBullet` 链路
+  - 远程攻击公式来自 `EnemyDefinition.RangedBulletAttack`
+  - 发射节奏仍然读取 `Enemy.AttackCooldown`
+  - 射程仍然读取 `Enemy.AttackRange`
+  - 远程子弹默认会使用 `PlayerOnly` 目标策略，但也可以在定义里改为其他策略
+- `EnemySummoner` 当前会在攻击距离内按冷却尝试召唤配置好的敌人
+  - 召唤落点会复用 `EnemyGenerator.TryGetSpawnPositionAround(...)`
+  - 召唤物会复用普通 `EnemyDefinition + EnemyWaveConfig` 初始化流程
+  - 召唤配置会在写入前强制清空 `tokenDrops`，因此召唤物不会掉落 `BulletTokenPickup`
+  - 召唤物不进入 `WaveManager` 的波次存活统计，因此不会影响清波条件
 
 ## 当前未闭环或需要特别注意的点
 
@@ -879,7 +933,7 @@
 - 改启动流程：[`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) + [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) + [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) + [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
 - 改游戏状态：[`Assets/Scripts/Kernel/Status.cs`](Assets/Scripts/Kernel/Status.cs) + [`Assets/Scripts/Kernel/StatusController.cs`](Assets/Scripts/Kernel/StatusController.cs)
 - 加新 UI Screen：[`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI) + [`Assets/Prefabs/UI`](Assets/Prefabs/UI) + [`Assets/Scripts/Vocalith/UI/UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
-- 改网格生成、格子替换或 Scene Cell Edit：[`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs) + [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
+- 改固定网格 seed 生成、格子替换或 Scene Cell Edit：[`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Scripts/Kernel/ArenaSeedLayoutBuilder.cs`](Assets/Scripts/Kernel/ArenaSeedLayoutBuilder.cs) + [`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs) + [`Assets/Editor/MapGridEditorUtility.cs`](Assets/Editor/MapGridEditorUtility.cs) + [`Assets/Editor/MapGridAuthoringEditor.cs`](Assets/Editor/MapGridAuthoringEditor.cs)
 - 改主相机透视跟随、关键视觉 billboard 或墙体遮挡淡出：[`Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs`](Assets/Scripts/Kernel/Player/PlayerFollowCamera.cs) + [`Assets/Scripts/Kernel/Camera/GameplayBillboard.cs`](Assets/Scripts/Kernel/Camera/GameplayBillboard.cs) + [`Assets/Scripts/Kernel/Camera/CameraOcclusionFader.cs`](Assets/Scripts/Kernel/Camera/CameraOcclusionFader.cs)
 - 改统一高度契约或 grounded / floating / projectile 的根节点高度规则：[`Assets/Scripts/Kernel/WorldHeightUtility.cs`](Assets/Scripts/Kernel/WorldHeightUtility.cs) + [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs) + [`Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs`](Assets/Scripts/Kernel/Player/PlayerPlaneMovement.cs) + [`Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs`](Assets/Scripts/Kernel/Enemy/CharEnemyMovement.cs) + [`Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs`](Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs) + [`Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs`](Assets/Scripts/Kernel/Enemy/EnemyBulletTokenDropper.cs)
 - 改坐标承载组件或 cell 位移控制：[`Assets/Scripts/Kernel/Cell/CellData.cs`](Assets/Scripts/Kernel/Cell/CellData.cs) + [`Assets/Scripts/Kernel/MapGridCoordinateBinding.cs`](Assets/Scripts/Kernel/MapGridCoordinateBinding.cs)

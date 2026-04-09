@@ -55,7 +55,7 @@ public sealed class EnemyBulletTokenDropperTests
         Assert.That(isDead, Is.True);
         Assert.That(pickupParent.transform.childCount, Is.EqualTo(2));
 
-        List<BaseTokenData> droppedTokens = new();
+        List<PlaceableTokenData> droppedTokens = new();
         for (int i = 0; i < pickupParent.transform.childCount; i++)
         {
             BulletTokenPickup spawnedPickup = pickupParent.transform.GetChild(i).GetComponent<BulletTokenPickup>();
@@ -66,6 +66,40 @@ public sealed class EnemyBulletTokenDropperTests
         Assert.That(droppedTokens, Has.Member(guaranteedA));
         Assert.That(droppedTokens, Has.Member(guaranteedB));
         Assert.That(droppedTokens, Has.No.Member(neverDrop));
+    }
+
+    [Test]
+    public void EnemyDeath_CanDropLinkedToken()
+    {
+        GameObject pickupParent = CreateGameObject("PickupParent");
+        BulletTokenPickup pickupPrefab = CreatePickupPrefab();
+        BaseCharEnemyNorm1 enemy = CreateEnemy();
+        EnemyBulletTokenDropper dropper = enemy.gameObject.AddComponent<EnemyBulletTokenDropper>();
+        LinkedTokenData linked = CreateLinkedToken("linked_fire_hit", "FireHit", 1.5f,
+            CreateToken<CoreTokenData>("fire", "Fire"),
+            CreateToken<ResultTokenData>("hit", "Hit"));
+
+        Assert.That(dropper.TrySetPickupPrefab(pickupPrefab), Is.True);
+        SetPrivateField(dropper, "pickupParent", pickupParent.transform);
+
+        dropper.ApplyWaveConfig(new EnemyWaveConfig(
+            100f,
+            120f,
+            3f,
+            0.5f,
+            1f,
+            new[]
+            {
+                new EnemyBulletTokenDropEntry(linked, 1f),
+            }));
+
+        Assert.That(enemy.TryApplyDamage(enemy.CurrentHealth, out _, out bool isDead), Is.True);
+        Assert.That(isDead, Is.True);
+        Assert.That(pickupParent.transform.childCount, Is.EqualTo(1));
+
+        BulletTokenPickup spawnedPickup = pickupParent.transform.GetChild(0).GetComponent<BulletTokenPickup>();
+        Assert.That(spawnedPickup, Is.Not.Null);
+        Assert.That(spawnedPickup.Token, Is.SameAs(linked));
     }
 
     [Test]
@@ -148,6 +182,18 @@ public sealed class EnemyBulletTokenDropperTests
         token.TokenId = tokenId;
         token.DisplayText = displayText;
         token.name = tokenId;
+        createdObjects.Add(token);
+        return token;
+    }
+
+    private LinkedTokenData CreateLinkedToken(string itemId, string pickupDisplay, float damageMultiplier, params BaseTokenData[] linkedTokens)
+    {
+        LinkedTokenData token = ScriptableObject.CreateInstance<LinkedTokenData>();
+        token.ItemId = itemId;
+        token.PickupDisplayTextOverride = pickupDisplay;
+        token.ConfiguredDamageMultiplier = damageMultiplier;
+        token.SetLinkedTokens(linkedTokens);
+        token.name = itemId;
         createdObjects.Add(token);
         return token;
     }

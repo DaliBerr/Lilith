@@ -282,6 +282,59 @@ public sealed class AttackFormulaCompilerTests
     }
 
     [Test]
+    public void Compile_WithAcceptedLinkedItem_AppliesDamageMultiplier()
+    {
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        ResultTokenData resultToken = CreateResultToken("direct", "Hit", AttackResultType.DirectDamage, acceptsNumericValue: false, defaultExplosionRadius: 0f);
+        LinkedTokenData linked = CreateLinkedToken("linked_fire_hit", 1.5f, coreToken, resultToken);
+
+        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new PlaceableTokenData[]
+        {
+            linked,
+        });
+
+        Assert.That(compiledAttack.CanFire, Is.True);
+        Assert.That(compiledAttack.AttackSpec.damage, Is.EqualTo(1.5f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Compile_WithPartiallyAcceptedLinkedItem_DoesNotApplyDamageMultiplier()
+    {
+        BehaviorTokenData behaviorToken = CreateBehaviorToken("spread", "Spread", AttackBehaviorType.Spread, acceptsNumericValue: true, defaultProjectileCount: 3, spreadAngleStep: 10f);
+        ResultTokenData resultToken = CreateResultToken("direct", "Hit", AttackResultType.DirectDamage, acceptsNumericValue: false, defaultExplosionRadius: 0f);
+        LinkedTokenData linked = CreateLinkedToken("linked_invalid_prefix", 2f, behaviorToken, resultToken);
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+
+        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new PlaceableTokenData[]
+        {
+            linked,
+            coreToken,
+        });
+
+        Assert.That(compiledAttack.CanFire, Is.True);
+        Assert.That(compiledAttack.AttackSpec.damage, Is.EqualTo(1f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Compile_WithMultipleAcceptedLinkedItems_MultipliesDamageInOrder()
+    {
+        TestPreTokenData preToken = CreatePreToken("pre", "Pre");
+        LinkedTokenData preLinked = CreateLinkedToken("linked_pre", 1.5f, preToken);
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        ResultTokenData resultToken = CreateResultToken("direct", "Hit", AttackResultType.DirectDamage, acceptsNumericValue: false, defaultExplosionRadius: 0f);
+        LinkedTokenData coreLinked = CreateLinkedToken("linked_core_result", 2f, coreToken, resultToken);
+
+        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new PlaceableTokenData[]
+        {
+            preLinked,
+            coreLinked,
+        });
+
+        Assert.That(compiledAttack.CanFire, Is.True);
+        Assert.That(compiledAttack.AttackSpec.damage, Is.EqualTo(3f).Within(0.0001f));
+    }
+
+    [Test]
     public void Compile_WithoutCore_ReturnsHardFailure()
     {
         ValueTokenData valueToken = CreateValueToken("two", "2", 2f);
@@ -598,6 +651,17 @@ public sealed class AttackFormulaCompilerTests
     {
         T token = ScriptableObject.CreateInstance<T>();
         token.name = name;
+        createdObjects.Add(token);
+        return token;
+    }
+
+    private LinkedTokenData CreateLinkedToken(string itemId, float damageMultiplier, params BaseTokenData[] linkedTokens)
+    {
+        LinkedTokenData token = ScriptableObject.CreateInstance<LinkedTokenData>();
+        token.ItemId = itemId;
+        token.ConfiguredDamageMultiplier = damageMultiplier;
+        token.SetLinkedTokens(linkedTokens);
+        token.name = itemId;
         createdObjects.Add(token);
         return token;
     }

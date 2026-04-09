@@ -26,6 +26,7 @@ public abstract class Enemy : MonoBehaviour
     public abstract float MaxHealth { get; }
     public abstract float CurrentHealth { get; }
     public bool IsDead => CurrentHealth <= 0f;
+    public event Action<Enemy> Damaged;
     public event Action<Enemy> Died;
 
     /// <summary>
@@ -64,6 +65,16 @@ public abstract class Enemy : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 向外部订阅者广播一次受击通知，供仇恨、受击反馈等行为订阅。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    protected void NotifyDamaged()
+    {
+        Damaged?.Invoke(this);
+    }
+
+    /// <summary>
     /// summary: 向外部订阅者广播一次死亡通知；同一生命周期内只会成功发出一次。
     /// param: 无
     /// returns: 首次成功广播时返回 true
@@ -87,10 +98,10 @@ public abstract class Enemy : MonoBehaviour
 [Serializable]
 public struct EnemyBulletTokenDropEntry
 {
-    public BaseTokenData token;
+    public PlaceableTokenData token;
     [Range(0f, 1f)] public float dropChance;
 
-    public EnemyBulletTokenDropEntry(BaseTokenData token, float dropChance)
+    public EnemyBulletTokenDropEntry(PlaceableTokenData token, float dropChance)
     {
         this.token = token;
         this.dropChance = dropChance;
@@ -129,6 +140,61 @@ public struct EnemyWaveConfig
         this.attackCooldown = attackCooldown;
         this.attackDamage = attackDamage;
         this.tokenDrops = tokenDrops != null ? new List<EnemyBulletTokenDropEntry>(tokenDrops) : new List<EnemyBulletTokenDropEntry>();
+    }
+
+    /// <summary>
+    /// summary: 修正当前敌人数值配置中的非法取值，并可选清空掉落表供召唤物复用。
+    /// param: clearTokenDrops 为 true 时输出配置中不会保留任何 token 掉落项
+    /// returns: 经过规范化后的运行时敌人数值配置副本
+    /// </summary>
+    public EnemyWaveConfig GetSanitized(bool clearTokenDrops = false)
+    {
+        EnemyWaveConfig sanitized = this;
+        sanitized.maxHealth = SanitizePositiveValue(sanitized.maxHealth, 1f);
+        sanitized.moveSpeed = SanitizeValue(sanitized.moveSpeed, 0f);
+        sanitized.attackRange = SanitizeValue(sanitized.attackRange, 0f);
+        sanitized.attackCooldown = SanitizeValue(sanitized.attackCooldown, 0f);
+        sanitized.attackDamage = SanitizeValue(sanitized.attackDamage, 0f);
+        sanitized.tokenDrops = clearTokenDrops ? new List<EnemyBulletTokenDropEntry>() : SanitizeTokenDrops(sanitized.tokenDrops);
+        return sanitized;
+    }
+
+    private static List<EnemyBulletTokenDropEntry> SanitizeTokenDrops(IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
+    {
+        List<EnemyBulletTokenDropEntry> sanitizedDrops = new();
+        if (tokenDrops == null)
+        {
+            return sanitizedDrops;
+        }
+
+        foreach (EnemyBulletTokenDropEntry entry in tokenDrops)
+        {
+            EnemyBulletTokenDropEntry sanitizedEntry = entry;
+            sanitizedEntry.dropChance = Mathf.Clamp01(sanitizedEntry.dropChance);
+            sanitizedDrops.Add(sanitizedEntry);
+        }
+
+        return sanitizedDrops;
+    }
+
+    private static float SanitizeValue(float value, float fallbackValue)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f)
+        {
+            return fallbackValue;
+        }
+
+        return value;
+    }
+
+    private static float SanitizePositiveValue(float value, float fallbackValue)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
+        {
+            return fallbackValue;
+        }
+
+        return value;
     }
 }
 

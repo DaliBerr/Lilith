@@ -9,14 +9,14 @@ namespace Kernel.Bullet
     [DisallowMultipleComponent]
     public sealed class BulletTokenPickup : MonoBehaviour
     {
-        [SerializeField] private BaseTokenData token;
+        [SerializeField] private PlaceableTokenData token;
         [SerializeField] private TMP_Text glyphText;
         [SerializeField] private Collider triggerCollider;
         [SerializeField, Min(0f)] private float ySpinDegreesPerSecond = 90f;
 
         private bool isCollected;
 
-        public BaseTokenData Token => token;
+        public PlaceableTokenData Token => token;
         public bool IsCollected => isCollected;
 
         private void Awake()
@@ -48,7 +48,7 @@ namespace Kernel.Bullet
         /// param: value 当前 pickup 持有的 token
         /// returns: token 有效并成功刷新显示时返回 true
         /// </summary>
-        public bool TrySetToken(BaseTokenData value)
+        public bool TrySetToken(PlaceableTokenData value)
         {
             if (value == null)
             {
@@ -72,7 +72,7 @@ namespace Kernel.Bullet
                 return;
             }
 
-            if (!inventory.TryAddToken(token, out _))
+            if (!inventory.TryAddItem(token, out _))
             {
                 return;
             }
@@ -118,7 +118,7 @@ namespace Kernel.Bullet
                 return;
             }
 
-            glyphText.text = token != null ? token.GetResolvedDisplayText() : string.Empty;
+            glyphText.text = token != null ? token.GetPickupDisplayText() : string.Empty;
         }
 
         /// <summary>

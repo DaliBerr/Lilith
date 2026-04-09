@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using Kernel.MapGrid;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace Kernel.MapGrid.Editor
@@ -22,6 +24,7 @@ namespace Kernel.MapGrid.Editor
     public sealed class MapGridAuthoringEditor : UnityEditor.Editor
     {
         private const string SceneCellEditUndoName = "Scene Cell Edit";
+        private const string SeedPreviewUndoName = "Preview Seed Layout";
         private const float HoverFillAlpha = 0.08f;
 
         private delegate bool InspectorAction(out string error);
@@ -78,6 +81,8 @@ namespace Kernel.MapGrid.Editor
             DrawStatus(authoring);
             EditorGUILayout.Space();
             DrawGridActions(authoring);
+            EditorGUILayout.Space();
+            DrawSeedGenerationSection(authoring);
             EditorGUILayout.Space();
             DrawSceneCellEditSection(authoring);
             EditorGUILayout.Space();
@@ -208,6 +213,39 @@ namespace Kernel.MapGrid.Editor
             if (!string.IsNullOrEmpty(sceneCellEditMessage))
             {
                 EditorGUILayout.HelpBox(sceneCellEditMessage, sceneCellEditMessageType);
+            }
+        }
+
+        private void DrawSeedGenerationSection(MapGridAuthoring authoring)
+        {
+            ArenaSeedMapGenerator seedGenerator = authoring.GetComponent<ArenaSeedMapGenerator>();
+            if (seedGenerator == null)
+            {
+                return;
+            }
+
+            EditorGUILayout.LabelField("Seed Generation", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Seed", seedGenerator.Seed.ToString());
+            EditorGUILayout.HelpBox(
+                "Preview uses the same seeded layout generation path as runtime startup. It overwrites current Ground/Wall cell states and may snap the player once.",
+                MessageType.Info);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Preview From Seed"))
+                {
+                    ExecuteSeedPreviewAction(authoring, seedGenerator, randomizeSeed: false, snapOnly: false);
+                }
+
+                if (GUILayout.Button("Randomize Seed"))
+                {
+                    ExecuteSeedPreviewAction(authoring, seedGenerator, randomizeSeed: true, snapOnly: false);
+                }
+            }
+
+            if (GUILayout.Button("Snap Player To Generated Cell"))
+            {
+                ExecuteSeedPreviewAction(authoring, seedGenerator, randomizeSeed: false, snapOnly: true);
             }
         }
 
@@ -668,6 +706,133 @@ namespace Kernel.MapGrid.Editor
             }
 
             UnityEditor.EditorUtility.DisplayDialog("Map Grid", error, "OK");
+        }
+
+        private static void ExecuteSeedPreviewAction(
+            MapGridAuthoring authoring,
+            ArenaSeedMapGenerator seedGenerator,
+            bool randomizeSeed,
+            bool snapOnly)
+        {
+            string actionName = snapOnly ? "Snap Player To Generated Cell" : SeedPreviewUndoName;
+            Undo.IncrementCurrentGroup();
+            int undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName(actionName);
+
+            try
+            {
+                List<UnityEngine.Object> dirtyTargets = CollectSeedPreviewTargets(authoring, seedGenerator);
+                for (int i = 0; i < dirtyTargets.Count; i++)
+                {
+                    Undo.RecordObject(dirtyTargets[i], actionName);
+                }
+
+                if (randomizeSeed)
+                {
+                    seedGenerator.RandomizeSeed();
+                }
+
+                bool success;
+                string error;
+                if (snapOnly)
+                {
+                    success = seedGenerator.TrySnapPlayerToNearestGroundCell(out error);
+                }
+                else
+                {
+                    success = seedGenerator.TryGenerateAndApplyLayout(out error);
+                }
+
+                if (!success)
+                {
+                    Undo.RevertAllDownToGroup(undoGroup);
+                    UnityEditor.EditorUtility.DisplayDialog("Map Grid", error, "OK");
+                    return;
+                }
+
+                for (int i = 0; i < dirtyTargets.Count; i++)
+                {
+                    UnityEditor.EditorUtility.SetDirty(dirtyTargets[i]);
+                }
+
+                if (authoring.gameObject.scene.IsValid())
+                {
+                    EditorSceneManager.MarkSceneDirty(authoring.gameObject.scene);
+                }
+
+                Undo.CollapseUndoOperations(undoGroup);
+            }
+            catch (Exception exception)
+            {
+                Undo.RevertAllDownToGroup(undoGroup);
+                UnityEditor.EditorUtility.DisplayDialog("Map Grid", $"{actionName} failed: {exception.Message}", "OK");
+            }
+        }
+
+        private static List<UnityEngine.Object> CollectSeedPreviewTargets(MapGridAuthoring authoring, ArenaSeedMapGenerator seedGenerator)
+        {
+            var dirtyTargets = new List<UnityEngine.Object>();
+            var seenInstanceIds = new HashSet<int>();
+
+            TryAddDirtyTarget(authoring, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(seedGenerator, dirtyTargets, seenInstanceIds);
+            TryAddDirtyTarget(authoring.gameObject, dirtyTargets, seenInstanceIds);
+
+            IReadOnlyList<CellEntry> cells = authoring.Cells;
+            for (int i = 0; i < cells.Count; i++)
+            {
+                CellEntry entry = cells[i];
+                GameObject cellObject = entry?.CellObject;
+                if (cellObject == null)
+                {
+                    continue;
+                }
+
+                TryAddDirtyTarget(cellObject, dirtyTargets, seenInstanceIds);
+                if (!cellObject.TryGetComponent(out CellData cellData) || cellData == null)
+                {
+                    continue;
+                }
+
+                cellData.TryCacheSurfaceBindings();
+                TryAddDirtyTarget(cellData, dirtyTargets, seenInstanceIds);
+                TryAddDirtyTarget(cellData.WallCollider, dirtyTargets, seenInstanceIds);
+                TryAddDirtyTarget(cellData.GroundCollider, dirtyTargets, seenInstanceIds);
+                TryAddDirtyTarget(cellData.WallCollider != null ? cellData.WallCollider.gameObject : null, dirtyTargets, seenInstanceIds);
+                TryAddDirtyTarget(cellData.GroundCollider != null ? cellData.GroundCollider.gameObject : null, dirtyTargets, seenInstanceIds);
+                TryAddDirtyTarget(cellData.WallModelRoot != null ? cellData.WallModelRoot.gameObject : null, dirtyTargets, seenInstanceIds);
+                TryAddDirtyTarget(cellData.GroundModelRoot != null ? cellData.GroundModelRoot.gameObject : null, dirtyTargets, seenInstanceIds);
+            }
+
+            PlayerPlaneMovement playerMovement = FindFirstObjectByType<PlayerPlaneMovement>();
+            if (playerMovement != null)
+            {
+                TryAddDirtyTarget(playerMovement, dirtyTargets, seenInstanceIds);
+                TryAddDirtyTarget(playerMovement.transform, dirtyTargets, seenInstanceIds);
+                TryAddDirtyTarget(playerMovement.gameObject, dirtyTargets, seenInstanceIds);
+                if (playerMovement.TryGetComponent(out Rigidbody playerRigidbody))
+                {
+                    TryAddDirtyTarget(playerRigidbody, dirtyTargets, seenInstanceIds);
+                }
+            }
+
+            return dirtyTargets;
+        }
+
+        private static void TryAddDirtyTarget(UnityEngine.Object target, ICollection<UnityEngine.Object> dirtyTargets, ISet<int> seenInstanceIds)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            int instanceId = target.GetInstanceID();
+            if (!seenInstanceIds.Add(instanceId))
+            {
+                return;
+            }
+
+            dirtyTargets.Add(target);
         }
     }
 }

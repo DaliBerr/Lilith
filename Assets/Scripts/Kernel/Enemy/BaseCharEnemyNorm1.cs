@@ -93,14 +93,13 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     /// </summary>
     public void ApplyWaveConfig(EnemyWaveConfig config)
     {
-        currentWaveConfig = config;
+        currentWaveConfig = config.GetSanitized();
         hasWaveConfig = true;
-        health = SanitizePositiveValue(config.maxHealth, health);
-        moveSpeed = SanitizeValue(config.moveSpeed, moveSpeed);
-        attackRange = SanitizeValue(config.attackRange, attackRange);
-        attackCooldown = SanitizeValue(config.attackCooldown, attackCooldown);
-        attackDamage = SanitizeValue(config.attackDamage, attackDamage);
-        stoppingDistance = attackRange;
+        health = SanitizePositiveValue(currentWaveConfig.maxHealth, health);
+        moveSpeed = SanitizeValue(currentWaveConfig.moveSpeed, moveSpeed);
+        attackRange = SanitizeValue(currentWaveConfig.attackRange, attackRange);
+        attackCooldown = SanitizeValue(currentWaveConfig.attackCooldown, attackCooldown);
+        attackDamage = SanitizeValue(currentWaveConfig.attackDamage, attackDamage);
         SanitizeConfiguration();
         ResetHealthToFull();
     }
@@ -124,6 +123,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
 
         currentHealth = Mathf.Max(0f, currentHealth - damage);
         remainingHealth = currentHealth;
+        NotifyDamaged();
         isDead = IsDead;
         if (isDead)
         {

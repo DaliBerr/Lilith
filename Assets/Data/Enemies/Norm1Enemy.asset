@@ -15,12 +15,39 @@ MonoBehaviour:
   enemyId: Norm1
   displayName: Norm1
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
-  movementKind: 1
+  movementKind: 2
   attackKind: 1
+  dashMovement:
+    triggerDistance: 24
+    windupSeconds: 0.25
+    dashSpeedMultiplier: 3
+    dashDurationSeconds: 0.3
+    dashCooldownSeconds: 1
+  keepDistanceMovement:
+    preferredDistance: 24
+    distanceTolerance: 4
+  aggroOnHitMovement:
+    aggroSpeedMultiplier: 1.5
   visual:
-    glyphText: "\u575A"
+    glyphText: "\u8FC5"
     glyphColor: {r: 1, g: 1, b: 1, a: 1}
     runeBaseSprite: {fileID: 21300000, guid: 102f1e024a95ffd458c822de641b670c, type: 3}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
     groundShadowSprite: {fileID: 21300000, guid: 5ef8e7d0a52638c458d6bb43407aa593, type: 3}
     groundShadowTint: {r: 0, g: 0, b: 0, a: 0.28}
+  rangedBulletAttack:
+    bulletPrefab: {fileID: 0}
+    formulaItems: []
+    targetPolicy: 1
+  summonAttack:
+    summonedEnemyDefinition: {fileID: 0}
+    summonedEnemyConfig:
+      maxHealth: 1
+      moveSpeed: 0
+      attackRange: 0
+      attackCooldown: 0
+      attackDamage: 0
+      tokenDrops: []
+    summonCountPerCast: 1
+    summonRadius: 12
+    maxAliveSummons: 3

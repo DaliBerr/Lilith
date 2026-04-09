@@ -516,6 +516,74 @@ namespace Kernel.MapGrid
             return TryRefreshDirtyGroundWallState(out _, out error);
         }
 
+        /// <summary>
+        /// summary: 按 row-major 布局一次性覆盖整张地图的墙地表面状态，并同步模型、Collider 与 tag。
+        /// param: layout 目标表面布局，按 y 外层、x 内层顺序写入每个 cell 的 SurfaceType
+        /// param: error 校验失败或写入失败时返回的错误信息
+        /// returns: 成功把整张地图应用到现有索引 cell 时返回 true
+        /// </summary>
+        public bool TryApplySurfaceLayout(IReadOnlyList<CellData.CellSurfaceType> layout, out string error)
+        {
+            error = null;
+
+            if (layout == null)
+            {
+                error = "Surface layout is null.";
+                return false;
+            }
+
+            if (layout.Count != ExpectedCellCount)
+            {
+                error = $"Surface layout contains {layout.Count} cells, but the grid expects {ExpectedCellCount}.";
+                return false;
+            }
+
+            if (!TryRebuildLookupFromEntries(out error))
+            {
+                return false;
+            }
+
+            for (int y = 0; y < gridHeight; y++)
+            {
+                for (int x = 0; x < gridWidth; x++)
+                {
+                    int layoutIndex = (y * gridWidth) + x;
+                    if (!TryGetCell(new Vector2Int(x, y), out GameObject cellObject) || cellObject == null)
+                    {
+                        error = $"No indexed cell exists at ({x}, {y}).";
+                        return false;
+                    }
+
+                    if (!cellObject.TryGetComponent(out CellData cellData) || cellData == null)
+                    {
+                        error = $"Cell '{cellObject.name}' does not contain a CellData component.";
+                        return false;
+                    }
+
+                    CellData.CellSurfaceType targetSurface = layout[layoutIndex];
+                    if (cellData.SurfaceType != targetSurface)
+                    {
+                        if (!cellData.TrySetSurfaceType(targetSurface))
+                        {
+                            error = $"Failed to set cell '{cellObject.name}' to surface '{targetSurface}'.";
+                            return false;
+                        }
+
+                        continue;
+                    }
+
+                    if (!cellData.IsSurfacePresentationCurrent() && !cellData.TryRefreshSurfacePresentation())
+                    {
+                        error = $"Failed to refresh the surface presentation on '{cellObject.name}'.";
+                        return false;
+                    }
+                }
+            }
+
+            InvalidateCellSurfaceCache();
+            return true;
+        }
+
         public void ReplaceCellEntries(IList<CellEntry> entries)
         {
             cellEntries = CloneEntries(entries);

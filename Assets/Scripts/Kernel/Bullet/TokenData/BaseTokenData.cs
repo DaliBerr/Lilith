@@ -7,7 +7,7 @@ namespace Kernel.Bullet
     /// <summary>
     /// 所有攻击词元资产的基础类型，统一承载显示文本与稳定标识。
     /// </summary>
-    public abstract class BaseTokenData : ScriptableObject
+    public abstract class BaseTokenData : PlaceableTokenData
     {
         [SerializeField] private string tokenId = string.Empty;
         [SerializeField] private string displayText = string.Empty;
@@ -16,6 +16,9 @@ namespace Kernel.Bullet
         [SerializeField] private bool hasBulletTextOverride;
         [SerializeField, TextArea] private string bulletTextOverride = string.Empty;
         [SerializeField] private List<TokenModifierDefinition> modifiers = new();
+
+        public override int SlotSpan => 1;
+        public override float DamageMultiplier => 1f;
 
         public string TokenId
         {
@@ -48,6 +51,24 @@ namespace Kernel.Bullet
         public string GetResolvedDisplayText()
         {
             return string.IsNullOrWhiteSpace(displayText) ? tokenId : displayText;
+        }
+
+        public override BaseTokenData GetVisualToken(int localOffset)
+        {
+            return localOffset == 0 ? this : null;
+        }
+
+        public override void AppendCompileTokens(List<BaseTokenData> buffer)
+        {
+            if (buffer != null)
+            {
+                buffer.Add(this);
+            }
+        }
+
+        public override string GetPickupDisplayText()
+        {
+            return GetResolvedDisplayText();
         }
 
         /// <summary>

@@ -16,7 +16,19 @@ namespace Kernel.UI
     }
 
     /// <summary>
-    /// 背包单槽位视图，负责显示 token 文本并把拖拽事件转发给 BackPackUIScreen。
+    /// 标记当前格在连锁物件中的显示角色。
+    /// </summary>
+    public enum BackPackChainCellRole
+    {
+        Empty = 0,
+        Single = 1,
+        ChainHead = 2,
+        ChainBody = 3,
+        ChainTail = 4,
+    }
+
+    /// <summary>
+    /// 背包单槽位视图，负责显示当前格上的视觉 token 并把拖拽事件转发给 BackPackUIScreen。
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BackPackGridSlotView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
@@ -30,9 +42,12 @@ namespace Kernel.UI
         [SerializeField] private Color inventoryIdleColor = new(1f, 1f, 1f, 0.35f);
         [SerializeField] private Color spellBookIdleColor = new(1f, 0.9f, 0.7f, 0.45f);
         [SerializeField] private Color dragHighlightColor = new(1f, 1f, 1f, 0.8f);
+        [SerializeField] private Color chainHeadTint = new(1f, 0.97f, 0.84f, 1f);
+        [SerializeField] private Color chainBodyTint = new(0.9f, 0.95f, 1f, 1f);
+        [SerializeField] private Color chainTailTint = new(0.93f, 1f, 0.9f, 1f);
 
         private BackPackUIScreen owner;
-        private BaseTokenData token;
+        private TokenCellOccupancy occupancy;
         private bool isDragging;
         private bool isDisplayOnly;
         private BackPackSlotArea area;
@@ -41,8 +56,13 @@ namespace Kernel.UI
 
         public BackPackSlotArea Area => area;
         public int SlotIndex => slotIndex;
-        public BaseTokenData Token => token;
+        public PlaceableTokenData Item => occupancy.item;
+        public int AnchorIndex => occupancy.anchorIndex;
+        public int LocalOffset => occupancy.localOffset;
+        public bool IsAnchor => occupancy.isAnchor;
+        public BaseTokenData Token => occupancy.VisualToken;
         public RectTransform SlotRectTransform => rectTransform;
+        public BackPackChainCellRole ChainRole => ResolveChainRole();
 
         private void Awake()
         {
@@ -93,21 +113,31 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 更新当前槽位承载的 token，并刷新显示文本。
-        /// param: value 需要显示的新 token；空槽时传入 null
+        /// summary: 用新的占用信息刷新当前槽位显示。
+        /// param: value 当前格的最新占用状态
         /// returns: 无
         /// </summary>
-        public void SetToken(BaseTokenData value)
+        public void SetOccupancy(TokenCellOccupancy value)
         {
             EnsureLocalReferences();
-            token = value;
+            occupancy = value;
             RefreshText();
             ApplyVisualState();
         }
 
+        /// <summary>
+        /// summary: 用单格基础 token 刷新当前槽位显示，兼容旧调用方。
+        /// param: value 当前格需要显示的单格基础 token
+        /// returns: 无
+        /// </summary>
+        public void SetToken(BaseTokenData value)
+        {
+            SetOccupancy(value != null ? new TokenCellOccupancy(value, slotIndex, 0, true) : TokenCellOccupancy.Empty);
+        }
+
         public void OnBeginDrag(PointerEventData eventData)
         {
-            if (isDisplayOnly || owner == null || token == null)
+            if (isDisplayOnly || owner == null || !occupancy.IsOccupied)
             {
                 return;
             }
@@ -188,7 +218,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 根据当前 token 和拖拽状态更新槽位上的文本显示。
+        /// summary: 根据当前格上的视觉 token 更新文本显示。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -199,11 +229,11 @@ namespace Kernel.UI
                 return;
             }
 
-            tokenText.text = token != null ? token.GetResolvedDisplayText() : string.Empty;
+            tokenText.text = occupancy.VisualToken != null ? occupancy.VisualToken.GetResolvedDisplayText() : string.Empty;
         }
 
         /// <summary>
-        /// summary: 应用空槽、Spell Book 和拖拽中的基础视觉反馈，不额外引入复杂表现层。
+        /// summary: 应用空槽、连锁格和拖拽中的基础视觉反馈。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -211,7 +241,7 @@ namespace Kernel.UI
         {
             if (background != null)
             {
-                background.color = isDragging ? dragHighlightColor : (area == BackPackSlotArea.SpellBook ? spellBookIdleColor : inventoryIdleColor);
+                background.color = isDragging ? dragHighlightColor : ResolveIdleColor();
             }
 
             if (canvasGroup != null)
@@ -242,6 +272,49 @@ namespace Kernel.UI
             canvasGroup.blocksRaycasts = shouldBlock;
             canvasGroup.interactable = true;
         }
+
+        private BackPackChainCellRole ResolveChainRole()
+        {
+            if (!occupancy.IsOccupied)
+            {
+                return BackPackChainCellRole.Empty;
+            }
+
+            int span = occupancy.item != null && occupancy.item.SlotSpan > 0 ? occupancy.item.SlotSpan : 1;
+            if (span <= 1)
+            {
+                return BackPackChainCellRole.Single;
+            }
+
+            if (occupancy.localOffset <= 0)
+            {
+                return BackPackChainCellRole.ChainHead;
+            }
+
+            if (occupancy.localOffset >= span - 1)
+            {
+                return BackPackChainCellRole.ChainTail;
+            }
+
+            return BackPackChainCellRole.ChainBody;
+        }
+
+        private Color ResolveIdleColor()
+        {
+            Color baseColor = area == BackPackSlotArea.SpellBook ? spellBookIdleColor : inventoryIdleColor;
+            return ChainRole switch
+            {
+                BackPackChainCellRole.ChainHead => MultiplyColor(baseColor, chainHeadTint),
+                BackPackChainCellRole.ChainBody => MultiplyColor(baseColor, chainBodyTint),
+                BackPackChainCellRole.ChainTail => MultiplyColor(baseColor, chainTailTint),
+                _ => baseColor,
+            };
+        }
+
+        private static Color MultiplyColor(Color left, Color right)
+        {
+            return new Color(left.r * right.r, left.g * right.g, left.b * right.b, left.a * right.a);
+        }
     }
 
     /// <summary>
@@ -258,6 +331,7 @@ namespace Kernel.UI
         [Header("Preview Colors")]
         [SerializeField] private Color inventoryPreviewColor = new(1f, 1f, 1f, 0.92f);
         [SerializeField] private Color spellBookPreviewColor = new(1f, 0.9f, 0.7f, 0.92f);
+        [SerializeField] private bool hideTextForLinkedPreview = true;
 
         private RectTransform rectTransform;
 
@@ -275,15 +349,28 @@ namespace Kernel.UI
         /// </summary>
         public void InitializeFromSlot(BackPackGridSlotView source)
         {
+            InitializeFromSlotRange(source, source != null ? source.SlotRectTransform : null, source != null ? source.SlotRectTransform : null);
+        }
+
+        /// <summary>
+        /// summary: 用源槽位和整件首尾槽位的数据刷新预览显示，并把尺寸同步为整件跨度。
+        /// param: source 当前拖拽源槽位
+        /// param: firstSlot 当前整件首格 RectTransform
+        /// param: lastSlot 当前整件末格 RectTransform
+        /// returns: 无
+        /// </summary>
+        public void InitializeFromSlotRange(BackPackGridSlotView source, RectTransform firstSlot, RectTransform lastSlot)
+        {
             EnsureLocalReferences();
             if (source == null)
             {
                 return;
             }
 
-            SetToken(source.Token);
+            bool isLinkedPreview = source.Item != null && source.Item.SlotSpan > 1 && firstSlot != null && lastSlot != null && firstSlot != lastSlot;
+            SetToken(isLinkedPreview && hideTextForLinkedPreview ? null : source.Token);
             SetArea(source.Area);
-            CopySizeFrom(source.SlotRectTransform);
+            CopyBoundsFrom(firstSlot != null ? firstSlot : source.SlotRectTransform, lastSlot != null ? lastSlot : source.SlotRectTransform);
         }
 
         /// <summary>
@@ -381,7 +468,7 @@ namespace Kernel.UI
         /// param: sourceRect 当前源槽位根节点
         /// returns: 无
         /// </summary>
-        private void CopySizeFrom(RectTransform sourceRect)
+        private void CopyBoundsFrom(RectTransform firstRect, RectTransform lastRect)
         {
             if (rectTransform == null)
             {
@@ -392,10 +479,14 @@ namespace Kernel.UI
             rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             rectTransform.pivot = new Vector2(0.5f, 0.5f);
             rectTransform.localScale = Vector3.one;
-            if (sourceRect != null)
+            if (firstRect == null || lastRect == null)
             {
-                rectTransform.sizeDelta = sourceRect.rect.size;
+                return;
             }
+
+            float width = Mathf.Abs(lastRect.position.x - firstRect.position.x) + Mathf.Max(firstRect.rect.width, lastRect.rect.width);
+            float height = Mathf.Max(firstRect.rect.height, lastRect.rect.height);
+            rectTransform.sizeDelta = new Vector2(width, height);
         }
     }
 }

@@ -68,6 +68,7 @@ public sealed class CharBullet : MonoBehaviour
     private bool hasPreviousImpactCheckCenter;
     private bool isActiveShot;
     private CompiledAttack compiledAttack;
+    private BulletTargetPolicy targetPolicy = BulletTargetPolicy.EnemiesOnly;
 
     public TMP_Text GlyphText
     {
@@ -138,6 +139,7 @@ public sealed class CharBullet : MonoBehaviour
     public float Damage => attackSpec.damage;
     public AttackSpec CurrentAttackSpec => attackSpec;
     public CompiledAttack CurrentCompiledAttack => compiledAttack;
+    public BulletTargetPolicy TargetPolicy => targetPolicy;
 
     private void Awake()
     {
@@ -157,9 +159,16 @@ public sealed class CharBullet : MonoBehaviour
     /// param: shotDirection 本次发射方向
     /// param: shotAttackSpec 本次发射使用的攻击配置
     /// param: shotCompiledAttack 本次发射对应的编译结果
+    /// param: shotTargetPolicy 本次发射允许命中的目标策略
     /// returns: 无
     /// </summary>
-    public void InitializeShot(Transform owner, Vector3 spawnPosition, Vector3 shotDirection, AttackSpec shotAttackSpec, CompiledAttack shotCompiledAttack)
+    public void InitializeShot(
+        Transform owner,
+        Vector3 spawnPosition,
+        Vector3 shotDirection,
+        AttackSpec shotAttackSpec,
+        CompiledAttack shotCompiledAttack,
+        BulletTargetPolicy shotTargetPolicy = BulletTargetPolicy.EnemiesOnly)
     {
         TryCacheBindings(overwriteExisting: true);
         EnsureCompatiblePhysicsBindings(allowFallbackCreation: false);
@@ -167,6 +176,7 @@ public sealed class CharBullet : MonoBehaviour
         AttackSpec resolvedAttackSpec = shotCompiledAttack != null ? shotCompiledAttack.AttackSpec : shotAttackSpec;
         attackSpec = resolvedAttackSpec.GetSanitized();
         compiledAttack = shotCompiledAttack;
+        targetPolicy = shotTargetPolicy;
         ownerRoot = owner;
         spawnWorldPosition = spawnPosition;
         elapsedLifetime = 0f;
@@ -1234,6 +1244,13 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         Transform targetRoot = other.attachedRigidbody != null ? other.attachedRigidbody.transform : other.transform.root;
+        bool isEnvironmentImpact = !HasImpactActor(other);
+        bool isValidActorImpact = IsConfiguredActorImpactTarget(other, targetRoot);
+        if (!isEnvironmentImpact && !isValidActorImpact)
+        {
+            return false;
+        }
+
         int targetRootId = targetRoot.GetInstanceID();
         if (!impactedTargetRoots.Add(targetRootId))
         {
@@ -1241,31 +1258,46 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         Vector3 impactPoint = GetImpactPoint(other);
-        TryApplyDamageToEnemy(other, targetRoot, "Direct");
+        TryApplyConfiguredDirectDamage(other, targetRoot, "Direct");
         TryApplyExplosionDamageAt(impactPoint);
-        int nextLife = Mathf.Max(0, remainingLife - Mathf.Max(1, attackSpec.impactLifeCost));
-        // GameDebug.LogFormat(
-        //     "[CharBullet] Hit target='{0}' via collider='{1}' layer={2} life {3}->{4}",
-        //     targetRoot.name,
-        //     other.name,
-        //     other.gameObject.layer,
-        //     remainingLife,
-        //     nextLife);
         ApplyLifeCost(attackSpec.impactLifeCost);
         return true;
     }
 
     /// <summary>
-    /// summary: 当命中的对象被标记为敌人时，尝试把当前子弹伤害应用到其 Enemy 组件上。
+    /// summary: 当命中的对象符合当前目标策略时，尝试把当前子弹伤害应用到该 actor 上。
     /// param: other 本次命中的碰撞体
     /// param: targetRoot 当前命中去重使用的根节点
+    /// param: damageSource 本次伤害来源，便于区分直击和爆炸日志
+    /// returns: 成功对任一有效 actor 结算伤害时返回 true
+    /// </summary>
+    private bool TryApplyConfiguredDirectDamage(Collider other, Transform targetRoot, string damageSource)
+    {
+        bool damagedAnyTarget = false;
+        if (ShouldDamageEnemies())
+        {
+            damagedAnyTarget |= TryApplyDamageToEnemy(other, targetRoot, damageSource);
+        }
+
+        if (ShouldDamagePlayer())
+        {
+            damagedAnyTarget |= TryApplyDamageToPlayer(other, targetRoot, damageSource);
+        }
+
+        return damagedAnyTarget;
+    }
+
+    /// <summary>
+    /// summary: 当命中的对象被标记为敌人且当前策略允许伤害敌人时，尝试把当前子弹伤害应用到其 Enemy 组件上。
+    /// param: other 本次命中的碰撞体
+    /// param: targetRoot 当前命中的根节点
     /// param: damageSource 本次伤害来源，便于区分直击和爆炸日志
     /// returns: 成功对敌人结算伤害时返回 true
     /// </summary>
     private bool TryApplyDamageToEnemy(Collider other, Transform targetRoot, string damageSource)
     {
         Enemy enemy = other.GetComponentInParent<Enemy>();
-        if (Damage <= 0f || !IsEnemyImpactTarget(other, targetRoot, enemy))
+        if (Damage <= 0f || !ShouldDamageEnemies() || !IsEnemyImpactTarget(other, targetRoot, enemy))
         {
             return false;
         }
@@ -1310,6 +1342,43 @@ public sealed class CharBullet : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 当命中的对象拥有 PlayerHealth 且当前策略允许伤害玩家时，尝试把当前子弹伤害应用到其生命组件上。
+    /// param: other 本次命中的碰撞体
+    /// param: targetRoot 当前命中的根节点
+    /// param: damageSource 本次伤害来源，便于区分直击和爆炸日志
+    /// returns: 成功对玩家结算伤害时返回 true
+    /// </summary>
+    private bool TryApplyDamageToPlayer(Collider other, Transform targetRoot, string damageSource)
+    {
+        PlayerHealth playerHealth = other.GetComponentInParent<PlayerHealth>();
+        if (Damage <= 0f || !ShouldDamagePlayer() || playerHealth == null)
+        {
+            return false;
+        }
+
+        string targetName = targetRoot != null ? targetRoot.name : "<destroyed>";
+        float previousHealth = playerHealth.CurrentHealth;
+        if (!playerHealth.TryApplyDamage(Damage, out float remainingHealth, out bool isDead))
+        {
+            GameDebug.LogFormat(
+                "[CharBullet] Player target='{0}' ignored {1} damage={2} health={3}/{4}",
+                targetName,
+                damageSource,
+                Damage,
+                previousHealth,
+                playerHealth.MaxHealth);
+            return false;
+        }
+
+        if (isDead)
+        {
+            GameDebug.LogFormat("[CharBullet] Player target='{0}' died from {1}.", targetName, damageSource);
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// summary: 若当前编译结果带有爆炸语义，则在命中点附近再做一次 AoE 伤害结算。
     /// param: impactPoint 当前命中的世界位置
     /// returns: 无
@@ -1346,7 +1415,7 @@ public sealed class CharBullet : MonoBehaviour
                 continue;
             }
 
-            TryApplyDamageToEnemy(overlap, overlapRoot, "Explosion");
+            TryApplyConfiguredDirectDamage(overlap, overlapRoot, "Explosion");
         }
     }
 
@@ -1365,6 +1434,47 @@ public sealed class CharBullet : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 判断当前命中的对象是否属于可识别的 actor；仅玩家与敌人会进入策略判定。
+    /// param: other 当前命中的碰撞体
+    /// returns: 命中对象携带 Enemy 或 PlayerHealth 组件时返回 true
+    /// </summary>
+    private static bool HasImpactActor(Collider other)
+    {
+        return other != null &&
+               (other.GetComponentInParent<Enemy>() != null || other.GetComponentInParent<PlayerHealth>() != null);
+    }
+
+    /// <summary>
+    /// summary: 根据当前子弹的目标策略判断本次命中的 actor 是否为合法目标。
+    /// param: other 当前命中的碰撞体
+    /// param: targetRoot 当前命中的根节点
+    /// returns: 命中对象属于当前策略允许的玩家或敌人时返回 true
+    /// </summary>
+    private bool IsConfiguredActorImpactTarget(Collider other, Transform targetRoot)
+    {
+        if (other == null)
+        {
+            return false;
+        }
+
+        if (ShouldDamageEnemies())
+        {
+            Enemy enemy = other.GetComponentInParent<Enemy>();
+            if (IsEnemyImpactTarget(other, targetRoot, enemy))
+            {
+                return true;
+            }
+        }
+
+        if (ShouldDamagePlayer() && other.GetComponentInParent<PlayerHealth>() != null)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// summary: 判断单个节点是否带有项目里用于敌人的标签。
     /// param: target 需要检查的节点
     /// returns: 标签匹配 Enemy_Object 时返回 true
@@ -1378,6 +1488,26 @@ public sealed class CharBullet : MonoBehaviour
 
         string targetTag = target.tag;
         return string.Equals(targetTag, EnemyTagName, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// summary: 判断当前子弹策略是否允许对敌人造成伤害。
+    /// param: 无
+    /// returns: 目标策略包含敌人时返回 true
+    /// </summary>
+    private bool ShouldDamageEnemies()
+    {
+        return targetPolicy == BulletTargetPolicy.EnemiesOnly || targetPolicy == BulletTargetPolicy.Both;
+    }
+
+    /// <summary>
+    /// summary: 判断当前子弹策略是否允许对玩家造成伤害。
+    /// param: 无
+    /// returns: 目标策略包含玩家时返回 true
+    /// </summary>
+    private bool ShouldDamagePlayer()
+    {
+        return targetPolicy == BulletTargetPolicy.PlayerOnly || targetPolicy == BulletTargetPolicy.Both;
     }
 
     /// <summary>

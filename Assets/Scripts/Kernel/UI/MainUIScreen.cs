@@ -28,10 +28,17 @@ namespace Kernel.UI
         [SerializeField] private Button pauseButton;
         [SerializeField] private TMP_Text pauseButtonText;
 
+        [Header("Linked Outline")]
+        [SerializeField] private Color linkedOutlineColor = new(1f, 0.84f, 0.35f, 0.95f);
+        [SerializeField, Min(1f)] private float linkedOutlineThickness = 4f;
+        [SerializeField] private Vector2 linkedOutlinePadding = new(6f, 6f);
+
         private readonly List<BackPackGridSlotView> runtimeSpellSlots = new();
+        private readonly List<LinkedTokenOutlineView> runtimeSpellOutlines = new();
         private PlayerPlaneMovement currentPlayer;
         private AttackFormulaLoadout currentLoadout;
         private bool hasLoggedMissingSpellTemplate;
+        private RectTransform spellLinkedOutlineLayer;
 
         public override Status currentStatus { get; } = StatusList.PlayingStatus;
 
@@ -211,6 +218,7 @@ namespace Kernel.UI
             }
 
             hasLoggedMissingSpellTemplate = false;
+            EnsureSpellOutlineLayer();
             spellSlotTemplate.InitializeDisplayOnly(BackPackSlotArea.SpellBook);
             spellSlotTemplate.SetToken(null);
             if (spellSlotTemplate.gameObject.activeSelf)
@@ -287,29 +295,36 @@ namespace Kernel.UI
                 return;
             }
 
-            IReadOnlyList<BaseTokenData> tokens = currentLoadout.Tokens;
-            if (tokens == null)
+            IReadOnlyList<PlaceableTokenData> items = currentLoadout.Items;
+            if (items == null)
             {
                 return;
             }
 
             int visibleIndex = 0;
-            for (int i = 0; i < tokens.Count; i++)
+            for (int i = 0; i < items.Count; i++)
             {
-                BaseTokenData token = tokens[i];
-                if (token == null)
+                PlaceableTokenData item = items[i];
+                if (item == null)
                 {
                     continue;
                 }
 
-                BackPackGridSlotView slotView = Instantiate(spellSlotTemplate, spellPanel);
-                slotView.gameObject.SetActive(true);
-                slotView.name = $"Spell Slot {visibleIndex + 1:D2}";
-                slotView.InitializeDisplayOnly(BackPackSlotArea.SpellBook);
-                slotView.SetToken(token);
-                runtimeSpellSlots.Add(slotView);
-                visibleIndex++;
+                int anchorIndex = visibleIndex;
+                int span = Mathf.Max(1, item.SlotSpan);
+                for (int offset = 0; offset < span; offset++)
+                {
+                    BackPackGridSlotView slotView = Instantiate(spellSlotTemplate, spellPanel);
+                    slotView.gameObject.SetActive(true);
+                    slotView.name = $"Spell Slot {visibleIndex + 1:D2}";
+                    slotView.InitializeDisplayOnly(BackPackSlotArea.SpellBook);
+                    slotView.SetOccupancy(new TokenCellOccupancy(item, anchorIndex, offset, offset == 0));
+                    runtimeSpellSlots.Add(slotView);
+                    visibleIndex++;
+                }
             }
+
+            RefreshSpellOutlines();
         }
 
         /// <summary>
@@ -325,6 +340,7 @@ namespace Kernel.UI
             }
 
             runtimeSpellSlots.Clear();
+            SetLinkedOutlineViewsVisible(runtimeSpellOutlines, 0);
         }
 
         /// <summary>
@@ -375,6 +391,108 @@ namespace Kernel.UI
             }
 
             return null;
+        }
+
+        private void EnsureSpellOutlineLayer()
+        {
+            RectTransform parent = spellPanel != null ? spellPanel.parent as RectTransform : topPanel;
+            if (parent == null)
+            {
+                spellLinkedOutlineLayer = null;
+                return;
+            }
+
+            if (spellLinkedOutlineLayer == null)
+            {
+                GameObject layerObject = new("MainSpellLinkedOutlineLayer", typeof(RectTransform), typeof(CanvasGroup));
+                layerObject.layer = gameObject.layer;
+                spellLinkedOutlineLayer = layerObject.GetComponent<RectTransform>();
+                spellLinkedOutlineLayer.SetParent(parent, false);
+                spellLinkedOutlineLayer.anchorMin = Vector2.zero;
+                spellLinkedOutlineLayer.anchorMax = Vector2.one;
+                spellLinkedOutlineLayer.offsetMin = Vector2.zero;
+                spellLinkedOutlineLayer.offsetMax = Vector2.zero;
+                spellLinkedOutlineLayer.localScale = Vector3.one;
+
+                CanvasGroup canvasGroup = layerObject.GetComponent<CanvasGroup>();
+                canvasGroup.alpha = 1f;
+                canvasGroup.blocksRaycasts = false;
+                canvasGroup.interactable = false;
+            }
+
+            spellLinkedOutlineLayer.SetAsLastSibling();
+        }
+
+        private void RefreshSpellOutlines()
+        {
+            EnsureSpellOutlineLayer();
+            if (spellPanel == null || spellLinkedOutlineLayer == null)
+            {
+                SetLinkedOutlineViewsVisible(runtimeSpellOutlines, 0);
+                return;
+            }
+
+            spellLinkedOutlineLayer.SetAsLastSibling();
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(spellPanel);
+
+            int visibleCount = 0;
+            for (int i = 0; i < runtimeSpellSlots.Count; i++)
+            {
+                BackPackGridSlotView slot = runtimeSpellSlots[i];
+                if (slot == null || slot.Item == null || !slot.IsAnchor || slot.Item.SlotSpan <= 1)
+                {
+                    continue;
+                }
+
+                int endIndex = slot.AnchorIndex + slot.Item.SlotSpan - 1;
+                if (endIndex < 0 || endIndex >= runtimeSpellSlots.Count)
+                {
+                    continue;
+                }
+
+                BackPackGridSlotView endSlot = runtimeSpellSlots[endIndex];
+                if (endSlot == null || slot.SlotRectTransform == null || endSlot.SlotRectTransform == null)
+                {
+                    continue;
+                }
+
+                LinkedTokenOutlineView outlineView = GetOrCreateLinkedOutlineView(visibleCount);
+                outlineView.ApplyStyle(linkedOutlineColor, linkedOutlineThickness);
+                outlineView.FitToSlots(spellLinkedOutlineLayer, slot.SlotRectTransform, endSlot.SlotRectTransform, linkedOutlinePadding);
+                outlineView.gameObject.SetActive(true);
+                visibleCount++;
+            }
+
+            SetLinkedOutlineViewsVisible(runtimeSpellOutlines, visibleCount);
+        }
+
+        private LinkedTokenOutlineView GetOrCreateLinkedOutlineView(int index)
+        {
+            while (runtimeSpellOutlines.Count <= index)
+            {
+                LinkedTokenOutlineView outlineView = LinkedTokenOutlineView.CreateRuntime($"Main Spell Linked Outline {runtimeSpellOutlines.Count + 1:D2}", spellLinkedOutlineLayer, gameObject.layer);
+                outlineView.gameObject.SetActive(false);
+                runtimeSpellOutlines.Add(outlineView);
+            }
+
+            return runtimeSpellOutlines[index];
+        }
+
+        private static void SetLinkedOutlineViewsVisible(List<LinkedTokenOutlineView> outlineViews, int visibleCount)
+        {
+            if (outlineViews == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < outlineViews.Count; i++)
+            {
+                if (outlineViews[i] != null)
+                {
+                    outlineViews[i].gameObject.SetActive(i < visibleCount);
+                }
+            }
         }
 
         /// <summary>

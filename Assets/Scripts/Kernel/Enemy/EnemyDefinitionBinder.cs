@@ -11,6 +11,8 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
     [SerializeField] private Enemy enemyData;
     [SerializeField] private CharEnemyMovement movement;
     [SerializeField] private EnemyMeleeAttacker meleeAttacker;
+    [SerializeField] private EnemyRangedTokenAttacker rangedTokenAttacker;
+    [SerializeField] private EnemySummoner summoner;
     [SerializeField] private CharGlyphPresenter glyphPresenter;
     [SerializeField] private CharEnemyVisualPresenter visualPresenter;
 
@@ -61,6 +63,16 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
             meleeAttacker = GetComponent<EnemyMeleeAttacker>();
         }
 
+        if (overwriteExisting || rangedTokenAttacker == null || rangedTokenAttacker.transform != transform)
+        {
+            rangedTokenAttacker = GetComponent<EnemyRangedTokenAttacker>();
+        }
+
+        if (overwriteExisting || summoner == null || summoner.transform != transform)
+        {
+            summoner = GetComponent<EnemySummoner>();
+        }
+
         if (overwriteExisting || glyphPresenter == null || glyphPresenter.transform != transform)
         {
             glyphPresenter = GetComponent<CharGlyphPresenter>();
@@ -103,7 +115,7 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
 
     private bool ApplyMovementKind(EnemyMovementKind movementKind)
     {
-        bool shouldEnableMovement = movementKind == EnemyMovementKind.ChaseTarget;
+        bool shouldEnableMovement = movementKind != EnemyMovementKind.None;
         if (movement == null)
         {
             return !shouldEnableMovement;
@@ -115,13 +127,31 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
 
     private bool ApplyAttackKind(EnemyAttackKind attackKind)
     {
-        bool shouldEnableAttack = attackKind == EnemyAttackKind.MeleeContact;
-        if (meleeAttacker == null)
+        bool shouldEnableMelee = attackKind == EnemyAttackKind.MeleeContact;
+        bool shouldEnableRanged = attackKind == EnemyAttackKind.RangedBulletToken;
+        bool shouldEnableSummon = attackKind == EnemyAttackKind.SummonEnemy;
+        if ((shouldEnableMelee && meleeAttacker == null) ||
+            (shouldEnableRanged && rangedTokenAttacker == null) ||
+            (shouldEnableSummon && summoner == null))
         {
-            return !shouldEnableAttack;
+            return false;
         }
 
-        meleeAttacker.enabled = shouldEnableAttack;
+        if (meleeAttacker != null)
+        {
+            meleeAttacker.enabled = shouldEnableMelee;
+        }
+
+        if (rangedTokenAttacker != null)
+        {
+            rangedTokenAttacker.enabled = shouldEnableRanged;
+        }
+
+        if (summoner != null)
+        {
+            summoner.enabled = shouldEnableSummon;
+        }
+
         return true;
     }
 

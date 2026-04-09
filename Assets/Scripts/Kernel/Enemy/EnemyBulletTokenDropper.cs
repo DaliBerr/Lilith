@@ -19,7 +19,7 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
     [SerializeField, Min(0f)] private float pickupSpreadRadius = 6f;
 
     private readonly List<EnemyBulletTokenDropEntry> tokenDrops = new();
-    private readonly List<BaseTokenData> rolledDrops = new();
+    private readonly List<PlaceableTokenData> rolledDrops = new();
 
     private Enemy ownerEnemy;
     private VocalithRandom randomSource;
@@ -150,7 +150,7 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
 
         for (int i = 0; i < rolledDrops.Count; i++)
         {
-            BaseTokenData token = rolledDrops[i];
+            PlaceableTokenData token = rolledDrops[i];
             Vector3 spawnPosition = basePosition + GetSpreadOffset(i, rolledDrops.Count, baseAngleDegrees);
             BulletTokenPickup spawnedPickup = Instantiate(pickupPrefab, spawnPosition, Quaternion.identity, resolvedParent);
             if (!spawnedPickup.TrySetToken(token))

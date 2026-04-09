@@ -44,6 +44,21 @@ public sealed class EnemyGeneratorTests
     }
 
     [Test]
+    public void TryGetSpawnPositionAround_ReturnsGroundTaggedCellOnly()
+    {
+        MapGridAuthoring authoring = CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        SetPrivateField(generator, "maxGroundSpawnRolls", 8);
+
+        bool success = generator.TryGetSpawnPositionAround(authoring.GetCellWorldPosition(24, 24), 6f, out Vector3 spawnPosition);
+
+        Assert.That(success, Is.True);
+        Assert.That(authoring.TryGetCellCoordinateFromWorldPoint(spawnPosition, out Vector2Int coordinate), Is.True);
+        Assert.That(authoring.TryGetCell(coordinate, out GameObject cellObject), Is.True);
+        Assert.That(cellObject.CompareTag(MapGridAuthoring.GroundTagName), Is.True);
+    }
+
+    [Test]
     public void TryGetSpawnPosition_ReturnsFalseWhenNoGroundTaggedCellCanBeRolled()
     {
         CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.WallTagName);
@@ -91,10 +106,11 @@ public sealed class EnemyGeneratorTests
         Assert.That(spawnedBaseEnemy.AttackRange, Is.EqualTo(18f));
         Assert.That(spawnedBaseEnemy.AttackCooldown, Is.EqualTo(0.75f));
         Assert.That(spawnedBaseEnemy.AttackDamage, Is.EqualTo(12f));
-        Assert.That(spawnedBaseEnemy.StoppingDistance, Is.EqualTo(18f));
+        Assert.That(spawnedBaseEnemy.StoppingDistance, Is.EqualTo(1f));
 
         Assert.That(prefabEnemy.MaxHealth, Is.EqualTo(100f));
         Assert.That(prefabEnemy.MoveSpeed, Is.EqualTo(120f));
+        Assert.That(prefabEnemy.StoppingDistance, Is.EqualTo(1f));
         Assert.That(prefabEnemy.AttackRange, Is.EqualTo(0f));
         Assert.That(prefabEnemy.AttackCooldown, Is.EqualTo(0f));
         Assert.That(prefabEnemy.AttackDamage, Is.EqualTo(0f));
@@ -193,6 +209,32 @@ public sealed class EnemyGeneratorTests
     }
 
     [Test]
+    public void TrySpawnEnemyAt_BindsTargetsForMovementAndExtendedAttackers()
+    {
+        CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        GameObject playerObject = CreateGameObject("Player");
+        PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
+        Transform player = playerObject.transform;
+        player.position = new Vector3(32f, 0f, 32f);
+
+        GameObject enemyPrefab = CreateEnemyPrefab(100f);
+        EnemyDefinition definition = CreateEnemyDefinition("CasterEnemy", enemyPrefab.GetComponent<EnemyDefinitionBinder>());
+        Assert.That(generator.TrySetTarget(player), Is.True);
+
+        bool success = generator.TrySpawnEnemyAt(definition, new EnemyWaveConfig(100f, 120f, 14f, 0.75f, 6f), new Vector3(28f, 0f, 28f), out Enemy spawnedEnemy);
+
+        Assert.That(success, Is.True);
+        createdObjects.Add(spawnedEnemy.gameObject);
+        Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<CharEnemyMovement>(), "targetPlayer"), Is.SameAs(player));
+        Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<EnemyMeleeAttacker>(), "targetPlayer"), Is.SameAs(player));
+        Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<EnemyRangedTokenAttacker>(), "targetPlayer"), Is.SameAs(player));
+        Assert.That(GetPrivateField<PlayerHealth>(spawnedEnemy.GetComponent<EnemyRangedTokenAttacker>(), "targetPlayerHealth"), Is.SameAs(playerHealth));
+        Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<EnemySummoner>(), "targetPlayer"), Is.SameAs(player));
+        Assert.That(GetPrivateField<EnemyGenerator>(spawnedEnemy.GetComponent<EnemySummoner>(), "enemyGenerator"), Is.SameAs(generator));
+    }
+
+    [Test]
     public void TrySpawnEnemy_ReturnsFalseWhenDefinitionHasNoRuntimePrefab()
     {
         CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);
@@ -251,6 +293,8 @@ public sealed class EnemyGeneratorTests
         collider.size = new Vector3(10f, 10f, 10f);
         enemyObject.AddComponent<CharEnemyMovement>();
         enemyObject.AddComponent<EnemyMeleeAttacker>();
+        enemyObject.AddComponent<EnemyRangedTokenAttacker>();
+        enemyObject.AddComponent<EnemySummoner>();
         enemyObject.AddComponent<EnemyDefinitionBinder>();
         BaseCharEnemyNorm1 enemyData = enemyObject.AddComponent<BaseCharEnemyNorm1>();
         SetEnemyHealth(enemyData, maxHealth);
@@ -292,6 +336,13 @@ public sealed class EnemyGeneratorTests
         FieldInfo field = FindInstanceField(target.GetType(), fieldName);
         Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
         field.SetValue(target, value);
+    }
+
+    private static T GetPrivateField<T>(object target, string fieldName)
+    {
+        FieldInfo field = FindInstanceField(target.GetType(), fieldName);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        return (T)field.GetValue(target);
     }
 
     private static void SetEnemyHealth(BaseCharEnemyNorm1 enemy, float health)

@@ -1,0 +1,115 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace Kernel.Bullet
+{
+    /// <summary>
+    /// 表示一个横向连续占据多个格子的连锁 token 物件。
+    /// </summary>
+    [CreateAssetMenu(menuName = "Lilith/Bullet Tokens/Linked Token", fileName = "LinkedToken")]
+    public sealed class LinkedTokenData : PlaceableTokenData
+    {
+        [SerializeField] private string itemId = string.Empty;
+        [SerializeField, TextArea] private string description = string.Empty;
+        [SerializeField] private List<BaseTokenData> linkedTokens = new();
+        [SerializeField, Min(1f)] private float damageMultiplier = 1f;
+        [SerializeField] private string pickupDisplayTextOverride = string.Empty;
+
+        public string ItemId
+        {
+            get => itemId;
+            set => itemId = value != null ? value.Trim() : string.Empty;
+        }
+
+        public string Description
+        {
+            get => description;
+            set => description = value ?? string.Empty;
+        }
+
+        public IReadOnlyList<BaseTokenData> LinkedTokens => linkedTokens;
+        public override int SlotSpan => linkedTokens != null ? linkedTokens.Count : 0;
+        public override float DamageMultiplier => Mathf.Max(1f, damageMultiplier);
+
+        public float ConfiguredDamageMultiplier
+        {
+            get => damageMultiplier;
+            set => damageMultiplier = Mathf.Max(1f, value);
+        }
+
+        public string PickupDisplayTextOverride
+        {
+            get => pickupDisplayTextOverride;
+            set => pickupDisplayTextOverride = value ?? string.Empty;
+        }
+
+        /// <summary>
+        /// summary: 用新的成员 token 序列替换当前连锁件内容。
+        /// param: tokens 需要写入的新成员 token 集合
+        /// returns: 无
+        /// </summary>
+        public void SetLinkedTokens(IEnumerable<BaseTokenData> tokens)
+        {
+            linkedTokens ??= new List<BaseTokenData>();
+            linkedTokens.Clear();
+            if (tokens == null)
+            {
+                return;
+            }
+
+            foreach (BaseTokenData token in tokens)
+            {
+                if (token != null)
+                {
+                    linkedTokens.Add(token);
+                }
+            }
+        }
+
+        public override BaseTokenData GetVisualToken(int localOffset)
+        {
+            if (linkedTokens == null || localOffset < 0 || localOffset >= linkedTokens.Count)
+            {
+                return null;
+            }
+
+            return linkedTokens[localOffset];
+        }
+
+        public override void AppendCompileTokens(List<BaseTokenData> buffer)
+        {
+            if (buffer == null || linkedTokens == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < linkedTokens.Count; i++)
+            {
+                if (linkedTokens[i] != null)
+                {
+                    buffer.Add(linkedTokens[i]);
+                }
+            }
+        }
+
+        public override string GetPickupDisplayText()
+        {
+            if (!string.IsNullOrWhiteSpace(pickupDisplayTextOverride))
+            {
+                return pickupDisplayTextOverride;
+            }
+
+            return base.GetPickupDisplayText();
+        }
+
+        private void OnValidate()
+        {
+            itemId = itemId != null ? itemId.Trim() : string.Empty;
+            description ??= string.Empty;
+            pickupDisplayTextOverride ??= string.Empty;
+            damageMultiplier = Mathf.Max(1f, damageMultiplier);
+            linkedTokens ??= new List<BaseTokenData>();
+            linkedTokens.RemoveAll(token => token == null);
+        }
+    }
+}

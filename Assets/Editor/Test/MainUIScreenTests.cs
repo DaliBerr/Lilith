@@ -101,6 +101,34 @@ public sealed class MainUIScreenTests
         Assert.That(GetVisibleSpellSlots(spellPanel).Count, Is.EqualTo(0));
     }
 
+    [Test]
+    public void MainUIScreen_ExpandsLinkedItemsIntoAdjacentHudSlots()
+    {
+        LinkedTokenData linked = CreateLinkedToken("linked_fire_hit", 1.5f,
+            CreateToken<CoreTokenData>("fire", "Fire"),
+            CreateToken<ResultTokenData>("hit", "Hit"));
+        AttackFormulaLoadout loadout = CreatePlayerWithItems(new PlaceableTokenData[]
+        {
+            linked,
+        });
+
+        MainUIScreen screen = CreateMainUIScreen(out RectTransform spellPanel, out _);
+        InvokeNonPublic(screen, "OnInit");
+
+        List<BackPackGridSlotView> visibleSlots = GetVisibleSpellSlots(spellPanel);
+
+        Assert.That(visibleSlots.Count, Is.EqualTo(2));
+        Assert.That(visibleSlots[0].ChainRole, Is.EqualTo(BackPackChainCellRole.ChainHead));
+        Assert.That(visibleSlots[1].ChainRole, Is.EqualTo(BackPackChainCellRole.ChainTail));
+        Assert.That(GetTokenText(visibleSlots[0]), Is.EqualTo("Fire"));
+        Assert.That(GetTokenText(visibleSlots[1]), Is.EqualTo("Hit"));
+        Assert.That(GetActiveLinkedOutlines(screen.gameObject).Count, Is.EqualTo(1));
+
+        loadout.SetItems(System.Array.Empty<PlaceableTokenData>());
+        Assert.That(GetVisibleSpellSlots(spellPanel).Count, Is.EqualTo(0));
+        Assert.That(GetActiveLinkedOutlines(screen.gameObject).Count, Is.EqualTo(0));
+    }
+
     private MainUIScreen CreateMainUIScreen(out RectTransform spellPanel, out BackPackGridSlotView templateSlot)
     {
         GameObject root = CreateUiObject("MainUI");
@@ -132,6 +160,15 @@ public sealed class MainUIScreenTests
         player.AddComponent<PlayerPlaneMovement>();
         AttackFormulaLoadout loadout = player.AddComponent<AttackFormulaLoadout>();
         loadout.SetTokens(tokens);
+        return loadout;
+    }
+
+    private AttackFormulaLoadout CreatePlayerWithItems(IEnumerable<PlaceableTokenData> items)
+    {
+        GameObject player = CreateGameObject("Player");
+        player.AddComponent<PlayerPlaneMovement>();
+        AttackFormulaLoadout loadout = player.AddComponent<AttackFormulaLoadout>();
+        loadout.SetItems(items);
         return loadout;
     }
 
@@ -185,6 +222,17 @@ public sealed class MainUIScreenTests
         return token;
     }
 
+    private LinkedTokenData CreateLinkedToken(string itemId, float damageMultiplier, params BaseTokenData[] linkedTokens)
+    {
+        LinkedTokenData token = ScriptableObject.CreateInstance<LinkedTokenData>();
+        token.ItemId = itemId;
+        token.ConfiguredDamageMultiplier = damageMultiplier;
+        token.SetLinkedTokens(linkedTokens);
+        token.name = itemId;
+        createdObjects.Add(token);
+        return token;
+    }
+
     private static void InvokeNonPublic(object target, string methodName)
     {
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -212,5 +260,20 @@ public sealed class MainUIScreenTests
     {
         TMP_Text text = slotView.transform.Find("Text")?.GetComponent<TMP_Text>();
         return text != null ? text.text : string.Empty;
+    }
+
+    private static List<LinkedTokenOutlineView> GetActiveLinkedOutlines(GameObject root)
+    {
+        List<LinkedTokenOutlineView> result = new();
+        LinkedTokenOutlineView[] outlines = root.GetComponentsInChildren<LinkedTokenOutlineView>(true);
+        for (int i = 0; i < outlines.Length; i++)
+        {
+            if (outlines[i] != null && outlines[i].gameObject.activeSelf)
+            {
+                result.Add(outlines[i]);
+            }
+        }
+
+        return result;
     }
 }

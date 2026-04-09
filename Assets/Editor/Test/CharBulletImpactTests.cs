@@ -79,6 +79,44 @@ public sealed class CharBulletImpactTests
         Assert.That(bullet.RemainingLife, Is.EqualTo(1));
     }
 
+    [Test]
+    public void CheckImpactContacts_PlayerOnlyDamagesPlayerAndConsumesLife()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(Vector3.zero, 6f);
+        PlayerHealth playerHealth = CreatePlayer(Vector3.zero, new Vector3(8f, 8f, 8f), 10f);
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 2);
+        attackSpec.damage = 2f;
+
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, null, BulletTargetPolicy.PlayerOnly);
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(bullet, "CheckImpactContacts");
+
+        Assert.That(playerHealth.CurrentHealth, Is.EqualTo(8f));
+        Assert.That(bullet.RemainingLife, Is.EqualTo(1));
+        Assert.That(bullet.TargetPolicy, Is.EqualTo(BulletTargetPolicy.PlayerOnly));
+    }
+
+    [Test]
+    public void CheckImpactContacts_PlayerOnlyIgnoresEnemyWithoutConsumingLife()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(Vector3.zero, 6f);
+        BaseCharEnemyNorm1 enemy = CreateEnemyWithTaggedChildCollider(MapGridAuthoring.GroundTagName);
+        SetEnemyHealth(enemy, 5f);
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 2);
+        attackSpec.damage = 2f;
+
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, null, BulletTargetPolicy.PlayerOnly);
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(bullet, "CheckImpactContacts");
+
+        Assert.That(enemy.CurrentHealth, Is.EqualTo(5f));
+        Assert.That(bullet.RemainingLife, Is.EqualTo(2));
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);
@@ -125,6 +163,19 @@ public sealed class CharBulletImpactTests
         collider.size = new Vector3(8f, 8f, 8f);
         collider.center = Vector3.zero;
         return enemy;
+    }
+
+    private PlayerHealth CreatePlayer(Vector3 position, Vector3 colliderSize, float maxHealth)
+    {
+        GameObject playerObject = CreateGameObject("Player");
+        playerObject.transform.position = position;
+        PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
+        BoxCollider collider = playerObject.AddComponent<BoxCollider>();
+        collider.size = colliderSize;
+        SetPrivateField(playerHealth, "maxHealth", maxHealth);
+        SetPrivateField(playerHealth, "currentHealth", maxHealth);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
+        return playerHealth;
     }
 
     private static AttackSpec CreateAttackSpec(int projectileLife)

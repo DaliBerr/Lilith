@@ -49,7 +49,7 @@ namespace Kernel.UI
             }
         }
 
-        public event Action<BackPackPreviewDummyEnemy> Damaged;
+        public new event Action<BackPackPreviewDummyEnemy> Damaged;
 
         /// <summary>
         /// summary: 返回预览目标当前可用于放置爆炸圈提示的世界锚点。

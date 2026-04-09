@@ -40,27 +40,54 @@ public sealed class BulletTokenPickupTests
     }
 
     [Test]
-    public void OnTriggerEnter_PlayerInventoryFull_KeepsPickupInWorld()
+    public void OnTriggerEnter_LinkedTokenWithoutContinuousSpace_KeepsPickupInWorld()
     {
         PlayerBulletTokenInventory inventory = CreateInventory();
         BoxCollider playerCollider = inventory.gameObject.AddComponent<BoxCollider>();
         BulletTokenPickup pickup = CreatePickup();
-        CoreTokenData existingToken = CreateToken<CoreTokenData>("existing", "Existing");
-        CoreTokenData droppedToken = CreateToken<CoreTokenData>("dropped", "Dropped");
+        LinkedTokenData linked = CreateLinkedToken("linked_fire_hit", "FireHit", 1.5f,
+            CreateToken<CoreTokenData>("fire", "Fire"),
+            CreateToken<ResultTokenData>("hit", "Hit"));
+        CoreTokenData filler = CreateToken<CoreTokenData>("filler", "Fill");
 
         for (int i = 0; i < PlayerBulletTokenInventory.Capacity; i++)
         {
-            Assert.That(inventory.SetToken(i, existingToken), Is.True);
+            if ((i % PlayerBulletTokenInventory.Columns) == PlayerBulletTokenInventory.Columns - 1)
+            {
+                continue;
+            }
+
+            Assert.That(inventory.SetToken(i, filler), Is.True);
         }
 
-        Assert.That(pickup.TrySetToken(droppedToken), Is.True);
+        Assert.That(pickup.TrySetToken(linked), Is.True);
 
         InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
 
-        Assert.That(inventory.FindFirstEmptySlot(), Is.EqualTo(-1));
         Assert.That(pickup != null, Is.True);
         Assert.That(pickup.IsCollected, Is.False);
-        Assert.That(pickup.Token, Is.SameAs(droppedToken));
+        Assert.That(inventory.FindFirstEmptySlot(), Is.EqualTo(PlayerBulletTokenInventory.Columns - 1));
+    }
+
+    [Test]
+    public void OnTriggerEnter_LinkedTokenWithContinuousSpace_FillsWholeSpan()
+    {
+        PlayerBulletTokenInventory inventory = CreateInventory();
+        BoxCollider playerCollider = inventory.gameObject.AddComponent<BoxCollider>();
+        BulletTokenPickup pickup = CreatePickup();
+        LinkedTokenData linked = CreateLinkedToken("linked_fire_hit", "FireHit", 1.5f,
+            CreateToken<CoreTokenData>("fire", "Fire"),
+            CreateToken<ResultTokenData>("hit", "Hit"));
+
+        Assert.That(pickup.TrySetToken(linked), Is.True);
+
+        InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
+
+        Assert.That(inventory.GetCell(0).item, Is.SameAs(linked));
+        Assert.That(inventory.GetCell(1).item, Is.SameAs(linked));
+        Assert.That(inventory.GetCell(0).isAnchor, Is.True);
+        Assert.That(inventory.GetCell(1).isAnchor, Is.False);
+        Assert.That(pickup == null, Is.True);
     }
 
     [Test]
@@ -123,6 +150,18 @@ public sealed class BulletTokenPickupTests
         token.TokenId = tokenId;
         token.DisplayText = displayText;
         token.name = tokenId;
+        createdObjects.Add(token);
+        return token;
+    }
+
+    private LinkedTokenData CreateLinkedToken(string itemId, string pickupDisplay, float damageMultiplier, params BaseTokenData[] linkedTokens)
+    {
+        LinkedTokenData token = ScriptableObject.CreateInstance<LinkedTokenData>();
+        token.ItemId = itemId;
+        token.PickupDisplayTextOverride = pickupDisplay;
+        token.ConfiguredDamageMultiplier = damageMultiplier;
+        token.SetLinkedTokens(linkedTokens);
+        token.name = itemId;
         createdObjects.Add(token);
         return token;
     }

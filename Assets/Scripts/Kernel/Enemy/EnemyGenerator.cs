@@ -20,6 +20,8 @@ public sealed class EnemyGenerator : MonoBehaviour
 
     private VocalithRandom randomSource;
 
+    public float SpawnDistance => spawnDistance;
+
     private void Awake()
     {
         TryResolveTargetPlayer();
@@ -69,16 +71,7 @@ public sealed class EnemyGenerator : MonoBehaviour
             return false;
         }
 
-        Quaternion spawnRotation = GetSpawnRotation(spawnPosition, targetPlayer.position);
-        EnemyDefinitionBinder spawnedBinder = Instantiate(definition.RuntimePrefabBinder, spawnPosition, spawnRotation, spawnedEnemyParent);
-        if (!TryInitializeSpawnedEnemy(spawnedBinder, definition, config, out spawnedEnemy))
-        {
-            DestroySpawnedObject(spawnedBinder != null ? spawnedBinder.gameObject : null);
-            spawnedEnemy = null;
-            return false;
-        }
-
-        return true;
+        return TrySpawnEnemyAt(definition, config, spawnPosition, out spawnedEnemy);
     }
 
     /// <summary>
@@ -94,19 +87,49 @@ public sealed class EnemyGenerator : MonoBehaviour
             return false;
         }
 
-        for (int attempt = 0; attempt < maxGroundSpawnRolls; attempt++)
-        {
-            Vector3 candidatePosition = GetRandomSpawnCandidatePosition();
-            if (!IsGroundSpawnPosition(candidatePosition))
-            {
-                continue;
-            }
+        return TryGetSpawnPositionOnGround(targetPlayer.position, spawnDistance, useFullRadius: false, out spawnPosition);
+    }
 
-            spawnPosition = candidatePosition;
-            return true;
+    /// <summary>
+    /// summary: 在指定中心点附近多次抽样候选点，并只返回落在 Ground 地块上的刷怪位置。
+    /// param: centerPosition 本次抽样使用的世界中心点
+    /// param: radius 本次抽样允许使用的最大半径
+    /// param: spawnPosition 输出的有效敌人出生世界坐标
+    /// returns: 找到有效地面刷怪点时返回 true
+    /// </summary>
+    public bool TryGetSpawnPositionAround(Vector3 centerPosition, float radius, out Vector3 spawnPosition)
+    {
+        return TryGetSpawnPositionOnGround(centerPosition, radius, useFullRadius: true, out spawnPosition);
+    }
+
+    /// <summary>
+    /// summary: 按显式世界坐标实例化一名敌人，并沿用与常规刷怪相同的定义绑定与目标注入流程。
+    /// param: definition 当前要实例化的敌人定义
+    /// param: config 当前实例应接收的敌人数值配置
+    /// param: spawnPosition 当前实例的世界出生点
+    /// param: spawnedEnemy 输出的 Enemy 运行时组件
+    /// returns: 成功实例化敌人时返回 true
+    /// </summary>
+    public bool TrySpawnEnemyAt(EnemyDefinition definition, EnemyWaveConfig config, Vector3 spawnPosition, out Enemy spawnedEnemy)
+    {
+        spawnedEnemy = null;
+        if (definition == null || definition.RuntimePrefabBinder == null || !TryResolveTargetPlayer() || !TryResolveMapGrid())
+        {
+            return false;
         }
 
-        return false;
+        Vector3 resolvedSpawnPosition = spawnPosition;
+        resolvedSpawnPosition.y = targetMapGrid.WorldPlaneY;
+        Quaternion spawnRotation = GetSpawnRotation(resolvedSpawnPosition, targetPlayer.position);
+        EnemyDefinitionBinder spawnedBinder = Instantiate(definition.RuntimePrefabBinder, resolvedSpawnPosition, spawnRotation, spawnedEnemyParent);
+        if (!TryInitializeSpawnedEnemy(spawnedBinder, definition, config, out spawnedEnemy))
+        {
+            DestroySpawnedObject(spawnedBinder != null ? spawnedBinder.gameObject : null);
+            spawnedEnemy = null;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -188,17 +211,18 @@ public sealed class EnemyGenerator : MonoBehaviour
     /// param: 无
     /// returns: 一个尚未经过地面校验的候选世界坐标
     /// </summary>
-    private Vector3 GetRandomSpawnCandidatePosition()
+    private Vector3 GetRandomSpawnCandidatePosition(Vector3 centerPosition, float radius, bool useFullRadius)
     {
         EnsureRandomSource();
         float angleRadians = NextFloat(0f, Mathf.PI * 2f);
         Vector2 randomOffset = new(Mathf.Cos(angleRadians), Mathf.Sin(angleRadians));
-        Vector3 playerPosition = targetPlayer.position;
+        float resolvedRadius = Mathf.Max(0f, radius);
+        float offsetScale = useFullRadius ? Mathf.Sqrt(NextFloat(0f, 1f)) * resolvedRadius : resolvedRadius;
         float planeY = targetMapGrid.WorldPlaneY;
         return new Vector3(
-            playerPosition.x + (randomOffset.x * spawnDistance),
+            centerPosition.x + (randomOffset.x * offsetScale),
             planeY,
-            playerPosition.z + (randomOffset.y * spawnDistance));
+            centerPosition.z + (randomOffset.y * offsetScale));
     }
 
     /// <summary>
@@ -278,6 +302,19 @@ public sealed class EnemyGenerator : MonoBehaviour
         {
             meleeAttacker.TrySetTarget(targetPlayer);
         }
+
+        EnemyRangedTokenAttacker rangedTokenAttacker = spawnedRoot.GetComponent<EnemyRangedTokenAttacker>();
+        if (rangedTokenAttacker != null)
+        {
+            rangedTokenAttacker.TrySetTarget(targetPlayer);
+        }
+
+        EnemySummoner summoner = spawnedRoot.GetComponent<EnemySummoner>();
+        if (summoner != null)
+        {
+            summoner.TrySetTarget(targetPlayer);
+            summoner.TrySetEnemyGenerator(this);
+        }
     }
 
     /// <summary>
@@ -336,6 +373,29 @@ public sealed class EnemyGenerator : MonoBehaviour
         }
 
         return minInclusive + (maxInclusive - minInclusive) * randomSource.NextFloat01();
+    }
+
+    private bool TryGetSpawnPositionOnGround(Vector3 centerPosition, float radius, bool useFullRadius, out Vector3 spawnPosition)
+    {
+        spawnPosition = default;
+        if (!TryResolveMapGrid())
+        {
+            return false;
+        }
+
+        for (int attempt = 0; attempt < maxGroundSpawnRolls; attempt++)
+        {
+            Vector3 candidatePosition = GetRandomSpawnCandidatePosition(centerPosition, radius, useFullRadius);
+            if (!IsGroundSpawnPosition(candidatePosition))
+            {
+                continue;
+            }
+
+            spawnPosition = candidatePosition;
+            return true;
+        }
+
+        return false;
     }
 
     private static void DestroySpawnedObject(GameObject spawnedRoot)
