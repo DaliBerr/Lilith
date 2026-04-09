@@ -1,0 +1,28 @@
+{
+  "entries": [
+    {
+      "speakerId": "narrator",
+      "displayName": "旁白",
+      "displayMode": "replace",
+      "text": "这里是一段新的页面开头，会从这一句开始覆盖旧文本。"
+    },
+    {
+      "speakerId": "narrator",
+      "displayName": "旁白",
+      "displayMode": "append",
+      "text": "这一句会保留上一句，并在下一行继续逐字显示。"
+    },
+    {
+      "speakerId": "hero",
+      "displayName": "勇者",
+      "displayMode": "append",
+      "text": "即使说话人变化，当前版本也仍然只显示正文，但数据已经可以提前写入。"
+    },
+    {
+      "speakerId": "villain",
+      "displayName": "魔王",
+      "displayMode": "replace",
+      "text": "当你希望从这里开始清掉前面的段落，只需要把 displayMode 改回 replace。"
+    }
+  ]
+}

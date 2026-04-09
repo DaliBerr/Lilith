@@ -32,8 +32,9 @@ public sealed class StoryTellerUIScreenTests
         TestStorySequenceParser parser = parserObject.AddComponent<TestStorySequenceParser>();
         parser.InitializeForTest();
 
-        StoryTellerUIScreen screen = CreateStoryTellerScreen(out TMP_Text storyText);
+        StoryTellerUIScreen screen = CreateStoryTellerScreen(out TMP_Text storyText, out GameObject skipButtonRoot, out Button skipButton);
         InvokeNonPublic(screen, "OnInit");
+        Assert.That(skipButtonRoot.activeSelf, Is.False);
         InvokeNonPublic(screen, "OnAfterShow");
 
         parser.EmitSnapshot(new StorySequenceSnapshot(
@@ -43,10 +44,15 @@ public sealed class StoryTellerUIScreenTests
             5,
             0,
             1,
-            false));
+            false,
+            true));
 
         Assert.That(storyText.text, Is.EqualTo("Hello World"));
         Assert.That(storyText.maxVisibleCharacters, Is.EqualTo(5));
+        Assert.That(skipButtonRoot.activeSelf, Is.True);
+
+        skipButton.onClick.Invoke();
+        Assert.That(parser.SkipToNextReplaceRequested, Is.True);
 
         InvokeNonPublic(screen, "OnAfterHide");
         parser.EmitSnapshot(new StorySequenceSnapshot(
@@ -56,12 +62,14 @@ public sealed class StoryTellerUIScreenTests
             7,
             0,
             1,
+            true,
             true));
 
         Assert.That(storyText.text, Is.EqualTo(string.Empty));
+        Assert.That(skipButtonRoot.activeSelf, Is.False);
     }
 
-    private StoryTellerUIScreen CreateStoryTellerScreen(out TMP_Text storyText)
+    private StoryTellerUIScreen CreateStoryTellerScreen(out TMP_Text storyText, out GameObject skipButtonRoot, out Button skipButton)
     {
         GameObject root = new("Storyteller Panel", typeof(RectTransform));
         createdObjects.Add(root);
@@ -73,6 +81,15 @@ public sealed class StoryTellerUIScreenTests
         createdObjects.Add(textObject);
         textObject.transform.SetParent(root.transform, false);
         storyText = textObject.AddComponent<TextMeshProUGUI>();
+
+        skipButtonRoot = new GameObject("Skip Button", typeof(RectTransform), typeof(Image));
+        createdObjects.Add(skipButtonRoot);
+        skipButtonRoot.transform.SetParent(root.transform, false);
+
+        GameObject buttonObject = new GameObject("Button", typeof(RectTransform), typeof(Image), typeof(Button));
+        createdObjects.Add(buttonObject);
+        buttonObject.transform.SetParent(skipButtonRoot.transform, false);
+        skipButton = buttonObject.GetComponent<Button>();
         return screen;
     }
 
@@ -85,6 +102,8 @@ public sealed class StoryTellerUIScreenTests
 
     private sealed class TestStorySequenceParser : StorySequenceParser
     {
+        public bool SkipToNextReplaceRequested { get; private set; }
+
         public void InitializeForTest()
         {
             Awake();
@@ -93,6 +112,11 @@ public sealed class StoryTellerUIScreenTests
         public void EmitSnapshot(StorySequenceSnapshot snapshot)
         {
             PublishSnapshot(snapshot);
+        }
+
+        public override void RequestSkipToNextReplaceOrFinish()
+        {
+            SkipToNextReplaceRequested = true;
         }
     }
 }

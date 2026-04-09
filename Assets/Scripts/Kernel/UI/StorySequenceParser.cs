@@ -78,7 +78,8 @@ namespace Kernel.UI
             int visibleCharacterCount,
             int entryIndex,
             int entryCount,
-            bool isEntryFullyRevealed)
+            bool isEntryFullyRevealed,
+            bool shouldShowSkipButton)
         {
             SpeakerId = speakerId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
@@ -87,6 +88,7 @@ namespace Kernel.UI
             EntryIndex = Mathf.Max(0, entryIndex);
             EntryCount = Mathf.Max(0, entryCount);
             IsEntryFullyRevealed = isEntryFullyRevealed;
+            ShouldShowSkipButton = shouldShowSkipButton;
         }
 
         public string SpeakerId { get; }
@@ -96,6 +98,7 @@ namespace Kernel.UI
         public int EntryIndex { get; }
         public int EntryCount { get; }
         public bool IsEntryFullyRevealed { get; }
+        public bool ShouldShowSkipButton { get; }
     }
 
     /// <summary>
@@ -129,7 +132,13 @@ namespace Kernel.UI
         private bool hasActiveTextAssetHandle;
         private bool isPlaying;
         private bool skipCurrentEntryRequested;
+        private bool skipToNextReplaceRequested;
+        private bool advanceDisplayBlockRequested;
+        private bool finishAfterFinalBlockRequested;
+        private bool waitForSkipConfirmationOnFinalBlock;
         private bool allowDefaultSkipInput;
+        private bool shouldShowSkipButton;
+        private int currentDisplayBlockEndIndex = -1;
         private StorySequenceSnapshot currentSnapshot;
         private bool hasCurrentSnapshot;
 
@@ -182,7 +191,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 统一处理默认跳过输入；当前只在启用时消费空格键补完当前句。
+        /// summary: 统一处理默认跳过输入；当前支持空格和鼠标左键补完当前句，并在第一次使用后显示跳过按钮。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -195,6 +204,7 @@ namespace Kernel.UI
 
             if (ShouldConsumeDefaultSkipInput())
             {
+                NotifyAdvanceShortcutUsed();
                 RequestSkipCurrentEntry();
             }
         }
@@ -234,7 +244,7 @@ namespace Kernel.UI
         /// param: 无
         /// returns: 无
         /// </summary>
-        public void RequestSkipCurrentEntry()
+        public virtual void RequestSkipCurrentEntry()
         {
             if (!isPlaying)
             {
@@ -242,6 +252,33 @@ namespace Kernel.UI
             }
 
             skipCurrentEntryRequested = true;
+        }
+
+        /// <summary>
+        /// summary: 请求直接跳过到下一条 replace 边界；若当前已是最后一个显示块，则会直接结束播放。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public virtual void RequestSkipToNextReplaceOrFinish()
+        {
+            if (!isPlaying)
+            {
+                return;
+            }
+
+            if (IsCurrentSnapshotAtFullyRevealedFinalDisplayBlock())
+            {
+                finishAfterFinalBlockRequested = true;
+                return;
+            }
+
+            if (IsCurrentSnapshotAtFullyRevealedDisplayBlockBoundary())
+            {
+                advanceDisplayBlockRequested = true;
+                return;
+            }
+
+            skipToNextReplaceRequested = true;
         }
 
         /// <summary>
@@ -372,7 +409,13 @@ namespace Kernel.UI
 
             isPlaying = true;
             skipCurrentEntryRequested = false;
+            skipToNextReplaceRequested = false;
+            advanceDisplayBlockRequested = false;
+            finishAfterFinalBlockRequested = false;
+            waitForSkipConfirmationOnFinalBlock = false;
             allowDefaultSkipInput = request.AllowDefaultSkipInput;
+            shouldShowSkipButton = false;
+            currentDisplayBlockEndIndex = -1;
             hasCurrentSnapshot = false;
             currentSnapshot = default;
             return true;
@@ -456,6 +499,7 @@ namespace Kernel.UI
             float charactersPerSecond = Mathf.Max(0f, request.CharactersPerSecond);
             float lineHoldSeconds = Mathf.Max(0f, request.LineHoldSeconds);
             string accumulatedDisplayText = string.Empty;
+            bool revealUpcomingBlockImmediately = false;
 
             for (int index = 0; index < entryCount; index++)
             {
@@ -467,14 +511,24 @@ namespace Kernel.UI
                 int totalCharacterCount = Mathf.Max(0, entryText.Length);
                 int visibleCharacterCount = 0;
                 float revealedCharacters = 0f;
+                int blockEndIndex = FindDisplayBlockEndIndex(data.Entries, index);
+                bool skipCurrentBlockRequested = revealUpcomingBlockImmediately || TryConsumeSkipToNextReplaceRequest();
+                revealUpcomingBlockImmediately = false;
+                currentDisplayBlockEndIndex = blockEndIndex;
 
                 skipCurrentEntryRequested = false;
                 PublishSnapshot(CreateSnapshot(entry, fullText, prefixVisibleCharacterCount, index, entryCount, false));
 
-                if (totalCharacterCount > 0 && charactersPerSecond > 0f)
+                if (!skipCurrentBlockRequested && totalCharacterCount > 0 && charactersPerSecond > 0f)
                 {
                     while (visibleCharacterCount < totalCharacterCount)
                     {
+                        if (TryConsumeSkipToNextReplaceRequest())
+                        {
+                            skipCurrentBlockRequested = true;
+                            break;
+                        }
+
                         if (skipCurrentEntryRequested)
                         {
                             break;
@@ -503,23 +557,115 @@ namespace Kernel.UI
                 accumulatedDisplayText = fullText;
 
                 float elapsed = 0f;
-                while (elapsed < lineHoldSeconds)
+                while (!skipCurrentBlockRequested && elapsed < lineHoldSeconds)
                 {
+                    if (TryConsumeSkipToNextReplaceRequest())
+                    {
+                        skipCurrentBlockRequested = true;
+                        break;
+                    }
+
+                    if (TryConsumeAdvanceDisplayBlockRequest())
+                    {
+                        revealUpcomingBlockImmediately = true;
+                        index = blockEndIndex;
+                        break;
+                    }
+
                     elapsed += Mathf.Max(0f, GetPlaybackDeltaTime());
                     yield return null;
                 }
+
+                if (revealUpcomingBlockImmediately)
+                {
+                    continue;
+                }
+
+                if (!skipCurrentBlockRequested && TryConsumeAdvanceDisplayBlockRequest())
+                {
+                    revealUpcomingBlockImmediately = true;
+                    index = blockEndIndex;
+                    continue;
+                }
+
+                if (!skipCurrentBlockRequested && TryConsumeSkipToNextReplaceRequest())
+                {
+                    skipCurrentBlockRequested = true;
+                }
+
+                if (skipCurrentBlockRequested)
+                {
+                    if (blockEndIndex > index)
+                    {
+                        for (int appendIndex = index + 1; appendIndex <= blockEndIndex; appendIndex++)
+                        {
+                            StorySequenceEntry appendEntry = data.Entries[appendIndex];
+                            string appendEntryText = appendEntry.Text ?? string.Empty;
+                            string appendPrefixText = BuildPrefixText(accumulatedDisplayText, appendEntry);
+                            string appendFullText = string.Concat(appendPrefixText, appendEntryText);
+                            currentDisplayBlockEndIndex = blockEndIndex;
+                            PublishSnapshot(CreateSnapshot(
+                                appendEntry,
+                                appendFullText,
+                                appendFullText.Length,
+                                appendIndex,
+                                entryCount,
+                                true));
+                            accumulatedDisplayText = appendFullText;
+                        }
+                    }
+
+                    skipCurrentEntryRequested = false;
+                    if (blockEndIndex >= entryCount - 1)
+                    {
+                        waitForSkipConfirmationOnFinalBlock = true;
+                        break;
+                    }
+
+                    while (isPlaying && !TryConsumeAdvanceDisplayBlockRequest())
+                    {
+                        yield return null;
+                    }
+
+                    if (!isPlaying)
+                    {
+                        yield break;
+                    }
+
+                    revealUpcomingBlockImmediately = true;
+                    index = blockEndIndex;
+                }
+            }
+
+            if (!waitForSkipConfirmationOnFinalBlock)
+            {
+                yield break;
+            }
+
+            while (isPlaying && !finishAfterFinalBlockRequested)
+            {
+                yield return null;
+            }
+
+            if (isPlaying)
+            {
+                activeSequenceRoutine = null;
+                FinalizeSequence(new StorySequenceResult(StorySequenceCompletionStatus.Completed));
             }
         }
 
         /// <summary>
-        /// summary: 默认空格跳过输入的读取入口，便于测试替换输入来源。
+        /// summary: 默认跳过输入的读取入口，当前支持空格键和鼠标左键。
         /// param: 无
         /// returns: 当前帧需要补完当前句时返回 true
         /// </summary>
         protected virtual bool ShouldConsumeDefaultSkipInput()
         {
             Keyboard keyboard = Keyboard.current;
-            return keyboard != null && keyboard.spaceKey.wasPressedThisFrame;
+            Mouse mouse = Mouse.current;
+            bool isSpacePressed = keyboard != null && keyboard.spaceKey.wasPressedThisFrame;
+            bool isLeftMousePressed = mouse != null && mouse.leftButton.wasPressedThisFrame;
+            return isSpacePressed || isLeftMousePressed;
         }
 
         /// <summary>
@@ -555,6 +701,12 @@ namespace Kernel.UI
             isPlaying = false;
             allowDefaultSkipInput = false;
             skipCurrentEntryRequested = false;
+            skipToNextReplaceRequested = false;
+            advanceDisplayBlockRequested = false;
+            finishAfterFinalBlockRequested = false;
+            waitForSkipConfirmationOnFinalBlock = false;
+            shouldShowSkipButton = false;
+            currentDisplayBlockEndIndex = -1;
             hasCurrentSnapshot = false;
             currentSnapshot = default;
 
@@ -592,7 +744,7 @@ namespace Kernel.UI
         /// param name="isEntryFullyRevealed": 当前条目是否已完整显示
         /// returns: 构造好的剧情快照
         /// </summary>
-        private static StorySequenceSnapshot CreateSnapshot(
+        private StorySequenceSnapshot CreateSnapshot(
             StorySequenceEntry entry,
             string fullText,
             int visibleCharacterCount,
@@ -607,7 +759,163 @@ namespace Kernel.UI
                 visibleCharacterCount,
                 entryIndex,
                 entryCount,
-                isEntryFullyRevealed);
+                isEntryFullyRevealed,
+                shouldShowSkipButton);
+        }
+
+        /// <summary>
+        /// summary: 首次触发空格或鼠标左键时标记跳过按钮可见，并立即把最新状态同步给当前界面。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        protected void NotifyAdvanceShortcutUsed()
+        {
+            if (shouldShowSkipButton)
+            {
+                return;
+            }
+
+            shouldShowSkipButton = true;
+            if (hasCurrentSnapshot)
+            {
+                PublishSnapshot(CreateSnapshot(
+                    currentSnapshot.SpeakerId,
+                    currentSnapshot.DisplayName,
+                    currentSnapshot.FullText,
+                    currentSnapshot.VisibleCharacterCount,
+                    currentSnapshot.EntryIndex,
+                    currentSnapshot.EntryCount,
+                    currentSnapshot.IsEntryFullyRevealed,
+                    true));
+            }
+        }
+
+        /// <summary>
+        /// summary: 读取并清空“跳到下一条 replace”请求标记，避免同一请求在多个阶段重复消费。
+        /// param: 无
+        /// returns: 当前存在未消费的跳过块请求时返回 true
+        /// </summary>
+        private bool TryConsumeSkipToNextReplaceRequest()
+        {
+            if (!skipToNextReplaceRequested)
+            {
+                return false;
+            }
+
+            skipToNextReplaceRequested = false;
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 读取并清空“从当前分段边界推进到下一分段”的请求标记。
+        /// param: 无
+        /// returns: 当前存在未消费的分段推进请求时返回 true
+        /// </summary>
+        private bool TryConsumeAdvanceDisplayBlockRequest()
+        {
+            if (!advanceDisplayBlockRequested)
+            {
+                return false;
+            }
+
+            advanceDisplayBlockRequested = false;
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 判断当前快照是否已经完整显示到当前分段边界。
+        /// param: 无
+        /// returns: 当前快照已经完整显示当前分段末尾时返回 true
+        /// </summary>
+        private bool IsCurrentSnapshotAtFullyRevealedDisplayBlockBoundary()
+        {
+            if (!hasCurrentSnapshot || !currentSnapshot.IsEntryFullyRevealed)
+            {
+                return false;
+            }
+
+            if (currentDisplayBlockEndIndex < 0)
+            {
+                return false;
+            }
+
+            return currentSnapshot.EntryIndex >= currentDisplayBlockEndIndex;
+        }
+
+        /// <summary>
+        /// summary: 判断当前快照是否已经完整显示到最终显示块的末尾；若是，则跳过按钮可直接结束序列。
+        /// param: 无
+        /// returns: 当前已经显示完最后一个显示块时返回 true
+        /// </summary>
+        private bool IsCurrentSnapshotAtFullyRevealedFinalDisplayBlock()
+        {
+            if (!IsCurrentSnapshotAtFullyRevealedDisplayBlockBoundary())
+            {
+                return false;
+            }
+
+            if (currentDisplayBlockEndIndex < currentSnapshot.EntryCount - 1)
+            {
+                return false;
+            }
+
+            return currentSnapshot.EntryIndex >= currentDisplayBlockEndIndex;
+        }
+
+        /// <summary>
+        /// summary: 查找当前显示块的结束条目索引；块由一个 replace 起始，后续 append 条目组成。
+        /// param name="entries": 当前剧情条目列表
+        /// param name="currentIndex": 当前正在处理的条目索引
+        /// returns: 当前显示块最后一条条目的索引
+        /// </summary>
+        private static int FindDisplayBlockEndIndex(IReadOnlyList<StorySequenceEntry> entries, int currentIndex)
+        {
+            int endIndex = currentIndex;
+            for (int index = currentIndex + 1; index < entries.Count; index++)
+            {
+                StorySequenceEntry nextEntry = entries[index];
+                if (nextEntry == null || nextEntry.DisplayMode == StorySequenceDisplayMode.Replace)
+                {
+                    break;
+                }
+
+                endIndex = index;
+            }
+
+            return endIndex;
+        }
+
+        /// <summary>
+        /// summary: 基于当前状态重新构造剧情快照，供跳过按钮显隐这类 UI 状态刷新复用。
+        /// param name="speakerId": 当前 speakerId
+        /// param name="displayName": 当前显示名
+        /// param name="fullText": 当前完整文本
+        /// param name="visibleCharacterCount": 当前可见字符数
+        /// param name="entryIndex": 当前条目索引
+        /// param name="entryCount": 当前条目总数
+        /// param name="isEntryFullyRevealed": 当前条目是否完整显示
+        /// param name="isSkipButtonVisible": 当前是否显示跳过按钮
+        /// returns: 构造好的剧情快照
+        /// </summary>
+        private static StorySequenceSnapshot CreateSnapshot(
+            string speakerId,
+            string displayName,
+            string fullText,
+            int visibleCharacterCount,
+            int entryIndex,
+            int entryCount,
+            bool isEntryFullyRevealed,
+            bool isSkipButtonVisible)
+        {
+            return new StorySequenceSnapshot(
+                speakerId,
+                displayName,
+                fullText,
+                visibleCharacterCount,
+                entryIndex,
+                entryCount,
+                isEntryFullyRevealed,
+                isSkipButtonVisible);
         }
 
         /// <summary>

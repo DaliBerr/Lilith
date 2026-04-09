@@ -242,6 +242,34 @@ public sealed class StorySequenceParserTests
         Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
     }
 
+    [Test]
+    public void Service_AdvanceShortcutUsage_ShowsSkipButtonInSnapshots()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(new StorySequenceEntry { Text = "ABCD" });
+        parser.DeltaTimeOverride = 0f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://intro",
+            CharactersPerSecond = 1f,
+            LineHoldSeconds = 10f,
+            AllowDefaultSkipInput = false
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        parser.SnapshotChanged += snapshots.Add;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        IEnumerator routine = parser.RunSequenceForTest(request);
+        ManualCoroutineRunner runner = new(routine);
+        runner.StepUntil(() => snapshots.Count > 0, 20, "Initial story snapshot was not published.");
+
+        parser.TriggerAdvanceShortcutForTest();
+
+        Assert.That(snapshots.Exists(snapshot => snapshot.ShouldShowSkipButton), Is.True);
+    }
+
     [UnityTest]
     public IEnumerator Service_AppendDisplayMode_KeepsPreviousLineAndAddsNewline()
     {
@@ -284,6 +312,141 @@ public sealed class StorySequenceParserTests
         Assert.That(appendedSnapshot.FullText, Is.EqualTo("First line\nSecond line"));
         Assert.That(appendedSnapshot.VisibleCharacterCount, Is.GreaterThanOrEqualTo("First line\n".Length));
         Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+    }
+
+    [Test]
+    public void Service_RequestSkipToNextReplaceOrFinish_RevealsOneDisplayBlockPerClick()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(
+            new StorySequenceEntry
+            {
+                Text = "First line",
+                DisplayMode = StorySequenceDisplayMode.Replace
+            },
+            new StorySequenceEntry
+            {
+                Text = "Second line",
+                DisplayMode = StorySequenceDisplayMode.Append
+            },
+            new StorySequenceEntry
+            {
+                Text = "Third line",
+                DisplayMode = StorySequenceDisplayMode.Replace
+            },
+            new StorySequenceEntry
+            {
+                Text = "Fourth line",
+                DisplayMode = StorySequenceDisplayMode.Append
+            },
+            new StorySequenceEntry
+            {
+                Text = "Fifth line",
+                DisplayMode = StorySequenceDisplayMode.Replace
+            });
+        parser.DeltaTimeOverride = 0f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://intro",
+            CharactersPerSecond = 1f,
+            LineHoldSeconds = 10f,
+            AllowDefaultSkipInput = false
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        IEnumerator routine = parser.RunSequenceForTest(request);
+        ManualCoroutineRunner runner = new(routine);
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "First line"),
+            20,
+            "Initial replace snapshot was not published.");
+
+        parser.RequestSkipToNextReplaceOrFinish();
+
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "First line\nSecond line" && snapshot.IsEntryFullyRevealed),
+            50,
+            "First skip should reveal only the current display block.");
+
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "First line\nSecond line" && snapshot.IsEntryFullyRevealed), Is.True);
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "Third line"), Is.False);
+        Assert.That(result.HasValue, Is.False);
+
+        parser.RequestSkipToNextReplaceOrFinish();
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "Third line\nFourth line" && snapshot.IsEntryFullyRevealed),
+            50,
+            "Second skip should reveal only the next display block.");
+
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "Fifth line"), Is.False);
+        parser.StopCurrentSequence();
+        Assert.That(result.HasValue, Is.True);
+
+        Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Cancelled));
+    }
+
+    [Test]
+    public void Service_RequestSkipToNextReplaceOrFinish_OnFinalDisplayBlock_RevealsAllTextFirstThenFinishesOnSecondClick()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(
+            new StorySequenceEntry
+            {
+                Text = "First line",
+                DisplayMode = StorySequenceDisplayMode.Replace
+            },
+            new StorySequenceEntry
+            {
+                Text = "Second line",
+                DisplayMode = StorySequenceDisplayMode.Append
+            },
+            new StorySequenceEntry
+            {
+                Text = "Third line",
+                DisplayMode = StorySequenceDisplayMode.Append
+            });
+        parser.DeltaTimeOverride = 0f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://intro",
+            CharactersPerSecond = 1f,
+            LineHoldSeconds = 10f,
+            AllowDefaultSkipInput = false
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        ManualCoroutineRunner runner = new(parser.RunSequenceForTest(request));
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "First line"),
+            20,
+            "Initial replace snapshot was not published.");
+
+        parser.RequestSkipToNextReplaceOrFinish();
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "First line\nSecond line\nThird line" && snapshot.IsEntryFullyRevealed),
+            50,
+            "First skip should reveal the entire final display block.");
+
+        Assert.That(result.HasValue, Is.False);
+        Assert.That(parser.IsPlaying, Is.True);
+
+        parser.RequestSkipToNextReplaceOrFinish();
+        runner.StepUntil(() => result.HasValue, 10, "Second skip should finish the sequence.");
+
+        Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+        Assert.That(parser.IsPlaying, Is.False);
     }
 
     [UnityTest]
@@ -357,6 +520,38 @@ public sealed class StorySequenceParserTests
         return texts;
     }
 
+    private sealed class ManualCoroutineRunner
+    {
+        private readonly Stack<IEnumerator> stack = new();
+
+        public ManualCoroutineRunner(IEnumerator routine)
+        {
+            stack.Push(routine);
+        }
+
+        public void StepUntil(System.Func<bool> predicate, int maxSteps, string failureMessage)
+        {
+            int steps = 0;
+            while (!predicate())
+            {
+                Assert.That(steps++, Is.LessThan(maxSteps), failureMessage);
+                Assert.That(stack.Count, Is.GreaterThan(0), "Coroutine finished before the expected condition was met.");
+
+                IEnumerator currentRoutine = stack.Peek();
+                if (!currentRoutine.MoveNext())
+                {
+                    stack.Pop();
+                    continue;
+                }
+
+                if (currentRoutine.Current is IEnumerator nestedRoutine)
+                {
+                    stack.Push(nestedRoutine);
+                }
+            }
+        }
+    }
+
     private sealed class TestStorySequenceParser : StorySequenceParser
     {
         public StorySequenceData NextLoadedData { get; set; }
@@ -371,6 +566,11 @@ public sealed class StorySequenceParserTests
         public IEnumerator RunSequenceForTest(StorySequenceRequest request)
         {
             return PlaySequenceFromRequestCo(request);
+        }
+
+        public void TriggerAdvanceShortcutForTest()
+        {
+            NotifyAdvanceShortcutUsed();
         }
 
         protected override IEnumerator LoadSequenceDataCo(

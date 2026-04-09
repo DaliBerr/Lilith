@@ -1,6 +1,7 @@
 using Kernel.GameState;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Vocalith.UI;
 
 namespace Kernel.UI
@@ -14,6 +15,8 @@ namespace Kernel.UI
     {
         [Header("Bindings")]
         [SerializeField] private TMP_Text storyText;
+        [SerializeField] private GameObject skipButtonRoot;
+        [SerializeField] private Button skipButton;
 
         public override Status currentStatus { get; } = StatusList.InMainMenuStatus;
 
@@ -62,6 +65,8 @@ namespace Kernel.UI
         {
             storyText ??= transform.Find("Text")?.GetComponent<TMP_Text>();
             storyText ??= GetComponentInChildren<TMP_Text>(true);
+            skipButtonRoot ??= transform.Find("Skip Button")?.gameObject;
+            skipButton ??= transform.Find("Skip Button/Button")?.GetComponent<Button>();
         }
 
         /// <summary>
@@ -74,11 +79,13 @@ namespace Kernel.UI
             StorySequenceParser parser = StorySequenceParser.Instance;
             if (parser == null)
             {
+                BindSkipButton();
                 return;
             }
 
             parser.SnapshotChanged -= HandleStorySnapshotChanged;
             parser.SnapshotChanged += HandleStorySnapshotChanged;
+            BindSkipButton();
 
             if (parser.TryGetCurrentSnapshot(out StorySequenceSnapshot snapshot))
             {
@@ -96,10 +103,12 @@ namespace Kernel.UI
             StorySequenceParser parser = StorySequenceParser.Instance;
             if (parser == null)
             {
+                UnbindSkipButton();
                 return;
             }
 
             parser.SnapshotChanged -= HandleStorySnapshotChanged;
+            UnbindSkipButton();
         }
 
         /// <summary>
@@ -121,6 +130,7 @@ namespace Kernel.UI
         {
             if (storyText == null)
             {
+                SetSkipButtonVisible(snapshot.ShouldShowSkipButton);
                 return;
             }
 
@@ -128,6 +138,7 @@ namespace Kernel.UI
             storyText.maxVisibleCharacters = snapshot.IsEntryFullyRevealed
                 ? int.MaxValue
                 : Mathf.Max(0, snapshot.VisibleCharacterCount);
+            SetSkipButtonVisible(snapshot.ShouldShowSkipButton);
         }
 
         /// <summary>
@@ -139,11 +150,72 @@ namespace Kernel.UI
         {
             if (storyText == null)
             {
+                SetSkipButtonVisible(false);
                 return;
             }
 
             storyText.text = string.Empty;
             storyText.maxVisibleCharacters = int.MaxValue;
+            SetSkipButtonVisible(false);
+        }
+
+        /// <summary>
+        /// summary: 绑定跳过按钮点击事件，点击后直接请求剧情服务快进到下一条 replace 或结束播放。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void BindSkipButton()
+        {
+            if (skipButton == null)
+            {
+                return;
+            }
+
+            skipButton.onClick.RemoveListener(HandleSkipButtonClicked);
+            skipButton.onClick.AddListener(HandleSkipButtonClicked);
+        }
+
+        /// <summary>
+        /// summary: 解除跳过按钮点击事件，避免界面关闭后残留监听。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void UnbindSkipButton()
+        {
+            if (skipButton == null)
+            {
+                return;
+            }
+
+            skipButton.onClick.RemoveListener(HandleSkipButtonClicked);
+        }
+
+        /// <summary>
+        /// summary: 响应剧情界面的跳过按钮，直接让剧情播放器快进到下一条 replace 或结束。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HandleSkipButtonClicked()
+        {
+            StorySequenceParser.Instance?.RequestSkipToNextReplaceOrFinish();
+        }
+
+        /// <summary>
+        /// summary: 控制跳过按钮根节点显隐；当前默认隐藏，首次手动推进后再显示。
+        /// param name="isVisible": 是否显示跳过按钮
+        /// returns: 无
+        /// </summary>
+        private void SetSkipButtonVisible(bool isVisible)
+        {
+            if (skipButtonRoot == null)
+            {
+                return;
+            }
+
+            if (skipButtonRoot.activeSelf != isVisible)
+            {
+                skipButtonRoot.SetActive(isVisible);
+            }
         }
 
         /// <summary>

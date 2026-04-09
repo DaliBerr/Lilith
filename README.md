@@ -116,7 +116,9 @@
 8. 点击 `Start`
    - [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 会调用 [`GlobalStartup.RequestStartGame()`](Assets/Scripts/GlobalStartup.cs)
    - [`Assets/Scripts/Kernel/UI/StoryTellerUIScreen.cs`](Assets/Scripts/Kernel/UI/StoryTellerUIScreen.cs) 会实例化 [`Assets/Prefabs/UI/Storyteller Panel.prefab`](Assets/Prefabs/UI/Storyteller%20Panel.prefab)，只负责订阅剧情快照并显示正文
-   - [`Assets/Scripts/Kernel/UI/StorySequenceParser.cs`](Assets/Scripts/Kernel/UI/StorySequenceParser.cs) 会作为持久化运行时服务，从 Addressables 地址 `Assets/Data/Story/Introduction` 读取剧情 JSON，按 `entries[].text` 或带可选 `speakerId/displayName/displayMode/text` 的协议逐句逐字播放；按空格只会立刻补完当前句，句末停留后自动进入下一句
+   - [`Assets/Scripts/Kernel/UI/StorySequenceParser.cs`](Assets/Scripts/Kernel/UI/StorySequenceParser.cs) 会作为持久化运行时服务，从 Addressables 地址 `Assets/Data/Story/Introduction` 读取剧情 JSON，按 `entries[].text` 或带可选 `speakerId/displayName/displayMode/text` 的协议逐句逐字播放；按空格或鼠标左键都会立刻补完当前句，句末停留后自动进入下一句
+   - 首次使用空格或鼠标左键手动推进后，剧情界面里的 Skip Button 才会显示；点击它会直接快进到下一条 `replace` 边界
+   - 若后续已经没有新的 `replace` 块，第一次点击 Skip Button 只会把最终显示块剩余文本全部展开；当最终块已经完整显示后，再次点击 Skip Button 才会结束播放
    - 最后一条文本播放完成后，才会调用 [`GlobalStartup.RequestEnterMainScene()`](Assets/Scripts/GlobalStartup.cs) 清理当前 UI 栈并切到 [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
 
 [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs) 当前在 `Main` 场景里只负责：
@@ -269,12 +271,15 @@
 - `StoryTellerUIScreen`
   - 挂在 [`Assets/Prefabs/UI/Storyteller Panel.prefab`](Assets/Prefabs/UI/Storyteller%20Panel.prefab) 根节点
   - 当前只负责绑定 `TMP_Text`、订阅 [`Assets/Scripts/Kernel/UI/StorySequenceParser.cs`](Assets/Scripts/Kernel/UI/StorySequenceParser.cs) 的剧情快照，并按 `text + maxVisibleCharacters` 刷新正文显示
+  - prefab 内的 Skip Button 当前默认隐藏；在剧情服务标记可见后才显示，并把点击事件转发给剧情服务执行块级快进
 - `StorySequenceParser`
-  - 作为跨场景保留的运行时剧情播放服务，负责 Addressables 文本加载、JSON 解析、逐字播放、空格补完当前句、句间停留和完成回调
+  - 作为跨场景保留的运行时剧情播放服务，负责 Addressables 文本加载、JSON 解析、逐字播放、空格或鼠标左键补完当前句、句间停留和完成回调
   - 默认会从 Addressables 地址 `Assets/Data/Story/Introduction` 读取 [`Assets/Data/Story/Introduction.json`](Assets/Data/Story/Introduction.json)
   - 文本协议当前支持 `{ "entries": [{ "text": "..." }] }`，也兼容可选 `speakerId/displayName/displayMode/text` 字段，为后续多人对话扩展预留数据位
   - `displayMode` 当前支持 `replace` 和 `append`
   - `replace` 会从当前句开始覆盖显示；`append` 会保留上一段已完成文本，并在下一行继续逐字显示当前句，便于在 JSON 里显式控制“何时开始清屏重写”
+  - 首次检测到空格或鼠标左键后，会把当前快照标记为“可显示 Skip Button”；Skip Button 会直接快进到下一条 `replace` 边界
+  - 若后续已无新的 `replace` 块，第一次 Skip 只会把最终显示块全部显示出来；只有在最终块已经完整显示后再次点击 Skip，才会结束播放
   - 播放失败、解析失败或资源缺失时会记日志并直接继续进入 `Main`
 - `MainUIScreen`
   - 作为战斗 HUD 模板，当前暴露血条区、顶部 `Spell Panel` 和暂停按钮引用
