@@ -12,6 +12,8 @@ public sealed class BulletTokenPickupTests
     [TearDown]
     public void TearDown()
     {
+        DestroyExistingWallet();
+
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {
             if (createdObjects[i] != null)
@@ -91,6 +93,44 @@ public sealed class BulletTokenPickupTests
     }
 
     [Test]
+    public void OnTriggerEnter_RemnantPickup_AddsWalletCountAndDestroysPickup()
+    {
+        PlayerRemnantWallet wallet = CreateWallet();
+        PlayerBulletTokenInventory inventory = CreateInventory();
+        BoxCollider playerCollider = inventory.gameObject.AddComponent<BoxCollider>();
+        BulletTokenPickup pickup = CreatePickup();
+        RemnantPickupTokenData token = CreateRemnantToken("pickup_remnant", "Remnant", 3);
+
+        Assert.That(pickup.TrySetToken(token), Is.True);
+
+        InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
+
+        Assert.That(wallet.CurrentRemnants, Is.EqualTo(3));
+        Assert.That(pickup == null, Is.True);
+    }
+
+    [Test]
+    public void OnTriggerEnter_HealingPickupAtFullHealth_IsConsumedWithoutHealing()
+    {
+        PlayerBulletTokenInventory inventory = CreateInventory();
+        BoxCollider playerCollider = inventory.gameObject.AddComponent<BoxCollider>();
+        PlayerHealth playerHealth = inventory.gameObject.AddComponent<PlayerHealth>();
+        SetPrivateField(playerHealth, "maxHealth", 100f);
+        SetPrivateField(playerHealth, "currentHealth", 100f);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
+
+        BulletTokenPickup pickup = CreatePickup();
+        HealingPickupTokenData token = CreateHealingToken("pickup_heal", "Heal", 25f);
+
+        Assert.That(pickup.TrySetToken(token), Is.True);
+
+        InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
+
+        Assert.That(playerHealth.CurrentHealth, Is.EqualTo(100f).Within(0.0001f));
+        Assert.That(pickup == null, Is.True);
+    }
+
+    [Test]
     public void OnTriggerEnter_NonPlayerCollider_DoesNothing()
     {
         GameObject otherObject = CreateGameObject("Other");
@@ -144,6 +184,15 @@ public sealed class BulletTokenPickupTests
         return pickupObject.AddComponent<BulletTokenPickup>();
     }
 
+    private PlayerRemnantWallet CreateWallet()
+    {
+        DestroyExistingWallet();
+        GameObject walletObject = CreateGameObject("Wallet");
+        PlayerRemnantWallet wallet = walletObject.AddComponent<PlayerRemnantWallet>();
+        wallet.TrySetRemnants(0, out _);
+        return wallet;
+    }
+
     private T CreateToken<T>(string tokenId, string displayText) where T : BaseTokenData
     {
         T token = ScriptableObject.CreateInstance<T>();
@@ -166,6 +215,28 @@ public sealed class BulletTokenPickupTests
         return token;
     }
 
+    private RemnantPickupTokenData CreateRemnantToken(string tokenId, string displayText, int remnantAmount)
+    {
+        RemnantPickupTokenData token = ScriptableObject.CreateInstance<RemnantPickupTokenData>();
+        token.TokenId = tokenId;
+        token.DisplayText = displayText;
+        SetPrivateField(token, "remnantAmount", remnantAmount);
+        token.name = tokenId;
+        createdObjects.Add(token);
+        return token;
+    }
+
+    private HealingPickupTokenData CreateHealingToken(string tokenId, string displayText, float healingAmount)
+    {
+        HealingPickupTokenData token = ScriptableObject.CreateInstance<HealingPickupTokenData>();
+        token.TokenId = tokenId;
+        token.DisplayText = displayText;
+        SetPrivateField(token, "healingAmount", healingAmount);
+        token.name = tokenId;
+        createdObjects.Add(token);
+        return token;
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);
@@ -178,5 +249,37 @@ public sealed class BulletTokenPickupTests
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
         method.Invoke(target, args);
+    }
+
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    {
+        FieldInfo field = FindInstanceField(target.GetType(), fieldName);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        field.SetValue(target, value);
+    }
+
+    private static FieldInfo FindInstanceField(System.Type type, string fieldName)
+    {
+        while (type != null)
+        {
+            FieldInfo field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field != null)
+            {
+                return field;
+            }
+
+            type = type.BaseType;
+        }
+
+        return null;
+    }
+
+    private static void DestroyExistingWallet()
+    {
+        PlayerRemnantWallet existingWallet = Object.FindFirstObjectByType<PlayerRemnantWallet>();
+        if (existingWallet != null)
+        {
+            Object.DestroyImmediate(existingWallet.gameObject);
+        }
     }
 }

@@ -11,6 +11,7 @@ public static class AttackTokenAssetGenerator
     private const string ResultFolder = RootFolder + "/Result";
     private const string ValueFolder = RootFolder + "/Value";
     private const string LinkedFolder = RootFolder + "/Linked";
+    private const string PickupFolder = RootFolder + "/Pickup";
 
     [MenuItem("Tools/Lilith/Bullet/Generate Default Token Assets")]
     public static void GenerateDefaultAssets()
@@ -20,6 +21,7 @@ public static class AttackTokenAssetGenerator
         EnsureFolderChain(ResultFolder);
         EnsureFolderChain(ValueFolder);
         EnsureFolderChain(LinkedFolder);
+        EnsureFolderChain(PickupFolder);
 
         CreateOrUpdateAsset<CoreTokenData>(CoreFolder + "/FireCore.asset", token =>
         {
@@ -178,6 +180,22 @@ public static class AttackTokenAssetGenerator
                 fireCore,
                 directDamage,
             });
+        });
+
+        CreateOrUpdateAsset<RemnantPickupTokenData>(PickupFolder + "/RemnantPickup.asset", token =>
+        {
+            token.TokenId = "pickup_remnant";
+            token.DisplayText = "Remnant";
+            token.Description = "Collect to increase remnant currency stored in save data.";
+            token.RemnantAmount = 1;
+        });
+
+        CreateOrUpdateAsset<HealingPickupTokenData>(PickupFolder + "/HealingPickup.asset", token =>
+        {
+            token.TokenId = "pickup_heal";
+            token.DisplayText = "Heal";
+            token.Description = "Collect to immediately restore player health.";
+            token.HealingAmount = 20f;
         });
 
         AssetDatabase.SaveAssets();

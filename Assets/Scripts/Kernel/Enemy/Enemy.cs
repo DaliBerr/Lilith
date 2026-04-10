@@ -93,18 +93,20 @@ public abstract class Enemy : MonoBehaviour
 }
 
 /// <summary>
-/// 描述单个 Bullet Token 掉落项以及它的独立掉落概率。
+/// 描述单个 Bullet Token 掉落项、独立掉落概率与命中后生成数量。
 /// </summary>
 [Serializable]
 public struct EnemyBulletTokenDropEntry
 {
     public PlaceableTokenData token;
     [Range(0f, 1f)] public float dropChance;
+    [Min(1)] public int dropCount;
 
-    public EnemyBulletTokenDropEntry(PlaceableTokenData token, float dropChance)
+    public EnemyBulletTokenDropEntry(PlaceableTokenData token, float dropChance, int dropCount = 1)
     {
         this.token = token;
         this.dropChance = dropChance;
+        this.dropCount = Mathf.Max(1, dropCount);
     }
 }
 
@@ -171,6 +173,7 @@ public struct EnemyWaveConfig
         {
             EnemyBulletTokenDropEntry sanitizedEntry = entry;
             sanitizedEntry.dropChance = Mathf.Clamp01(sanitizedEntry.dropChance);
+            sanitizedEntry.dropCount = Mathf.Max(1, sanitizedEntry.dropCount);
             sanitizedDrops.Add(sanitizedEntry);
         }
 

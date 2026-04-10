@@ -73,6 +73,7 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
             }
 
             entry.dropChance = Mathf.Clamp01(entry.dropChance);
+            entry.dropCount = Mathf.Max(1, entry.dropCount);
             tokenDrops.Add(entry);
         }
     }
@@ -132,7 +133,11 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
                 continue;
             }
 
-            rolledDrops.Add(entry.token);
+            int dropCount = Mathf.Max(1, entry.dropCount);
+            for (int countIndex = 0; countIndex < dropCount; countIndex++)
+            {
+                rolledDrops.Add(entry.token);
+            }
         }
 
         if (rolledDrops.Count <= 0)

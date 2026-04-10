@@ -73,6 +73,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTokenPickup.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\CameraOcclusionFader.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\HealingPickupTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\LinkedTokenOutlineView.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\UIInputRouter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualLibrary.cs" />
@@ -91,6 +92,7 @@
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CompiledAttack.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Save\RuntimeSaveService.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScrobePolymorph.cs" />
@@ -119,6 +121,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Event\Events.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealth.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\SerializedFieldConverter.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PickupTokenData.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
     <Compile Include="Assets\Scripts\Kernel\ArenaSeedMapGenerator.cs" />
     <Compile Include="Assets\Scripts\StartUp.cs" />
@@ -126,6 +129,8 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\CodeC.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\IsaveItem.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\GameplayBillboard.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\RemnantPickupTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\PlayerRemnantWallet.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaLoadout.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogBootStrap.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerBulletTokenInventory.cs" />
@@ -140,6 +145,7 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyMovement.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PauseUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BehaviorTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\RemnantSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridAuthoring.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveDefinition.cs" />

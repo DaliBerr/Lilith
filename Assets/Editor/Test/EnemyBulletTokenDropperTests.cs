@@ -103,6 +103,83 @@ public sealed class EnemyBulletTokenDropperTests
     }
 
     [Test]
+    public void EnemyDeath_CanDropPickupOnlyTokens()
+    {
+        GameObject pickupParent = CreateGameObject("PickupParent");
+        BulletTokenPickup pickupPrefab = CreatePickupPrefab();
+        BaseCharEnemyNorm1 enemy = CreateEnemy();
+        EnemyBulletTokenDropper dropper = enemy.gameObject.AddComponent<EnemyBulletTokenDropper>();
+
+        Assert.That(dropper.TrySetPickupPrefab(pickupPrefab), Is.True);
+        SetPrivateField(dropper, "pickupParent", pickupParent.transform);
+
+        RemnantPickupTokenData remnantToken = CreateRemnantToken("pickup_remnant", "Remnant", 2);
+        HealingPickupTokenData healingToken = CreateHealingToken("pickup_heal", "Heal", 20f);
+
+        dropper.ApplyWaveConfig(new EnemyWaveConfig(
+            100f,
+            120f,
+            3f,
+            0.5f,
+            1f,
+            new[]
+            {
+                new EnemyBulletTokenDropEntry(remnantToken, 1f),
+                new EnemyBulletTokenDropEntry(healingToken, 1f),
+            }));
+
+        Assert.That(enemy.TryApplyDamage(enemy.CurrentHealth, out _, out bool isDead), Is.True);
+        Assert.That(isDead, Is.True);
+        Assert.That(pickupParent.transform.childCount, Is.EqualTo(2));
+
+        List<PlaceableTokenData> droppedTokens = new();
+        for (int i = 0; i < pickupParent.transform.childCount; i++)
+        {
+            BulletTokenPickup spawnedPickup = pickupParent.transform.GetChild(i).GetComponent<BulletTokenPickup>();
+            Assert.That(spawnedPickup, Is.Not.Null);
+            droppedTokens.Add(spawnedPickup.Token);
+        }
+
+        Assert.That(droppedTokens, Has.Member(remnantToken));
+        Assert.That(droppedTokens, Has.Member(healingToken));
+    }
+
+    [Test]
+    public void EnemyDeath_UsesWaveDropCountForSpawnQuantity()
+    {
+        GameObject pickupParent = CreateGameObject("PickupParent");
+        BulletTokenPickup pickupPrefab = CreatePickupPrefab();
+        BaseCharEnemyNorm1 enemy = CreateEnemy();
+        EnemyBulletTokenDropper dropper = enemy.gameObject.AddComponent<EnemyBulletTokenDropper>();
+
+        Assert.That(dropper.TrySetPickupPrefab(pickupPrefab), Is.True);
+        SetPrivateField(dropper, "pickupParent", pickupParent.transform);
+
+        CoreTokenData token = CreateToken<CoreTokenData>("drop_count_test", "Drop Count");
+        dropper.ApplyWaveConfig(new EnemyWaveConfig(
+            100f,
+            120f,
+            3f,
+            0.5f,
+            1f,
+            new[]
+            {
+                new EnemyBulletTokenDropEntry(token, 1f, 3),
+            }));
+
+        Assert.That(enemy.TryApplyDamage(enemy.CurrentHealth, out _, out bool isDead), Is.True);
+        Assert.That(isDead, Is.True);
+        Assert.That(pickupParent.transform.childCount, Is.EqualTo(3));
+
+        for (int i = 0; i < pickupParent.transform.childCount; i++)
+        {
+            BulletTokenPickup spawnedPickup = pickupParent.transform.GetChild(i).GetComponent<BulletTokenPickup>();
+            Assert.That(spawnedPickup, Is.Not.Null);
+            Assert.That(spawnedPickup.Token, Is.SameAs(token));
+        }
+    }
+
+    [Test]
     public void EnemyDeath_WithNoSuccessfulDrops_SpawnsNothing()
     {
         GameObject pickupParent = CreateGameObject("PickupParent");
@@ -194,6 +271,28 @@ public sealed class EnemyBulletTokenDropperTests
         token.ConfiguredDamageMultiplier = damageMultiplier;
         token.SetLinkedTokens(linkedTokens);
         token.name = itemId;
+        createdObjects.Add(token);
+        return token;
+    }
+
+    private RemnantPickupTokenData CreateRemnantToken(string tokenId, string displayText, int remnantAmount)
+    {
+        RemnantPickupTokenData token = ScriptableObject.CreateInstance<RemnantPickupTokenData>();
+        token.TokenId = tokenId;
+        token.DisplayText = displayText;
+        SetPrivateField(token, "remnantAmount", remnantAmount);
+        token.name = tokenId;
+        createdObjects.Add(token);
+        return token;
+    }
+
+    private HealingPickupTokenData CreateHealingToken(string tokenId, string displayText, float healingAmount)
+    {
+        HealingPickupTokenData token = ScriptableObject.CreateInstance<HealingPickupTokenData>();
+        token.TokenId = tokenId;
+        token.DisplayText = displayText;
+        SetPrivateField(token, "healingAmount", healingAmount);
+        token.name = tokenId;
         createdObjects.Add(token);
         return token;
     }

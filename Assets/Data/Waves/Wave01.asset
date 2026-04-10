@@ -26,8 +26,13 @@ MonoBehaviour:
       tokenDrops:
       - token: {fileID: 11400000, guid: 29b3f0bc5983cf741b89c9df972f21ab, type: 2}
         dropChance: 1
-      - token: {fileID: 11400000, guid: 29b3f0bc5983cf741b89c9df972f21ab, type: 2}
+        dropCount: 1
+      - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
         dropChance: 1
+        dropCount: 1
+      - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+        dropChance: 1
+        dropCount: 1
   - enemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
     spawnCount: 4
     enemyConfig:

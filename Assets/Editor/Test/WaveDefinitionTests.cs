@@ -43,9 +43,9 @@ public sealed class WaveDefinitionTests
                 3f,
                 new[]
                 {
-                    new EnemyBulletTokenDropEntry(null, 0.5f),
-                    new EnemyBulletTokenDropEntry(keptLowChanceToken, -0.3f),
-                    new EnemyBulletTokenDropEntry(keptHighChanceToken, 1.8f),
+                    new EnemyBulletTokenDropEntry(null, 0.5f) { dropCount = 0 },
+                    new EnemyBulletTokenDropEntry(keptLowChanceToken, -0.3f) { dropCount = -2 },
+                    new EnemyBulletTokenDropEntry(keptHighChanceToken, 1.8f) { dropCount = 4 },
                 }));
 
         SetPrivateField(waveDefinition, "enemySpawns", new List<WaveEnemySpawnEntry> { entry });
@@ -57,10 +57,13 @@ public sealed class WaveDefinitionTests
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops, Has.Count.EqualTo(3));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[0].token, Is.Null);
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[0].dropChance, Is.EqualTo(0.5f));
+        Assert.That(sanitizedEntry.enemyConfig.tokenDrops[0].dropCount, Is.EqualTo(1));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[1].token, Is.SameAs(keptLowChanceToken));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[1].dropChance, Is.EqualTo(0f));
+        Assert.That(sanitizedEntry.enemyConfig.tokenDrops[1].dropCount, Is.EqualTo(1));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[2].token, Is.SameAs(keptHighChanceToken));
         Assert.That(sanitizedEntry.enemyConfig.tokenDrops[2].dropChance, Is.EqualTo(1f));
+        Assert.That(sanitizedEntry.enemyConfig.tokenDrops[2].dropCount, Is.EqualTo(4));
     }
 
     [Test]

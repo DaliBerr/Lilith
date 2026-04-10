@@ -67,7 +67,17 @@ namespace Kernel.Bullet
         /// </summary>
         private void OnTriggerEnter(Collider other)
         {
-            if (isCollected || token == null || other == null || !TryResolveInventory(other, out PlayerBulletTokenInventory inventory))
+            if (isCollected || token == null || other == null)
+            {
+                return;
+            }
+
+            if (TryCollectSpecialPickup(other))
+            {
+                return;
+            }
+
+            if (!TryResolveInventory(other, out PlayerBulletTokenInventory inventory))
             {
                 return;
             }
@@ -77,8 +87,92 @@ namespace Kernel.Bullet
                 return;
             }
 
-            isCollected = true;
-            DestroySelf();
+            ConsumePickup();
+        }
+
+        /// <summary>
+        /// summary: 对需要立即结算效果的专用 pickup token 执行拾取处理。
+        /// param: other 本次进入触发器的碰撞体
+        /// returns: 已按专用规则处理并消费当前 pickup 时返回 true
+        /// </summary>
+        private bool TryCollectSpecialPickup(Collider other)
+        {
+            if (token is RemnantPickupTokenData remnantToken)
+            {
+                return TryCollectRemnantPickup(remnantToken, other);
+            }
+
+            if (token is HealingPickupTokenData healingToken)
+            {
+                return TryCollectHealingPickup(healingToken, other);
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// summary: 结算残卷拾取效果，命中玩家后直接增加全局残卷数量并消费 pickup。
+        /// param: remnantToken 当前 pickup 绑定的残卷 token
+        /// param: other 本次进入触发器的碰撞体
+        /// returns: 成功结算并消费当前 pickup 时返回 true
+        /// </summary>
+        private bool TryCollectRemnantPickup(RemnantPickupTokenData remnantToken, Collider other)
+        {
+            if (remnantToken == null || !IsPlayerCollector(other))
+            {
+                return false;
+            }
+
+            if (!PlayerRemnantWallet.TryAddCurrentRemnants(remnantToken.RemnantAmount, out _))
+            {
+                return false;
+            }
+
+            ConsumePickup();
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 结算愈拾取效果，命中玩家后尝试回血并消费 pickup。
+        /// param: healingToken 当前 pickup 绑定的治疗 token
+        /// param: other 本次进入触发器的碰撞体
+        /// returns: 成功命中玩家并消费当前 pickup 时返回 true
+        /// </summary>
+        private bool TryCollectHealingPickup(HealingPickupTokenData healingToken, Collider other)
+        {
+            if (healingToken == null || !TryResolvePlayerHealth(other, out PlayerHealth playerHealth))
+            {
+                return false;
+            }
+
+            playerHealth.TryApplyHealing(healingToken.HealingAmount, out _, out _);
+            ConsumePickup();
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 判断当前碰撞体是否属于玩家可拾取对象。
+        /// param: other 本次进入触发器的碰撞体
+        /// returns: 命中玩家相关组件时返回 true
+        /// </summary>
+        private static bool IsPlayerCollector(Collider other)
+        {
+            return other != null
+                && (other.GetComponentInParent<PlayerHealth>() != null
+                    || other.GetComponentInParent<PlayerBulletTokenInventory>() != null
+                    || other.GetComponentInParent<PlayerPlaneMovement>() != null);
+        }
+
+        /// <summary>
+        /// summary: 从进入触发器的碰撞体向上解析玩家生命组件。
+        /// param: other 本次进入触发器的碰撞体
+        /// param: playerHealth 输出解析到的玩家生命组件
+        /// returns: 成功拿到玩家生命组件时返回 true
+        /// </summary>
+        private static bool TryResolvePlayerHealth(Collider other, out PlayerHealth playerHealth)
+        {
+            playerHealth = other.GetComponentInParent<PlayerHealth>();
+            return playerHealth != null;
         }
 
         /// <summary>
@@ -159,6 +253,17 @@ namespace Kernel.Bullet
         {
             inventory = other.GetComponentInParent<PlayerBulletTokenInventory>();
             return inventory != null;
+        }
+
+        /// <summary>
+        /// summary: 统一消费当前 pickup，标记为已收集并执行销毁。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ConsumePickup()
+        {
+            isCollected = true;
+            DestroySelf();
         }
 
         /// <summary>

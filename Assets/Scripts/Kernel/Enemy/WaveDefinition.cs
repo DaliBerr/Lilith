@@ -219,7 +219,7 @@ public sealed class WaveDefinition : ScriptableObject
     }
 
     /// <summary>
-    /// summary: 修正掉落表里的概率取值，但保留空 token 占位项，避免 Inspector 新增元素后被 OnValidate 立即删掉。
+    /// summary: 修正掉落表里的概率与数量取值，但保留空 token 占位项，避免 Inspector 新增元素后被 OnValidate 立即删掉。
     /// param: tokenDrops 当前条目上序列化出来的掉落表
     /// returns: 保留原有条目顺序的掉落表副本
     /// </summary>
@@ -235,6 +235,7 @@ public sealed class WaveDefinition : ScriptableObject
         {
             EnemyBulletTokenDropEntry entry = tokenDrops[i];
             entry.dropChance = Mathf.Clamp01(entry.dropChance);
+            entry.dropCount = Mathf.Max(1, entry.dropCount);
             sanitizedDrops.Add(entry);
         }
 

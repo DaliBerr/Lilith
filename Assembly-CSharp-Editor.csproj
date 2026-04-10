@@ -86,6 +86,7 @@
     <Compile Include="Assets\Editor\Test\PlayerHealthBarControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\StoryTellerUIScreenTests.cs" />
     <Compile Include="Assets\Editor\AttackTokenAssetGenerator.cs" />
+    <Compile Include="Assets\Editor\Test\RuntimeSaveServiceTests.cs" />
     <Compile Include="Assets\Editor\MapGridMigrationUtility.cs" />
     <Compile Include="Assets\Editor\MapGridEditorUtility.cs" />
     <Compile Include="Assets\Editor\Test\EnemyMeleeAttackerTests.cs" />
