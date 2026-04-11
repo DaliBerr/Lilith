@@ -16,6 +16,9 @@ MonoBehaviour:
   displayText: Hit
   description: Single target direct damage.
   tokenType: 5
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
   resultType: 1
   acceptsNumericValue: 0
   defaultExplosionRadius: 0

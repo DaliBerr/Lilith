@@ -870,6 +870,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.GlobalStartup
   isEnableDevMode: 1
+  startStoryAddress: Assets/Data/Story/Introduction
+  startStoryCharactersPerSecond: 24
+  startStoryLineHoldSeconds: 1.2
 --- !u!4 &2076344239
 Transform:
   m_ObjectHideFlags: 0

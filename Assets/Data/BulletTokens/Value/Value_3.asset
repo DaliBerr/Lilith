@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Value_3
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.ValueTokenData
   tokenId: value_3
-  displayText: "\u4E09"
+  displayText: 3
   description: Numeric token 3.
   tokenType: 4
   hasBulletTextOverride: 0

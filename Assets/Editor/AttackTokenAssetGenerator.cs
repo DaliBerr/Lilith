@@ -12,6 +12,7 @@ public static class AttackTokenAssetGenerator
     private const string ValueFolder = RootFolder + "/Value";
     private const string LinkedFolder = RootFolder + "/Linked";
     private const string PickupFolder = RootFolder + "/Pickup";
+    private const string LibraryPath = RootFolder + "/BulletTokenLibrary.asset";
 
     [MenuItem("Tools/Lilith/Bullet/Generate Default Token Assets")]
     public static void GenerateDefaultAssets()
@@ -169,17 +170,19 @@ public static class AttackTokenAssetGenerator
 
         CoreTokenData fireCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(CoreFolder + "/FireCore.asset");
         ResultTokenData directDamage = AssetDatabase.LoadAssetAtPath<ResultTokenData>(ResultFolder + "/DirectDamage.asset");
-        CreateOrUpdateAsset<LinkedTokenData>(LinkedFolder + "/FireDirectChain.asset", item =>
+        LinkedTokenData fireSpread = null;
+        CreateOrUpdateAsset<LinkedTokenData>(LinkedFolder + "/Fire-Spread.asset", item =>
         {
-            item.ItemId = "linked_fire_direct";
-            item.Description = "A linked Fire Core + Direct Damage chain piece.";
-            item.ConfiguredDamageMultiplier = 1.5f;
-            item.PickupDisplayTextOverride = "FireHit";
+            item.ItemId = "Fire_Spread";
+            item.Description = string.Empty;
+            item.ConfiguredDamageMultiplier = 1.2f;
+            item.PickupDisplayTextOverride = "火";
             item.SetLinkedTokens(new BaseTokenData[]
             {
                 fireCore,
                 directDamage,
             });
+            fireSpread = item;
         });
 
         CreateOrUpdateAsset<RemnantPickupTokenData>(PickupFolder + "/RemnantPickup.asset", token =>
@@ -198,9 +201,30 @@ public static class AttackTokenAssetGenerator
             token.HealingAmount = 20f;
         });
 
+        CreateOrUpdateAsset<BulletTokenLibrary>(LibraryPath, library =>
+        {
+            library.SetTokens(new PlaceableTokenData[]
+            {
+                AssetDatabase.LoadAssetAtPath<CoreTokenData>(CoreFolder + "/FireCore.asset"),
+                AssetDatabase.LoadAssetAtPath<CoreTokenData>(CoreFolder + "/IceCore.asset"),
+                AssetDatabase.LoadAssetAtPath<CoreTokenData>(CoreFolder + "/ThunderCore.asset"),
+                AssetDatabase.LoadAssetAtPath<CoreTokenData>(CoreFolder + "/EdgeCore.asset"),
+                AssetDatabase.LoadAssetAtPath<BehaviorTokenData>(BehaviorFolder + "/Straight.asset"),
+                AssetDatabase.LoadAssetAtPath<BehaviorTokenData>(BehaviorFolder + "/Spread.asset"),
+                AssetDatabase.LoadAssetAtPath<ResultTokenData>(ResultFolder + "/DirectDamage.asset"),
+                AssetDatabase.LoadAssetAtPath<ResultTokenData>(ResultFolder + "/Explosion.asset"),
+                AssetDatabase.LoadAssetAtPath<ValueTokenData>(ValueFolder + "/Value_2.asset"),
+                AssetDatabase.LoadAssetAtPath<ValueTokenData>(ValueFolder + "/Value_3.asset"),
+                AssetDatabase.LoadAssetAtPath<ValueTokenData>(ValueFolder + "/Value_5.asset"),
+                fireSpread ?? AssetDatabase.LoadAssetAtPath<LinkedTokenData>(LinkedFolder + "/Fire-Spread.asset"),
+                AssetDatabase.LoadAssetAtPath<RemnantPickupTokenData>(PickupFolder + "/RemnantPickup.asset"),
+                AssetDatabase.LoadAssetAtPath<HealingPickupTokenData>(PickupFolder + "/HealingPickup.asset"),
+            });
+        });
+
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log("[AttackTokenAssetGenerator] Default bullet token assets are ready under Assets/Data/BulletTokens.");
+        Debug.Log("[AttackTokenAssetGenerator] Default bullet token assets and BulletTokenLibrary are ready under Assets/Data/BulletTokens.");
     }
 
     private static void CreateOrUpdateAsset<T>(string assetPath, Action<T> configure) where T : ScriptableObject

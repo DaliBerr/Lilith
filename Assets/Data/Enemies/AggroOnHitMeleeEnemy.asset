@@ -39,15 +39,6 @@ MonoBehaviour:
     bulletPrefab: {fileID: 0}
     formulaItems: []
     targetPolicy: 1
-  summonAttack:
-    summonedEnemyDefinition: {fileID: 0}
-    summonedEnemyConfig:
-      maxHealth: 1
-      moveSpeed: 0
-      attackRange: 0
-      attackCooldown: 0
-      attackDamage: 0
-      tokenDrops: []
-    summonCountPerCast: 1
-    summonRadius: 8
-    maxAliveSummons: 2
+  skillCasting:
+    maxSkillCastsPerTick: 1
+  skillSlots: []

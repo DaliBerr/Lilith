@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: FireCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: fire_core
-  displayText: "\u706B"
+  displayText: Fire
   description: Base fire core.
   tokenType: 2
   hasBulletTextOverride: 1
@@ -23,12 +23,12 @@ MonoBehaviour:
     expression: =Color.red
   coreType: 1
   defaultValueType: 1
-  damage: 20
+  damage: 1
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 160
+  projectileSpeed: 320
   maxLifetime: 2
   maxTravelDistance: 512
   impactMask:
     serializedVersion: 2
-    m_Bits: 2035
+    m_Bits: 4294967291

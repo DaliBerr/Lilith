@@ -15,11 +15,22 @@ MonoBehaviour:
   m_GroupName: UI
   m_GUID: 3d8500dabd131694dbbd021695a725c1
   m_SerializeEntries:
+  - m_GUID: 450bdcc12e49510429d7ff846980a24f
+    m_Address: Assets/Prefabs/UI/Token Select Panel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 4a42d39cd166bb84e84f9e40ef030262
     m_Address: Assets/Prefabs/UI/BackPackUI
     m_ReadOnly: 0
     m_SerializedLabels:
     - UI
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 59d03886b44b91d4ca4a8ac3ed4d43c8
+    m_Address: Assets/Prefabs/UI/Profile Popup
+    m_ReadOnly: 0
+    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5b774ac9e1a27d54d8a0597f14c48db6
     m_Address: Assets/Prefabs/UI/Storyteller Panel
@@ -47,6 +58,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d56f5ebd3341ee44a9db06a9fc20aec1
     m_Address: Assets/Prefabs/UI/StartUp UI Prefab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e5b98263adf94d04ab18ac63ad9168e8
+    m_Address: Assets/Prefabs/UI/BulletToken Selection Prefab
     m_ReadOnly: 0
     m_SerializedLabels:
     - UI

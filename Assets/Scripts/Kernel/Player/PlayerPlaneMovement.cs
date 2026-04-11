@@ -49,6 +49,24 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     /// </summary>
     public CharBullet BulletPrefab => bulletPrefab;
 
+    /// <summary>
+    /// summary: 显式设置当前玩家移动与瞄准共用的地图网格，并立即重对齐到对应 gameplay plane。
+    /// param: mapGrid 当前应绑定的地图网格
+    /// returns: 成功绑定并完成平面对齐时返回 true
+    /// </summary>
+    public bool TrySetTargetMapGrid(MapGridAuthoring mapGrid)
+    {
+        if (mapGrid == null)
+        {
+            return false;
+        }
+
+        targetMapGrid = mapGrid;
+        TryResolveGroundingReferenceCollider();
+        EnsureGroundedRigidbodyConfiguration();
+        return TrySnapToGameplayPlane();
+    }
+
     private void Awake()
     {
         TryAutoAssignLoadout();

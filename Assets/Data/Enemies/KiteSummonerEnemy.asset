@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: KiteSummoner
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 3
-  attackKind: 3
+  attackKind: 0
   dashMovement:
     triggerDistance: 24
     windupSeconds: 0.25
@@ -39,15 +39,21 @@ MonoBehaviour:
     bulletPrefab: {fileID: 0}
     formulaItems: []
     targetPolicy: 1
-  summonAttack:
-    summonedEnemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
-    summonedEnemyConfig:
-      maxHealth: 14
-      moveSpeed: 110
-      attackRange: 3
-      attackCooldown: 0.8
-      attackDamage: 4
-      tokenDrops: []
-    summonCountPerCast: 1
-    summonRadius: 8
-    maxAliveSummons: 2
+  skillCasting:
+    maxSkillCastsPerTick: 1
+  skillSlots:
+  - skillKind: 1
+    cooldownSeconds: 0
+    castRange: 16
+    summonSkill:
+      summonedEnemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
+      summonedEnemyConfig:
+        maxHealth: 14
+        moveSpeed: 110
+        attackRange: 3
+        attackCooldown: 0.8
+        attackDamage: 4
+        tokenDrops: []
+      summonCountPerCast: 1
+      summonRadius: 8
+      maxAliveSummons: 2

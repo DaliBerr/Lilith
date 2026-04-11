@@ -1,3 +1,4 @@
+using System.Collections;
 using Kernel.GameState;
 using Vocalith.Logging;
 using Vocalith.UI;
@@ -15,18 +16,19 @@ namespace Kernel.UI
     {
         [Header("Buttons")]
         [SerializeField] private Button startButton;
-        [SerializeField] private Button loadButton;
+        [SerializeField] private GameObject loadButtonRoot;
         [SerializeField] private Button settingsButton;
         [SerializeField] private Button quitButton;
 
-        private bool hasRequestedStart;
+        private bool isOpeningProfileModal;
 
         public override Status currentStatus { get; } = StatusList.InMainMenuStatus;
 
         protected override void OnInit()
         {
             TryAutoBindReferences();
-            hasRequestedStart = false;
+            HideLegacyLoadButton();
+            isOpeningProfileModal = false;
             SetButtonsInteractable(true);
             BindButtonCallbacks();
         }
@@ -54,27 +56,39 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 按当前 StartUp UI Prefab 的层级自动补齐四个按钮引用。
+        /// summary: 按当前 StartUp UI Prefab 的层级自动补齐按钮与旧 Load 节点引用。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void TryAutoBindReferences()
         {
             startButton ??= FindButton("Button Panel/Start Button/Edge/Button");
-            loadButton ??= FindButton("Button Panel/Load Button/Edge/Button");
+            loadButtonRoot ??= transform.Find("Button Panel/Load Button")?.gameObject;
             settingsButton ??= FindButton("Button Panel/Option Button/Edge/Button");
             quitButton ??= FindButton("Button Panel/Quit Button/Edge/Button");
         }
 
         /// <summary>
-        /// summary: 绑定启动菜单的四个按钮回调。
+        /// summary: 隐藏旧的 Load 按钮，使开始流程统一走档位弹窗。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HideLegacyLoadButton()
+        {
+            if (loadButtonRoot != null && loadButtonRoot.activeSelf)
+            {
+                loadButtonRoot.SetActive(false);
+            }
+        }
+
+        /// <summary>
+        /// summary: 绑定启动菜单当前仍启用的按钮回调。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void BindButtonCallbacks()
         {
             BindButton(startButton, HandleStartButtonClicked);
-            BindButton(loadButton, HandleLoadButtonClicked);
             BindButton(settingsButton, HandleSettingsButtonClicked);
             BindButton(quitButton, HandleQuitButtonClicked);
         }
@@ -87,19 +101,72 @@ namespace Kernel.UI
         private void UnbindButtonCallbacks()
         {
             UnbindButton(startButton, HandleStartButtonClicked);
-            UnbindButton(loadButton, HandleLoadButtonClicked);
             UnbindButton(settingsButton, HandleSettingsButtonClicked);
             UnbindButton(quitButton, HandleQuitButtonClicked);
         }
 
         /// <summary>
-        /// summary: 响应开始按钮，通知 GlobalStartup 进入“剧情介绍 -> Main 场景”的开始流程。
+        /// summary: 统一切换启动菜单当前可见按钮的交互状态，供 profile modal 打开期间临时锁定输入。
+        /// param name="interactable": 目标交互状态
+        /// returns: 无
+        /// </summary>
+        private void SetButtonsInteractable(bool interactable)
+        {
+            SetButtonInteractable(startButton, interactable);
+            SetButtonInteractable(settingsButton, interactable);
+            SetButtonInteractable(quitButton, interactable);
+        }
+
+        /// <summary>
+        /// summary: 安全切换单个按钮的 interactable 状态。
+        /// param name="button": 目标按钮
+        /// param name="interactable": 目标交互状态
+        /// returns: 无
+        /// </summary>
+        private static void SetButtonInteractable(Button button, bool interactable)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.interactable = interactable;
+        }
+
+        /// <summary>
+        /// summary: 通过标准 modal 流程打开 Profile 管理界面，并在打开期间临时锁定启动菜单按钮。
+        /// param: 无
+        /// returns: 可供协程等待的枚举器
+        /// </summary>
+        private IEnumerator ShowProfileManagementModal()
+        {
+            if (ui == null)
+            {
+                GameDebug.LogWarning("[StartUpMenuUI] UIManager is missing. Unable to open Profile modal.");
+                yield break;
+            }
+
+            isOpeningProfileModal = true;
+            SetButtonsInteractable(false);
+            try
+            {
+                yield return ui.ShowModalAndWait<ProfileManagementUIScreen>();
+            }
+            finally
+            {
+                isOpeningProfileModal = false;
+                SetButtonsInteractable(true);
+            }
+        }
+
+        /// <summary>
+        /// summary: 响应开始按钮，默认弹出四个固定存档栏位供玩家直接选择。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void HandleStartButtonClicked()
         {
-            if (hasRequestedStart)
+            if (isOpeningProfileModal)
             {
                 return;
             }
@@ -116,27 +183,7 @@ namespace Kernel.UI
                 return;
             }
 
-            if (!GlobalStartup.Instance.RequestStartGame())
-            {
-                GameDebug.LogWarning("[StartUpMenuUI] Start request was ignored.");
-                return;
-            }
-
-            hasRequestedStart = true;
-            SetButtonsInteractable(false);
-        }
-
-        /// <summary>
-        /// summary: 响应加载按钮，弹出统一的“功能未实现”提示窗口。
-        /// param: 无
-        /// returns: 无
-        /// </summary>
-        private void HandleLoadButtonClicked()
-        {
-            StartCoroutine(PopUpUIUtility.ShowInfoPopup(
-                ui,
-                nameof(StartUpMenuUI),
-                "加载功能暂未实现，后续会在这里接入存档读取流程。"));
+            StartCoroutine(ShowProfileManagementModal());
         }
 
         /// <summary>
@@ -165,19 +212,6 @@ namespace Kernel.UI
 #else
             Application.Quit();
 #endif
-        }
-
-        /// <summary>
-        /// summary: 统一设置四个按钮的交互开关，避免重复点击开始按钮。
-        /// param name="interactable": 目标交互状态
-        /// returns: 无
-        /// </summary>
-        private void SetButtonsInteractable(bool interactable)
-        {
-            SetButtonInteractable(startButton, interactable);
-            SetButtonInteractable(loadButton, interactable);
-            SetButtonInteractable(settingsButton, interactable);
-            SetButtonInteractable(quitButton, interactable);
         }
 
         /// <summary>
@@ -221,22 +255,6 @@ namespace Kernel.UI
             }
 
             button.onClick.RemoveListener(callback);
-        }
-
-        /// <summary>
-        /// summary: 安全切换单个按钮的 interactable 状态。
-        /// param name="button": 目标按钮
-        /// param name="interactable": 目标交互状态
-        /// returns: 无
-        /// </summary>
-        private static void SetButtonInteractable(Button button, bool interactable)
-        {
-            if (button == null)
-            {
-                return;
-            }
-
-            button.interactable = interactable;
         }
 
         /// <summary>

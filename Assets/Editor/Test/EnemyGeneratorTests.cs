@@ -235,6 +235,39 @@ public sealed class EnemyGeneratorTests
     }
 
     [Test]
+    public void TrySpawnEnemyAt_BindsCombatMapAndPickupParentForSpawnedComponents()
+    {
+        MapGridAuthoring authoring = CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        Transform runtimeEnemyParent = CreateGameObject("RuntimeEnemies").transform;
+        Transform runtimePickupParent = CreateGameObject("RuntimePickups").transform;
+        Transform player = CreateGameObject("Player").transform;
+        player.position = new Vector3(32f, 0f, 32f);
+
+        GameObject enemyPrefab = CreateEnemyPrefab(100f);
+        enemyPrefab.AddComponent<EnemyBulletTokenDropper>();
+        EnemyDefinition definition = CreateEnemyDefinition("DropEnemy", enemyPrefab.GetComponent<EnemyDefinitionBinder>());
+        SetPrivateField(generator, "spawnedEnemyParent", runtimeEnemyParent);
+        SetPrivateField(generator, "pickupParent", runtimePickupParent);
+
+        Assert.That(generator.TrySetTarget(player), Is.True);
+        Assert.That(generator.TrySetTargetMapGrid(authoring), Is.True);
+
+        bool success = generator.TrySpawnEnemyAt(
+            definition,
+            new EnemyWaveConfig(100f, 120f, 14f, 0.75f, 6f),
+            new Vector3(28f, 0f, 28f),
+            out Enemy spawnedEnemy);
+
+        Assert.That(success, Is.True);
+        createdObjects.Add(spawnedEnemy.gameObject);
+        Assert.That(spawnedEnemy.transform.parent, Is.SameAs(runtimeEnemyParent));
+        Assert.That(GetPrivateField<MapGridAuthoring>(spawnedEnemy.GetComponent<CharEnemyMovement>(), "targetMapGrid"), Is.SameAs(authoring));
+        Assert.That(GetPrivateField<MapGridAuthoring>(spawnedEnemy.GetComponent<EnemyBulletTokenDropper>(), "targetMapGrid"), Is.SameAs(authoring));
+        Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<EnemyBulletTokenDropper>(), "pickupParent"), Is.SameAs(runtimePickupParent));
+    }
+
+    [Test]
     public void TrySpawnEnemy_ReturnsFalseWhenDefinitionHasNoRuntimePrefab()
     {
         CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);

@@ -123,6 +123,35 @@ public sealed class CharEnemyMovementTests
     }
 
     [Test]
+    public void TickMovement_OrbitTarget_UsesAnExplicitEnemyTargetTransform()
+    {
+        BaseCharEnemyNorm1 orbitTargetEnemy = CreateEnemy(out _, out GameObject orbitTargetObject);
+        SetEnemyHealth(orbitTargetEnemy, 10f);
+        orbitTargetObject.transform.position = new Vector3(5f, 0f, 0f);
+
+        BaseCharEnemyNorm1 enemy = CreateEnemy(out CharEnemyMovement movement, out GameObject enemyObject);
+        enemyObject.transform.position = Vector3.zero;
+
+        EnemyDefinition definition = CreateDefinition(EnemyMovementKind.OrbitTarget, EnemyAttackKind.None);
+        SetPrivateField(definition, "orbitTargetMovement", new EnemyDefinition.OrbitTargetMovementDefinition
+        {
+            orbitRadius = 5f,
+            orbitRadiusTolerance = 0.25f,
+            orbitSpeedMultiplier = 1f,
+            clockwise = true,
+        });
+        enemy.TryBindDefinition(definition);
+        enemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 10f, 0f, 0f, 0f));
+        Assert.That(movement.TrySetOrbitTarget(orbitTargetObject.transform), Is.True);
+        InvokePrivateMethod(movement, "Awake");
+
+        InvokePrivateMethod(movement, "TickMovement", 0.2f, 0f);
+
+        Assert.That(enemyObject.transform.position.z, Is.GreaterThan(0f));
+        Assert.That(Mathf.Abs(enemyObject.transform.position.x), Is.LessThan(0.01f));
+    }
+
+    [Test]
     public void TickMovement_ChaseThenDash_TransitionsThroughWindupDashAndCooldown()
     {
         BaseCharEnemyNorm1 enemy = CreateEnemy(out CharEnemyMovement movement, out GameObject enemyObject);

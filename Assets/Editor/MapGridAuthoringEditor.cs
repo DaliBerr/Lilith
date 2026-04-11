@@ -225,9 +225,8 @@ namespace Kernel.MapGrid.Editor
             }
 
             EditorGUILayout.LabelField("Seed Generation", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("Seed", seedGenerator.Seed.ToString());
             EditorGUILayout.HelpBox(
-                "Preview uses the same seeded layout generation path as runtime startup. It overwrites current Ground/Wall cell states and may snap the player once.",
+                "Preview uses the same seeded layout generation path as runtime startup. Adjust the attached ArenaSeedMapGenerator component for seed, density, and clearance tuning. Preview overwrites current Ground/Wall cell states and may snap the player once.",
                 MessageType.Info);
 
             using (new EditorGUILayout.HorizontalScope())

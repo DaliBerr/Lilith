@@ -430,6 +430,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CharEnemyMovement
   enemyData: {fileID: 2777352532888450817}
   targetPlayer: {fileID: 1506151790293226984}
+  orbitTarget: {fileID: 0}
   targetRigidbody: {fileID: 2987621430868687394}
   targetMapGrid: {fileID: 0}
   groundingReferenceCollider: {fileID: 823031084670450595}

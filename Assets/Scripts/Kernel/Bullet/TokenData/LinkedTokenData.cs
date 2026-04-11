@@ -102,6 +102,16 @@ namespace Kernel.Bullet
             return base.GetPickupDisplayText();
         }
 
+        /// <summary>
+        /// summary: 返回当前连锁 token 在选择弹窗中的说明文本。
+        /// param: 无
+        /// returns: 当前连锁 token 的 description
+        /// </summary>
+        public override string GetSelectionDescription()
+        {
+            return Description;
+        }
+
         private void OnValidate()
         {
             itemId = itemId != null ? itemId.Trim() : string.Empty;

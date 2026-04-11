@@ -62,6 +62,16 @@ namespace Kernel.Bullet
         }
 
         /// <summary>
+        /// summary: 返回当前 pickup token 在选择弹窗中的说明文本。
+        /// param: 无
+        /// returns: 当前 pickup token 的 description
+        /// </summary>
+        public override string GetSelectionDescription()
+        {
+            return Description;
+        }
+
+        /// <summary>
         /// summary: 修正 pickup token 的可序列化文本字段，避免空引用进入运行时。
         /// param: 无
         /// returns: 无

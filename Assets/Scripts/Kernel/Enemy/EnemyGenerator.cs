@@ -15,6 +15,7 @@ public sealed class EnemyGenerator : MonoBehaviour
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private MapGridAuthoring targetMapGrid;
     [SerializeField] private Transform spawnedEnemyParent;
+    [SerializeField] private Transform pickupParent;
     [SerializeField, Min(0f)] private float spawnDistance = 30f;
     [SerializeField, Min(MinimumGroundSpawnRolls)] private int maxGroundSpawnRolls = 16;
 
@@ -48,6 +49,22 @@ public sealed class EnemyGenerator : MonoBehaviour
         }
 
         targetPlayer = player;
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 显式设置当前生成器所使用的地图网格，避免多地图场景下依赖模糊的自动查找。
+    /// param: mapGrid 当前单局战斗应使用的地图网格
+    /// returns: 传入网格有效时返回 true
+    /// </summary>
+    public bool TrySetTargetMapGrid(MapGridAuthoring mapGrid)
+    {
+        if (mapGrid == null)
+        {
+            return false;
+        }
+
+        targetMapGrid = mapGrid;
         return true;
     }
 
@@ -295,6 +312,7 @@ public sealed class EnemyGenerator : MonoBehaviour
         if (enemyMovement != null)
         {
             enemyMovement.TrySetTarget(targetPlayer);
+            enemyMovement.TrySetTargetMapGrid(targetMapGrid);
         }
 
         EnemyMeleeAttacker meleeAttacker = spawnedRoot.GetComponent<EnemyMeleeAttacker>();
@@ -315,6 +333,13 @@ public sealed class EnemyGenerator : MonoBehaviour
             summoner.TrySetTarget(targetPlayer);
             summoner.TrySetEnemyGenerator(this);
         }
+
+        EnemyBulletTokenDropper tokenDropper = spawnedRoot.GetComponent<EnemyBulletTokenDropper>();
+        if (tokenDropper != null)
+        {
+            tokenDropper.TrySetTargetMapGrid(targetMapGrid);
+            tokenDropper.TrySetPickupParent(pickupParent != null ? pickupParent : spawnedEnemyParent);
+        }
     }
 
     /// <summary>
@@ -331,11 +356,30 @@ public sealed class EnemyGenerator : MonoBehaviour
 
         if (!WorldHeightUtility.TryFindGroundingReferenceCollider(enemyRoot, out Collider referenceCollider))
         {
-            WorldHeightUtility.TrySnapTransformToPlaneHeight(enemyRoot, targetMapGrid.WorldPlaneY);
+            if (WorldHeightUtility.TrySnapTransformToPlaneHeight(enemyRoot, targetMapGrid.WorldPlaneY))
+            {
+                SyncSpawnedEnemyRigidbody(enemyRoot);
+            }
+
             return;
         }
 
-        WorldHeightUtility.TrySnapGroundedRoot(enemyRoot, referenceCollider, targetMapGrid.WorldPlaneY);
+        if (WorldHeightUtility.TrySnapGroundedRoot(enemyRoot, referenceCollider, targetMapGrid.WorldPlaneY))
+        {
+            SyncSpawnedEnemyRigidbody(enemyRoot);
+        }
+    }
+
+    private static void SyncSpawnedEnemyRigidbody(Transform enemyRoot)
+    {
+        if (enemyRoot == null || !enemyRoot.TryGetComponent(out Rigidbody targetRigidbody))
+        {
+            return;
+        }
+
+        targetRigidbody.position = enemyRoot.position;
+        targetRigidbody.linearVelocity = Vector3.zero;
+        targetRigidbody.angularVelocity = Vector3.zero;
     }
 
     /// <summary>
@@ -347,6 +391,10 @@ public sealed class EnemyGenerator : MonoBehaviour
     {
         spawnDistance = Mathf.Max(0f, spawnDistance);
         maxGroundSpawnRolls = Mathf.Max(MinimumGroundSpawnRolls, maxGroundSpawnRolls);
+        if (spawnedEnemyParent == null)
+        {
+            spawnedEnemyParent = transform;
+        }
     }
 
     /// <summary>

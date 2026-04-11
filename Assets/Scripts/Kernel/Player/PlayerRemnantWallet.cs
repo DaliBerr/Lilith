@@ -140,6 +140,7 @@ public sealed class PlayerRemnantWallet : MonoBehaviour
     /// </summary>
     public bool TryAddRemnants(int amount, out int resultingCount)
     {
+        RuntimeSaveService.EnsureProfileLoaded();
         EnsureInitialized();
         resultingCount = remnantCount;
         if (amount <= 0)
@@ -151,6 +152,7 @@ public sealed class PlayerRemnantWallet : MonoBehaviour
         long nextCount = (long)remnantCount + amount;
         remnantCount = nextCount >= int.MaxValue ? int.MaxValue : (int)nextCount;
         resultingCount = remnantCount;
+        RuntimeSaveService.GetOrCreateInstance()?.SetRemnantCount(remnantCount);
         PublishChanged(previousCount);
         return true;
     }
@@ -163,6 +165,29 @@ public sealed class PlayerRemnantWallet : MonoBehaviour
     /// </summary>
     public bool TrySetRemnants(int amount, out int resultingCount)
     {
+        RuntimeSaveService.EnsureProfileLoaded();
+        return TrySetRemnantsInternal(amount, out resultingCount, persistProfile: true);
+    }
+
+    /// <summary>
+    /// summary: 用永久档中的遗珍数量覆盖当前钱包，但不触发反向写档。
+    /// param name="amount": 需要从永久档同步到钱包的遗珍数量
+    /// returns: 数值发生变化时返回 true
+    /// </summary>
+    public bool ApplyLoadedRemnants(int amount)
+    {
+        return TrySetRemnantsInternal(amount, out _, persistProfile: false);
+    }
+
+    /// <summary>
+    /// summary: 覆盖当前实例持有的残卷数量，并按需要回写永久档。
+    /// param name="amount": 需要写入的残卷数量
+    /// param name="resultingCount": 输出写入后的残卷总数
+    /// param name="persistProfile": 是否把本次变化同步回永久档
+    /// returns: 数值发生变化时返回 true
+    /// </summary>
+    private bool TrySetRemnantsInternal(int amount, out int resultingCount, bool persistProfile)
+    {
         EnsureInitialized();
         int sanitizedAmount = Mathf.Max(0, amount);
         resultingCount = sanitizedAmount;
@@ -173,6 +198,11 @@ public sealed class PlayerRemnantWallet : MonoBehaviour
 
         int previousCount = remnantCount;
         remnantCount = sanitizedAmount;
+        if (persistProfile)
+        {
+            RuntimeSaveService.GetOrCreateInstance()?.SetRemnantCount(remnantCount);
+        }
+
         PublishChanged(previousCount);
         return true;
     }
@@ -190,7 +220,16 @@ public sealed class PlayerRemnantWallet : MonoBehaviour
         }
 
         SanitizeConfiguration();
-        remnantCount = startingRemnants;
+        RuntimeSaveService runtimeSaveService = RuntimeSaveService.Instance;
+        if (runtimeSaveService != null && runtimeSaveService.HasLoadedProfile)
+        {
+            remnantCount = runtimeSaveService.GetCurrentRemnantCount();
+        }
+        else
+        {
+            remnantCount = startingRemnants;
+        }
+
         hasInitialized = true;
     }
 

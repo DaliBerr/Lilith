@@ -38,6 +38,16 @@ namespace Kernel.Bullet
             return BuildConcatenatedDisplayText(tokens);
         }
 
+        /// <summary>
+        /// summary: 返回当前物件在 Token Select 弹窗里的说明文本。
+        /// param: 无
+        /// returns: 当前物件的选择描述；默认返回空字符串
+        /// </summary>
+        public virtual string GetSelectionDescription()
+        {
+            return string.Empty;
+        }
+
         protected static string BuildConcatenatedDisplayText(IReadOnlyList<BaseTokenData> tokens)
         {
             if (tokens == null || tokens.Count <= 0)

@@ -56,6 +56,38 @@ namespace Kernel.MapGrid.Editor.Tests
         }
 
         [Test]
+        public void ArenaSeedLayoutBuilder_DensitySettingsIncreaseWallCoverage()
+        {
+            Vector2Int gridSize = new(24, 16);
+            Vector2Int playerCell = new(12, 8);
+            ArenaSeedLayoutSettings openSettings = CreateSettings(obstacleCountMin: 0, obstacleCountMax: 0, spawnAnnulusHalfWidthCells: 0);
+            ArenaSeedLayoutSettings denseSettings = CreateSettings(
+                obstacleCountMin: 12,
+                obstacleCountMax: 12,
+                obstacleWidthRange: new Vector2Int(3, 3),
+                obstacleHeightRange: new Vector2Int(3, 3),
+                edgeClearanceCells: 1,
+                playerSafeRadiusCells: 1,
+                spawnAnnulusHalfWidthCells: 0);
+
+            for (int seed = 0; seed < 64; seed++)
+            {
+                bool openSuccess = ArenaSeedLayoutBuilder.TryBuildLayout(gridSize, seed, playerCell, null, openSettings, out List<CellData.CellSurfaceType> openLayout, out string openError);
+                bool denseSuccess = ArenaSeedLayoutBuilder.TryBuildLayout(gridSize, seed, playerCell, null, denseSettings, out List<CellData.CellSurfaceType> denseLayout, out string denseError);
+
+                Assert.That(openSuccess, Is.True, openError);
+                Assert.That(denseSuccess, Is.True, denseError);
+
+                if (CountCells(denseLayout, CellData.CellSurfaceType.Wall) > CountCells(openLayout, CellData.CellSurfaceType.Wall))
+                {
+                    return;
+                }
+            }
+
+            Assert.Fail("Expected denser tuning parameters to produce more wall cells than the open baseline.");
+        }
+
+        [Test]
         public void ArenaSeedLayoutBuilder_BorderWallsAlwaysApplied()
         {
             ArenaSeedLayoutSettings settings = CreateSettings(obstacleCountMin: 0, obstacleCountMax: 0);

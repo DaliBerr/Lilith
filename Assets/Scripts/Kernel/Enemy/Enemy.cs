@@ -241,6 +241,21 @@ public interface IEnemyWaveConfigReceiver
 }
 
 /// <summary>
+/// 为敌人技能执行器提供统一契约，供技能调度器按技能类型分发具体释放逻辑。
+/// </summary>
+public interface IEnemySkillCaster
+{
+    EnemySkillKind SkillKind { get; }
+
+    /// <summary>
+    /// summary: 尝试按给定技能槽配置执行一次技能释放。
+    /// param: skillSlot 当前调度命中的技能槽配置
+    /// returns: 技能实际成功释放时返回 true
+    /// </summary>
+    bool TryCastSkill(EnemyDefinition.EnemySkillSlotDefinition skillSlot);
+}
+
+/// <summary>
 /// 为敌人运行时行为提供统一的 UI/暂停阻断判断，避免移动和攻击各自维护一套条件。
 /// </summary>
 public static class EnemyGameplayPauseGuard

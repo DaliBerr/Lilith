@@ -13,22 +13,20 @@ MonoBehaviour:
   m_Name: IceCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: ice_core
-  displayText: "\u51B0"
+  displayText: Ice
   description: Base ice core.
   tokenType: 2
   hasBulletTextOverride: 1
   bulletTextOverride: "\u51B0"
-  modifiers:
-  - target: 0
-    expression: =Color.blue
+  modifiers: []
   coreType: 2
   defaultValueType: 1
   damage: 1
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 160
+  projectileSpeed: 320
   maxLifetime: 2
   maxTravelDistance: 512
   impactMask:
     serializedVersion: 2
-    m_Bits: 2035
+    m_Bits: 4294967291

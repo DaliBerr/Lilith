@@ -16,6 +16,9 @@ MonoBehaviour:
   displayText: Spread
   description: Symmetric spread shot.
   tokenType: 3
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
   behaviorType: 2
   acceptsNumericValue: 1
   defaultProjectileCount: 3

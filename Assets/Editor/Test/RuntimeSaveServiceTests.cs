@@ -1,14 +1,13 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
+using Newtonsoft.Json;
+using Kernel.Bullet;
 using NUnit.Framework;
 using UnityEngine;
-using Vocalith.EventSystem;
 
 public sealed class RuntimeSaveServiceTests
 {
     private readonly List<UnityEngine.Object> createdObjects = new();
-    private readonly List<string> createdSavePaths = new();
 
     [TearDown]
     public void TearDown()
@@ -25,63 +24,145 @@ public sealed class RuntimeSaveServiceTests
         }
 
         createdObjects.Clear();
-
-        for (int i = 0; i < createdSavePaths.Count; i++)
-        {
-            string path = createdSavePaths[i];
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-            {
-                continue;
-            }
-
-            File.Delete(path);
-        }
-
-        createdSavePaths.Clear();
+        DeleteSaveDirectory();
     }
 
     [Test]
-    public void TrySaveAndTryLoad_RestoresRemnantWalletCount()
+    public void SelectProfileSlot_NewSlot_CreatesDefaultProfileAndSummary()
     {
-        PlayerRemnantWallet wallet = CreateWallet(initialCount: 12);
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
         RuntimeSaveService saveService = CreateSaveService();
-        string slotName = "runtime_save_test_" + Guid.NewGuid().ToString("N");
 
-        bool saveSuccess = saveService.TrySave(slotName, out string savePath);
-        createdSavePaths.Add(savePath);
+        bool selectSuccess = saveService.SelectProfileSlot(0, out bool isNewSlot);
+        ProfileSlotSummary[] summaries = saveService.GetSlotSummaries();
 
-        Assert.That(saveSuccess, Is.True);
-        Assert.That(File.Exists(savePath), Is.True);
+        Assert.That(selectSuccess, Is.True);
+        Assert.That(isNewSlot, Is.True);
+        Assert.That(File.Exists(BuildProfilePath(0)), Is.True);
+        Assert.That(saveService.ActiveProfileSlotIndex, Is.EqualTo(0));
+        Assert.That(saveService.GetProfileSnapshot().RemnantCount, Is.EqualTo(0));
+        Assert.That(summaries[0].HasProfile, Is.True);
+        Assert.That(summaries[0].LastSavedUtcTicks, Is.GreaterThan(0L));
+    }
 
-        Assert.That(wallet.TrySetRemnants(1, out _), Is.True);
+    [Test]
+    public void SelectProfileSlot_ExistingSlot_RestoresRemnantWalletCount()
+    {
+        PrepareCleanSaveEnvironment();
+        PlayerRemnantWallet wallet = CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(1, out bool firstSelectionIsNew), Is.True);
+        Assert.That(firstSelectionIsNew, Is.True);
+        Assert.That(wallet.ApplyLoadedRemnants(12), Is.True);
+        Assert.That(saveService.SaveProfile(), Is.True);
+
+        Assert.That(wallet.ApplyLoadedRemnants(1), Is.True);
         Assert.That(wallet.CurrentRemnants, Is.EqualTo(1));
 
-        bool loadSuccess = saveService.TryLoad(slotName, out string loadedPath);
+        bool selectSuccess = saveService.SelectProfileSlot(1, out bool secondSelectionIsNew);
 
-        Assert.That(loadSuccess, Is.True);
-        Assert.That(loadedPath, Is.EqualTo(savePath));
+        Assert.That(selectSuccess, Is.True);
+        Assert.That(secondSelectionIsNew, Is.False);
         Assert.That(wallet.CurrentRemnants, Is.EqualTo(12));
     }
 
     [Test]
-    public void EventRequests_SaveThenLoad_RestoresRemnantWalletCount()
+    public void DeleteProfileSlot_RemovesFileAndClearsSummary()
     {
-        PlayerRemnantWallet wallet = CreateWallet(initialCount: 7);
-        CreateSaveService();
-        string slotName = "runtime_event_save_test_" + Guid.NewGuid().ToString("N");
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
 
-        EventManager.eventBus.Publish(new EventList.SaveGameRequest(slotName));
-        string savePath = BuildSavePath(slotName);
-        createdSavePaths.Add(savePath);
+        Assert.That(saveService.SelectProfileSlot(2, out _), Is.True);
+        Assert.That(File.Exists(BuildProfilePath(2)), Is.True);
 
-        Assert.That(File.Exists(savePath), Is.True);
+        bool deleteSuccess = saveService.DeleteProfileSlot(2);
+        ProfileSlotSummary[] summaries = saveService.GetSlotSummaries();
 
-        Assert.That(wallet.TrySetRemnants(0, out _), Is.True);
+        Assert.That(deleteSuccess, Is.True);
+        Assert.That(File.Exists(BuildProfilePath(2)), Is.False);
+        Assert.That(summaries[2].HasProfile, Is.False);
+        Assert.That(saveService.HasSelectedProfileSlot, Is.False);
+    }
+
+    [Test]
+    public void ResetProfile_ResetsRemnantsButLeavesGlobalModeUntouched()
+    {
+        PrepareCleanSaveEnvironment();
+        PlayerRemnantWallet wallet = CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        Assert.That(wallet.ApplyLoadedRemnants(11), Is.True);
+        Assert.That(saveService.SaveProfile(), Is.True);
+
+        GlobalModeSettingsService.LoadMode(GameMode.Normal, forceReload: true);
+        GlobalModeSettingsService.SetMode(GameMode.Dev);
+
+        bool resetSuccess = saveService.ResetProfile();
+        GameMode restoredMode = GlobalModeSettingsService.LoadMode(GameMode.Normal, forceReload: true);
+
+        Assert.That(resetSuccess, Is.True);
         Assert.That(wallet.CurrentRemnants, Is.EqualTo(0));
+        Assert.That(saveService.GetProfileSnapshot().RemnantCount, Is.EqualTo(0));
+        Assert.That(restoredMode, Is.EqualTo(GameMode.Dev));
+    }
 
-        EventManager.eventBus.Publish(new EventList.LoadGameRequest(slotName));
+    [Test]
+    public void RemnantChanges_AreDeferredUntilRunEndCommit()
+    {
+        PrepareCleanSaveEnvironment();
+        PlayerRemnantWallet wallet = CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
 
+        Assert.That(saveService.SelectProfileSlot(0, out bool isNewSlot), Is.True);
+        Assert.That(isNewSlot, Is.True);
+        Assert.That(ReadProfileFromDisk(0).RemnantCount, Is.EqualTo(0));
+
+        Assert.That(saveService.SetRemnantCount(7), Is.True);
         Assert.That(wallet.CurrentRemnants, Is.EqualTo(7));
+        Assert.That(ReadProfileFromDisk(0).RemnantCount, Is.EqualTo(0));
+
+        Assert.That(saveService.AddRemnants(2, out int resultingCount), Is.True);
+        Assert.That(resultingCount, Is.EqualTo(9));
+        Assert.That(wallet.CurrentRemnants, Is.EqualTo(9));
+        Assert.That(ReadProfileFromDisk(0).RemnantCount, Is.EqualTo(0));
+
+        Assert.That(saveService.CommitRunEndProfileState(), Is.True);
+        Assert.That(ReadProfileFromDisk(0).RemnantCount, Is.EqualTo(9));
+    }
+
+    [Test]
+    public void ReloadProfile_DoesNotRestoreRunDataOutsidePermanentProfile()
+    {
+        PrepareCleanSaveEnvironment();
+        PlayerRemnantWallet wallet = CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+        PlayerHealth health = CreateComponent<PlayerHealth>("PlayerHealth");
+        AttackFormulaLoadout loadout = CreateComponent<AttackFormulaLoadout>("AttackFormulaLoadout");
+        PlayerBulletTokenInventory inventory = CreateComponent<PlayerBulletTokenInventory>("PlayerBulletTokenInventory");
+        TestTokenData loadoutToken = CreateToken("loadout_token");
+        TestTokenData inventoryToken = CreateToken("inventory_token");
+
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        Assert.That(wallet.ApplyLoadedRemnants(9), Is.True);
+        Assert.That(saveService.SaveProfile(), Is.True);
+
+        Assert.That(health.TryApplyDamage(25f, out float remainingHealth, out _), Is.True);
+        loadout.SetTokens(new[] { loadoutToken });
+        Assert.That(inventory.SetToken(0, inventoryToken), Is.True);
+        Assert.That(wallet.ApplyLoadedRemnants(2), Is.True);
+
+        bool reloadSuccess = saveService.ReloadProfile();
+
+        Assert.That(reloadSuccess, Is.True);
+        Assert.That(wallet.CurrentRemnants, Is.EqualTo(9));
+        Assert.That(health.CurrentHealth, Is.EqualTo(remainingHealth));
+        Assert.That(loadout.Items.Count, Is.EqualTo(1));
+        Assert.That(loadout.Items[0], Is.SameAs(loadoutToken));
+        Assert.That(inventory.GetToken(0), Is.SameAs(inventoryToken));
     }
 
     private PlayerRemnantWallet CreateWallet(int initialCount)
@@ -89,7 +170,7 @@ public sealed class RuntimeSaveServiceTests
         DestroyExistingWallet();
         GameObject walletObject = CreateGameObject("Wallet");
         PlayerRemnantWallet wallet = walletObject.AddComponent<PlayerRemnantWallet>();
-        wallet.TrySetRemnants(initialCount, out _);
+        wallet.ApplyLoadedRemnants(initialCount);
         return wallet;
     }
 
@@ -100,6 +181,21 @@ public sealed class RuntimeSaveServiceTests
         return saveObject.AddComponent<RuntimeSaveService>();
     }
 
+    private T CreateComponent<T>(string objectName) where T : Component
+    {
+        GameObject gameObject = CreateGameObject(objectName);
+        return gameObject.AddComponent<T>();
+    }
+
+    private TestTokenData CreateToken(string tokenId)
+    {
+        TestTokenData token = ScriptableObject.CreateInstance<TestTokenData>();
+        token.TokenId = tokenId;
+        token.DisplayText = tokenId;
+        createdObjects.Add(token);
+        return token;
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);
@@ -107,9 +203,36 @@ public sealed class RuntimeSaveServiceTests
         return gameObject;
     }
 
-    private static string BuildSavePath(string slotName)
+    private static void PrepareCleanSaveEnvironment()
     {
-        return Path.Combine(Application.persistentDataPath, "Saves", slotName + ".json");
+        DeleteSaveDirectory();
+        GlobalModeSettingsService.LoadMode(GameMode.Normal, forceReload: true);
+    }
+
+    private static string BuildProfilePath(int slotIndex)
+    {
+        return Path.Combine(Application.persistentDataPath, "Saves", $"profile-slot-{slotIndex + 1}.json");
+    }
+
+    private static PermanentProfileData ReadProfileFromDisk(int slotIndex)
+    {
+        string profilePath = BuildProfilePath(slotIndex);
+        string json = File.ReadAllText(profilePath);
+        return JsonConvert.DeserializeObject<PermanentProfileData>(json);
+    }
+
+    private static string BuildSaveDirectoryPath()
+    {
+        return Path.Combine(Application.persistentDataPath, "Saves");
+    }
+
+    private static void DeleteSaveDirectory()
+    {
+        string saveDirectoryPath = BuildSaveDirectoryPath();
+        if (Directory.Exists(saveDirectoryPath))
+        {
+            Directory.Delete(saveDirectoryPath, recursive: true);
+        }
     }
 
     private static void DestroyExistingWallet()
@@ -128,5 +251,9 @@ public sealed class RuntimeSaveServiceTests
         {
             UnityEngine.Object.DestroyImmediate(existingService.gameObject);
         }
+    }
+
+    private sealed class TestTokenData : BaseTokenData
+    {
     }
 }

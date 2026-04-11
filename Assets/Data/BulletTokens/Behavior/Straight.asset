@@ -16,6 +16,9 @@ MonoBehaviour:
   displayText: Straight
   description: Default straight projectile.
   tokenType: 3
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
   behaviorType: 1
   acceptsNumericValue: 0
   defaultProjectileCount: 1

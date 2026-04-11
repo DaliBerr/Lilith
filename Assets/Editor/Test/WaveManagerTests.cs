@@ -22,6 +22,23 @@ public sealed class WaveManagerTests
         createdObjects.Clear();
     }
 
+    [Test]
+    public void CompleteSequence_RaisesSequenceCompletedOnceAndUpdatesState()
+    {
+        WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
+        int completionCount = 0;
+        waveManager.SequenceCompleted += () => completionCount++;
+        SetPrivateField(waveManager, "isSequenceRunning", true);
+        SetPrivateField(waveManager, "hasCompletedSequence", false);
+
+        InvokePrivateMethod<object>(waveManager, "CompleteSequence");
+        InvokePrivateMethod<object>(waveManager, "CompleteSequence");
+
+        Assert.That(completionCount, Is.EqualTo(1));
+        Assert.That(waveManager.IsSequenceRunning, Is.False);
+        Assert.That(waveManager.HasCompletedSequence, Is.True);
+    }
+
     // [Test]
     // public void Tick_SpawnsWaveByQuotaAndAdvancesAfterEnemiesAreCleared()
     // {

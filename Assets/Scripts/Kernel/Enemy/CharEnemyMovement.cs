@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 
 /// <summary>
-/// 控制文字敌人沿 XZ 平面执行追踪、冲刺、风筝与受击仇恨等移动策略。
+/// 控制文字敌人沿 XZ 平面执行追踪、冲刺、风筝、环绕目标与受击仇恨等移动策略。
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class CharEnemyMovement : MonoBehaviour
@@ -36,6 +36,7 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
     [SerializeField] private Enemy enemyData;
     [SerializeField] private Transform targetPlayer;
+    [SerializeField] private Transform orbitTarget;
     [SerializeField] private Rigidbody targetRigidbody;
     [SerializeField] private MapGridAuthoring targetMapGrid;
     [SerializeField] private Collider groundingReferenceCollider;
@@ -124,6 +125,46 @@ public sealed class CharEnemyMovement : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 显式设置环绕移动使用的目标对象；目标可以是玩家或其他敌人。
+    /// param: target 当前环绕移动应跟随的 Transform
+    /// returns: 传入目标有效时返回 true
+    /// </summary>
+    public bool TrySetOrbitTarget(Transform target)
+    {
+        if (target == null || IsOwnTransform(target))
+        {
+            return false;
+        }
+
+        ClearPathCache();
+        orbitTarget = target;
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 显式设置当前敌人寻路与 grounded snap 使用的地图网格，并清理旧路径缓存。
+    /// param: mapGrid 当前敌人应使用的地图网格
+    /// returns: 成功绑定并完成平面对齐时返回 true
+    /// </summary>
+    public bool TrySetTargetMapGrid(MapGridAuthoring mapGrid)
+    {
+        if (mapGrid == null)
+        {
+            return false;
+        }
+
+        if (targetMapGrid != mapGrid)
+        {
+            targetMapGrid = mapGrid;
+            ClearPathCache();
+        }
+
+        TryResolveGroundingReferenceCollider();
+        EnsureGroundedRigidbodyConfiguration();
+        return TrySnapToGameplayPlane();
+    }
+
+    /// <summary>
     /// summary: 让敌人立即朝向当前目标，不等待下一帧移动更新。
     /// param: 无
     /// returns: 成功拿到有效目标方向时返回 true
@@ -171,7 +212,21 @@ public sealed class CharEnemyMovement : MonoBehaviour
             return;
         }
 
-        if (deltaTime <= 0f || !TryResolveEnemyData() || !TryResolveTargetPlayer())
+        if (deltaTime <= 0f || !TryResolveEnemyData())
+        {
+            StopMovement();
+            return;
+        }
+
+        if (ResolveMovementKind() == EnemyMovementKind.OrbitTarget)
+        {
+            if (ResolveOrbitTargetTransform() == null)
+            {
+                StopMovement();
+                return;
+            }
+        }
+        else if (!TryResolveTargetPlayer())
         {
             StopMovement();
             return;
@@ -223,6 +278,9 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
             case EnemyMovementKind.AggroOnHit:
                 return ResolveAggroOnHitMovement(deltaTime, out movementDirection, out speedMultiplier);
+
+            case EnemyMovementKind.OrbitTarget:
+                return ResolveOrbitTargetMovement(deltaTime, out movementDirection, out speedMultiplier);
 
             case EnemyMovementKind.ChaseTarget:
             default:
@@ -302,6 +360,71 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
         float movementStepDistance = GetMovementStepDistance(speedMultiplier, deltaTime);
         return TryGetMovementDirectionTowardsTarget(ResolveDefaultChaseStoppingDistance(), movementStepDistance, out movementDirection);
+    }
+
+    /// <summary>
+    /// summary: 环绕目标行为下，敌人在指定半径外靠近目标，进入半径带后沿切线方向绕行。
+    /// param: deltaTime 本次移动使用的时间步长
+    /// param: movementDirection 输出的平面移动方向
+    /// param: speedMultiplier 输出的速度倍率
+    /// returns: 当前帧需要平移时返回 true
+    /// </summary>
+    private bool ResolveOrbitTargetMovement(float deltaTime, out Vector3 movementDirection, out float speedMultiplier)
+    {
+        movementDirection = Vector3.zero;
+        EnemyDefinition.OrbitTargetMovementDefinition orbitMovement = ResolveOrbitTargetMovementDefinition();
+        speedMultiplier = Mathf.Max(0f, orbitMovement.orbitSpeedMultiplier);
+
+        if (!TryGetOrbitPlanarTargetOffset(out Vector3 targetOffset, out float targetDistance))
+        {
+            return false;
+        }
+
+        float minRadius = Mathf.Max(0f, orbitMovement.orbitRadius - orbitMovement.orbitRadiusTolerance);
+        float maxRadius = orbitMovement.orbitRadius + orbitMovement.orbitRadiusTolerance;
+        if (targetDistance > maxRadius)
+        {
+            movementDirection = targetOffset.sqrMagnitude > MinimumDirectionSqrMagnitude
+                ? targetOffset.normalized
+                : transform.forward.sqrMagnitude > MinimumDirectionSqrMagnitude
+                    ? transform.forward.normalized
+                    : Vector3.forward;
+            movementDirection.y = 0f;
+            return movementDirection.sqrMagnitude > MinimumDirectionSqrMagnitude;
+        }
+
+        if (targetDistance < minRadius)
+        {
+            movementDirection = GetRetreatDirection(targetOffset);
+            return movementDirection.sqrMagnitude > MinimumDirectionSqrMagnitude;
+        }
+
+        Vector3 radialFromTarget = -targetOffset;
+        radialFromTarget.y = 0f;
+        if (radialFromTarget.sqrMagnitude <= MinimumDirectionSqrMagnitude)
+        {
+            movementDirection = transform.forward.sqrMagnitude > MinimumDirectionSqrMagnitude
+                ? transform.forward.normalized
+                : Vector3.forward;
+            movementDirection.y = 0f;
+            return movementDirection.sqrMagnitude > MinimumDirectionSqrMagnitude;
+        }
+
+        Vector3 tangentDirection = orbitMovement.clockwise
+            ? Vector3.Cross(Vector3.up, radialFromTarget)
+            : Vector3.Cross(radialFromTarget, Vector3.up);
+        tangentDirection.y = 0f;
+        if (tangentDirection.sqrMagnitude <= MinimumDirectionSqrMagnitude)
+        {
+            movementDirection = transform.forward.sqrMagnitude > MinimumDirectionSqrMagnitude
+                ? transform.forward.normalized
+                : Vector3.forward;
+            movementDirection.y = 0f;
+            return movementDirection.sqrMagnitude > MinimumDirectionSqrMagnitude;
+        }
+
+        movementDirection = tangentDirection.normalized;
+        return true;
     }
 
     /// <summary>
@@ -1059,6 +1182,28 @@ public sealed class CharEnemyMovement : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 解析环绕目标相对敌人的平面偏移与距离；目标可由外部显式注入，也可回退到当前玩家。
+    /// param: targetOffset 输出的目标平面偏移
+    /// param: targetDistance 输出的目标平面距离
+    /// returns: 成功解析到有效环绕目标时返回 true
+    /// </summary>
+    private bool TryGetOrbitPlanarTargetOffset(out Vector3 targetOffset, out float targetDistance)
+    {
+        targetOffset = Vector3.zero;
+        targetDistance = 0f;
+        Transform orbitTransform = ResolveOrbitTargetTransform();
+        if (orbitTransform == null)
+        {
+            return false;
+        }
+
+        targetOffset = orbitTransform.position - GetCurrentPosition();
+        targetOffset.y = 0f;
+        targetDistance = targetOffset.magnitude;
+        return true;
+    }
+
+    /// <summary>
     /// summary: 把目标方向转换成实际位移或刚体速度，统一支持 Transform 与 Rigidbody 两种模式。
     /// param: direction 当前应前进的世界方向
     /// param: deltaTime 本次移动使用的时间步长
@@ -1135,6 +1280,26 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
         targetPlayer = playerMovement.transform;
         return true;
+    }
+
+    /// <summary>
+    /// summary: 解析环绕行为当前应使用的目标对象；优先使用显式注入的 orbitTarget，否则回退到玩家。
+    /// param: 无
+    /// returns: 成功拿到有效环绕目标时返回 true
+    /// </summary>
+    private Transform ResolveOrbitTargetTransform()
+    {
+        if (orbitTarget != null && !IsOwnTransform(orbitTarget))
+        {
+            return orbitTarget;
+        }
+
+        if (TryResolveTargetPlayer())
+        {
+            return targetPlayer;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1402,6 +1567,23 @@ public sealed class CharEnemyMovement : MonoBehaviour
         }
 
         return Mathf.Max(1f, enemyData.Definition.AggroOnHitMovement.aggroSpeedMultiplier);
+    }
+
+    /// <summary>
+    /// summary: 读取环绕目标行为的配置；若敌人未绑定定义则返回一组可运行的默认值。
+    /// param: 无
+    /// returns: 当前敌人的环绕目标配置
+    /// </summary>
+    private EnemyDefinition.OrbitTargetMovementDefinition ResolveOrbitTargetMovementDefinition()
+    {
+        return enemyData != null && enemyData.Definition != null
+            ? enemyData.Definition.OrbitTargetMovement.GetSanitized()
+            : new EnemyDefinition.OrbitTargetMovementDefinition
+            {
+                orbitRadius = ResolveDefaultChaseStoppingDistance(),
+                orbitRadiusTolerance = 0f,
+                orbitSpeedMultiplier = 1f,
+            };
     }
 
     private EnemyDefinition.DashMovementDefinition ResolveDashMovementDefinition()

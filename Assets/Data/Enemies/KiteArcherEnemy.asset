@@ -40,15 +40,6 @@ MonoBehaviour:
     formulaItems:
     - {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
     targetPolicy: 1
-  summonAttack:
-    summonedEnemyDefinition: {fileID: 0}
-    summonedEnemyConfig:
-      maxHealth: 1
-      moveSpeed: 0
-      attackRange: 0
-      attackCooldown: 0
-      attackDamage: 0
-      tokenDrops: []
-    summonCountPerCast: 1
-    summonRadius: 8
-    maxAliveSummons: 2
+  skillCasting:
+    maxSkillCastsPerTick: 1
+  skillSlots: []

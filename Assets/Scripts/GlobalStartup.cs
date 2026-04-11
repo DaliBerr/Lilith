@@ -81,11 +81,8 @@ namespace Kernel
 
             yield return InitLanguage();
             StatusController.Initialize();
-
-            if (isEnableDevMode)
-            {
-                StatusController.AddStatus(StatusList.DevModeStatus);
-            }
+            ApplyConfiguredModeStatus(GlobalModeSettingsService.LoadMode(ResolveDefaultGameMode()));
+            RuntimeSaveService.GetOrCreateInstance();
 
             StatusController.AddStatus(StatusList.GameLoadingStatus);
             yield return StartCoroutine(InitGlobal());
@@ -142,14 +139,16 @@ namespace Kernel
         /// param: 无
         /// returns: 无
         /// </summary>
-        public void RequestEnterMainScene()
+        public bool RequestEnterMainScene()
         {
             if (!isBootCompleted || isLoadingMainScene || hasHandedOffToMainScene)
             {
-                return;
+                return false;
             }
 
+            isLoadingMainScene = true;
             StartCoroutine(LoadMainSceneCo());
+            return true;
         }
 
         /// <summary>
@@ -267,7 +266,6 @@ namespace Kernel
         /// </summary>
         private IEnumerator LoadMainSceneCo()
         {
-            isLoadingMainScene = true;
             UnsubscribeFromStartStorySequence();
 
             if (StatusController.HasStatus(StatusList.InMainMenuStatus))
@@ -358,6 +356,36 @@ namespace Kernel
             }
 
             parser.SequenceCompleted -= startup.HandleStartStorySequenceCompleted;
+        }
+
+        /// <summary>
+        /// summary: 把 Inspector 中的默认开关转换为首次启动时使用的全局模式默认值。
+        /// param: 无
+        /// returns: 首次启动应写入 global-mode.json 的默认模式
+        /// </summary>
+        private GameMode ResolveDefaultGameMode()
+        {
+            return isEnableDevMode ? GameMode.Dev : GameMode.Normal;
+        }
+
+        /// <summary>
+        /// summary: 按全局模式配置在状态栈中只保留一个模式状态，避免 Dev/Normal 同时存在。
+        /// param name="mode": 当前需要应用的模式配置
+        /// returns: 无
+        /// </summary>
+        private static void ApplyConfiguredModeStatus(GameMode mode)
+        {
+            if (StatusController.HasStatus(StatusList.DevModeStatus))
+            {
+                StatusController.RemoveStatus(StatusList.DevModeStatus);
+            }
+
+            if (StatusController.HasStatus(StatusList.NormalModeStatus))
+            {
+                StatusController.RemoveStatus(StatusList.NormalModeStatus);
+            }
+
+            StatusController.AddStatus(mode == GameMode.Dev ? StatusList.DevModeStatus : StatusList.NormalModeStatus);
         }
     }
 }

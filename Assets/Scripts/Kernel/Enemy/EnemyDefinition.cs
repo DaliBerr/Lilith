@@ -74,6 +74,29 @@ public sealed class EnemyDefinition : ScriptableObject
     }
 
     [Serializable]
+    public struct OrbitTargetMovementDefinition
+    {
+        [Min(0f)] public float orbitRadius;
+        [Min(0f)] public float orbitRadiusTolerance;
+        [Min(0f)] public float orbitSpeedMultiplier;
+        public bool clockwise;
+
+        /// <summary>
+        /// summary: 修正环绕目标配置中的非法取值，保证运行时调度器拿到稳定参数。
+        /// param: 无
+        /// returns: 经过规范化后的环绕目标配置副本
+        /// </summary>
+        public OrbitTargetMovementDefinition GetSanitized()
+        {
+            OrbitTargetMovementDefinition sanitized = this;
+            sanitized.orbitRadius = Mathf.Max(0f, sanitized.orbitRadius);
+            sanitized.orbitRadiusTolerance = Mathf.Max(0f, sanitized.orbitRadiusTolerance);
+            sanitized.orbitSpeedMultiplier = Mathf.Max(0f, sanitized.orbitSpeedMultiplier);
+            return sanitized;
+        }
+    }
+
+    [Serializable]
     public struct EnemyVisualDefinition
     {
         public string glyphText;
@@ -121,7 +144,7 @@ public sealed class EnemyDefinition : ScriptableObject
     }
 
     [Serializable]
-    public struct SummonAttackDefinition
+    public struct SummonSkillDefinition
     {
         public EnemyDefinition summonedEnemyDefinition;
         public EnemyWaveConfig summonedEnemyConfig;
@@ -130,17 +153,68 @@ public sealed class EnemyDefinition : ScriptableObject
         [Min(0)] public int maxAliveSummons;
 
         /// <summary>
-        /// summary: 修正召唤攻击配置中的非法取值，并统一清空召唤物掉落表。
+        /// summary: 修正召唤技能配置中的非法取值，并统一清空召唤物掉落表。
         /// param: 无
-        /// returns: 经过规范化后的召唤攻击配置副本
+        /// returns: 经过规范化后的召唤技能配置副本
         /// </summary>
-        public SummonAttackDefinition GetSanitized()
+        public SummonSkillDefinition GetSanitized()
         {
-            SummonAttackDefinition sanitized = this;
+            SummonSkillDefinition sanitized = this;
             sanitized.summonedEnemyConfig = sanitized.summonedEnemyConfig.GetSanitized(clearTokenDrops: true);
             sanitized.summonCountPerCast = Mathf.Max(1, sanitized.summonCountPerCast);
             sanitized.summonRadius = Mathf.Max(0f, sanitized.summonRadius);
             sanitized.maxAliveSummons = Mathf.Max(0, sanitized.maxAliveSummons);
+            return sanitized;
+        }
+    }
+
+    [Serializable]
+    public struct EnemySkillSlotDefinition
+    {
+        public EnemySkillKind skillKind;
+        [Min(0f)] public float cooldownSeconds;
+        [Min(0f)] public float castRange;
+        public SummonSkillDefinition summonSkill;
+
+        /// <summary>
+        /// summary: 修正单个技能槽中的非法值，保证运行时调度器拿到稳定配置。
+        /// param: 无
+        /// returns: 经过规范化后的技能槽配置副本
+        /// </summary>
+        public EnemySkillSlotDefinition GetSanitized()
+        {
+            EnemySkillSlotDefinition sanitized = this;
+            sanitized.cooldownSeconds = Mathf.Max(0f, sanitized.cooldownSeconds);
+            sanitized.castRange = Mathf.Max(0f, sanitized.castRange);
+            sanitized.summonSkill = sanitized.summonSkill.GetSanitized();
+            return sanitized;
+        }
+
+        /// <summary>
+        /// summary: 优先返回技能槽自己的施法距离；未填写时回退到敌人通用攻击距离。
+        /// param: fallbackCastRange 当前敌人可复用的通用攻击距离
+        /// returns: 当前技能槽应使用的施法距离
+        /// </summary>
+        public float ResolveCastRange(float fallbackCastRange)
+        {
+            return castRange > 0f ? castRange : Mathf.Max(0f, fallbackCastRange);
+        }
+    }
+
+    [Serializable]
+    public struct EnemySkillCastingDefinition
+    {
+        [Min(1)] public int maxSkillCastsPerTick;
+
+        /// <summary>
+        /// summary: 修正技能调度配置中的非法值，保证每次调度至少允许尝试一个技能槽。
+        /// param: 无
+        /// returns: 经过规范化后的技能调度配置副本
+        /// </summary>
+        public EnemySkillCastingDefinition GetSanitized()
+        {
+            EnemySkillCastingDefinition sanitized = this;
+            sanitized.maxSkillCastsPerTick = Mathf.Max(1, sanitized.maxSkillCastsPerTick);
             return sanitized;
         }
     }
@@ -167,6 +241,12 @@ public sealed class EnemyDefinition : ScriptableObject
     {
         aggroSpeedMultiplier = 1.5f,
     };
+    [SerializeField] private OrbitTargetMovementDefinition orbitTargetMovement = new()
+    {
+        orbitRadius = 12f,
+        orbitRadiusTolerance = 2f,
+        orbitSpeedMultiplier = 1f,
+    };
     [SerializeField] private EnemyVisualDefinition visual = new()
     {
         glyphText = string.Empty,
@@ -178,12 +258,11 @@ public sealed class EnemyDefinition : ScriptableObject
     {
         targetPolicy = BulletTargetPolicy.PlayerOnly,
     };
-    [SerializeField] private SummonAttackDefinition summonAttack = new()
+    [SerializeField] private EnemySkillCastingDefinition skillCasting = new()
     {
-        summonCountPerCast = 1,
-        summonRadius = 12f,
-        maxAliveSummons = 3,
+        maxSkillCastsPerTick = 1,
     };
+    [SerializeField] private List<EnemySkillSlotDefinition> skillSlots = new();
 
     public string EnemyId => string.IsNullOrWhiteSpace(enemyId) ? name : enemyId.Trim();
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? EnemyId : displayName.Trim();
@@ -194,9 +273,11 @@ public sealed class EnemyDefinition : ScriptableObject
     public DashMovementDefinition DashMovement => dashMovement;
     public KeepDistanceMovementDefinition KeepDistanceMovement => keepDistanceMovement;
     public AggroOnHitMovementDefinition AggroOnHitMovement => aggroOnHitMovement;
+    public OrbitTargetMovementDefinition OrbitTargetMovement => orbitTargetMovement;
     public EnemyVisualDefinition Visual => visual;
     public RangedBulletAttackDefinition RangedBulletAttack => rangedBulletAttack;
-    public SummonAttackDefinition SummonAttack => summonAttack;
+    public EnemySkillCastingDefinition SkillCasting => skillCasting.GetSanitized();
+    public IReadOnlyList<EnemySkillSlotDefinition> SkillSlots => ResolveSkillSlots();
 
     private void OnValidate()
     {
@@ -205,9 +286,25 @@ public sealed class EnemyDefinition : ScriptableObject
         dashMovement = dashMovement.GetSanitized();
         keepDistanceMovement = keepDistanceMovement.GetSanitized();
         aggroOnHitMovement = aggroOnHitMovement.GetSanitized();
+        orbitTargetMovement = orbitTargetMovement.GetSanitized();
         visual = visual.GetSanitized();
         rangedBulletAttack = rangedBulletAttack.GetSanitized();
-        summonAttack = summonAttack.GetSanitized();
+        skillCasting = skillCasting.GetSanitized();
+        skillSlots ??= new List<EnemySkillSlotDefinition>();
+        for (int i = 0; i < skillSlots.Count; i++)
+        {
+            skillSlots[i] = skillSlots[i].GetSanitized();
+        }
+    }
+
+    /// <summary>
+    /// summary: 解析当前定义应暴露给运行时的技能槽列表。
+    /// param: 无
+    /// returns: 当前定义的可执行技能槽集合
+    /// </summary>
+    private IReadOnlyList<EnemySkillSlotDefinition> ResolveSkillSlots()
+    {
+        return skillSlots != null ? skillSlots : Array.Empty<EnemySkillSlotDefinition>();
     }
 }
 
@@ -218,6 +315,7 @@ public enum EnemyMovementKind
     ChaseThenDash = 2,
     KeepDistance = 3,
     AggroOnHit = 4,
+    OrbitTarget = 5,
 }
 
 public enum EnemyAttackKind
@@ -225,5 +323,10 @@ public enum EnemyAttackKind
     None = 0,
     MeleeContact = 1,
     RangedBulletToken = 2,
-    SummonEnemy = 3,
+}
+
+public enum EnemySkillKind
+{
+    None = 0,
+    SummonEnemy = 1,
 }

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Value_2
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.ValueTokenData
   tokenId: value_2
-  displayText: "\u4E8C"
+  displayText: 2
   description: Numeric token 2.
   tokenType: 4
   hasBulletTextOverride: 0

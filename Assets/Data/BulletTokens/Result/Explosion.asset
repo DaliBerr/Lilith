@@ -16,6 +16,9 @@ MonoBehaviour:
   displayText: Boom
   description: Direct damage plus explosion damage.
   tokenType: 5
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
   resultType: 2
   acceptsNumericValue: 1
   defaultExplosionRadius: 2

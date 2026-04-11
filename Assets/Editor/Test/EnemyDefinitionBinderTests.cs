@@ -43,6 +43,7 @@ public sealed class EnemyDefinitionBinderTests
             binder,
             EnemyMovementKind.ChaseTarget,
             EnemyAttackKind.MeleeContact,
+            null,
             new EnemyDefinition.EnemyVisualDefinition
             {
                 glyphText = "坚",
@@ -86,6 +87,7 @@ public sealed class EnemyDefinitionBinderTests
             binder,
             EnemyMovementKind.None,
             EnemyAttackKind.None,
+            null,
             new EnemyDefinition.EnemyVisualDefinition
             {
                 glyphText = "静",
@@ -102,7 +104,7 @@ public sealed class EnemyDefinitionBinderTests
     }
 
     [Test]
-    public void ApplyDefinition_EnablesOnlyConfiguredExtendedAttackComponent()
+    public void ApplyDefinition_SeparatesAttackAndSkillSlots()
     {
         EnemyDefinitionBinder binder = CreateBoundEnemyShell(
             out _,
@@ -113,38 +115,43 @@ public sealed class EnemyDefinitionBinderTests
             out _,
             out _,
             out _);
-        EnemyDefinition rangedDefinition = CreateEnemyDefinition(
-            "ArcherEnemy",
+        EnemyDefinition hybridDefinition = CreateEnemyDefinition(
+            "ArcherSummonerEnemy",
             binder,
             EnemyMovementKind.KeepDistance,
             EnemyAttackKind.RangedBulletToken,
+            new[]
+            {
+                CreateSummonSkillSlot(cooldownSeconds: 0.25f, castRange: 12f),
+            },
             new EnemyDefinition.EnemyVisualDefinition
             {
                 glyphText = "远",
                 glyphColor = Color.yellow,
             });
-        EnemyDefinition summonDefinition = CreateEnemyDefinition(
-            "SummonerEnemy",
+        EnemyDefinition meleeDefinition = CreateEnemyDefinition(
+            "MeleeEnemy",
             binder,
             EnemyMovementKind.AggroOnHit,
-            EnemyAttackKind.SummonEnemy,
+            EnemyAttackKind.MeleeContact,
+            null,
             new EnemyDefinition.EnemyVisualDefinition
             {
-                glyphText = "召",
-                glyphColor = Color.magenta,
+                glyphText = "近",
+                glyphColor = Color.red,
             });
 
-        Assert.That(binder.ApplyDefinition(rangedDefinition), Is.True);
+        Assert.That(binder.ApplyDefinition(hybridDefinition), Is.True);
         Assert.That(movement.enabled, Is.True);
         Assert.That(meleeAttacker.enabled, Is.False);
         Assert.That(rangedTokenAttacker.enabled, Is.True);
-        Assert.That(summoner.enabled, Is.False);
-
-        Assert.That(binder.ApplyDefinition(summonDefinition), Is.True);
-        Assert.That(movement.enabled, Is.True);
-        Assert.That(meleeAttacker.enabled, Is.False);
-        Assert.That(rangedTokenAttacker.enabled, Is.False);
         Assert.That(summoner.enabled, Is.True);
+
+        Assert.That(binder.ApplyDefinition(meleeDefinition), Is.True);
+        Assert.That(movement.enabled, Is.True);
+        Assert.That(meleeAttacker.enabled, Is.True);
+        Assert.That(rangedTokenAttacker.enabled, Is.False);
+        Assert.That(summoner.enabled, Is.False);
     }
 
     [Test]
@@ -236,6 +243,7 @@ public sealed class EnemyDefinitionBinderTests
         EnemyDefinitionBinder runtimePrefab,
         EnemyMovementKind movementKind,
         EnemyAttackKind attackKind,
+        IEnumerable<EnemyDefinition.EnemySkillSlotDefinition> skillSlots,
         EnemyDefinition.EnemyVisualDefinition visual)
     {
         EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
@@ -246,8 +254,30 @@ public sealed class EnemyDefinitionBinderTests
         SetPrivateField(definition, "runtimePrefab", runtimePrefab);
         SetPrivateField(definition, "movementKind", movementKind);
         SetPrivateField(definition, "attackKind", attackKind);
+        SetPrivateField(
+            definition,
+            "skillSlots",
+            skillSlots != null
+                ? new List<EnemyDefinition.EnemySkillSlotDefinition>(skillSlots)
+                : new List<EnemyDefinition.EnemySkillSlotDefinition>());
         SetPrivateField(definition, "visual", visual);
         return definition;
+    }
+
+    private static EnemyDefinition.EnemySkillSlotDefinition CreateSummonSkillSlot(float cooldownSeconds, float castRange)
+    {
+        return new EnemyDefinition.EnemySkillSlotDefinition
+        {
+            skillKind = EnemySkillKind.SummonEnemy,
+            cooldownSeconds = cooldownSeconds,
+            castRange = castRange,
+            summonSkill = new EnemyDefinition.SummonSkillDefinition
+            {
+                summonCountPerCast = 1,
+                summonRadius = 6f,
+                maxAliveSummons = 2,
+            },
+        };
     }
 
     private Sprite CreateSprite(string name)

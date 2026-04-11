@@ -65,7 +65,7 @@ public sealed class EnemyAttackExtensionTests
     }
 
     [Test]
-    public void TryPerformSummon_SpawnsConfiguredEnemyWithoutDropsAndHonorsMaxAliveLimit()
+    public void TryCastSkill_Summoner_SpawnsConfiguredEnemyWithoutDropsAndHonorsMaxAliveLimit()
     {
         CreateMapAuthoring(32, 32, Vector2.one, MapGridAuthoring.GroundTagName);
         EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
@@ -91,11 +91,14 @@ public sealed class EnemyAttackExtensionTests
         EnemySummoner summoner = summonerObject.AddComponent<EnemySummoner>();
         SetEnemyHealth(summonerEnemy, 10f);
 
-        EnemyDefinition summonerDefinition = CreateDefinition(EnemyMovementKind.None, EnemyAttackKind.SummonEnemy, runtimePrefab: null);
-        SetPrivateField(summonerDefinition, "summonAttack", new EnemyDefinition.SummonAttackDefinition
-        {
-            summonedEnemyDefinition = summonedDefinition,
-            summonedEnemyConfig = new EnemyWaveConfig(
+        EnemyDefinition.EnemySkillSlotDefinition summonSkillSlot = CreateSummonSkillSlot(
+            summonedDefinition,
+            cooldownSeconds: 0.25f,
+            castRange: 8f,
+            summonCountPerCast: 1,
+            maxAliveSummons: 1,
+            summonRadius: 3f,
+            summonedEnemyConfig: new EnemyWaveConfig(
                 6f,
                 4f,
                 0f,
@@ -104,19 +107,20 @@ public sealed class EnemyAttackExtensionTests
                 new[]
                 {
                     new EnemyBulletTokenDropEntry(droppedToken, 1f),
-                }),
-            summonCountPerCast = 1,
-            summonRadius = 3f,
-            maxAliveSummons = 1,
-        });
+                }));
+        EnemyDefinition summonerDefinition = CreateDefinition(
+            EnemyMovementKind.None,
+            EnemyAttackKind.None,
+            runtimePrefab: null,
+            skillSlots: new[] { summonSkillSlot });
 
         summonerEnemy.TryBindDefinition(summonerDefinition);
-        summonerEnemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 0f, 8f, 0f, 0f));
+        summonerEnemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 0f, 8f, 1.5f, 0f));
         Assert.That(summoner.TrySetTarget(playerObject.transform), Is.True);
         Assert.That(summoner.TrySetEnemyGenerator(generator), Is.True);
         InvokePrivateMethod(summoner, "Awake");
 
-        bool firstSummon = (bool)InvokePrivateMethod(summoner, "TryPerformSummon", 0f);
+        bool firstSummon = summoner.TryCastSkill(summonSkillSlot);
         List<Enemy> aliveSummons = GetPrivateField<List<Enemy>>(summoner, "aliveSummons");
         Enemy spawnedSummon = aliveSummons[0];
         createdObjects.Add(spawnedSummon.gameObject);
@@ -126,10 +130,98 @@ public sealed class EnemyAttackExtensionTests
         Assert.That(spawnedSummon.Definition, Is.SameAs(summonedDefinition));
         Assert.That(spawnedSummon.GetComponent<EnemyBulletTokenDropper>().TokenDrops, Is.Empty);
 
-        bool secondSummon = (bool)InvokePrivateMethod(summoner, "TryPerformSummon", 0.1f);
+        bool secondSummon = summoner.TryCastSkill(summonSkillSlot);
 
         Assert.That(secondSummon, Is.False);
         Assert.That(aliveSummons, Has.Count.EqualTo(1));
+
+        spawnedSummon.TryApplyDamage(spawnedSummon.CurrentHealth, out _, out _);
+        bool thirdSummon = summoner.TryCastSkill(summonSkillSlot);
+
+        Assert.That(thirdSummon, Is.True);
+        Assert.That(aliveSummons, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void TryPerformSkills_Binder_CastsMultipleSkillSlotsWithIndependentCooldowns()
+    {
+        CreateMapAuthoring(32, 32, Vector2.one, MapGridAuthoring.GroundTagName);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        GameObject playerObject = CreateGameObject("Player");
+        playerObject.transform.position = new Vector3(16f, 0f, 16f);
+        PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
+        SetPrivateField(playerHealth, "maxHealth", 10f);
+        SetPrivateField(playerHealth, "currentHealth", 10f);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
+        Assert.That(generator.TrySetTarget(playerObject.transform), Is.True);
+        SetPrivateField(generator, "maxGroundSpawnRolls", 8);
+
+        GameObject summonedPrefab = CreateEnemyPrefabShell();
+        EnemyDefinition summonedDefinition = CreateDefinition(
+            EnemyMovementKind.None,
+            EnemyAttackKind.None,
+            summonedPrefab.GetComponent<EnemyDefinitionBinder>());
+
+        GameObject bossObject = CreateGameObject("Boss");
+        bossObject.transform.position = new Vector3(16f, 0f, 14f);
+        BaseCharEnemyNorm1 bossEnemy = bossObject.AddComponent<BaseCharEnemyNorm1>();
+        EnemySummoner summoner = bossObject.AddComponent<EnemySummoner>();
+        EnemyDefinitionBinder binder = bossObject.AddComponent<EnemyDefinitionBinder>();
+        SetEnemyHealth(bossEnemy, 20f);
+
+        EnemyDefinition.EnemySkillSlotDefinition firstSkillSlot = CreateSummonSkillSlot(
+            summonedDefinition,
+            cooldownSeconds: 0.25f,
+            castRange: 8f,
+            summonCountPerCast: 1,
+            maxAliveSummons: 4,
+            summonRadius: 3f,
+            summonedEnemyConfig: new EnemyWaveConfig(6f, 4f, 0f, 0f, 1f));
+        EnemyDefinition.EnemySkillSlotDefinition secondSkillSlot = CreateSummonSkillSlot(
+            summonedDefinition,
+            cooldownSeconds: 0.5f,
+            castRange: 8f,
+            summonCountPerCast: 1,
+            maxAliveSummons: 4,
+            summonRadius: 3f,
+            summonedEnemyConfig: new EnemyWaveConfig(6f, 4f, 0f, 0f, 1f));
+        EnemyDefinition bossDefinition = CreateDefinition(
+            EnemyMovementKind.None,
+            EnemyAttackKind.None,
+            runtimePrefab: null,
+            skillSlots: new[] { firstSkillSlot, secondSkillSlot },
+            maxSkillCastsPerTick: 2);
+
+        bossEnemy.TryBindDefinition(bossDefinition);
+        bossEnemy.ApplyWaveConfig(new EnemyWaveConfig(20f, 0f, 8f, 0f, 0f));
+        Assert.That(summoner.TrySetTarget(playerObject.transform), Is.True);
+        Assert.That(summoner.TrySetEnemyGenerator(generator), Is.True);
+        InvokePrivateMethod(summoner, "Awake");
+        Assert.That(binder.ApplyDefinition(bossDefinition), Is.True);
+
+        bool firstTick = (bool)InvokePrivateMethod(binder, "TryPerformSkills", 0f);
+        List<Enemy> aliveSummons = GetPrivateField<List<Enemy>>(summoner, "aliveSummons");
+        createdObjects.Add(aliveSummons[0].gameObject);
+        createdObjects.Add(aliveSummons[1].gameObject);
+
+        Assert.That(firstTick, Is.True);
+        Assert.That(aliveSummons, Has.Count.EqualTo(2));
+
+        aliveSummons[1].TryApplyDamage(aliveSummons[1].CurrentHealth, out _, out _);
+        aliveSummons[0].TryApplyDamage(aliveSummons[0].CurrentHealth, out _, out _);
+        bool secondTick = (bool)InvokePrivateMethod(binder, "TryPerformSkills", 0.3f);
+
+        Assert.That(secondTick, Is.True);
+        Assert.That(aliveSummons, Has.Count.EqualTo(1));
+        createdObjects.Add(aliveSummons[0].gameObject);
+
+        aliveSummons[0].TryApplyDamage(aliveSummons[0].CurrentHealth, out _, out _);
+        bool thirdTick = (bool)InvokePrivateMethod(binder, "TryPerformSkills", 0.6f);
+
+        Assert.That(thirdTick, Is.True);
+        Assert.That(aliveSummons, Has.Count.EqualTo(2));
+        createdObjects.Add(aliveSummons[0].gameObject);
+        createdObjects.Add(aliveSummons[1].gameObject);
     }
 
     private MapGridAuthoring CreateMapAuthoring(int width, int height, Vector2 cellSize, string fillTag, float planeY = 0f)
@@ -200,7 +292,12 @@ public sealed class EnemyAttackExtensionTests
         return token;
     }
 
-    private EnemyDefinition CreateDefinition(EnemyMovementKind movementKind, EnemyAttackKind attackKind, EnemyDefinitionBinder runtimePrefab)
+    private EnemyDefinition CreateDefinition(
+        EnemyMovementKind movementKind,
+        EnemyAttackKind attackKind,
+        EnemyDefinitionBinder runtimePrefab,
+        IEnumerable<EnemyDefinition.EnemySkillSlotDefinition> skillSlots = null,
+        int maxSkillCastsPerTick = 1)
     {
         EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
         definition.name = "EnemyDefinitionTestAsset";
@@ -210,12 +307,50 @@ public sealed class EnemyAttackExtensionTests
         SetPrivateField(definition, "runtimePrefab", runtimePrefab);
         SetPrivateField(definition, "movementKind", movementKind);
         SetPrivateField(definition, "attackKind", attackKind);
+        SetPrivateField(
+            definition,
+            "skillSlots",
+            skillSlots != null
+                ? new List<EnemyDefinition.EnemySkillSlotDefinition>(skillSlots)
+                : new List<EnemyDefinition.EnemySkillSlotDefinition>());
+        SetPrivateField(
+            definition,
+            "skillCasting",
+            new EnemyDefinition.EnemySkillCastingDefinition
+            {
+                maxSkillCastsPerTick = maxSkillCastsPerTick,
+            });
         SetPrivateField(definition, "visual", new EnemyDefinition.EnemyVisualDefinition
         {
             glyphText = "测",
             glyphColor = Color.white,
         });
         return definition;
+    }
+
+    private static EnemyDefinition.EnemySkillSlotDefinition CreateSummonSkillSlot(
+        EnemyDefinition summonedDefinition,
+        float cooldownSeconds,
+        float castRange,
+        int summonCountPerCast,
+        int maxAliveSummons,
+        float summonRadius,
+        EnemyWaveConfig summonedEnemyConfig)
+    {
+        return new EnemyDefinition.EnemySkillSlotDefinition
+        {
+            skillKind = EnemySkillKind.SummonEnemy,
+            cooldownSeconds = cooldownSeconds,
+            castRange = castRange,
+            summonSkill = new EnemyDefinition.SummonSkillDefinition
+            {
+                summonedEnemyDefinition = summonedDefinition,
+                summonedEnemyConfig = summonedEnemyConfig,
+                summonCountPerCast = summonCountPerCast,
+                summonRadius = summonRadius,
+                maxAliveSummons = maxAliveSummons,
+            },
+        };
     }
 
     private GameObject CreateGameObject(string name)

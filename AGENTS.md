@@ -90,7 +90,7 @@
 
 
 ## Subagent workflow / Subagent 使用约定
-若当前运行环境支持 subagent，默认允许主模型把**只读、低风险、可并行、上下文压缩型**子任务委派给更轻量的子代理（如 `gpt-5.4-mini`）。
+若当前运行环境支持 subagent，默认允许主模型把**只读、低风险、可并行、上下文压缩型**子任务委派给更轻量的子代理，当前存在：log_triager/test_triager/impact_auditor/doc_auditor/prefab_locator/diff_reviewer各subagnet。
 
 ### 何时优先使用 subagent
 以下任务默认适合优先交给 mini 子代理：

@@ -168,7 +168,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.UI.StartUpMenuUI
   canvasGroup: {fileID: 0}
   startButton: {fileID: 8589729235085734320}
-  loadButton: {fileID: 8440787254265373002}
+  loadButtonRoot: {fileID: 3464671972890287364}
   settingsButton: {fileID: 1290679679006475233}
   quitButton: {fileID: 1894388325863089310}
 --- !u!1 &1788678670394283175
@@ -345,8 +345,8 @@ RectTransform:
   - {fileID: 916231152256172685}
   m_Father: {fileID: 1620361622174534032}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.1, y: 0.1}
-  m_AnchorMax: {x: 0.25, y: 0.7}
+  m_AnchorMin: {x: 0.1, y: 0.15}
+  m_AnchorMax: {x: 0.25, y: 0.65}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -434,6 +434,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Load Button
       objectReference: {fileID: 0}
+    - target: {fileID: 2980903551068440751, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3973076010591271957, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_AnchorMax.x
       value: 1
@@ -472,7 +476,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_AnchorMin.x
@@ -480,11 +484,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 208
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_SizeDelta.y
@@ -520,11 +524,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 144
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -228.25
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -543,22 +547,16 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
+--- !u!1 &3464671972890287364 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2980903551068440751, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
+  m_PrefabInstance: {fileID: 1822470420444616107}
+  m_PrefabAsset: {fileID: 0}
 --- !u!224 &7196347638163621721 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
   m_PrefabInstance: {fileID: 1822470420444616107}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &8440787254265373002 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 7811779943492482273, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
-  m_PrefabInstance: {fileID: 1822470420444616107}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!1001 &1971975490842477905
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VocalithRandom = Vocalith.Random;
@@ -9,6 +10,8 @@ using VocalithRandom = Vocalith.Random;
 public sealed class WaveManager : MonoBehaviour
 {
     private const float NoScheduledTime = -1f;
+
+    public event Action SequenceCompleted;
 
     [SerializeField] private EnemyGenerator enemyGenerator;
     [SerializeField] private List<WaveDefinition> waves = new();
@@ -24,6 +27,10 @@ public sealed class WaveManager : MonoBehaviour
     private bool isSequenceRunning;
     private bool hasCompletedSequence;
     private VocalithRandom randomSource;
+
+    public bool IsSequenceRunning => isSequenceRunning;
+
+    public bool HasCompletedSequence => hasCompletedSequence;
 
     private void Awake()
     {
@@ -260,11 +267,16 @@ public sealed class WaveManager : MonoBehaviour
     /// </summary>
     private void CompleteSequence()
     {
+        bool shouldNotifyCompletion = isSequenceRunning && !hasCompletedSequence;
         isSequenceRunning = false;
         hasCompletedSequence = true;
         spawnedCountsPerEntry.Clear();
         nextSpawnTime = NoScheduledTime;
         nextWaveStartTime = NoScheduledTime;
+        if (shouldNotifyCompletion)
+        {
+            SequenceCompleted?.Invoke();
+        }
     }
 
     /// <summary>

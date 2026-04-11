@@ -13,22 +13,20 @@ MonoBehaviour:
   m_Name: ThunderCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: thunder_core
-  displayText: "\u96F7"
+  displayText: Thunder
   description: Base thunder core.
   tokenType: 2
   hasBulletTextOverride: 1
   bulletTextOverride: "\u96F7"
-  modifiers:
-  - target: 0
-    expression: =Color.yellow
+  modifiers: []
   coreType: 3
   defaultValueType: 1
   damage: 1
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 160
+  projectileSpeed: 320
   maxLifetime: 2
   maxTravelDistance: 512
   impactMask:
     serializedVersion: 2
-    m_Bits: 2035
+    m_Bits: 4294967291

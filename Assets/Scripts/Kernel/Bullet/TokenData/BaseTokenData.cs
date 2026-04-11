@@ -72,6 +72,16 @@ namespace Kernel.Bullet
         }
 
         /// <summary>
+        /// summary: 返回当前基础 token 在选择弹窗中的说明文本。
+        /// param: 无
+        /// returns: 当前 token 的 description
+        /// </summary>
+        public override string GetSelectionDescription()
+        {
+            return Description;
+        }
+
+        /// <summary>
         /// summary: 由派生类写入固定的词元类型，避免在 Inspector 中被误改。
         /// param: value 需要写入的词元分类
         /// returns: 无

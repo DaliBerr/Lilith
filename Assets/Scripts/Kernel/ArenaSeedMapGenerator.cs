@@ -32,6 +32,45 @@ namespace Kernel.MapGrid
             set => seed = value;
         }
 
+        public bool GenerateOnAwake
+        {
+            get => generateOnAwake;
+            set => generateOnAwake = value;
+        }
+
+        public bool SnapPlayerOnGenerate
+        {
+            get => snapPlayerToNearestGroundCell;
+            set => snapPlayerToNearestGroundCell = value;
+        }
+
+        public ArenaSeedLayoutSettings LayoutSettings
+        {
+            get => new(
+                borderWallThickness,
+                obstacleCountMin,
+                obstacleCountMax,
+                obstacleWidthRange,
+                obstacleHeightRange,
+                edgeClearanceCells,
+                playerSafeRadiusCells,
+                spawnAnnulusHalfWidthCells,
+                maxPlacementAttemptsPerObstacle);
+            set
+            {
+                borderWallThickness = value.BorderWallThickness;
+                obstacleCountMin = value.ObstacleCountMin;
+                obstacleCountMax = value.ObstacleCountMax;
+                obstacleWidthRange = value.ObstacleWidthRange;
+                obstacleHeightRange = value.ObstacleHeightRange;
+                edgeClearanceCells = value.EdgeClearanceCells;
+                playerSafeRadiusCells = value.PlayerSafeRadiusCells;
+                spawnAnnulusHalfWidthCells = value.SpawnAnnulusHalfWidthCells;
+                maxPlacementAttemptsPerObstacle = value.MaxPlacementAttemptsPerObstacle;
+                SanitizeConfiguration();
+            }
+        }
+
         private void Awake()
         {
             if (!generateOnAwake)
@@ -69,8 +108,31 @@ namespace Kernel.MapGrid
         /// </summary>
         public bool TryGenerateAndApplyLayout(bool includePlayerSnap, out string error)
         {
+            if (!TryResolveMapGrid(out error))
+            {
+                return false;
+            }
+
+            if (!TryResolveTargetPlayer(out error))
+            {
+                return false;
+            }
+
+            Vector2Int playerReferenceCell = MapSpawnUtility.GetClosestValidCellCoordinate(targetMapGrid, targetPlayer.position);
+            return TryGenerateAndApplyLayout(playerReferenceCell, includePlayerSnap, out error);
+        }
+
+        /// <summary>
+        /// summary: 使用显式指定的出生参考格生成并应用整张地图布局，并可选择是否把玩家吸附到最近地面格。
+        /// param: playerReferenceCell 当前布局生成和刷怪保留区使用的参考格
+        /// param: includePlayerSnap 为 true 时在布局应用完成后吸附玩家到最近地面格
+        /// param: error 构建布局、写入地图或吸附玩家失败时返回的错误信息
+        /// returns: 成功完成整图生成、应用和可选玩家吸附时返回 true
+        /// </summary>
+        public bool TryGenerateAndApplyLayout(Vector2Int playerReferenceCell, bool includePlayerSnap, out string error)
+        {
             error = null;
-            if (!TryBuildLayout(out List<CellData.CellSurfaceType> layout, out error))
+            if (!TryBuildLayout(playerReferenceCell, out List<CellData.CellSurfaceType> layout, out error))
             {
                 return false;
             }
@@ -85,7 +147,7 @@ namespace Kernel.MapGrid
                 return true;
             }
 
-            return TrySnapPlayerToNearestGroundCell(out error);
+            return TrySnapPlayerToNearestGroundCell(playerReferenceCell, out error);
         }
 
         /// <summary>
@@ -109,7 +171,27 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            Vector2Int playerReferenceCell = GetClosestValidCellCoordinate(targetPlayer.position);
+            Vector2Int playerReferenceCell = MapSpawnUtility.GetClosestValidCellCoordinate(targetMapGrid, targetPlayer.position);
+            return TryBuildLayout(playerReferenceCell, out layout, out error);
+        }
+
+        /// <summary>
+        /// summary: 仅根据显式指定的参考格和当前 seed / Inspector 参数构建一份 row-major 地图布局，不直接改写场景对象。
+        /// param: playerReferenceCell 当前布局生成和刷怪保留区使用的参考格
+        /// param: layout 输出的 row-major 墙地布局
+        /// param: error 构建输入不完整或生成失败时返回的错误信息
+        /// returns: 成功得到完整布局时返回 true
+        /// </summary>
+        public bool TryBuildLayout(Vector2Int playerReferenceCell, out List<CellData.CellSurfaceType> layout, out string error)
+        {
+            layout = null;
+            error = null;
+
+            if (!TryResolveMapGrid(out error))
+            {
+                return false;
+            }
+
             int? spawnAnnulusRadiusCells = TryResolveSpawnAnnulusRadiusCells(out int resolvedSpawnRadiusCells)
                 ? resolvedSpawnRadiusCells
                 : null;
@@ -148,29 +230,8 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            Vector2Int startCoordinates = GetClosestValidCellCoordinate(targetPlayer.position);
-            if (!TryFindNearestGroundCoordinate(startCoordinates, out Vector2Int targetCoordinates, out error))
-            {
-                return false;
-            }
-
-            Vector3 cellWorldPosition = targetMapGrid.GetCellWorldPosition(targetCoordinates.x, targetCoordinates.y);
-            Vector3 snappedPosition = new(cellWorldPosition.x, targetMapGrid.WorldPlaneY, cellWorldPosition.z);
-            if (WorldHeightUtility.TryFindGroundingReferenceCollider(targetPlayer, out Collider referenceCollider) &&
-                WorldHeightUtility.TryGetGroundedRootPosition(targetPlayer, referenceCollider, targetMapGrid.WorldPlaneY, out Vector3 groundedPosition))
-            {
-                snappedPosition.y = groundedPosition.y;
-            }
-
-            targetPlayer.position = snappedPosition;
-            if (targetPlayer.TryGetComponent(out Rigidbody targetRigidbody))
-            {
-                targetRigidbody.position = snappedPosition;
-                targetRigidbody.linearVelocity = Vector3.zero;
-                targetRigidbody.angularVelocity = Vector3.zero;
-            }
-
-            return true;
+            Vector2Int startCoordinates = MapSpawnUtility.GetClosestValidCellCoordinate(targetMapGrid, targetPlayer.position);
+            return TrySnapPlayerToNearestGroundCell(startCoordinates, out error);
         }
 
         /// <summary>
@@ -181,6 +242,23 @@ namespace Kernel.MapGrid
         public void RandomizeSeed()
         {
             seed = Guid.NewGuid().GetHashCode();
+        }
+
+        /// <summary>
+        /// summary: 把当前玩家根节点吸附到指定起始格附近的最近有效地面格中心，并保持 grounded 高度契约。
+        /// param: startCoordinates 当前吸附搜索使用的起始格
+        /// param: error 找不到地图、玩家或有效地面格时返回的错误信息
+        /// returns: 成功把玩家吸附到有效地面格时返回 true
+        /// </summary>
+        public bool TrySnapPlayerToNearestGroundCell(Vector2Int startCoordinates, out string error)
+        {
+            error = null;
+            if (!TryResolveMapGrid(out error) || !TryResolveTargetPlayer(out error))
+            {
+                return false;
+            }
+
+            return MapSpawnUtility.TryTeleportToNearestGroundCell(targetMapGrid, targetPlayer, startCoordinates, out _, out error);
         }
 
         private bool TryResolveMapGrid(out string error)
@@ -242,102 +320,6 @@ namespace Kernel.MapGrid
             float averageCellSize = Mathf.Max(0.0001f, (targetMapGrid.CellSize.x + targetMapGrid.CellSize.y) * 0.5f);
             spawnAnnulusRadiusCells = Mathf.RoundToInt(targetEnemyGenerator.SpawnDistance / averageCellSize);
             return spawnAnnulusRadiusCells > 0;
-        }
-
-        private Vector2Int GetClosestValidCellCoordinate(Vector3 worldPosition)
-        {
-            Vector3 localPoint = targetMapGrid.transform.InverseTransformPoint(worldPosition);
-            float cellWidth = Mathf.Max(0.0001f, targetMapGrid.CellSize.x);
-            float cellHeight = Mathf.Max(0.0001f, targetMapGrid.CellSize.y);
-            int x = Mathf.RoundToInt(localPoint.x / cellWidth);
-            int y = Mathf.RoundToInt(localPoint.z / cellHeight);
-            return new Vector2Int(
-                Mathf.Clamp(x, 0, targetMapGrid.GridWidth - 1),
-                Mathf.Clamp(y, 0, targetMapGrid.GridHeight - 1));
-        }
-
-        private bool TryFindNearestGroundCoordinate(Vector2Int startCoordinates, out Vector2Int nearestGroundCoordinates, out string error)
-        {
-            nearestGroundCoordinates = default;
-            error = null;
-
-            if (IsGroundCell(startCoordinates))
-            {
-                nearestGroundCoordinates = startCoordinates;
-                return true;
-            }
-
-            float cellWidth = Mathf.Max(0.0001f, targetMapGrid.CellSize.x);
-            float cellHeight = Mathf.Max(0.0001f, targetMapGrid.CellSize.y);
-            int maxRadius = Mathf.Max(targetMapGrid.GridWidth, targetMapGrid.GridHeight);
-            for (int radius = 1; radius <= maxRadius; radius++)
-            {
-                bool foundGround = false;
-                float bestDistance = float.MaxValue;
-                Vector2Int bestCoordinates = default;
-
-                int minX = Mathf.Max(0, startCoordinates.x - radius);
-                int maxX = Mathf.Min(targetMapGrid.GridWidth - 1, startCoordinates.x + radius);
-                int minY = Mathf.Max(0, startCoordinates.y - radius);
-                int maxY = Mathf.Min(targetMapGrid.GridHeight - 1, startCoordinates.y + radius);
-                for (int y = minY; y <= maxY; y++)
-                {
-                    for (int x = minX; x <= maxX; x++)
-                    {
-                        if (Mathf.Abs(x - startCoordinates.x) != radius &&
-                            Mathf.Abs(y - startCoordinates.y) != radius)
-                        {
-                            continue;
-                        }
-
-                        var candidate = new Vector2Int(x, y);
-                        if (!IsGroundCell(candidate))
-                        {
-                            continue;
-                        }
-
-                        float distance =
-                            Mathf.Pow((x - startCoordinates.x) * cellWidth, 2f) +
-                            Mathf.Pow((y - startCoordinates.y) * cellHeight, 2f);
-                        if (foundGround && distance >= bestDistance)
-                        {
-                            continue;
-                        }
-
-                        foundGround = true;
-                        bestDistance = distance;
-                        bestCoordinates = candidate;
-                    }
-                }
-
-                if (!foundGround)
-                {
-                    continue;
-                }
-
-                nearestGroundCoordinates = bestCoordinates;
-                return true;
-            }
-
-            error = "ArenaSeedMapGenerator could not find any valid ground cell on the current map.";
-            return false;
-        }
-
-        private bool IsGroundCell(Vector2Int coordinates)
-        {
-            if (!targetMapGrid.IsValidGridCoordinate(coordinates.x, coordinates.y) ||
-                !targetMapGrid.TryGetCell(coordinates, out GameObject cellObject) ||
-                cellObject == null)
-            {
-                return false;
-            }
-
-            if (cellObject.TryGetComponent(out CellData cellData) && cellData != null)
-            {
-                return cellData.SurfaceType == CellData.CellSurfaceType.Ground;
-            }
-
-            return cellObject.CompareTag(MapGridAuthoring.GroundTagName);
         }
 
         private void SanitizeConfiguration()

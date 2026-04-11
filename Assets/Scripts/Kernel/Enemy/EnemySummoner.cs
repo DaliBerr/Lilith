@@ -2,10 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 让敌人在攻击距离内按冷却召唤配置好的敌人。
+/// 按技能槽配置执行一次召唤技能；冷却与多技能调度由外层统一控制。
 /// </summary>
 [DisallowMultipleComponent]
-public sealed class EnemySummoner : MonoBehaviour
+public sealed class EnemySummoner : MonoBehaviour, IEnemySkillCaster
 {
     [SerializeField] private Enemy enemyData;
     [SerializeField] private Transform targetPlayer;
@@ -13,23 +13,14 @@ public sealed class EnemySummoner : MonoBehaviour
     [SerializeField] private EnemyGenerator enemyGenerator;
 
     private readonly List<Enemy> aliveSummons = new();
-    private float nextSummonTime;
+
+    public EnemySkillKind SkillKind => EnemySkillKind.SummonEnemy;
 
     private void Awake()
     {
         TryResolveEnemyData();
         TryResolveTargetPlayer();
         TryResolveEnemyGenerator();
-    }
-
-    private void Update()
-    {
-        if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
-        {
-            return;
-        }
-
-        TryPerformSummon(Time.time);
     }
 
     private void OnValidate()
@@ -73,13 +64,13 @@ public sealed class EnemySummoner : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 在满足攻击距离、冷却与召唤上限时，于敌人身边生成配置好的召唤物。
-    /// param: currentTime 当前逻辑时钟
+    /// summary: 按给定技能槽配置执行一次召唤；具体冷却和多技能并发由调度器统一处理。
+    /// param: skillSlot 当前命中的技能槽配置
     /// returns: 成功生成至少一名召唤物时返回 true
     /// </summary>
-    private bool TryPerformSummon(float currentTime)
+    public bool TryCastSkill(EnemyDefinition.EnemySkillSlotDefinition skillSlot)
     {
-        if (currentTime < nextSummonTime || !TryResolveEnemyData() || !TryResolveTargetPlayer() || !TryResolveEnemyGenerator())
+        if (skillSlot.skillKind != SkillKind || !TryResolveEnemyData() || !TryResolveTargetPlayer() || !TryResolveEnemyGenerator())
         {
             return false;
         }
@@ -89,39 +80,38 @@ public sealed class EnemySummoner : MonoBehaviour
             return false;
         }
 
-        float attackRange = enemyData.AttackRange;
-        if (attackRange <= 0f || !IsTargetWithinRange(attackRange))
+        float castRange = skillSlot.ResolveCastRange(enemyData.AttackRange);
+        if (castRange <= 0f || !IsTargetWithinRange(castRange))
         {
             return false;
         }
 
-        EnemyDefinition definition = enemyData.Definition;
-        EnemyDefinition.SummonAttackDefinition summonAttack = definition != null ? definition.SummonAttack : default;
-        if (summonAttack.summonedEnemyDefinition == null)
+        EnemyDefinition.SummonSkillDefinition summonSkill = skillSlot.summonSkill;
+        if (summonSkill.summonedEnemyDefinition == null)
         {
             return false;
         }
 
         PruneDeadSummons();
-        int allowedCount = summonAttack.maxAliveSummons > 0
-            ? Mathf.Max(0, summonAttack.maxAliveSummons - aliveSummons.Count)
+        int allowedCount = summonSkill.maxAliveSummons > 0
+            ? Mathf.Max(0, summonSkill.maxAliveSummons - aliveSummons.Count)
             : 0;
         if (allowedCount <= 0)
         {
             return false;
         }
 
-        int summonCount = Mathf.Min(summonAttack.summonCountPerCast, allowedCount);
+        int summonCount = Mathf.Min(summonSkill.summonCountPerCast, allowedCount);
         int spawnedCount = 0;
-        EnemyWaveConfig summonConfig = summonAttack.summonedEnemyConfig.GetSanitized(clearTokenDrops: true);
+        EnemyWaveConfig summonConfig = summonSkill.summonedEnemyConfig.GetSanitized(clearTokenDrops: true);
         for (int i = 0; i < summonCount; i++)
         {
-            if (!enemyGenerator.TryGetSpawnPositionAround(transform.position, summonAttack.summonRadius, out Vector3 spawnPosition))
+            if (!enemyGenerator.TryGetSpawnPositionAround(transform.position, summonSkill.summonRadius, out Vector3 spawnPosition))
             {
                 continue;
             }
 
-            if (!enemyGenerator.TrySpawnEnemyAt(summonAttack.summonedEnemyDefinition, summonConfig, spawnPosition, out Enemy summonedEnemy))
+            if (!enemyGenerator.TrySpawnEnemyAt(summonSkill.summonedEnemyDefinition, summonConfig, spawnPosition, out Enemy summonedEnemy))
             {
                 continue;
             }
@@ -135,7 +125,6 @@ public sealed class EnemySummoner : MonoBehaviour
             return false;
         }
 
-        nextSummonTime = currentTime + Mathf.Max(0f, enemyData.AttackCooldown);
         return true;
     }
 
@@ -168,6 +157,11 @@ public sealed class EnemySummoner : MonoBehaviour
         return offset.sqrMagnitude <= attackRange * attackRange;
     }
 
+    /// <summary>
+    /// summary: 解析当前物体上的敌人数据组件，保证技能执行和基础数据读取使用同一实例。
+    /// param: 无
+    /// returns: 成功拿到 Enemy 数据组件时返回 true
+    /// </summary>
     private bool TryResolveEnemyData()
     {
         if (enemyData != null && enemyData.transform == transform)

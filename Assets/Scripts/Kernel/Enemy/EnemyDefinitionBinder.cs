@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
@@ -16,11 +18,16 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
     [SerializeField] private CharGlyphPresenter glyphPresenter;
     [SerializeField] private CharEnemyVisualPresenter visualPresenter;
 
+    private readonly List<IEnemySkillCaster> skillCasters = new();
+    private float[] nextSkillReadyTimes = Array.Empty<float>();
+    private EnemyDefinition skillTimingDefinition;
+
     public EnemyDefinition Definition => definition;
 
     private void Awake()
     {
         TryCacheBindings();
+        CacheSkillCasters();
         if (definition != null)
         {
             ApplyDefinition(definition);
@@ -30,15 +37,27 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
     private void Reset()
     {
         TryCacheBindings(overwriteExisting: true);
+        CacheSkillCasters();
     }
 
     private void OnValidate()
     {
         TryCacheBindings();
+        CacheSkillCasters();
         if (definition != null)
         {
             ApplyDefinition(definition);
         }
+    }
+
+    private void Update()
+    {
+        if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
+        {
+            return;
+        }
+
+        TryPerformSkills(Time.time);
     }
 
     /// <summary>
@@ -98,17 +117,21 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
             return false;
         }
 
+        CacheSkillCasters();
         definition = nextDefinition;
         if (!enemyData.TryBindDefinition(definition))
         {
             return false;
         }
 
-        if (!ApplyMovementKind(definition.MovementKind) || !ApplyAttackKind(definition.AttackKind))
+        if (!ApplyMovementKind(definition.MovementKind) ||
+            !ApplyAttackKind(definition.AttackKind) ||
+            !ApplySkillSlots(definition.SkillSlots))
         {
             return false;
         }
 
+        ResetSkillRuntimeState(forceReset: true);
         ApplyVisuals(definition.Visual);
         return true;
     }
@@ -129,10 +152,8 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
     {
         bool shouldEnableMelee = attackKind == EnemyAttackKind.MeleeContact;
         bool shouldEnableRanged = attackKind == EnemyAttackKind.RangedBulletToken;
-        bool shouldEnableSummon = attackKind == EnemyAttackKind.SummonEnemy;
         if ((shouldEnableMelee && meleeAttacker == null) ||
-            (shouldEnableRanged && rangedTokenAttacker == null) ||
-            (shouldEnableSummon && summoner == null))
+            (shouldEnableRanged && rangedTokenAttacker == null))
         {
             return false;
         }
@@ -147,12 +168,189 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
             rangedTokenAttacker.enabled = shouldEnableRanged;
         }
 
-        if (summoner != null)
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 按技能槽列表启停当前 prefab 壳上的技能执行器，并校验每个技能槽都有对应执行组件。
+    /// param: skillSlots 当前定义声明的技能槽列表
+    /// returns: 所有技能槽都能找到对应执行器时返回 true
+    /// </summary>
+    private bool ApplySkillSlots(IReadOnlyList<EnemyDefinition.EnemySkillSlotDefinition> skillSlots)
+    {
+        for (int i = 0; i < skillCasters.Count; i++)
         {
-            summoner.enabled = shouldEnableSummon;
+            if (skillCasters[i] is not Behaviour skillCasterBehaviour)
+            {
+                continue;
+            }
+
+            skillCasterBehaviour.enabled = ContainsSkillKind(skillSlots, skillCasters[i].SkillKind);
+        }
+
+        for (int i = 0; i < skillSlots.Count; i++)
+        {
+            EnemyDefinition.EnemySkillSlotDefinition skillSlot = skillSlots[i];
+            if (skillSlot.skillKind == EnemySkillKind.None)
+            {
+                continue;
+            }
+
+            if (!TryGetSkillCaster(skillSlot.skillKind, requireEnabled: false, out _))
+            {
+                return false;
+            }
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// summary: 按定义里的技能槽顺序调度技能释放，并为每个槽位维护独立冷却。
+    /// param: currentTime 当前逻辑时钟
+    /// returns: 本帧至少成功释放一个技能槽时返回 true
+    /// </summary>
+    private bool TryPerformSkills(float currentTime)
+    {
+        if (definition == null)
+        {
+            return false;
+        }
+
+        IReadOnlyList<EnemyDefinition.EnemySkillSlotDefinition> skillSlots = definition.SkillSlots;
+        if (skillSlots.Count <= 0)
+        {
+            return false;
+        }
+
+        EnsureSkillRuntimeState(skillSlots.Count);
+        int remainingSkillCasts = definition.SkillCasting.maxSkillCastsPerTick;
+        bool hasCastAnySkill = false;
+        for (int i = 0; i < skillSlots.Count && remainingSkillCasts > 0; i++)
+        {
+            EnemyDefinition.EnemySkillSlotDefinition skillSlot = skillSlots[i];
+            if (skillSlot.skillKind == EnemySkillKind.None || currentTime < nextSkillReadyTimes[i])
+            {
+                continue;
+            }
+
+            if (!TryGetSkillCaster(skillSlot.skillKind, requireEnabled: true, out IEnemySkillCaster skillCaster))
+            {
+                continue;
+            }
+
+            if (!skillCaster.TryCastSkill(skillSlot))
+            {
+                continue;
+            }
+
+            nextSkillReadyTimes[i] = currentTime + Mathf.Max(0f, skillSlot.cooldownSeconds);
+            remainingSkillCasts--;
+            hasCastAnySkill = true;
+        }
+
+        return hasCastAnySkill;
+    }
+
+    /// <summary>
+    /// summary: 重新扫描当前敌人根节点上的技能执行器组件，供多技能调度和启停逻辑复用。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void CacheSkillCasters()
+    {
+        skillCasters.Clear();
+        MonoBehaviour[] behaviours = GetComponents<MonoBehaviour>();
+        for (int i = 0; i < behaviours.Length; i++)
+        {
+            if (behaviours[i] is IEnemySkillCaster skillCaster)
+            {
+                skillCasters.Add(skillCaster);
+            }
+        }
+    }
+
+    /// <summary>
+    /// summary: 保证技能冷却状态数组与当前绑定定义的技能槽数量一致；定义切换时会重置全部技能冷却。
+    /// param: expectedSlotCount 当前定义的技能槽数量
+    /// returns: 无
+    /// </summary>
+    private void EnsureSkillRuntimeState(int expectedSlotCount)
+    {
+        if (skillTimingDefinition == definition && nextSkillReadyTimes.Length == expectedSlotCount)
+        {
+            return;
+        }
+
+        nextSkillReadyTimes = expectedSlotCount > 0 ? new float[expectedSlotCount] : Array.Empty<float>();
+        skillTimingDefinition = definition;
+    }
+
+    /// <summary>
+    /// summary: 在定义切换或重新绑定时显式重置技能冷却状态，避免旧定义残留冷却延续到新定义。
+    /// param: forceReset 为 true 时无条件清空当前技能冷却状态
+    /// returns: 无
+    /// </summary>
+    private void ResetSkillRuntimeState(bool forceReset = false)
+    {
+        if (forceReset)
+        {
+            nextSkillReadyTimes = Array.Empty<float>();
+            skillTimingDefinition = null;
+        }
+    }
+
+    /// <summary>
+    /// summary: 解析当前技能类型是否出现在定义的技能槽列表中，用于同步技能组件启停状态。
+    /// param: skillSlots 当前定义声明的技能槽列表
+    /// param: skillKind 需要检查的技能类型
+    /// returns: 至少存在一个匹配技能槽时返回 true
+    /// </summary>
+    private static bool ContainsSkillKind(IReadOnlyList<EnemyDefinition.EnemySkillSlotDefinition> skillSlots, EnemySkillKind skillKind)
+    {
+        if (skillKind == EnemySkillKind.None)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < skillSlots.Count; i++)
+        {
+            if (skillSlots[i].skillKind == skillKind)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// summary: 在当前敌人根节点上查找一个能处理指定技能类型的执行器，并可选过滤未启用组件。
+    /// param: skillKind 当前要调度的技能类型
+    /// param: requireEnabled 为 true 时会跳过未启用的 Behaviour 执行器
+    /// param: skillCaster 输出的技能执行器引用
+    /// returns: 成功找到匹配执行器时返回 true
+    /// </summary>
+    private bool TryGetSkillCaster(EnemySkillKind skillKind, bool requireEnabled, out IEnemySkillCaster skillCaster)
+    {
+        for (int i = 0; i < skillCasters.Count; i++)
+        {
+            if (skillCasters[i].SkillKind != skillKind)
+            {
+                continue;
+            }
+
+            if (requireEnabled && skillCasters[i] is Behaviour behaviour && !behaviour.enabled)
+            {
+                continue;
+            }
+
+            skillCaster = skillCasters[i];
+            return true;
+        }
+
+        skillCaster = null;
+        return false;
     }
 
     private void ApplyVisuals(EnemyDefinition.EnemyVisualDefinition visual)

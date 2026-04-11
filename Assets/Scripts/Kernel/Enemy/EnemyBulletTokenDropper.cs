@@ -95,6 +95,38 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
     }
 
     /// <summary>
+    /// summary: 显式设置当前掉落组件使用的地图网格，避免多地图场景下回退到错误地图。
+    /// param: mapGrid 当前掉落应使用的地图网格
+    /// returns: 传入网格有效时返回 true
+    /// </summary>
+    public bool TrySetTargetMapGrid(MapGridAuthoring mapGrid)
+    {
+        if (mapGrid == null)
+        {
+            return false;
+        }
+
+        targetMapGrid = mapGrid;
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 显式设置当前掉落生成时使用的父节点，确保战斗拾取物落到受控容器下。
+    /// param: parent 拾取物实例化后应挂载的父节点
+    /// returns: 传入父节点有效时返回 true
+    /// </summary>
+    public bool TrySetPickupParent(Transform parent)
+    {
+        if (parent == null)
+        {
+            return false;
+        }
+
+        pickupParent = parent;
+        return true;
+    }
+
+    /// <summary>
     /// summary: 供测试读取当前缓存的掉落表，确认波次配置是否已经正确写入。
     /// param: 无
     /// returns: 当前缓存的掉落表只读视图

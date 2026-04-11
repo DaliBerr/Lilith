@@ -34,22 +34,22 @@ namespace Kernel.GameState
     public static class StatusList
     {
         #region 游戏模式状态
-        // 开发者模式状态（通常希望读档后保持）
+        // 开发者模式状态（通过独立 global-mode.json 持久化，不再进入玩家永久档）
         public static Status DevModeStatus = new Status
         {
             StatusName = "DevMode",
             InActiveWith = new List<string> { "NormalMode" },
             allowSwitchWith = null,
-            Persistent = true
+            Persistent = false
         };
 
-        // 普通模式状态（通常希望读档后保持）
+        // 普通模式状态（通过独立 global-mode.json 持久化，不再进入玩家永久档）
         public static Status NormalModeStatus = new Status
         {
             StatusName = "NormalMode",
             InActiveWith = new List<string> { "DevMode" },
             allowSwitchWith = null,
-            Persistent = true
+            Persistent = false
         };
         #endregion
 

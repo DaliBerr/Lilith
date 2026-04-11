@@ -13,24 +13,24 @@ MonoBehaviour:
   m_Name: EdgeCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: edge_core
-  displayText: "\u5203"
+  displayText: Edge
   description: Base edge core.
   tokenType: 2
   hasBulletTextOverride: 1
   bulletTextOverride: "\u5203"
   modifiers:
-  - target: 0
-    expression: =Color.white
-  - target: 1
-    expression: -=12
+  - target: 2
+    expression: '*=0.8'
+  - target: 3
+    expression: +=10f
   coreType: 4
   defaultValueType: 1
   damage: 1
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 200
+  projectileSpeed: 320
   maxLifetime: 2
   maxTravelDistance: 512
   impactMask:
     serializedVersion: 2
-    m_Bits: 2035
+    m_Bits: 4294967291
