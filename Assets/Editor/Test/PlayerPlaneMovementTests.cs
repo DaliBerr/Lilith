@@ -58,6 +58,46 @@ public sealed class PlayerPlaneMovementTests
     }
 
     [Test]
+    public void ApplyFacingRotation_RotatesFacingPivotWithoutRotatingRootRigidbody()
+    {
+        PlayerPlaneMovement movement = CreateMovementSubject(
+            out GameObject playerObject,
+            out _,
+            out Rigidbody rigidbody);
+        GameObject aimPivotObject = CreateGameObject("AimPivot");
+        aimPivotObject.transform.SetParent(playerObject.transform, false);
+        SetPrivateField(movement, "facingPivot", aimPivotObject.transform);
+        SetPrivateField(movement, "rotationSpeed", 0f);
+
+        InvokePrivateVoidMethod(movement, "ApplyFacingRotation", Quaternion.Euler(0f, 90f, 0f), 1f);
+
+        Assert.That(Quaternion.Angle(playerObject.transform.rotation, Quaternion.identity), Is.LessThan(0.001f));
+        Assert.That(Quaternion.Angle(rigidbody.rotation, Quaternion.identity), Is.LessThan(0.001f));
+        Assert.That(Quaternion.Angle(aimPivotObject.transform.rotation, Quaternion.Euler(0f, 90f, 0f)), Is.LessThan(0.001f));
+    }
+
+    [Test]
+    public void GetBulletSpawnPosition_UsesFacingPivotOrientationWhenBound()
+    {
+        PlayerPlaneMovement movement = CreateMovementSubject(
+            out GameObject playerObject,
+            out _,
+            out _);
+        GameObject aimPivotObject = CreateGameObject("AimPivot");
+        aimPivotObject.transform.SetParent(playerObject.transform, false);
+        aimPivotObject.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+        SetPrivateField(movement, "facingPivot", aimPivotObject.transform);
+        SetPrivateField(movement, "bulletSpawnOrigin", aimPivotObject.transform);
+        SetPrivateField(movement, "bulletSpawnLocalOffset", new Vector3(0f, 0f, 2f));
+
+        Vector3 spawnPosition = InvokePrivateMethod<Vector3>(movement, "GetBulletSpawnPosition");
+
+        Assert.That(spawnPosition.x, Is.EqualTo(2f).Within(0.0001f));
+        Assert.That(spawnPosition.y, Is.EqualTo(playerObject.transform.position.y).Within(0.0001f));
+        Assert.That(spawnPosition.z, Is.EqualTo(0f).Within(0.0001f));
+    }
+
+    [Test]
     public void TryStartDash_RejectsWhenStaminaIsInsufficient()
     {
         DestroyAllCameras();
@@ -217,6 +257,13 @@ public sealed class PlayerPlaneMovementTests
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
         return (T)method.Invoke(target, args);
+    }
+
+    private static void InvokePrivateVoidMethod(object target, string methodName, params object[] args)
+    {
+        MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
+        method.Invoke(target, args);
     }
 
     private static bool InvokePrivateMethodWithOutVector3(object target, string methodName, Ray ray, out Vector3 worldPoint)

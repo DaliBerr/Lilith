@@ -25,6 +25,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     [SerializeField] private LayerMask movementCollisionMask = Physics.DefaultRaycastLayers;
     [SerializeField] private Rigidbody targetRigidbody;
     [SerializeField] private Camera targetCamera;
+    [SerializeField] private Transform facingPivot;
 
     [Header("Dash")]
     [SerializeField, Min(0f)] private float dashDistance = 6f;
@@ -94,6 +95,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             targetCamera = Camera.main;
         }
 
+        TryResolveFacingPivot();
         TryResolveTargetMapGrid();
         TryResolveGroundingReferenceCollider();
         EnsureGroundedRigidbodyConfiguration();
@@ -546,7 +548,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     /// </summary>
     private Vector3 GetBulletSpawnPosition()
     {
-        Transform spawnRoot = bulletSpawnOrigin != null ? bulletSpawnOrigin : transform;
+        Transform spawnRoot = bulletSpawnOrigin != null ? bulletSpawnOrigin : GetFacingTransform();
         return spawnRoot.TransformPoint(bulletSpawnLocalOffset);
     }
 
@@ -629,15 +631,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return;
         }
 
-        Quaternion currentRotation = targetRigidbody != null ? targetRigidbody.rotation : transform.rotation;
-        Quaternion nextRotation = GetNextRotation(currentRotation, targetRotation, deltaTime);
-        if (targetRigidbody != null)
-        {
-            targetRigidbody.MoveRotation(nextRotation);
-            return;
-        }
-
-        transform.rotation = nextRotation;
+        ApplyFacingRotation(targetRotation, deltaTime);
     }
 
     /// <summary>
@@ -708,6 +702,40 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 将角色当前朝向插值到目标旋转；默认只驱动独立朝向 pivot，不修改碰撞根节点姿态。
+    /// param: targetRotation 本次希望达到的目标朝向
+    /// param: deltaTime 本次旋转使用的时间步长
+    /// returns: 无
+    /// </summary>
+    private void ApplyFacingRotation(Quaternion targetRotation, float deltaTime)
+    {
+        Transform facingTransform = GetFacingTransform();
+        Quaternion currentRotation = facingTransform.rotation;
+        Quaternion nextRotation = GetNextRotation(currentRotation, targetRotation, deltaTime);
+        facingTransform.rotation = nextRotation;
+    }
+
+    /// <summary>
+    /// summary: 获取当前用于角色朝向、发射点和地影朝向的旋转源；优先使用显式绑定的朝向 pivot。
+    /// param: 无
+    /// returns: 当前应被旋转的朝向 Transform；找不到额外 pivot 时回退到发射点或玩家自身
+    /// </summary>
+    private Transform GetFacingTransform()
+    {
+        if (facingPivot != null)
+        {
+            return facingPivot;
+        }
+
+        if (bulletSpawnOrigin != null)
+        {
+            return bulletSpawnOrigin;
+        }
+
+        return transform;
+    }
+
+    /// <summary>
     /// summary: 获取当前用于鼠标投影的相机；未显式指定时尝试回退到 Main Camera。
     /// param: camera 输出的可用相机
     /// returns: 找到可用相机时返回 true
@@ -741,6 +769,34 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 当 Inspector 未显式绑定朝向 pivot 时，优先复用独立发射点或名为 AimPivot 的子节点。
+    /// param: 无
+    /// returns: 成功拿到独立朝向 pivot 时返回 true
+    /// </summary>
+    private bool TryResolveFacingPivot()
+    {
+        if (facingPivot != null)
+        {
+            return true;
+        }
+
+        if (bulletSpawnOrigin != null && bulletSpawnOrigin != transform)
+        {
+            facingPivot = bulletSpawnOrigin;
+            return true;
+        }
+
+        Transform aimPivot = transform.Find("AimPivot");
+        if (aimPivot == null)
+        {
+            return false;
+        }
+
+        facingPivot = aimPivot;
+        return true;
+    }
+
+    /// <summary>
     /// summary: 当 Inspector 未显式绑定 grounded 参考 Collider 时，尝试自动在玩家层级内解析一个可用碰撞体。
     /// param: 无
     /// returns: 成功拿到 grounded 参考 Collider 时返回 true
@@ -769,6 +825,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
 
         WorldHeightUtility.TryConfigureGroundedRigidbody(targetRigidbody);
         targetRigidbody.isKinematic = true;
+        targetRigidbody.constraints |= RigidbodyConstraints.FreezeRotation;
     }
 
     /// <summary>
@@ -867,6 +924,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private void OnValidate()
     {
         TryAutoAssignLoadout();
+        TryResolveFacingPivot();
         TryResolveTargetMapGrid();
         TryResolveGroundingReferenceCollider();
         EnsureGroundedRigidbodyConfiguration();

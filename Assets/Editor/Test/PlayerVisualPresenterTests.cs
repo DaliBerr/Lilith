@@ -15,6 +15,8 @@ public sealed class PlayerVisualPresenterTests
         GameObject playerObject = CreateGameObject("Player");
         BoxCollider groundingCollider = playerObject.AddComponent<BoxCollider>();
         groundingCollider.size = new Vector3(12f, 18f, 12f);
+        GameObject aimPivotObject = CreateGameObject("AimPivot");
+        aimPivotObject.transform.SetParent(playerObject.transform, false);
 
         GameObject textObject = CreateUiGameObject("Text");
         textObject.transform.SetParent(playerObject.transform, false);
@@ -28,16 +30,17 @@ public sealed class PlayerVisualPresenterTests
         shadowObject.AddComponent<SpriteRenderer>();
 
         PlayerVisualPresenter presenter = playerObject.AddComponent<PlayerVisualPresenter>();
+        SetPrivateField(presenter, "planarFacingSource", aimPivotObject.transform);
 
-        playerObject.transform.rotation = Quaternion.Euler(20f, 35f, 15f);
+        aimPivotObject.transform.rotation = Quaternion.Euler(20f, 35f, 15f);
         InvokePrivateMethod(presenter, "LateUpdate");
         Quaternion firstRotation = shadowObject.transform.rotation;
-        Quaternion firstExpectedRotation = CreateExpectedGroundShadowRotation(playerObject.transform.forward);
+        Quaternion firstExpectedRotation = CreateExpectedGroundShadowRotation(aimPivotObject.transform.forward);
 
-        playerObject.transform.rotation = Quaternion.Euler(340f, 125f, 25f);
+        aimPivotObject.transform.rotation = Quaternion.Euler(340f, 125f, 25f);
         InvokePrivateMethod(presenter, "LateUpdate");
         Quaternion secondRotation = shadowObject.transform.rotation;
-        Quaternion secondExpectedRotation = CreateExpectedGroundShadowRotation(playerObject.transform.forward);
+        Quaternion secondExpectedRotation = CreateExpectedGroundShadowRotation(aimPivotObject.transform.forward);
 
         Assert.That(Quaternion.Angle(firstRotation, firstExpectedRotation), Is.LessThan(0.001f));
         Assert.That(Quaternion.Angle(secondRotation, secondExpectedRotation), Is.LessThan(0.001f));
@@ -76,6 +79,29 @@ public sealed class PlayerVisualPresenterTests
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
         method.Invoke(target, null);
+    }
+
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    {
+        FieldInfo field = FindInstanceField(target.GetType(), fieldName);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        field.SetValue(target, value);
+    }
+
+    private static FieldInfo FindInstanceField(System.Type type, string fieldName)
+    {
+        while (type != null)
+        {
+            FieldInfo field = type.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field != null)
+            {
+                return field;
+            }
+
+            type = type.BaseType;
+        }
+
+        return null;
     }
 
     private static Quaternion CreateExpectedGroundShadowRotation(Vector3 worldForward)

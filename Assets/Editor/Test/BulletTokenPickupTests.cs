@@ -148,7 +148,7 @@ public sealed class BulletTokenPickupTests
     }
 
     [Test]
-    public void Prefab_GlyphAndShadowCarryGameplayBillboards()
+    public void Prefab_GlyphAndShadowDoNotCarryGameplayBillboards()
     {
         GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/Bullet/BulletTokenPickup.prefab");
 
@@ -159,8 +159,33 @@ public sealed class BulletTokenPickupTests
 
             Assert.That(glyph, Is.Not.Null);
             Assert.That(shadow, Is.Not.Null);
-            Assert.That(glyph.GetComponent<GameplayBillboard>(), Is.Not.Null);
-            Assert.That(shadow.GetComponent<GameplayBillboard>(), Is.Not.Null);
+            Assert.That(glyph.GetComponent<GameplayBillboard>(), Is.Null);
+            Assert.That(shadow.GetComponent<GameplayBillboard>(), Is.Null);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
+    public void RotateAroundYAxis_RotatesGlyphAndShadowWithPickupRoot()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/Bullet/BulletTokenPickup.prefab");
+
+        try
+        {
+            BulletTokenPickup pickup = prefabRoot.GetComponent<BulletTokenPickup>();
+            Transform glyph = prefabRoot.transform.Find("Glyph");
+            Transform shadow = prefabRoot.transform.Find("Shadow");
+            Quaternion initialGlyphRotation = glyph.rotation;
+            Quaternion initialShadowRotation = shadow.rotation;
+
+            InvokePrivateMethod(pickup, "RotateAroundYAxis", 1f);
+
+            Assert.That(Mathf.Abs(prefabRoot.transform.eulerAngles.y), Is.GreaterThan(0.1f));
+            Assert.That(Quaternion.Angle(initialGlyphRotation, glyph.rotation), Is.GreaterThan(0.1f));
+            Assert.That(Quaternion.Angle(initialShadowRotation, shadow.rotation), Is.GreaterThan(0.1f));
         }
         finally
         {

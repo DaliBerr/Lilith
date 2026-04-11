@@ -11,7 +11,6 @@ GameObject:
   - component: {fileID: 4354727672798562159}
   - component: {fileID: 7668608580017159937}
   - component: {fileID: 6415703104795316234}
-  - component: {fileID: 8286129545946218306}
   m_Layer: 0
   m_Name: Glyph
   m_TagString: Untagged
@@ -184,20 +183,6 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_renderer: {fileID: 7668608580017159937}
   m_maskType: 0
---- !u!114 &8286129545946218306
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2211634799480836315}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9a28a1b391083514c934b578d539a899, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GameplayBillboard
-  targetCamera: {fileID: 0}
-  automaticFacingEnabled: 1
 --- !u!1 &2993802527324132036
 GameObject:
   m_ObjectHideFlags: 0
@@ -281,7 +266,6 @@ GameObject:
   - component: {fileID: 4324505322423655891}
   - component: {fileID: 5391329807988815588}
   - component: {fileID: 8742324290216121571}
-  - component: {fileID: 6373132880453876109}
   m_Layer: 0
   m_Name: Shadow
   m_TagString: Untagged
@@ -454,17 +438,3 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_renderer: {fileID: 5391329807988815588}
   m_maskType: 0
---- !u!114 &6373132880453876109
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7607402865176741899}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9a28a1b391083514c934b578d539a899, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GameplayBillboard
-  targetCamera: {fileID: 0}
-  automaticFacingEnabled: 1

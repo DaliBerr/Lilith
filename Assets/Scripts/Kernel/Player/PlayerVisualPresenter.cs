@@ -22,6 +22,7 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
     [SerializeField] private TMP_Text glyphText;
     [SerializeField] private BoxCollider groundingCollider;
     [SerializeField] private SpriteRenderer groundShadowRenderer;
+    [SerializeField] private Transform planarFacingSource;
 
     [Header("Layout")]
     [SerializeField, Min(0f)] private float textHeightFactor = 0.35f;
@@ -37,6 +38,7 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
     public TMP_Text GlyphText => glyphText;
     public BoxCollider GroundingCollider => groundingCollider;
     public SpriteRenderer GroundShadowRenderer => groundShadowRenderer;
+    public Transform PlanarFacingSource => planarFacingSource;
 
     private void Awake()
     {
@@ -86,6 +88,11 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
         if (overwriteExisting || !IsSpriteRendererReferenceValid(groundShadowRenderer))
         {
             groundShadowRenderer = FindSpriteRenderer(GroundShadowPath);
+        }
+
+        if (overwriteExisting || !IsPlanarFacingReferenceValid(planarFacingSource))
+        {
+            planarFacingSource = FindPlanarFacingSource();
         }
 
         return IsRectTransformReferenceValid(textContainer) &&
@@ -189,7 +196,8 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
             return;
         }
 
-        Vector3 planarForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        Transform facingSource = planarFacingSource != null ? planarFacingSource : transform;
+        Vector3 planarForward = Vector3.ProjectOnPlane(facingSource.forward, Vector3.up);
         if (planarForward.sqrMagnitude <= MinimumPlanarDirectionSqrMagnitude)
         {
             groundShadowRenderer.transform.rotation = FlatRotation;
@@ -219,6 +227,17 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
         return target != null ? target.GetComponent<SpriteRenderer>() : null;
     }
 
+    /// <summary>
+    /// summary: 解析玩家视觉当前应跟随的平面朝向源；优先使用 AimPivot，缺失时回退到玩家根节点。
+    /// param: 无
+    /// returns: 可用于读取平面朝向的 Transform
+    /// </summary>
+    private Transform FindPlanarFacingSource()
+    {
+        Transform aimPivot = transform.Find("AimPivot");
+        return aimPivot != null ? aimPivot : transform;
+    }
+
     private bool IsRectTransformReferenceValid(RectTransform target)
     {
         return target != null && target.transform != null && target.transform.IsChildOf(transform);
@@ -232,5 +251,10 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
     private bool IsSpriteRendererReferenceValid(SpriteRenderer target)
     {
         return target != null && target.transform != null && target.transform.IsChildOf(transform);
+    }
+
+    private bool IsPlanarFacingReferenceValid(Transform target)
+    {
+        return target != null && (target == transform || target.IsChildOf(transform));
     }
 }
