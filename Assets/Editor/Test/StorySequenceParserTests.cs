@@ -271,6 +271,46 @@ public sealed class StorySequenceParserTests
     }
 
     [UnityTest]
+    public IEnumerator Service_WithMaxCharactersPerEntry_SplitsLongDialogIntoMultiplePages()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(new StorySequenceEntry
+        {
+            SpeakerId = "lilith",
+            DisplayName = "莉莉丝",
+            Text = new string('测', 261)
+        });
+        parser.DeltaTimeOverride = 1000f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://dialog",
+            CharactersPerSecond = 1000f,
+            LineHoldSeconds = 0f,
+            AllowDefaultSkipInput = false,
+            MaxCharactersPerEntry = 260
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        parser.StartCoroutine(parser.RunSequenceForTest(request));
+
+        while (!result.HasValue)
+        {
+            yield return null;
+        }
+
+        Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText.Length == 260), Is.True);
+        Assert.That(snapshots[snapshots.Count - 1].FullText.Length, Is.EqualTo(1));
+        Assert.That(snapshots.TrueForAll(snapshot => snapshot.FullText.Length <= 260), Is.True);
+    }
+
+    [UnityTest]
     public IEnumerator Service_AppendDisplayMode_KeepsPreviousLineAndAddsNewline()
     {
         TestStorySequenceParser parser = CreateTestParser();
@@ -312,6 +352,63 @@ public sealed class StorySequenceParserTests
         Assert.That(appendedSnapshot.FullText, Is.EqualTo("First line\nSecond line"));
         Assert.That(appendedSnapshot.VisibleCharacterCount, Is.GreaterThanOrEqualTo("First line\n".Length));
         Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+    }
+
+    [Test]
+    public void Service_RequestAdvanceToNextEntryOrFinish_InManualAdvanceMode_RevealsThenMovesToNextEntry()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(
+            new StorySequenceEntry { DisplayName = "莉莉丝", Text = "AB" },
+            new StorySequenceEntry { DisplayName = "观测者", Text = "CD" });
+        parser.DeltaTimeOverride = 0f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://dialog",
+            CharactersPerSecond = 1f,
+            LineHoldSeconds = 0f,
+            AllowDefaultSkipInput = false,
+            WaitForAdvanceInputAfterEntryReveal = true
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        ManualCoroutineRunner runner = new(parser.RunSequenceForTest(request));
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "AB" && snapshot.VisibleCharacterCount == 0),
+            20,
+            "Initial dialog snapshot was not published.");
+
+        parser.RequestAdvanceToNextEntryOrFinish();
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "AB" && snapshot.IsEntryFullyRevealed),
+            20,
+            "Advance should first fully reveal the current entry.");
+
+        parser.RequestAdvanceToNextEntryOrFinish();
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "CD" && snapshot.VisibleCharacterCount == 0),
+            20,
+            "Second advance should move to the next entry instead of finishing.");
+
+        parser.RequestAdvanceToNextEntryOrFinish();
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "CD" && snapshot.IsEntryFullyRevealed),
+            20,
+            "Third advance should reveal the final entry.");
+
+        Assert.That(result.HasValue, Is.False);
+
+        parser.RequestAdvanceToNextEntryOrFinish();
+        runner.StepUntil(() => result.HasValue, 10, "Final advance should finish the dialog sequence.");
+
+        Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+        Assert.That(parser.IsPlaying, Is.False);
     }
 
     [Test]

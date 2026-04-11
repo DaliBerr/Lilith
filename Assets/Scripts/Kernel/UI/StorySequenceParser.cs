@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using UnityEngine;
@@ -64,6 +66,8 @@ namespace Kernel.UI
         public float CharactersPerSecond { get; set; } = 24f;
         public float LineHoldSeconds { get; set; } = 1.2f;
         public bool AllowDefaultSkipInput { get; set; } = true;
+        public int MaxCharactersPerEntry { get; set; }
+        public bool WaitForAdvanceInputAfterEntryReveal { get; set; }
     }
 
     /// <summary>
@@ -133,6 +137,7 @@ namespace Kernel.UI
         private bool isPlaying;
         private bool skipCurrentEntryRequested;
         private bool skipToNextReplaceRequested;
+        private bool advanceToNextEntryRequested;
         private bool advanceDisplayBlockRequested;
         private bool finishAfterFinalBlockRequested;
         private bool waitForSkipConfirmationOnFinalBlock;
@@ -282,6 +287,33 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 请求推进到下一条对白；若当前条目尚未完整显示，则先立即补完当前条目。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public virtual void RequestAdvanceToNextEntryOrFinish()
+        {
+            if (!isPlaying)
+            {
+                return;
+            }
+
+            if (!hasCurrentSnapshot || !currentSnapshot.IsEntryFullyRevealed)
+            {
+                RequestSkipCurrentEntry();
+                return;
+            }
+
+            if (currentSnapshot.EntryIndex >= currentSnapshot.EntryCount - 1)
+            {
+                finishAfterFinalBlockRequested = true;
+                return;
+            }
+
+            advanceToNextEntryRequested = true;
+        }
+
+        /// <summary>
         /// summary: 主动停止当前剧情序列，并以 Cancelled 结果结束。
         /// param: 无
         /// returns: 无
@@ -410,6 +442,7 @@ namespace Kernel.UI
             isPlaying = true;
             skipCurrentEntryRequested = false;
             skipToNextReplaceRequested = false;
+            advanceToNextEntryRequested = false;
             advanceDisplayBlockRequested = false;
             finishAfterFinalBlockRequested = false;
             waitForSkipConfirmationOnFinalBlock = false;
@@ -442,6 +475,7 @@ namespace Kernel.UI
                 yield break;
             }
 
+            loadedData = PrepareDataForPlayback(loadedData, request);
             yield return PlaySequenceDataCo(loadedData, request);
 
             activeSequenceRoutine = null;
@@ -555,6 +589,42 @@ namespace Kernel.UI
                 skipCurrentEntryRequested = false;
                 PublishSnapshot(CreateSnapshot(entry, fullText, fullText.Length, index, entryCount, true));
                 accumulatedDisplayText = fullText;
+
+                if (request.WaitForAdvanceInputAfterEntryReveal)
+                {
+                    while (isPlaying)
+                    {
+                        if (TryConsumeSkipToNextReplaceRequest())
+                        {
+                            skipCurrentBlockRequested = true;
+                            break;
+                        }
+
+                        if (finishAfterFinalBlockRequested && index >= entryCount - 1)
+                        {
+                            activeSequenceRoutine = null;
+                            FinalizeSequence(new StorySequenceResult(StorySequenceCompletionStatus.Completed));
+                            yield break;
+                        }
+
+                        if (advanceToNextEntryRequested)
+                        {
+                            break;
+                        }
+
+                        yield return null;
+                    }
+
+                    if (!isPlaying)
+                    {
+                        yield break;
+                    }
+
+                    if (TryConsumeAdvanceToNextEntryRequest())
+                    {
+                        continue;
+                    }
+                }
 
                 float elapsed = 0f;
                 while (!skipCurrentBlockRequested && elapsed < lineHoldSeconds)
@@ -702,6 +772,7 @@ namespace Kernel.UI
             allowDefaultSkipInput = false;
             skipCurrentEntryRequested = false;
             skipToNextReplaceRequested = false;
+            advanceToNextEntryRequested = false;
             advanceDisplayBlockRequested = false;
             finishAfterFinalBlockRequested = false;
             waitForSkipConfirmationOnFinalBlock = false;
@@ -819,6 +890,22 @@ namespace Kernel.UI
             }
 
             advanceDisplayBlockRequested = false;
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 读取并清空“推进到下一条对白”请求标记，供对话 UI 的手动推进复用。
+        /// param: 无
+        /// returns: 当前存在未消费的对白推进请求时返回 true
+        /// </summary>
+        private bool TryConsumeAdvanceToNextEntryRequest()
+        {
+            if (!advanceToNextEntryRequested)
+            {
+                return false;
+            }
+
+            advanceToNextEntryRequested = false;
             return true;
         }
 
@@ -954,6 +1041,110 @@ namespace Kernel.UI
         private static string NormalizeDisplayName(string displayName)
         {
             return string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
+        }
+
+        /// <summary>
+        /// summary: 按请求配置预处理可播放条目；当前仅负责把超长对白拆成多个不超过上限的分页条目。
+        /// param name="data": 原始剧情数据
+        /// param name="request": 当前播放请求
+        /// returns: 可直接交给播放器消费的条目数据
+        /// </summary>
+        private static StorySequenceData PrepareDataForPlayback(StorySequenceData data, StorySequenceRequest request)
+        {
+            if (data?.Entries == null || data.Entries.Count == 0 || request == null)
+            {
+                return data;
+            }
+
+            int maxCharactersPerEntry = Mathf.Max(0, request.MaxCharactersPerEntry);
+            if (maxCharactersPerEntry <= 0)
+            {
+                return data;
+            }
+
+            List<StorySequenceEntry> preparedEntries = new();
+            for (int index = 0; index < data.Entries.Count; index++)
+            {
+                StorySequenceEntry entry = data.Entries[index];
+                if (entry == null || string.IsNullOrEmpty(entry.Text))
+                {
+                    continue;
+                }
+
+                AppendPreparedEntries(preparedEntries, entry, maxCharactersPerEntry);
+            }
+
+            return new StorySequenceData
+            {
+                Entries = preparedEntries
+            };
+        }
+
+        /// <summary>
+        /// summary: 把单条对白按最大字符数拆成多个可播放条目；溢出的后续分页一律改为 replace，确保单屏文本不会累积超限。
+        /// param name="target": 输出条目列表
+        /// param name="entry": 当前原始对白
+        /// param name="maxCharactersPerEntry": 单页允许的最大字符数
+        /// returns: 无
+        /// </summary>
+        private static void AppendPreparedEntries(List<StorySequenceEntry> target, StorySequenceEntry entry, int maxCharactersPerEntry)
+        {
+            List<string> chunks = SplitTextIntoChunks(entry.Text, maxCharactersPerEntry);
+            for (int chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)
+            {
+                target.Add(new StorySequenceEntry
+                {
+                    SpeakerId = entry.SpeakerId,
+                    DisplayName = entry.DisplayName,
+                    Text = chunks[chunkIndex],
+                    DisplayMode = chunkIndex == 0 ? entry.DisplayMode : StorySequenceDisplayMode.Replace
+                });
+            }
+        }
+
+        /// <summary>
+        /// summary: 按文本元素把一条对白切成若干分页，避免把代理对或组合字符从中间截断。
+        /// param name="text": 原始对白文本
+        /// param name="maxCharactersPerEntry": 单页允许的最大文本元素数量
+        /// returns: 拆分后的分页文本列表
+        /// </summary>
+        private static List<string> SplitTextIntoChunks(string text, int maxCharactersPerEntry)
+        {
+            List<string> chunks = new();
+            if (string.IsNullOrEmpty(text))
+            {
+                return chunks;
+            }
+
+            if (maxCharactersPerEntry <= 0)
+            {
+                chunks.Add(text);
+                return chunks;
+            }
+
+            TextElementEnumerator enumerator = StringInfo.GetTextElementEnumerator(text);
+            StringBuilder builder = new();
+            int currentCount = 0;
+            while (enumerator.MoveNext())
+            {
+                builder.Append(enumerator.GetTextElement());
+                currentCount++;
+                if (currentCount < maxCharactersPerEntry)
+                {
+                    continue;
+                }
+
+                chunks.Add(builder.ToString());
+                builder.Clear();
+                currentCount = 0;
+            }
+
+            if (builder.Length > 0)
+            {
+                chunks.Add(builder.ToString());
+            }
+
+            return chunks;
         }
     }
 }

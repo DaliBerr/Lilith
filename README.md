@@ -54,7 +54,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs)
   - 位于 `StartUp` 场景
   - 负责日志初始化、本地化初始化、`Addressables` 初始化、`Kernel.GameState.StatusController` 初始化
-  - 负责压入启动菜单；开始流程会先弹出 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 选择四个固定栏位，条目需要先选中、再点一次才会进入；新栏位进入开场剧情，已有栏位直接切到 `Main`
+  - 负责压入启动菜单；开始流程会先弹出 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 选择四个固定栏位，条目需要先选中、再点一次才会进入；新栏位进入开场 storyteller，结束后会继续串接 [`Assets/Scripts/Kernel/UI/DialogUIScreen.cs`](Assets/Scripts/Kernel/UI/DialogUIScreen.cs) 测试对白，再切到 `Main`；已有栏位直接切到 `Main`
 - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
   - 文件名是 `StartUp.cs`，类名是 `Startup`
   - 位于 `Main` 场景
@@ -69,7 +69,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - `Kernel.GameState`：位于 [`Assets/Scripts/Kernel/Status`](Assets/Scripts/Kernel/Status)
   - 入口：[`StatusController.cs`](Assets/Scripts/Kernel/Status/StatusController.cs)
 - UI：位于 [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI)
-  - 当前主入口包括 `StartUpMenuUI`、`StoryTellerUIScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`PopUpUIScreen`、`ProfileManagementUIScreen`、`TokenSelectUIScreen`
+  - 当前主入口包括 `StartUpMenuUI`、`StoryTellerUIScreen`、`DialogUIScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`PopUpUIScreen`、`ProfileManagementUIScreen`、`TokenSelectUIScreen`
 - 地图与寻路：位于 [`Assets/Scripts/Kernel/MapGrid`](Assets/Scripts/Kernel/MapGrid) 与 [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
   - 包含固定网格、双地图 Run flow、Seed 布局生成与格子寻路
   - [`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs) 暴露了边界厚度、障碍数量/尺寸、边缘留白、玩家安全区和刷怪环参数，可用来调节更密或更开的战斗地图
@@ -104,7 +104,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - 子弹视觉配置：[`Assets/Data/BulletVisuals`](Assets/Data/BulletVisuals)
 - 敌人定义：[`Assets/Data/Enemies`](Assets/Data/Enemies)
 - 波次定义：[`Assets/Data/Waves`](Assets/Data/Waves)
-- 开场剧情文本：[`Assets/Data/Story`](Assets/Data/Story)
+- 开场剧情文本与 Dialog UI 测试对白：[`Assets/Data/Story`](Assets/Data/Story)
 - 业务 UI prefab：[`Assets/Prefabs/UI`](Assets/Prefabs/UI)
 - 敌人 prefab：[`Assets/Prefabs/Enemy`](Assets/Prefabs/Enemy)
 - 子弹 prefab：[`Assets/Prefabs/Bullet`](Assets/Prefabs/Bullet)

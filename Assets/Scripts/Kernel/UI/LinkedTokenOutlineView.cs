@@ -9,6 +9,8 @@ namespace Kernel.UI
     [DisallowMultipleComponent]
     public sealed class LinkedTokenOutlineView : MonoBehaviour
     {
+        private static int runtimeConstructionDepth;
+
         [SerializeField] private RectTransform topEdge;
         [SerializeField] private RectTransform bottomEdge;
         [SerializeField] private RectTransform leftEdge;
@@ -32,6 +34,11 @@ namespace Kernel.UI
 
         private void OnValidate()
         {
+            if (runtimeConstructionDepth > 0)
+            {
+                return;
+            }
+
             EnsureVisualTree();
             ApplyEdgeThickness();
         }
@@ -45,17 +52,25 @@ namespace Kernel.UI
         /// </summary>
         public static LinkedTokenOutlineView CreateRuntime(string name, Transform parent, int uiLayer)
         {
-            GameObject root = new(name, typeof(RectTransform), typeof(CanvasGroup));
-            root.layer = uiLayer;
-            if (parent != null)
+            runtimeConstructionDepth++;
+            try
             {
-                root.transform.SetParent(parent, false);
-            }
+                GameObject root = new(name, typeof(RectTransform), typeof(CanvasGroup));
+                root.layer = uiLayer;
+                if (parent != null)
+                {
+                    root.transform.SetParent(parent, false);
+                }
 
-            LinkedTokenOutlineView outlineView = root.AddComponent<LinkedTokenOutlineView>();
-            outlineView.EnsureVisualTree();
-            outlineView.ApplyEdgeThickness();
-            return outlineView;
+                LinkedTokenOutlineView outlineView = root.AddComponent<LinkedTokenOutlineView>();
+                outlineView.EnsureVisualTree();
+                outlineView.ApplyEdgeThickness();
+                return outlineView;
+            }
+            finally
+            {
+                runtimeConstructionDepth--;
+            }
         }
 
         /// <summary>
