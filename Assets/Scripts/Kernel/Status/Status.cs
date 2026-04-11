@@ -106,6 +106,13 @@ namespace Kernel.GameState
             allowSwitchWith = new List<string> { "Paused", "Playing", "SaveLoading" },
             Persistent = false
         };
+        public static Status InDialogStatus = new Status
+        {
+            StatusName = "InDialog",
+            InActiveWith = null,
+            allowSwitchWith = null,
+            Persistent = false
+        };
         public static Status SaveLoadingStatus = new Status
         {
             StatusName = "SaveLoading",
@@ -144,6 +151,7 @@ namespace Kernel.GameState
             Register(InMainMenuStatus);
             Register(InMenuStatus);
             Register(InBackPackStatus);
+            Register(InDialogStatus);
             Register(PopUpStatus);
         }
 

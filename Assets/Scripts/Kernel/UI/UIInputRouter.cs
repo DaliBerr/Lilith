@@ -532,6 +532,11 @@ namespace Kernel.UI
         /// </summary>
         private static void PrepareModalForClose(UIScreen modal)
         {
+            if (modal is DialogUIScreen)
+            {
+                // 对话 modal 被 Esc 关闭时，需要同时结束剧情序列，避免启动协程一直等待完成事件。
+                StorySequenceParser.Instance?.StopCurrentSequence();
+            }
         }
     }
 }

@@ -205,7 +205,7 @@ public sealed class EnemyGeneratorTests
 
         Assert.That(success, Is.True);
         createdObjects.Add(spawnedEnemy.gameObject);
-        Assert.That(spawnedEnemy.transform.position.y, Is.EqualTo(15f).Within(0.001f));
+        Assert.That(spawnedEnemy.transform.position.y, Is.EqualTo(16f).Within(0.001f));
     }
 
     [Test]

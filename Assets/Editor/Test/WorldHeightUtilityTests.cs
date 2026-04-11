@@ -22,7 +22,7 @@ public sealed class WorldHeightUtilityTests
     }
 
     [Test]
-    public void CalculateGroundedRootY_UsesColliderBottomRelativeToRoot()
+    public void CalculateGroundedRootY_UsesColliderBottomRelativeToRootAndAppliesExtraLift()
     {
         GameObject root = CreateGameObject("Root");
         root.transform.position = new Vector3(0f, 0f, 0f);
@@ -31,7 +31,7 @@ public sealed class WorldHeightUtilityTests
 
         float groundedY = WorldHeightUtility.CalculateGroundedRootY(root.transform, collider, 3f);
 
-        Assert.That(groundedY, Is.EqualTo(8f));
+        Assert.That(groundedY, Is.EqualTo(9f));
     }
 
     [Test]

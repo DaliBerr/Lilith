@@ -79,6 +79,7 @@
     <Compile Include="Assets\Editor\LinkedTokenDataEditor.cs" />
     <Compile Include="Assets\Editor\CharBulletVisualAssetGenerator.cs" />
     <Compile Include="Assets\Editor\Test\WorldHeightUtilityTests.cs" />
+    <Compile Include="Assets\Editor\Test\PlayerVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\DialogUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthTests.cs" />
     <Compile Include="Assets\Editor\Test\MapGridAuthoringTests.cs" />

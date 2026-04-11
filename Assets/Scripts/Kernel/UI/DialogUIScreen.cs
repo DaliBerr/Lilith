@@ -19,7 +19,7 @@ namespace Kernel.UI
         [SerializeField] private GameObject speakerInfoRoot;
         [SerializeField] private TMP_Text speakerNameText;
 
-        public override Status currentStatus { get; } = StatusList.InMainMenuStatus;
+        public override Status currentStatus { get; } = StatusList.InDialogStatus;
 
         protected override void OnInit()
         {
@@ -244,7 +244,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 在对话界面关闭或销毁时移除 InMainMenu 状态，避免状态残留到后续场景。
+        /// summary: 在对话界面关闭或销毁时移除 InDialog 状态，恢复主场景的正常交互。
         /// param: 无
         /// returns: 无
         /// </summary>

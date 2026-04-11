@@ -11,8 +11,11 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
     private const string TextPath = "Text";
     private const string GlyphPath = "Text/Glyph";
     private const string GroundShadowPath = "GroundShadow";
+    private const float MinimumPlanarDirectionSqrMagnitude = 0.0001f;
+    private const float GroundShadowPitch = 90f;
+    private const float GroundShadowYawOffset = 180f;
 
-    private static readonly Quaternion FlatRotation = Quaternion.Euler(90f, 180f, 0f);
+    private static readonly Quaternion FlatRotation = Quaternion.Euler(GroundShadowPitch, GroundShadowYawOffset, 0f);
 
     [Header("Bindings")]
     [SerializeField] private RectTransform textContainer;
@@ -51,6 +54,11 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
     {
         TryCacheBindings();
         RefreshPresentation();
+    }
+
+    private void LateUpdate()
+    {
+        KeepGroundShadowWorldRotation();
     }
 
     /// <summary>
@@ -108,6 +116,7 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
 
         ApplyTextLayout(groundYLocal);
         ApplyShadowLayout(groundYLocal, planarSize);
+        KeepGroundShadowWorldRotation();
         return true;
     }
 
@@ -166,6 +175,30 @@ public sealed class PlayerVisualPresenter : MonoBehaviour
         groundShadowRenderer.shadowCastingMode = ShadowCastingMode.Off;
         groundShadowRenderer.receiveShadows = false;
         groundShadowRenderer.allowOcclusionWhenDynamic = true;
+    }
+
+    /// <summary>
+    /// summary: 将玩家地影锁定为世界空间的平放姿态，同时只保留玩家当前平面朝向对应的 yaw。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void KeepGroundShadowWorldRotation()
+    {
+        if (!IsSpriteRendererReferenceValid(groundShadowRenderer))
+        {
+            return;
+        }
+
+        Vector3 planarForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        if (planarForward.sqrMagnitude <= MinimumPlanarDirectionSqrMagnitude)
+        {
+            groundShadowRenderer.transform.rotation = FlatRotation;
+            return;
+        }
+
+        planarForward.Normalize();
+        float yaw = Mathf.Atan2(planarForward.x, planarForward.z) * Mathf.Rad2Deg;
+        groundShadowRenderer.transform.rotation = Quaternion.Euler(GroundShadowPitch, yaw + GroundShadowYawOffset, 0f);
     }
 
     private RectTransform FindRectTransform(string relativePath)

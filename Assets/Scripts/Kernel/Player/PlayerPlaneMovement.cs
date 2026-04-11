@@ -14,7 +14,6 @@ using Vocalith.Logging;
 [DisallowMultipleComponent]
 public sealed class PlayerPlaneMovement : MonoBehaviour
 {
-    private const float AcceleratedSpeedMultiplier = 1.5f;
     private const float MinimumLookDirectionSqrMagnitude = 0.0001f;
     private const float MinimumFireInterval = 0.01f;
     private const float FireRaycastDistance = 10000f;
@@ -22,8 +21,18 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     [Header("Movement")]
     [SerializeField, Min(0f)] private float moveSpeed = 5f;
     [SerializeField, Min(0f)] private float rotationSpeed = 720f;
+    [SerializeField, Min(0f)] private float movementSkinWidth = 1f;
+    [SerializeField] private LayerMask movementCollisionMask = Physics.DefaultRaycastLayers;
     [SerializeField] private Rigidbody targetRigidbody;
     [SerializeField] private Camera targetCamera;
+
+    [Header("Dash")]
+    [SerializeField, Min(0f)] private float dashDistance = 6f;
+    [SerializeField, Min(0.01f)] private float dashDuration = 0.18f;
+    [SerializeField, Min(0f)] private float dashStaminaCost = 25f;
+    [SerializeField, Min(0f)] private float staminaMax = 100f;
+    [SerializeField, Min(0f)] private float staminaRegenPerSecond = 20f;
+    [SerializeField, Min(0f)] private float staminaRegenDelay = 0.35f;
 
     [Header("Grounding")]
     [SerializeField] private MapGridAuthoring targetMapGrid;
@@ -41,6 +50,11 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private CompiledAttack compiledAttackCache;
     private int compiledAttackRevision = -1;
     private int lastLoggedCompileFailureRevision = int.MinValue;
+    private float currentStamina;
+    private float staminaRegenResumeTime;
+    private Vector3 lastMoveDirection = Vector3.forward;
+    private Vector3 dashDirection = Vector3.forward;
+    private float dashRemainingDistance;
 
     /// <summary>
     /// summary: 暴露当前玩家实际发射所使用的文字子弹 prefab，供背包预览等系统复用同一份表现资源。
@@ -85,10 +99,11 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         EnsureGroundedRigidbodyConfiguration();
         TrySnapToGameplayPlane();
         SanitizeConfiguration();
+        InitializeRuntimeDashState();
     }
 
     /// <summary>
-    /// summary: 无 Rigidbody 时，按帧直接修改 Transform 的 XZ，并处理射击输入。
+    /// summary: 轮询输入、更新冲刺体力；若当前不存在 Rigidbody，则直接用运动学解算推进 Transform。
     /// param: 无
     /// returns: 无
     /// </summary>
@@ -100,13 +115,15 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return;
         }
 
+        UpdateStamina(Time.deltaTime);
         HandleFireInput();
+        HandleDashInput();
         if (targetRigidbody != null)
         {
             return;
         }
 
-        Vector3 delta = GetMovementDelta(Time.deltaTime);
+        Vector3 delta = ResolveKinematicMovementDelta(GetMovementDelta(Time.deltaTime));
         Vector3 position = transform.position;
         position.x += delta.x;
         position.z += delta.z;
@@ -116,7 +133,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 有 Rigidbody 时，在 FixedUpdate 中推进玩家并旋转朝向。
+    /// summary: 使用运动学刚体在 FixedUpdate 中推进玩家、冲刺和旋转朝向。
     /// param: 无
     /// returns: 无
     /// </summary>
@@ -133,49 +150,24 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return;
         }
 
-        if (targetRigidbody.isKinematic)
-        {
-            targetRigidbody.MovePosition(targetRigidbody.position + GetMovementDelta(Time.fixedDeltaTime));
-        }
-        else
-        {
-            ApplyDynamicRigidbodyVelocity();
-        }
-
+        Vector3 resolvedDelta = ResolveKinematicMovementDelta(GetMovementDelta(Time.fixedDeltaTime));
+        targetRigidbody.MovePosition(targetRigidbody.position + resolvedDelta);
         RotateTowardsMouse(Time.fixedDeltaTime);
     }
 
     /// <summary>
-    /// summary: 对动态 Rigidbody 直接写入平面速度，让碰撞阻挡由物理系统自然处理。
-    /// param: 无
-    /// returns: 无
-    /// </summary>
-    private void ApplyDynamicRigidbodyVelocity()
-    {
-        Vector3 currentVelocity = targetRigidbody.linearVelocity;
-        Vector3 desiredVelocity = GetMovementVelocity();
-        currentVelocity.x = desiredVelocity.x;
-        currentVelocity.z = desiredVelocity.z;
-        targetRigidbody.linearVelocity = currentVelocity;
-    }
-
-    /// <summary>
-    /// summary: 把输入系统的二维向量转换成当前相机视角对应的世界平面速度。
+    /// summary: 把输入系统的二维向量转换成当前相机视角对应的世界平面步行速度。
     /// param: 无
     /// returns: 当前期望的世界平面速度
     /// </summary>
     private Vector3 GetMovementVelocity()
     {
-        Vector2 input = ReadMoveInput();
-        input = Vector2.ClampMagnitude(input, 1f);
-        if (input.sqrMagnitude <= 0f)
+        if (!TryGetCurrentMoveDirection(out Vector3 planarDirection))
         {
             return Vector3.zero;
         }
 
-        float currentMoveSpeed = moveSpeed * (IsAccelerating() ? AcceleratedSpeedMultiplier : 1f);
-        Vector3 planarDirection = GetPlanarMovementDirection(input);
-        return planarDirection * currentMoveSpeed;
+        return planarDirection * moveSpeed;
     }
 
     /// <summary>
@@ -221,13 +213,111 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 根据目标平面速度和时间步长计算本帧位移。
+    /// summary: 根据当前冲刺状态或目标平面速度和时间步长计算本帧位移。
     /// param: deltaTime 本次移动使用的时间步长
     /// returns: 本帧或本物理帧应当累加的世界位移
     /// </summary>
     private Vector3 GetMovementDelta(float deltaTime)
     {
+        if (TryConsumeDashMovementDelta(deltaTime, out Vector3 dashDelta))
+        {
+            return dashDelta;
+        }
+
         return GetMovementVelocity() * deltaTime;
+    }
+
+    /// <summary>
+    /// summary: 解析运动学玩家位移，先阻挡正向穿透，再尝试沿碰撞面滑动。
+    /// param name="desiredDelta": 本帧期望位移
+    /// returns: 处理阻挡与滑墙后的最终安全位移
+    /// </summary>
+    private Vector3 ResolveKinematicMovementDelta(Vector3 desiredDelta)
+    {
+        desiredDelta.y = 0f;
+        return ResolveKinematicMovementDeltaInternal(desiredDelta, 0);
+    }
+
+    /// <summary>
+    /// summary: 递归解析运动学位移，支持一次主阻挡与有限次数滑墙修正。
+    /// param name="desiredDelta": 当前待解析位移
+    /// param name="depth": 当前递归深度
+    /// returns: 当前层最终允许的安全位移
+    /// </summary>
+    private Vector3 ResolveKinematicMovementDeltaInternal(Vector3 desiredDelta, int depth)
+    {
+        const int maxSlideIterations = 2;
+
+        float distance = desiredDelta.magnitude;
+        if (distance <= 0f)
+        {
+            return Vector3.zero;
+        }
+
+        if (groundingReferenceCollider == null || targetRigidbody == null)
+        {
+            return desiredDelta;
+        }
+
+        Vector3 direction = desiredDelta / distance;
+        RaycastHit[] hits = targetRigidbody.SweepTestAll(
+            direction,
+            distance + movementSkinWidth,
+            QueryTriggerInteraction.Ignore);
+
+        RaycastHit? nearestHit = null;
+        float nearestDistance = float.MaxValue;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            RaycastHit hit = hits[i];
+            if (hit.collider == null || hit.collider.isTrigger)
+            {
+                continue;
+            }
+
+            if (IsTransformInsidePlayer(hit.collider.transform))
+            {
+                continue;
+            }
+
+            if (((1 << hit.collider.gameObject.layer) & movementCollisionMask.value) == 0)
+            {
+                continue;
+            }
+
+            if (hit.distance < nearestDistance)
+            {
+                nearestDistance = hit.distance;
+                nearestHit = hit;
+            }
+        }
+
+        if (nearestHit == null)
+        {
+            return desiredDelta;
+        }
+
+        float allowedDistance = Mathf.Max(0f, nearestDistance - movementSkinWidth);
+        Vector3 blockedMove = direction * allowedDistance;
+
+        if (depth >= maxSlideIterations)
+        {
+            return blockedMove;
+        }
+
+        Vector3 remainingDelta = desiredDelta - blockedMove;
+        remainingDelta.y = 0f;
+
+        Vector3 slideDelta = Vector3.ProjectOnPlane(remainingDelta, nearestHit.Value.normal);
+        slideDelta.y = 0f;
+
+        if (slideDelta.sqrMagnitude <= 0.000001f)
+        {
+            return blockedMove;
+        }
+
+        return blockedMove + ResolveKinematicMovementDeltaInternal(slideDelta, depth + 1);
     }
 
     /// <summary>
@@ -248,6 +338,159 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         }
 
         nextFireTime = Time.time + fireInterval;
+    }
+
+    /// <summary>
+    /// summary: 轮询冲刺输入，在按下加速键时触发一次短距离冲刺，而不是持续提高移动速度。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void HandleDashInput()
+    {
+        if (!IsDashTriggered())
+        {
+            return;
+        }
+
+        TryStartDash();
+    }
+
+    /// <summary>
+    /// summary: 启动一次隐藏体力消耗的冲刺；当前体力不足时直接失败。
+    /// param: 无
+    /// returns: 成功进入冲刺时返回 true
+    /// </summary>
+    private bool TryStartDash()
+    {
+        if (dashRemainingDistance > 0f || dashDistance <= 0f || dashDuration <= 0f || currentStamina < dashStaminaCost)
+        {
+            return false;
+        }
+
+        if (!TryGetDashDirection(out Vector3 resolvedDashDirection))
+        {
+            return false;
+        }
+
+        currentStamina = Mathf.Max(0f, currentStamina - dashStaminaCost);
+        dashDirection = resolvedDashDirection;
+        dashRemainingDistance = dashDistance;
+        staminaRegenResumeTime = float.PositiveInfinity;
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 若当前正处于冲刺，则按本帧时间步长消费一段固定距离。
+    /// param: deltaTime 本次移动使用的时间步长
+    /// param: dashDelta 输出的冲刺位移
+    /// returns: 当前帧存在可消费的冲刺距离时返回 true
+    /// </summary>
+    private bool TryConsumeDashMovementDelta(float deltaTime, out Vector3 dashDelta)
+    {
+        dashDelta = Vector3.zero;
+        if (dashRemainingDistance <= 0f || deltaTime <= 0f)
+        {
+            return false;
+        }
+
+        float dashSpeed = dashDistance / dashDuration;
+        float stepDistance = Mathf.Min(dashRemainingDistance, dashSpeed * deltaTime);
+        if (stepDistance <= 0f)
+        {
+            EndDash();
+            return false;
+        }
+
+        dashRemainingDistance -= stepDistance;
+        dashDelta = dashDirection * stepDistance;
+        if (dashRemainingDistance <= 0f)
+        {
+            EndDash();
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 按固定速率恢复隐藏体力槽；冲刺期间和冲刺后的短暂延迟内不会恢复。
+    /// param: deltaTime 本次恢复使用的时间步长
+    /// returns: 无
+    /// </summary>
+    private void UpdateStamina(float deltaTime)
+    {
+        if (deltaTime <= 0f || currentStamina >= staminaMax || Time.time < staminaRegenResumeTime)
+        {
+            return;
+        }
+
+        currentStamina = Mathf.MoveTowards(currentStamina, staminaMax, staminaRegenPerSecond * deltaTime);
+    }
+
+    /// <summary>
+    /// summary: 优先按当前移动输入获取冲刺方向；无法解析时回退到最近一次有效移动方向。
+    /// param: dashDirection 输出的平面冲刺方向
+    /// returns: 成功得到有效方向时返回 true
+    /// </summary>
+    private bool TryGetDashDirection(out Vector3 dashDirection)
+    {
+        if (TryGetCurrentMoveDirection(out Vector3 currentMoveDirection))
+        {
+            dashDirection = currentMoveDirection;
+            return true;
+        }
+
+        dashDirection = lastMoveDirection;
+        dashDirection.y = 0f;
+        if (dashDirection.sqrMagnitude <= MinimumLookDirectionSqrMagnitude)
+        {
+            return false;
+        }
+
+        dashDirection.Normalize();
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 读取当前帧的移动输入并转换成世界平面方向，同时缓存最后一次有效移动方向。
+    /// param: movementDirection 输出的世界平面方向
+    /// returns: 当前存在有效移动输入时返回 true
+    /// </summary>
+    private bool TryGetCurrentMoveDirection(out Vector3 movementDirection)
+    {
+        movementDirection = Vector3.zero;
+        Vector2 input = ReadMoveInput();
+        input = Vector2.ClampMagnitude(input, 1f);
+        if (input.sqrMagnitude <= 0f)
+        {
+            return false;
+        }
+
+        movementDirection = GetPlanarMovementDirection(input);
+        movementDirection.y = 0f;
+        if (movementDirection.sqrMagnitude <= MinimumLookDirectionSqrMagnitude)
+        {
+            return false;
+        }
+
+        movementDirection.Normalize();
+        lastMoveDirection = movementDirection;
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 结束当前冲刺并重置体力恢复延迟。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void EndDash()
+    {
+        if (!float.IsPositiveInfinity(staminaRegenResumeTime))
+        {
+            return;
+        }
+
+        dashRemainingDistance = 0f;
+        staminaRegenResumeTime = Time.time + staminaRegenDelay;
     }
 
     /// <summary>
@@ -513,7 +756,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 统一规范 grounded 玩家刚体，确保角色始终停留在地图平面对应的世界高度上。
+    /// summary: 统一规范 grounded 玩家刚体，强制使用不受重力影响的运动学刚体。
     /// param: 无
     /// returns: 无
     /// </summary>
@@ -525,6 +768,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         }
 
         WorldHeightUtility.TryConfigureGroundedRigidbody(targetRigidbody);
+        targetRigidbody.isKinematic = true;
     }
 
     /// <summary>
@@ -596,6 +840,28 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private void SanitizeConfiguration()
     {
         fireInterval = Mathf.Max(MinimumFireInterval, fireInterval);
+        movementSkinWidth = Mathf.Max(0f, movementSkinWidth);
+        dashDistance = Mathf.Max(0f, dashDistance);
+        dashDuration = Mathf.Max(0.01f, dashDuration);
+        dashStaminaCost = Mathf.Max(0f, dashStaminaCost);
+        staminaMax = Mathf.Max(0f, staminaMax);
+        staminaRegenPerSecond = Mathf.Max(0f, staminaRegenPerSecond);
+        staminaRegenDelay = Mathf.Max(0f, staminaRegenDelay);
+        currentStamina = Mathf.Clamp(currentStamina, 0f, staminaMax);
+    }
+
+    /// <summary>
+    /// summary: 初始化每次实例化都应从满体力开始的隐藏冲刺状态。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void InitializeRuntimeDashState()
+    {
+        currentStamina = staminaMax;
+        staminaRegenResumeTime = 0f;
+        dashRemainingDistance = 0f;
+        lastMoveDirection = Vector3.forward;
+        dashDirection = lastMoveDirection;
     }
 
     private void OnValidate()
@@ -726,11 +992,11 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 从 InputActionManager 读取 PlayerControls 的加速按钮状态。
+    /// summary: 从 InputActionManager 读取 PlayerControls 的冲刺按钮触发状态。
     /// param: 无
-    /// returns: 加速按钮当前按下时返回 true
+    /// returns: 冲刺按钮在本帧按下时返回 true
     /// </summary>
-    private static bool IsAccelerating()
+    private static bool IsDashTriggered()
     {
         InputActionManager inputManager = InputActionManager.Instance;
         if (inputManager == null || !inputManager.IsInitialized || inputManager.IsUnloaded || inputManager.Player == null)
@@ -738,7 +1004,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return false;
         }
 
-        return inputManager.Player.Movement.Accelerate.IsPressed();
+        return inputManager.Player.Movement.Accelerate.WasPressedThisFrame();
     }
 
     /// <summary>
@@ -758,37 +1024,25 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 检查当前是否存在会阻断战斗输入的 UI；背包和暂停菜单打开时玩家的移动、转向与射击都会暂停。
+    /// summary: 检查当前是否存在会阻断战斗输入的 UI；背包、暂停菜单和对话界面打开时玩家的移动、转向与射击都会暂停。
     /// param: 无
-    /// returns: 当前存在背包或暂停菜单状态时返回 true
+    /// returns: 当前存在会冻结战斗交互的状态时返回 true
     /// </summary>
     private static bool IsGameplayInputBlockedByUI()
     {
         return StatusController.HasStatus(StatusList.InBackPackStatus)
             || StatusController.HasStatus(StatusList.InPauseMenuStatus)
+            || StatusController.HasStatus(StatusList.InDialogStatus)
             || StatusController.HasStatus(StatusList.PausedStatus);
     }
 
     /// <summary>
-    /// summary: 背包打开时清零刚体的平面速度，避免动态刚体沿用上一帧的惯性继续滑动。
+    /// summary: 当战斗输入被 UI 阻断时，停止当前冲刺，避免角色继续按上一帧的 dash 轨迹位移。
     /// param: 无
     /// returns: 无
     /// </summary>
     private void StopPlanarMotion()
     {
-        if (targetRigidbody == null || targetRigidbody.isKinematic)
-        {
-            return;
-        }
-
-        Vector3 currentVelocity = targetRigidbody.linearVelocity;
-        if (Mathf.Approximately(currentVelocity.x, 0f) && Mathf.Approximately(currentVelocity.z, 0f))
-        {
-            return;
-        }
-
-        currentVelocity.x = 0f;
-        currentVelocity.z = 0f;
-        targetRigidbody.linearVelocity = currentVelocity;
+        EndDash();
     }
 }

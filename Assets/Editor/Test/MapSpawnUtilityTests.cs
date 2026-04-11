@@ -69,7 +69,7 @@ namespace Kernel.MapGrid.Editor.Tests
             Vector3 expectedCellPosition = authoring.GetCellWorldPosition(4, 1);
             Assert.That(playerObject.transform.position.x, Is.EqualTo(expectedCellPosition.x).Within(0.001f));
             Assert.That(playerObject.transform.position.z, Is.EqualTo(expectedCellPosition.z).Within(0.001f));
-            Assert.That(playerObject.transform.position.y, Is.EqualTo(17.5f).Within(0.001f));
+            Assert.That(playerObject.transform.position.y, Is.EqualTo(18.5f).Within(0.001f));
             Assert.That(rigidbody.position, Is.EqualTo(playerObject.transform.position));
             Assert.That(rigidbody.linearVelocity, Is.EqualTo(Vector3.zero));
             Assert.That(rigidbody.angularVelocity, Is.EqualTo(Vector3.zero));

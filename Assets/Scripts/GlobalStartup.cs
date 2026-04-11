@@ -16,35 +16,20 @@ namespace Kernel
     public sealed class GlobalStartup : MonoBehaviour
     {
         private const string DefaultStartStoryAddress = "Assets/Data/Story/Introduction";
-        private const string DefaultDialogTestAddress = "Assets/Data/Story/DialogTest";
         public static GlobalStartup Instance { get; private set; }
 
         private const string MainSceneName = "Main";
-
-        private enum StartupNarrativePhase
-        {
-            None,
-            StartStory,
-            DialogTest
-        }
 
         [SerializeField] private bool isEnableDevMode = true;
         [Header("Start Story")]
         [SerializeField] private string startStoryAddress = DefaultStartStoryAddress;
         [SerializeField] [Min(0f)] private float startStoryCharactersPerSecond = 24f;
         [SerializeField] [Min(0f)] private float startStoryLineHoldSeconds = 1.2f;
-        [Header("Dialog Test")]
-        [SerializeField] private bool playDialogTestAfterStartStory = true;
-        [SerializeField] private string dialogTestAddress = DefaultDialogTestAddress;
-        [SerializeField] [Min(0f)] private float dialogTestCharactersPerSecond = 36f;
-        [SerializeField] [Min(0f)] private float dialogTestLineHoldSeconds = 0f;
-        [SerializeField] [Min(1)] private int dialogTestMaxCharactersPerEntry = 260;
 
         private bool isBootCompleted;
         private bool isStartGameFlowRequested;
         private bool isLoadingMainScene;
         private bool hasHandedOffToMainScene;
-        private StartupNarrativePhase activeNarrativePhase;
 
         public bool IsBootCompleted => isBootCompleted;
 
@@ -198,55 +183,11 @@ namespace Kernel
             }
 
             UnsubscribeFromNarrativeSequence();
-            activeNarrativePhase = StartupNarrativePhase.StartStory;
-            parser.SequenceCompleted += HandleNarrativeSequenceCompleted;
+            parser.SequenceCompleted += HandleStartStorySequenceCompleted;
 
             if (!parser.TryPlay(CreateStartStoryRequest(), out string errorMessage))
             {
                 GameDebug.LogWarning($"[GlobalStartup] Failed to start story intro: {errorMessage}");
-                UnsubscribeFromNarrativeSequence();
-                RequestEnterMainScene();
-            }
-        }
-
-        /// <summary>
-        /// summary: 在开场 storyteller 完成后压入 Dialog UI，并播放一段多角色测试对白。
-        /// param: 无
-        /// returns: 协程枚举器
-        /// </summary>
-        private IEnumerator StartDialogTestFlowCo()
-        {
-            if (UIManager.Instance == null)
-            {
-                GameDebug.LogError("[GlobalStartup] UIManager is missing. Dialog test will be skipped.");
-                RequestEnterMainScene();
-                yield break;
-            }
-
-            yield return UIManager.Instance.PushScreenAndWait<DialogUIScreen>();
-
-            if (UIManager.Instance.GetTopScreen() is not DialogUIScreen)
-            {
-                GameDebug.LogWarning("[GlobalStartup] DialogUIScreen could not be shown. Falling back to Main scene.");
-                RequestEnterMainScene();
-                yield break;
-            }
-
-            StorySequenceParser parser = StorySequenceParser.Instance;
-            if (parser == null)
-            {
-                GameDebug.LogError("[GlobalStartup] StorySequenceParser is missing. Dialog test will be skipped.");
-                RequestEnterMainScene();
-                yield break;
-            }
-
-            UnsubscribeFromNarrativeSequence();
-            activeNarrativePhase = StartupNarrativePhase.DialogTest;
-            parser.SequenceCompleted += HandleNarrativeSequenceCompleted;
-
-            if (!parser.TryPlay(CreateDialogTestRequest(), out string errorMessage))
-            {
-                GameDebug.LogWarning($"[GlobalStartup] Failed to start dialog test: {errorMessage}");
                 UnsubscribeFromNarrativeSequence();
                 RequestEnterMainScene();
             }
@@ -371,47 +312,20 @@ namespace Kernel
         /// param name="result": 开场剧情的结束结果
         /// returns: 无
         /// </summary>
-        private void HandleNarrativeSequenceCompleted(StorySequenceResult result)
+        private void HandleStartStorySequenceCompleted(StorySequenceResult result)
         {
-            StartupNarrativePhase completedPhase = activeNarrativePhase;
             UnsubscribeFromNarrativeSequence();
 
-            switch (completedPhase)
+            if (result.Status == StorySequenceCompletionStatus.Failed)
             {
-                case StartupNarrativePhase.StartStory:
-                    if (result.Status == StorySequenceCompletionStatus.Failed)
-                    {
-                        GameDebug.LogWarning($"[GlobalStartup] Story intro failed: {result.ErrorMessage}");
-                    }
-                    else if (result.Status == StorySequenceCompletionStatus.Cancelled)
-                    {
-                        GameDebug.LogWarning("[GlobalStartup] Story intro was cancelled. Falling back to Main scene.");
-                    }
-
-                    if (result.Status == StorySequenceCompletionStatus.Completed && ShouldPlayDialogTestAfterStartStory())
-                    {
-                        StartCoroutine(StartDialogTestFlowCo());
-                        return;
-                    }
-
-                    RequestEnterMainScene();
-                    return;
-                case StartupNarrativePhase.DialogTest:
-                    if (result.Status == StorySequenceCompletionStatus.Failed)
-                    {
-                        GameDebug.LogWarning($"[GlobalStartup] Dialog test failed: {result.ErrorMessage}");
-                    }
-                    else if (result.Status == StorySequenceCompletionStatus.Cancelled)
-                    {
-                        GameDebug.LogWarning("[GlobalStartup] Dialog test was cancelled. Falling back to Main scene.");
-                    }
-
-                    RequestEnterMainScene();
-                    return;
-                default:
-                    RequestEnterMainScene();
-                    return;
+                GameDebug.LogWarning($"[GlobalStartup] Story intro failed: {result.ErrorMessage}");
             }
+            else if (result.Status == StorySequenceCompletionStatus.Cancelled)
+            {
+                GameDebug.LogWarning("[GlobalStartup] Story intro was cancelled. Falling back to Main scene.");
+            }
+
+            RequestEnterMainScene();
         }
 
         /// <summary>
@@ -433,8 +347,7 @@ namespace Kernel
                 return;
             }
 
-            parser.SequenceCompleted -= startup.HandleNarrativeSequenceCompleted;
-            startup.activeNarrativePhase = StartupNarrativePhase.None;
+            parser.SequenceCompleted -= startup.HandleStartStorySequenceCompleted;
         }
 
         /// <summary>
@@ -451,34 +364,6 @@ namespace Kernel
                 LineHoldSeconds = startStoryLineHoldSeconds,
                 AllowDefaultSkipInput = true
             };
-        }
-
-        /// <summary>
-        /// summary: 构造 Dialog UI 测试对白的播放请求；当前关闭默认左键跳过，改由 DialogUIScreen 自己接管推进输入。
-        /// param: 无
-        /// returns: 可直接提交给 StorySequenceParser 的请求对象
-        /// </summary>
-        private StorySequenceRequest CreateDialogTestRequest()
-        {
-            return new StorySequenceRequest
-            {
-                Address = string.IsNullOrWhiteSpace(dialogTestAddress) ? DefaultDialogTestAddress : dialogTestAddress.Trim(),
-                CharactersPerSecond = dialogTestCharactersPerSecond,
-                LineHoldSeconds = dialogTestLineHoldSeconds,
-                AllowDefaultSkipInput = false,
-                MaxCharactersPerEntry = Mathf.Max(1, dialogTestMaxCharactersPerEntry),
-                WaitForAdvanceInputAfterEntryReveal = true
-            };
-        }
-
-        /// <summary>
-        /// summary: 判断当前是否需要在 storyteller 完成后插入 Dialog UI 测试对白。
-        /// param: 无
-        /// returns: 允许插入测试对白时返回 true
-        /// </summary>
-        private bool ShouldPlayDialogTestAfterStartStory()
-        {
-            return playDialogTestAfterStartStory && !string.IsNullOrWhiteSpace(dialogTestAddress);
         }
 
         /// <summary>

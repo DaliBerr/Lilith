@@ -20,6 +20,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
     private PermanentProfileData currentProfile = PermanentProfileData.CreateDefault();
     private int activeSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
     private bool hasLoadedProfile;
+    private bool shouldShowOpeningGuideOnMainSceneEntry;
 
     public static RuntimeSaveService Instance { get; private set; }
 
@@ -62,6 +63,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
         currentProfile = PermanentProfileData.CreateDefault();
         hasLoadedProfile = false;
         activeSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
+        shouldShowOpeningGuideOnMainSceneEntry = false;
     }
 
     private void OnDestroy()
@@ -155,9 +157,11 @@ public sealed class RuntimeSaveService : MonoBehaviour
         activeSlotIndex = slotIndex;
         hasLoadedProfile = false;
         currentProfile = PermanentProfileData.CreateDefault();
+        shouldShowOpeningGuideOnMainSceneEntry = false;
 
         string filePath = SavePathUtility.GetProfileFilePath(slotIndex);
         isNewSlot = !File.Exists(filePath);
+        shouldShowOpeningGuideOnMainSceneEntry = isNewSlot;
         if (isNewSlot)
         {
             currentProfile = PermanentProfileData.CreateDefault();
@@ -195,6 +199,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
                 activeSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
                 hasLoadedProfile = false;
                 currentProfile = PermanentProfileData.CreateDefault();
+                shouldShowOpeningGuideOnMainSceneEntry = false;
                 ApplyProfileToRuntime();
             }
 
@@ -282,6 +287,22 @@ public sealed class RuntimeSaveService : MonoBehaviour
         return EnsureProfileLoadedInternal(applyToRuntime: false)
             ? currentProfile.Clone()
             : PermanentProfileData.CreateDefault();
+    }
+
+    /// <summary>
+    /// summary: 判断当前所选档位在本次进入 Main 场景后是否还需要播放一次开场引导对话；消费后会自动清除标记。
+    /// param: 无
+    /// returns: 当前存在待消费的开场引导标记时返回 true
+    /// </summary>
+    public bool TryConsumePendingOpeningGuideOnMainSceneEntry()
+    {
+        if (!shouldShowOpeningGuideOnMainSceneEntry)
+        {
+            return false;
+        }
+
+        shouldShowOpeningGuideOnMainSceneEntry = false;
+        return true;
     }
 
     /// <summary>

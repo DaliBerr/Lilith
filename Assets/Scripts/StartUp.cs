@@ -12,7 +12,16 @@ namespace Kernel
     /// </summary>
     public sealed class Startup : MonoBehaviour
     {
+        private const string DefaultOpeningGuideAddress = "Assets/Data/Story/DialogTest";
+
         public static Startup Instance { get; private set; }
+
+        [Header("Opening Guide")]
+        [SerializeField] private bool playOpeningGuideOnNewProfile = true;
+        [SerializeField] private string openingGuideAddress = DefaultOpeningGuideAddress;
+        [SerializeField] [Min(0f)] private float openingGuideCharactersPerSecond = 36f;
+        [SerializeField] [Min(0f)] private float openingGuideLineHoldSeconds = 0f;
+        [SerializeField] [Min(1)] private int openingGuideMaxCharactersPerEntry = 260;
 
         private bool isSceneBootCompleted;
 
@@ -61,6 +70,8 @@ namespace Kernel
                 StatusController.RemoveStatus(StatusList.GameLoadingStatus);
             }
 
+            yield return StartCoroutine(PlayOpeningGuideIfNeededCo());
+
             isSceneBootCompleted = true;
             GlobalStartup.Instance?.NotifyMainSceneStartupComplete();
         }
@@ -108,6 +119,117 @@ namespace Kernel
             }
 
             yield return UIManager.Instance.PushScreenAndWait<MainUIScreen>();
+        }
+
+        /// <summary>
+        /// summary: 若当前档位是新档，则在 MainUIScreen 上叠加开场引导对话 modal；结束后关闭该 modal。
+        /// param: 无
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator PlayOpeningGuideIfNeededCo()
+        {
+            if (!ShouldPlayOpeningGuide())
+            {
+                yield break;
+            }
+
+            RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
+            if (saveService == null || !saveService.TryConsumePendingOpeningGuideOnMainSceneEntry())
+            {
+                yield break;
+            }
+
+            if (UIManager.Instance == null)
+            {
+                GameDebug.LogWarning("[Startup] UIManager is missing. Opening guide will be skipped.");
+                yield break;
+            }
+
+            yield return UIManager.Instance.ShowModalAndWait<DialogUIScreen>();
+            if (UIManager.Instance.GetTopModal() is not DialogUIScreen dialogScreen)
+            {
+                GameDebug.LogWarning("[Startup] DialogUIScreen could not be shown. Opening guide will be skipped.");
+                yield break;
+            }
+
+            StorySequenceParser parser = StorySequenceParser.Instance;
+            if (parser == null)
+            {
+                GameDebug.LogWarning("[Startup] StorySequenceParser is missing. Opening guide will be skipped.");
+                yield return UIManager.Instance.PopModalAndWait();
+                yield break;
+            }
+
+            bool isCompleted = false;
+            StorySequenceResult guideResult = default;
+
+            void HandleGuideCompleted(StorySequenceResult result)
+            {
+                guideResult = result;
+                isCompleted = true;
+            }
+
+            parser.SequenceCompleted += HandleGuideCompleted;
+            try
+            {
+                if (!parser.TryPlay(CreateOpeningGuideRequest(), out string errorMessage))
+                {
+                    GameDebug.LogWarning($"[Startup] Failed to start opening guide dialog: {errorMessage}");
+                    yield return UIManager.Instance.PopModalAndWait();
+                    yield break;
+                }
+
+                while (!isCompleted)
+                {
+                    yield return null;
+                }
+            }
+            finally
+            {
+                parser.SequenceCompleted -= HandleGuideCompleted;
+            }
+
+            if (guideResult.Status == StorySequenceCompletionStatus.Failed)
+            {
+                GameDebug.LogWarning($"[Startup] Opening guide dialog failed: {guideResult.ErrorMessage}");
+            }
+            else if (guideResult.Status == StorySequenceCompletionStatus.Cancelled)
+            {
+                GameDebug.LogWarning("[Startup] Opening guide dialog was cancelled.");
+            }
+
+            if (UIManager.Instance.GetTopModal() == dialogScreen)
+            {
+                yield return UIManager.Instance.PopModalAndWait();
+            }
+        }
+
+        /// <summary>
+        /// summary: 判断当前是否允许在 Main 场景首进时播放开场引导对话。
+        /// param: 无
+        /// returns: 功能启用且对话地址有效时返回 true
+        /// </summary>
+        private bool ShouldPlayOpeningGuide()
+        {
+            return playOpeningGuideOnNewProfile && !string.IsNullOrWhiteSpace(openingGuideAddress);
+        }
+
+        /// <summary>
+        /// summary: 构造 Main 场景开场引导对话请求，使用分页对白并等待玩家手动推进。
+        /// param: 无
+        /// returns: 可直接提交给 StorySequenceParser 的请求对象
+        /// </summary>
+        private StorySequenceRequest CreateOpeningGuideRequest()
+        {
+            return new StorySequenceRequest
+            {
+                Address = string.IsNullOrWhiteSpace(openingGuideAddress) ? DefaultOpeningGuideAddress : openingGuideAddress.Trim(),
+                CharactersPerSecond = openingGuideCharactersPerSecond,
+                LineHoldSeconds = openingGuideLineHoldSeconds,
+                AllowDefaultSkipInput = false,
+                MaxCharactersPerEntry = Mathf.Max(1, openingGuideMaxCharactersPerEntry),
+                WaitForAdvanceInputAfterEntryReveal = true
+            };
         }
     }
 }

@@ -263,12 +263,13 @@ public static class EnemyGameplayPauseGuard
     /// <summary>
     /// summary: 判断当前是否存在会暂停敌人行为的 UI 或游戏状态。
     /// param: 无
-    /// returns: 当暂停菜单、背包或显式 Paused 状态存在时返回 true
+    /// returns: 当暂停菜单、背包、对话界面或显式 Paused 状态存在时返回 true
     /// </summary>
     public static bool ShouldSuspendEnemyActions()
     {
         return StatusController.HasStatus(StatusList.InBackPackStatus)
             || StatusController.HasStatus(StatusList.InPauseMenuStatus)
+            || StatusController.HasStatus(StatusList.InDialogStatus)
             || StatusController.HasStatus(StatusList.PausedStatus);
     }
 }

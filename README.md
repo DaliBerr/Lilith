@@ -54,11 +54,11 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs)
   - 位于 `StartUp` 场景
   - 负责日志初始化、本地化初始化、`Addressables` 初始化、`Kernel.GameState.StatusController` 初始化
-  - 负责压入启动菜单；开始流程会先弹出 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 选择四个固定栏位，条目需要先选中、再点一次才会进入；新栏位进入开场 storyteller，结束后会继续串接 [`Assets/Scripts/Kernel/UI/DialogUIScreen.cs`](Assets/Scripts/Kernel/UI/DialogUIScreen.cs) 测试对白，再切到 `Main`；已有栏位直接切到 `Main`
+  - 负责压入启动菜单；开始流程会先弹出 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 选择四个固定栏位，条目需要先选中、再点一次才会进入；新栏位先进入开场 storyteller，再切到 `Main`；已有栏位直接切到 `Main`
 - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
   - 文件名是 `StartUp.cs`，类名是 `Startup`
   - 位于 `Main` 场景
-  - 负责在全局启动完成后压入 [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)
+  - 负责在全局启动完成后压入 [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)，并在新档首次进入 `Main` 时叠加显示 [`Assets/Scripts/Kernel/UI/DialogUIScreen.cs`](Assets/Scripts/Kernel/UI/DialogUIScreen.cs)（modal）作为开场引导对话
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
   - 当前包含两张并存地图：`StartRoomMapRoot` 作为固定起始房间，`CombatMapRoot` 作为单局战斗地图
   - [`Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 负责玩家初始出生、进入战斗、战斗完成返回起始房间的流转
@@ -104,7 +104,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - 子弹视觉配置：[`Assets/Data/BulletVisuals`](Assets/Data/BulletVisuals)
 - 敌人定义：[`Assets/Data/Enemies`](Assets/Data/Enemies)
 - 波次定义：[`Assets/Data/Waves`](Assets/Data/Waves)
-- 开场剧情文本与 Dialog UI 测试对白：[`Assets/Data/Story`](Assets/Data/Story)
+- 开场剧情文本与 Main 场景开场引导对话：[`Assets/Data/Story`](Assets/Data/Story)
 - 业务 UI prefab：[`Assets/Prefabs/UI`](Assets/Prefabs/UI)
 - 敌人 prefab：[`Assets/Prefabs/Enemy`](Assets/Prefabs/Enemy)
 - 子弹 prefab：[`Assets/Prefabs/Bullet`](Assets/Prefabs/Bullet)

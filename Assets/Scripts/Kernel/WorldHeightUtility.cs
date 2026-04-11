@@ -7,12 +7,14 @@ namespace Kernel
     /// </summary>
     public static class WorldHeightUtility
     {
+        private const float AdditionalGroundedHeight = 1f;
+
         /// <summary>
-        /// summary: 计算一个 grounded 根节点在目标地图平面上应该使用的世界 Y 值。
+        /// summary: 计算一个 grounded 根节点在目标地图平面上应该使用的世界 Y 值，并额外抬高 1 个世界单位。
         /// param: root 需要被抬高到地面的根节点
         /// param: referenceCollider 用于确定落地底边的参考 Collider
         /// param: planeY 目标地图平面的世界 Y
-        /// returns: 让参考 Collider 底边贴住地图平面后的根节点世界 Y
+        /// returns: 让参考 Collider 底边贴住地图平面后，再额外抬高 1 个世界单位的根节点世界 Y
         /// </summary>
         public static float CalculateGroundedRootY(Transform root, Collider referenceCollider, float planeY)
         {
@@ -22,7 +24,7 @@ namespace Kernel
             }
 
             float bottomOffsetFromRoot = referenceCollider.bounds.min.y - root.position.y;
-            return planeY - bottomOffsetFromRoot;
+            return planeY - bottomOffsetFromRoot + AdditionalGroundedHeight;
         }
 
         /// <summary>

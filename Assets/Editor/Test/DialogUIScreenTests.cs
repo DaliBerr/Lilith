@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
+using Kernel.GameState;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
@@ -72,6 +73,17 @@ public sealed class DialogUIScreenTests
 
         Assert.That(dialogText.text, Is.EqualTo(string.Empty));
         Assert.That(speakerInfoRoot.activeSelf, Is.False);
+    }
+
+    [Test]
+    public void DialogUIScreen_UsesInDialogStatus()
+    {
+        DialogUIScreen screen = CreateDialogScreen(
+            out _,
+            out _,
+            out _);
+
+        Assert.That(screen.currentStatus.StatusName, Is.EqualTo(StatusList.InDialogStatus.StatusName));
     }
 
     private DialogUIScreen CreateDialogScreen(out TMP_Text dialogText, out GameObject speakerInfoRoot, out TMP_Text speakerNameText)

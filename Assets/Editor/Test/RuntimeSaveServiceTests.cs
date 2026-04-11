@@ -47,6 +47,20 @@ public sealed class RuntimeSaveServiceTests
     }
 
     [Test]
+    public void SelectProfileSlot_NewSlot_QueuesOpeningGuideForMainSceneOnce()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(0, out bool isNewSlot), Is.True);
+
+        Assert.That(isNewSlot, Is.True);
+        Assert.That(saveService.TryConsumePendingOpeningGuideOnMainSceneEntry(), Is.True);
+        Assert.That(saveService.TryConsumePendingOpeningGuideOnMainSceneEntry(), Is.False);
+    }
+
+    [Test]
     public void SelectProfileSlot_ExistingSlot_RestoresRemnantWalletCount()
     {
         PrepareCleanSaveEnvironment();
@@ -66,6 +80,22 @@ public sealed class RuntimeSaveServiceTests
         Assert.That(selectSuccess, Is.True);
         Assert.That(secondSelectionIsNew, Is.False);
         Assert.That(wallet.CurrentRemnants, Is.EqualTo(12));
+    }
+
+    [Test]
+    public void SelectProfileSlot_ExistingSlot_DoesNotQueueOpeningGuideForMainScene()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(1, out _), Is.True);
+        Assert.That(saveService.TryConsumePendingOpeningGuideOnMainSceneEntry(), Is.True);
+
+        Assert.That(saveService.SelectProfileSlot(1, out bool secondSelectionIsNew), Is.True);
+
+        Assert.That(secondSelectionIsNew, Is.False);
+        Assert.That(saveService.TryConsumePendingOpeningGuideOnMainSceneEntry(), Is.False);
     }
 
     [Test]
