@@ -30,16 +30,11 @@ MonoBehaviour:
   - m_GUID: 59d03886b44b91d4ca4a8ac3ed4d43c8
     m_Address: Assets/Prefabs/UI/Profile Popup
     m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 5b774ac9e1a27d54d8a0597f14c48db6
-    m_Address: Assets/Prefabs/UI/Storyteller Panel
-    m_ReadOnly: 0
     m_SerializedLabels:
     - UI
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: b5f17e7d729b2fa41988052758c3d005
-    m_Address: Assets/Prefabs/UI/Dialog UI
+  - m_GUID: 5b774ac9e1a27d54d8a0597f14c48db6
+    m_Address: Assets/Prefabs/UI/Storyteller Panel
     m_ReadOnly: 0
     m_SerializedLabels:
     - UI
@@ -50,8 +45,20 @@ MonoBehaviour:
     m_SerializedLabels:
     - UI
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 776b344ab9bc207479d04ef2033805d0
+    m_Address: Assets/Prefabs/UI/Boss Info UI
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 82408dff0a3e3ff448f8f37cea4da3da
     m_Address: Assets/Prefabs/UI/Info Popup
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b5f17e7d729b2fa41988052758c3d005
+    m_Address: Assets/Prefabs/UI/Dialog UI
     m_ReadOnly: 0
     m_SerializedLabels:
     - UI

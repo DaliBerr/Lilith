@@ -77,6 +77,46 @@ public sealed class TokenSelectModalTests
     }
 
     [Test]
+    public void BulletTokenLibrary_SampleChoices_ExcludesZeroWeightTokens()
+    {
+        CoreTokenData fire = CreateToken<CoreTokenData>("fire", "Fire", "Fire core");
+        CoreTokenData ice = CreateToken<CoreTokenData>("ice", "Ice", "Ice core");
+        BulletTokenLibrary library = CreateRuntimeLibrary(fire, ice);
+        library.SetTokenWeight(fire, 1f);
+        library.SetTokenWeight(ice, 0f);
+
+        for (int i = 0; i < 8; i++)
+        {
+            List<PlaceableTokenData> sample = library.SampleChoices(new VocalithRandom(1000 + i), desiredCount: 1);
+            Assert.That(sample.Count, Is.EqualTo(1));
+            Assert.That(sample[0], Is.SameAs(fire));
+        }
+    }
+
+    [Test]
+    public void BulletTokenLibrary_SampleChoices_IsDeterministicWithSeededRandom()
+    {
+        CoreTokenData fire = CreateToken<CoreTokenData>("fire", "Fire", "Fire core");
+        CoreTokenData ice = CreateToken<CoreTokenData>("ice", "Ice", "Ice core");
+        CoreTokenData thunder = CreateToken<CoreTokenData>("thunder", "Thunder", "Thunder core");
+        CoreTokenData edge = CreateToken<CoreTokenData>("edge", "Edge", "Edge core");
+        BulletTokenLibrary library = CreateRuntimeLibrary(fire, ice, thunder, edge);
+        library.SetTokenWeight(fire, 6f);
+        library.SetTokenWeight(ice, 3f);
+        library.SetTokenWeight(thunder, 2f);
+        library.SetTokenWeight(edge, 1f);
+
+        List<PlaceableTokenData> first = library.SampleChoices(new VocalithRandom(24680), desiredCount: 3);
+        List<PlaceableTokenData> second = library.SampleChoices(new VocalithRandom(24680), desiredCount: 3);
+
+        Assert.That(first.Count, Is.EqualTo(second.Count));
+        for (int i = 0; i < first.Count; i++)
+        {
+            Assert.That(first[i], Is.SameAs(second[i]));
+        }
+    }
+
+    [Test]
     public void SelectionView_BindsTextsAndClickInvokesOwnerCallback()
     {
         BulletTokenSelectionView view = CreateSelectionViewInstance();

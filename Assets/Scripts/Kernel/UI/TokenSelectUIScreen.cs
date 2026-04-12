@@ -261,7 +261,7 @@ namespace Kernel.UI
 
             VocalithRandom rng = selectionRandom ??= CreateDefaultRandom();
             int desiredCount = choiceCountOverride > 0 ? choiceCountOverride : -1;
-            List<PlaceableTokenData> sampledTokens = BulletTokenSelectionSampler.SampleChoices(tokenPool, rng, desiredCount);
+            List<PlaceableTokenData> sampledTokens = bulletTokenLibrary.SampleChoices(rng, desiredCount);
             if (sampledTokens == null || sampledTokens.Count <= 0)
             {
                 LogMissingConfiguration("No valid tokens were sampled.");

@@ -51,6 +51,7 @@
   <ItemGroup>
     <Compile Include="Assets\Editor\Test\BackPackAttackPreviewControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\WaveDefinitionTests.cs" />
+    <Compile Include="Assets\Editor\Test\BossInfoUIScreenTests.cs" />
     <Compile Include="Assets\Editor\SystemCallBlocker.cs" />
     <Compile Include="Assets\Editor\Test\WaveManagerTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyDefinitionBinderTests.cs" />
@@ -63,6 +64,7 @@
     <Compile Include="Assets\Editor\Test\CameraOcclusionFaderTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyBulletTokenDropperTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyAttackExtensionTests.cs" />
+    <Compile Include="Assets\Editor\Test\ScriptableObjectOnValidateTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackInventoryTests.cs" />
     <Compile Include="Assets\Editor\Test\BulletTokenPickupTests.cs" />
     <Compile Include="Assets\Editor\Test\GlobalModeSettingsServiceTests.cs" />

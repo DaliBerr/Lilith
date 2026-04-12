@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Vocalith.EventSystem;
 using VocalithRandom = Vocalith.Random;
 
 /// <summary>
@@ -27,6 +28,8 @@ public sealed class WaveManager : MonoBehaviour
     private bool isSequenceRunning;
     private bool hasCompletedSequence;
     private VocalithRandom randomSource;
+    private Enemy activeBossEnemy;
+    private string activeBossDisplayName = string.Empty;
 
     public bool IsSequenceRunning => isSequenceRunning;
 
@@ -45,6 +48,11 @@ public sealed class WaveManager : MonoBehaviour
         {
             TryStartSequence();
         }
+    }
+
+    private void OnDisable()
+    {
+        ClearActiveBossTracking(publishEndedEvent: activeBossEnemy != null, endedByDeath: false);
     }
 
     /// <summary>
@@ -76,6 +84,7 @@ public sealed class WaveManager : MonoBehaviour
             return false;
         }
 
+        ClearActiveBossTracking(publishEndedEvent: activeBossEnemy != null, endedByDeath: false);
         aliveEnemies.Clear();
         spawnedCountsPerEntry.Clear();
         currentWaveIndex = -1;
@@ -152,6 +161,7 @@ public sealed class WaveManager : MonoBehaviour
             spawnedCountsPerEntry[entryIndex]++;
         }
 
+        TryStartBossEncounter(spawnEntry, spawnedEnemy);
         nextSpawnTime = currentTime + currentWave.SpawnIntervalSeconds;
     }
 
@@ -270,6 +280,7 @@ public sealed class WaveManager : MonoBehaviour
         bool shouldNotifyCompletion = isSequenceRunning && !hasCompletedSequence;
         isSequenceRunning = false;
         hasCompletedSequence = true;
+        ClearActiveBossTracking(publishEndedEvent: activeBossEnemy != null, endedByDeath: false);
         spawnedCountsPerEntry.Clear();
         nextSpawnTime = NoScheduledTime;
         nextWaveStartTime = NoScheduledTime;
@@ -340,5 +351,74 @@ public sealed class WaveManager : MonoBehaviour
     private void EnsureRandomSource()
     {
         randomSource ??= new VocalithRandom();
+    }
+
+    /// <summary>
+    /// summary: 当当前刷怪条目声明为 Boss 时，注册当前 Boss 生命周期并向事件总线广播开战事件。
+    /// param: spawnEntry 当前刷出的波次敌人条目
+    /// param: spawnedEnemy 当前实际生成出的敌人实例
+    /// returns: 无
+    /// </summary>
+    private void TryStartBossEncounter(WaveEnemySpawnEntry spawnEntry, Enemy spawnedEnemy)
+    {
+        if (!spawnEntry.IsBossEncounter || spawnedEnemy == null)
+        {
+            return;
+        }
+
+        if (activeBossEnemy != null && activeBossEnemy != spawnedEnemy)
+        {
+            return;
+        }
+
+        activeBossEnemy = spawnedEnemy;
+        activeBossDisplayName = spawnEntry.ResolveBossDisplayName();
+        activeBossEnemy.Died -= HandleActiveBossDied;
+        activeBossEnemy.Died += HandleActiveBossDied;
+
+        EventManager.eventBus.Publish(new BossEncounterStartedEvent(
+            activeBossEnemy,
+            activeBossDisplayName,
+            activeBossEnemy.CurrentHealth,
+            activeBossEnemy.MaxHealth));
+    }
+
+    /// <summary>
+    /// summary: 当当前 Boss 死亡时，结束本次 Boss 遭遇并广播死亡驱动的结束事件。
+    /// param: boss 当前死亡的 Boss 实例
+    /// returns: 无
+    /// </summary>
+    private void HandleActiveBossDied(Enemy boss)
+    {
+        if (boss == null || boss != activeBossEnemy)
+        {
+            return;
+        }
+
+        ClearActiveBossTracking(publishEndedEvent: true, endedByDeath: true);
+    }
+
+    /// <summary>
+    /// summary: 清理当前 Boss 生命周期绑定，并按需向事件总线广播一次遭遇结束事件。
+    /// param: publishEndedEvent 是否广播结束事件
+    /// param: endedByDeath 本次结束是否由 Boss 死亡触发
+    /// returns: 无
+    /// </summary>
+    private void ClearActiveBossTracking(bool publishEndedEvent, bool endedByDeath)
+    {
+        Enemy bossToClear = activeBossEnemy;
+        string displayName = activeBossDisplayName;
+        if (bossToClear != null)
+        {
+            bossToClear.Died -= HandleActiveBossDied;
+        }
+
+        activeBossEnemy = null;
+        activeBossDisplayName = string.Empty;
+
+        if (publishEndedEvent && bossToClear != null)
+        {
+            EventManager.eventBus.Publish(new BossEncounterEndedEvent(bossToClear, displayName, endedByDeath));
+        }
     }
 }

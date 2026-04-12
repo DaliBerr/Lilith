@@ -210,12 +210,53 @@ public struct WaveEnemySpawnEntry
     public EnemyDefinition enemyDefinition;
     [Min(0)] public int spawnCount;
     public EnemyWaveConfig enemyConfig;
+    public bool isBossEncounter;
+    public string bossDisplayNameOverride;
 
-    public WaveEnemySpawnEntry(EnemyDefinition enemyDefinition, int spawnCount, EnemyWaveConfig enemyConfig)
+    public WaveEnemySpawnEntry(EnemyDefinition enemyDefinition, int spawnCount, EnemyWaveConfig enemyConfig, bool isBossEncounter = false, string bossDisplayNameOverride = "")
     {
         this.enemyDefinition = enemyDefinition;
         this.spawnCount = spawnCount;
         this.enemyConfig = enemyConfig;
+        this.isBossEncounter = isBossEncounter;
+        this.bossDisplayNameOverride = bossDisplayNameOverride ?? string.Empty;
+    }
+
+    public bool IsBossEncounter => isBossEncounter;
+
+    /// <summary>
+    /// summary: 规整当前波次敌人条目里的基础配置与 Boss 展示文案。
+    /// param: 无
+    /// returns: 经过规范化后的波次敌人条目副本
+    /// </summary>
+    public WaveEnemySpawnEntry GetSanitized()
+    {
+        WaveEnemySpawnEntry sanitized = this;
+        sanitized.spawnCount = Mathf.Max(0, sanitized.spawnCount);
+        sanitized.bossDisplayNameOverride = sanitized.bossDisplayNameOverride != null
+            ? sanitized.bossDisplayNameOverride.Trim()
+            : string.Empty;
+        return sanitized;
+    }
+
+    /// <summary>
+    /// summary: 解析当前 Boss UI 应展示的名称；未覆写时回退到敌人定义名。
+    /// param: 无
+    /// returns: 当前条目建议展示的 Boss 名称
+    /// </summary>
+    public string ResolveBossDisplayName()
+    {
+        if (!string.IsNullOrWhiteSpace(bossDisplayNameOverride))
+        {
+            return bossDisplayNameOverride.Trim();
+        }
+
+        if (enemyDefinition != null)
+        {
+            return enemyDefinition.DisplayName;
+        }
+
+        return string.Empty;
     }
 }
 

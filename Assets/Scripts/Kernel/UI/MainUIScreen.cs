@@ -58,6 +58,7 @@ namespace Kernel.UI
             TryAutoBindReferences();
             BindButtonCallbacks();
             RefreshSpellPanel();
+            ui?.EnsureOverlay<BossInfoUIScreen>();
         }
 
         protected override void OnBeforeShow()

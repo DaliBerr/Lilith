@@ -38,6 +38,7 @@ namespace Vocalith.UI
         readonly Stack<UIScreen> screenStack = new();
         readonly Stack<UIScreen> modalStack = new();
         readonly Dictionary<GameObject, AsyncOperationHandle<GameObject>> addrInstances = new();
+        readonly Dictionary<Type, UIScreen> overlayRegistry = new();
 
         void Awake()
         {
@@ -359,6 +360,45 @@ namespace Vocalith.UI
 
         public void HideAndDestroy(UIScreen s) => StartCoroutine(DestroyAfterHide(s));
 
+        /// <summary>
+        /// 确保指定 Overlay prefab 已实例化并完成初始化；已存在时不会重复创建。
+        /// </summary>
+        /// <typeparam name="T">目标 Overlay 的 UIScreen 类型。</typeparam>
+        /// <returns>无。</returns>
+        public void EnsureOverlay<T>() where T : UIScreen
+        {
+            StartCoroutine(RunNavigationLockedWait(EnsureOverlayCo<T>()));
+        }
+
+        /// <summary>
+        /// 同步等待指定 Overlay prefab 完成实例化与初始化。
+        /// </summary>
+        /// <typeparam name="T">目标 Overlay 的 UIScreen 类型。</typeparam>
+        /// <returns>协程枚举器。</returns>
+        public IEnumerator EnsureOverlayAndWait<T>() where T : UIScreen
+        {
+            yield return RunNavigationLockedWait(EnsureOverlayCo<T>());
+        }
+
+        /// <summary>
+        /// 尝试获取当前已缓存的 Overlay 实例；已销毁对象会被自动剔除。
+        /// </summary>
+        /// <typeparam name="T">目标 Overlay 的 UIScreen 类型。</typeparam>
+        /// <param name="overlay">输出的 Overlay 实例。</param>
+        /// <returns>命中可用实例时返回 true。</returns>
+        public bool TryGetOverlay<T>(out T overlay) where T : UIScreen
+        {
+            if (overlayRegistry.TryGetValue(typeof(T), out UIScreen existing) && existing != null)
+            {
+                overlay = existing as T;
+                return overlay != null;
+            }
+
+            overlayRegistry.Remove(typeof(T));
+            overlay = null;
+            return false;
+        }
+
         // --------- 内部：加载/实例化 ---------
         public IEnumerator PrePushScreenCo<T>() where T : UIScreen
         {
@@ -439,6 +479,25 @@ namespace Vocalith.UI
                 NormalizeRect(go.transform as RectTransform);
             }
             onReady?.Invoke(screen);
+        }
+
+        IEnumerator EnsureOverlayCo<T>() where T : UIScreen
+        {
+            if (TryGetOverlay(out T existingOverlay) && existingOverlay != null)
+            {
+                yield break;
+            }
+
+            T overlay = null;
+            yield return CreateScreenCo<T>(UILayer.Overlay, s => overlay = s);
+            if (overlay == null)
+            {
+                yield break;
+            }
+
+            overlay.gameObject.SetActive(true);
+            overlay.setAlpha(0f);
+            overlayRegistry[typeof(T)] = overlay;
         }
         static AsyncOperationHandle<GameObject> AddressableInstantiate(string address, Transform parent)
         {

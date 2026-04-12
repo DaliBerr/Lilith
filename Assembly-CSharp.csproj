@@ -91,6 +91,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\DialogUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ValueTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyRangedTokenAttacker.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarControllerBase.cs" />
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\GameUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveManager.cs" />
@@ -114,11 +115,13 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackSpec.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\TokenSelectUIUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\GlobalModeSettingsService.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarController.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewRig.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaCompiler.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StorySequenceParser.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterEndedEvent.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenModifierExpressionUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\WorldHeightUtility.cs" />
@@ -156,8 +159,10 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyMovement.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PauseUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BehaviorTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterStartedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\RemnantSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BossInfoUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridAuthoring.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveDefinition.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharGlyphPresenter.cs" />

@@ -119,7 +119,6 @@ namespace Kernel.Bullet
             pickupDisplayTextOverride ??= string.Empty;
             damageMultiplier = Mathf.Max(1f, damageMultiplier);
             linkedTokens ??= new List<BaseTokenData>();
-            linkedTokens.RemoveAll(token => token == null);
         }
     }
 }

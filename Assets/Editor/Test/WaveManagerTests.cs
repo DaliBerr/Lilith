@@ -3,6 +3,7 @@ using System.Reflection;
 using Kernel.MapGrid;
 using NUnit.Framework;
 using UnityEngine;
+using Vocalith.EventSystem;
 
 public sealed class WaveManagerTests
 {
@@ -37,6 +38,52 @@ public sealed class WaveManagerTests
         Assert.That(completionCount, Is.EqualTo(1));
         Assert.That(waveManager.IsSequenceRunning, Is.False);
         Assert.That(waveManager.HasCompletedSequence, Is.True);
+    }
+
+    [Test]
+    public void TryStartBossEncounter_PublishesBossLifecycleEvents()
+    {
+        WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
+        BaseCharEnemyNorm1 boss = CreateGameObject("Boss").AddComponent<BaseCharEnemyNorm1>();
+        SetPrivateField(boss, "health", 120f);
+        SetPrivateField(boss, "currentHealth", 120f);
+        SetPrivateField(boss, "hasInitializedHealth", true);
+
+        BossEncounterStartedEvent? startedEvent = null;
+        BossEncounterEndedEvent? endedEvent = null;
+        System.IDisposable startSubscription = EventManager.eventBus.Subscribe<BossEncounterStartedEvent>(evt => startedEvent = evt);
+        System.IDisposable endSubscription = EventManager.eventBus.Subscribe<BossEncounterEndedEvent>(evt => endedEvent = evt);
+
+        try
+        {
+            WaveEnemySpawnEntry bossEntry = new(
+                enemyDefinition: null,
+                spawnCount: 1,
+                enemyConfig: new EnemyWaveConfig(120f, 0f, 0f, 0f, 0f),
+                isBossEncounter: true,
+                bossDisplayNameOverride: "Final Boss");
+
+            InvokePrivateMethod<object>(waveManager, "TryStartBossEncounter", bossEntry, boss);
+
+            Assert.That(startedEvent.HasValue, Is.True);
+            Assert.That(startedEvent.Value.boss, Is.SameAs(boss));
+            Assert.That(startedEvent.Value.displayName, Is.EqualTo("Final Boss"));
+            Assert.That(startedEvent.Value.maxHealth, Is.EqualTo(120f));
+
+            bool damageApplied = boss.TryApplyDamage(120f, out _, out bool isDead);
+
+            Assert.That(damageApplied, Is.True);
+            Assert.That(isDead, Is.True);
+            Assert.That(endedEvent.HasValue, Is.True);
+            Assert.That(endedEvent.Value.boss, Is.SameAs(boss));
+            Assert.That(endedEvent.Value.displayName, Is.EqualTo("Final Boss"));
+            Assert.That(endedEvent.Value.endedByDeath, Is.True);
+        }
+        finally
+        {
+            startSubscription.Dispose();
+            endSubscription.Dispose();
+        }
     }
 
     // [Test]

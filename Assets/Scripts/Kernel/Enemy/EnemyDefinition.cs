@@ -130,15 +130,19 @@ public sealed class EnemyDefinition : ScriptableObject
         public BulletTargetPolicy targetPolicy;
 
         /// <summary>
-        /// summary: 修正远程词元攻击配置中的空列表与空元素，确保编译链路可稳定遍历。
-        /// param: 无
+        /// summary: 修正远程词元攻击配置中的空列表，并按需清理空元素。
+        /// param: removeNullFormulaItems 为 true 时会移除 formulaItems 中的空元素
         /// returns: 经过规范化后的远程词元攻击配置副本
         /// </summary>
-        public RangedBulletAttackDefinition GetSanitized()
+        public RangedBulletAttackDefinition GetSanitized(bool removeNullFormulaItems = true)
         {
             RangedBulletAttackDefinition sanitized = this;
             sanitized.formulaItems ??= new List<PlaceableTokenData>();
-            sanitized.formulaItems.RemoveAll(item => item == null);
+            if (removeNullFormulaItems)
+            {
+                sanitized.formulaItems.RemoveAll(item => item == null);
+            }
+
             return sanitized;
         }
     }
@@ -288,7 +292,7 @@ public sealed class EnemyDefinition : ScriptableObject
         aggroOnHitMovement = aggroOnHitMovement.GetSanitized();
         orbitTargetMovement = orbitTargetMovement.GetSanitized();
         visual = visual.GetSanitized();
-        rangedBulletAttack = rangedBulletAttack.GetSanitized();
+        rangedBulletAttack = rangedBulletAttack.GetSanitized(removeNullFormulaItems: false);
         skillCasting = skillCasting.GetSanitized();
         skillSlots ??= new List<EnemySkillSlotDefinition>();
         for (int i = 0; i < skillSlots.Count; i++)

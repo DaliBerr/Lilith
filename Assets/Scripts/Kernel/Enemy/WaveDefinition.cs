@@ -57,8 +57,7 @@ public sealed class WaveDefinition : ScriptableObject
 
         for (int i = 0; i < enemySpawns.Count; i++)
         {
-            WaveEnemySpawnEntry entry = enemySpawns[i];
-            entry.spawnCount = Mathf.Max(0, entry.spawnCount);
+            WaveEnemySpawnEntry entry = enemySpawns[i].GetSanitized();
             entry.enemyConfig = SanitizeEnemyConfig(entry.enemyConfig);
             enemySpawns[i] = entry;
         }

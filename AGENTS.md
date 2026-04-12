@@ -90,7 +90,7 @@
 
 
 ## Subagent workflow / Subagent 使用约定
-若当前运行环境支持 subagent，默认允许主模型把**只读、低风险、可并行、上下文压缩型**子任务委派给更轻量的子代理，当前存在：log_triager/test_triager/impact_auditor/doc_auditor/prefab_locator/diff_reviewer各subagnet。
+若当前运行环境支持 subagent，默认允许主模型把**只读、低风险、可并行、上下文压缩型**子任务委派给更轻量的子代理，当前存在：log_triager/test_triager/impact_auditor/doc_auditor/prefab_locator/diff_reviewer/test_runner各subagnet。
 
 ### 何时优先使用 subagent
 以下任务默认适合优先交给 mini 子代理：
@@ -102,6 +102,20 @@
 - **大范围搜索压缩**：先扫 10~30 个候选文件，再把真正值得主模型深读的 1~5 个文件筛出来
 - **改动后影响面清单**：列出可能受影响的脚本、场景、Prefab、asmdef、测试点
 - **文档差异核对**：检查 README / memory / AGENTS 是否需要更新，并给出候选修改点
+
+## Subagent for Unity test tail / Unity 测试收尾子代理约定
+- 当任务进入“修改后验证”阶段，且需要等待 Unity MCP 测试结果、轮询测试任务、整理失败摘要时，优先委托 `test_runner` 子代理执行
+- `test_runner` 负责：
+  - 读取 `mcpforunity://editor/state`
+  - 调用 `run_tests` / `get_test_job`
+  - 必要时调用 `read_console`
+  - 汇总测试通过/失败情况与关键错误线索
+- 主模型负责：
+  - 判断应该跑哪些测试
+  - 判断失败是否与本次改动直接相关
+  - 决定是否继续修复、扩大验证范围或结束任务
+- 默认不要让 `test_runner` 在未获明确授权时执行全量长耗时测试；优先跑与改动影响面最相关的测试
+- 若测试任务耗时较长，主模型可在等待测试期间并行委托其他只读子代理执行 diff 审查、README/memory 评估或影响面复查
 
 ### 不应交给 mini 子代理的任务
 以下任务默认仍由主模型自己负责，不要下放给 mini 作为最终决策者：
