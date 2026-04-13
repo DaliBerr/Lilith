@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using Kernel.Bullet;
 using Kernel.UI;
 using NUnit.Framework;
@@ -173,6 +174,26 @@ public sealed class BackPackInventoryTests
     }
 
     [Test]
+    public void Prefab_BackPackUI_WiresHoverPreviewPrefab()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/BackPackUI.prefab");
+
+        try
+        {
+            BackPackUIScreen screen = prefabRoot.GetComponent<BackPackUIScreen>();
+            Assert.That(screen, Is.Not.Null);
+
+            BulletTokenSelectionView hoverPreviewPrefab = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewPrefab");
+            Assert.That(hoverPreviewPrefab, Is.Not.Null);
+            Assert.That(hoverPreviewPrefab.GetComponent<BulletTokenSelectionView>(), Is.Not.Null);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
     public void SlotView_ReflectsChainRoleAndVisualToken()
     {
         LinkedTokenData linked = CreateLinkedToken("linked_fire_hit", "FireHit", 1.5f,
@@ -260,5 +281,12 @@ public sealed class BackPackInventoryTests
     {
         TMP_Text text = slotView.transform.Find("Text")?.GetComponent<TMP_Text>();
         return text != null ? text.text : string.Empty;
+    }
+
+    private static T GetPrivateField<T>(object target, string fieldName)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"{target.GetType().Name}.{fieldName} should exist.");
+        return (T)field.GetValue(target);
     }
 }

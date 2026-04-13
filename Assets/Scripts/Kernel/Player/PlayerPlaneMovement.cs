@@ -623,6 +623,8 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         }
 
         Array.Sort(hits, CompareRaycastDistance);
+        bool hasWallFallback = false;
+        Vector3 wallFallbackPoint = default;
         for (int i = 0; i < hits.Length; i++)
         {
             RaycastHit hit = hits[i];
@@ -631,8 +633,67 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
                 continue;
             }
 
+            if (IsAimWallCollider(hit.collider))
+            {
+                if (!hasWallFallback)
+                {
+                    wallFallbackPoint = hit.point;
+                    hasWallFallback = true;
+                }
+
+                continue;
+            }
+
             aimPoint = hit.point;
             return true;
+        }
+
+        if (hasWallFallback)
+        {
+            aimPoint = wallFallbackPoint;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// summary: 判断当前碰撞体是否属于墙体命中（CellData 墙体或任意 Wall Tag 层级）。
+    /// param: collider 当前命中的碰撞体
+    /// returns: 命中墙体时返回 true
+    /// </summary>
+    private static bool IsAimWallCollider(Collider collider)
+    {
+        if (collider == null)
+        {
+            return false;
+        }
+
+        CellData cellData = collider.GetComponentInParent<CellData>();
+        if (cellData != null && cellData.SurfaceType == CellData.CellSurfaceType.Wall)
+        {
+            return true;
+        }
+
+        return HasWallTagInHierarchy(collider.transform);
+    }
+
+    /// <summary>
+    /// summary: 从命中节点向上回溯，判断层级中是否存在 Wall Tag。
+    /// param: source 当前命中碰撞体所在 Transform
+    /// returns: 找到 Wall Tag 时返回 true
+    /// </summary>
+    private static bool HasWallTagInHierarchy(Transform source)
+    {
+        Transform current = source;
+        while (current != null)
+        {
+            if (current.tag == MapGridAuthoring.WallTagName)
+            {
+                return true;
+            }
+
+            current = current.parent;
         }
 
         return false;

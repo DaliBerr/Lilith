@@ -70,6 +70,8 @@
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\PermanentProfileData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTargetPolicy.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Quest\QuestService.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\QuestEntryView.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeDeep.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIWidget.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\LinkedTokenData.cs" />
@@ -107,6 +109,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\SettlementModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIManager.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Quest\QuestPersistenceModels.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCollections.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\GlobalTextInputGuard.cs" />
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeUIImage.cs" />
@@ -149,6 +152,7 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\BaseCharEnemyNorm1.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\CodeC.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\IsaveItem.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Quest\TutorialQuestConstants.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\GameplayBillboard.cs" />
     <Compile Include="Assets\Scripts\Kernel\Upgrade\PermanentUpgradeModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\RemnantPickupTokenData.cs" />
@@ -177,6 +181,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BossInfoUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridAuthoring.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Quest\QuestCatalogModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveDefinition.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharGlyphPresenter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\Scribe.cs" />

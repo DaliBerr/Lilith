@@ -30,7 +30,7 @@ MonoBehaviour:
   maxTravelDistance: 256
   impactMask:
     serializedVersion: 2
-    m_Bits: 4294967291
+    m_Bits: 2035
   armoredEnemyId: shield
   armoredDamageMultiplier: 1.2
   burnTriggerCount: 0

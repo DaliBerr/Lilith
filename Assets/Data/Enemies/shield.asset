@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
   m_Name: shield
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  enemyId: 甲
-  displayName: 甲
+  enemyId: "\u7532"
+  displayName: "\u7532"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 1
   attackKind: 1
@@ -34,8 +34,8 @@ MonoBehaviour:
     orbitSpeedMultiplier: 1
     clockwise: 0
   visual:
-    glyphText: 甲
-    glyphColor: {r: 1, g: 1, b: 1, a: 1}
+    glyphText: "\u7532"
+    glyphColor: {r: 1, g: 0.46176243, b: 0, a: 1}
     runeBaseSprite: {fileID: 0}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
     groundShadowSprite: {fileID: 0}

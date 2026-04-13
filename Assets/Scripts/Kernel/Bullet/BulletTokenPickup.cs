@@ -209,12 +209,21 @@ namespace Kernel.Bullet
         /// </summary>
         private void RefreshDisplay()
         {
-            if (glyphText == null)
+            string displayText = token != null ? token.GetPickupDisplayText() : string.Empty;
+            TMP_Text[] displayTexts = GetComponentsInChildren<TMP_Text>(includeInactive: true);
+
+            if (displayTexts == null || displayTexts.Length == 0)
             {
                 return;
             }
 
-            glyphText.text = token != null ? token.GetPickupDisplayText() : string.Empty;
+            for (int i = 0; i < displayTexts.Length; i++)
+            {
+                if (displayTexts[i] != null)
+                {
+                    displayTexts[i].text = displayText;
+                }
+            }
         }
 
         /// <summary>

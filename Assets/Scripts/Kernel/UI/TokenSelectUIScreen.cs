@@ -10,7 +10,7 @@ using VocalithRandom = Vocalith.Random;
 namespace Kernel.UI
 {
     /// <summary>
-    /// Token Select 弹窗屏幕：从 BulletTokenLibrary 中抽样 1-3 个 token 并生成可点击卡片。
+    /// Token Select 弹窗屏幕：从 BulletTokenLibrary 中默认抽样 3 个唯一 token 并生成可点击卡片。
     /// </summary>
     [DisallowMultipleComponent]
     [UIPrefab("Assets/Prefabs/UI/Token Select Panel")]
@@ -36,7 +36,7 @@ namespace Kernel.UI
         private SelectionOutcome pendingOutcome = SelectionOutcome.None;
         private PlaceableTokenData pendingSelection;
         private VocalithRandom selectionRandom;
-        private int choiceCountOverride = -1;
+        private int choiceCountOverride = 3;
         private bool hasInitialized;
         private bool hasResolvedOutcome;
         private bool hasLoggedConfigurationWarning;
@@ -148,13 +148,13 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 覆盖当前弹窗的抽样数量；传入小于等于 0 的值会恢复为随机 1-3 抽样。
+        /// summary: 覆盖当前弹窗的抽样数量；传入小于等于 0 的值会恢复为默认 3 抽样。
         /// param name="choiceCount": 需要固定展示的卡片数量
         /// returns: 无
         /// </summary>
         public void SetChoiceCountOverride(int choiceCount)
         {
-            choiceCountOverride = choiceCount > 0 ? choiceCount : -1;
+            choiceCountOverride = choiceCount > 0 ? choiceCount : 3;
             RefreshIfInitialized();
         }
 
@@ -260,7 +260,7 @@ namespace Kernel.UI
             }
 
             VocalithRandom rng = selectionRandom ??= CreateDefaultRandom();
-            int desiredCount = choiceCountOverride > 0 ? choiceCountOverride : -1;
+            int desiredCount = choiceCountOverride > 0 ? choiceCountOverride : 3;
             List<PlaceableTokenData> sampledTokens = bulletTokenLibrary.SampleChoices(rng, desiredCount);
             if (sampledTokens == null || sampledTokens.Count <= 0)
             {

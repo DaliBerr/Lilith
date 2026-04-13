@@ -1,4 +1,5 @@
 using System.Collections;
+using Kernel.Quest;
 using Kernel.GameState;
 using Kernel.UI;
 using Vocalith.Logging;
@@ -64,6 +65,7 @@ namespace Kernel
             }
 
             yield return StartCoroutine(EnterMainUI());
+            QuestService.GetOrCreateInstance()?.BeginRuntime();
 
             if (StatusController.HasStatus(StatusList.GameLoadingStatus))
             {

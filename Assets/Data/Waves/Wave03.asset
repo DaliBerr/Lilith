@@ -14,20 +14,66 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaveDefinition
   spawnIntervalSeconds: 0.8
   randomizeEnemySpawns: 1
-  postWaveTokenSelectionPlan: {fileID: 11400000, guid: 97d2ba8c2378c9243ba010f7ea1e42cb, type: 2}
+  postWaveTokenSelectionPlan: {fileID: 11400000, guid: f062d7fac7fc7a144a78ad4c7cbb87e4, type: 2}
   enemySpawns:
   - enemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
     spawnCount: 10
-    tokenDrops: []
+    tokenDrops:
+    - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
+      dropChance: 0.001
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
     isBossEncounter: 0
     bossDisplayNameOverride: 
   - enemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
     spawnCount: 4
-    tokenDrops: []
+    tokenDrops:
+    - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
+      dropChance: 0.001
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
     isBossEncounter: 0
     bossDisplayNameOverride: 
   - enemyDefinition: {fileID: 11400000, guid: e92152659a1ea184395551246961e6e2, type: 2}
     spawnCount: 2
-    tokenDrops: []
+    tokenDrops:
+    - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
+      dropChance: 0.001
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: 6ccecc6f6447003419bd70625f3cd85d, type: 2}
+    spawnCount: 2
+    tokenDrops:
+    - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
+      dropChance: 0.001
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 416a9aef644354e46a0d92ac0882b88e, type: 2}
+      dropChance: 0.2
+      dropCount: 1
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: 95411fedd0fd215438b2bc3d6bab4907, type: 2}
+    spawnCount: 2
+    tokenDrops:
+    - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
+      dropChance: 0.001
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 619db91a1ef104c4fbb3072a17ae9e15, type: 2}
+      dropChance: 0.2
+      dropCount: 1
     isBossEncounter: 0
     bossDisplayNameOverride: 

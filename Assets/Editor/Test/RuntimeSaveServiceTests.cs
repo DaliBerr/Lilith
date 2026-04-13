@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using System.IO;
-using Newtonsoft.Json;
 using Kernel.Bullet;
+using Kernel.Quest;
+using Newtonsoft.Json;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -193,6 +194,65 @@ public sealed class RuntimeSaveServiceTests
         Assert.That(loadout.Items.Count, Is.EqualTo(1));
         Assert.That(loadout.Items[0], Is.SameAs(loadoutToken));
         Assert.That(inventory.GetToken(0), Is.SameAs(inventoryToken));
+    }
+
+    [Test]
+    public void TrySetActiveQuestProgress_WritesQuestProgressToSelectedProfile()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+
+        ActiveQuestProgressSaveData progress = new()
+        {
+            EnemyKillCount = 2,
+            CombatVictoryCount = 1,
+            BossKillCount = 0
+        };
+
+        Assert.That(saveService.TrySetActiveQuestProgress("quest_save_progress", progress), Is.True);
+
+        PermanentProfileData diskProfile = ReadProfileFromDisk(0);
+
+        Assert.That(diskProfile.ActiveQuestProgressById.ContainsKey("quest_save_progress"), Is.True);
+        Assert.That(diskProfile.ActiveQuestProgressById["quest_save_progress"].EnemyKillCount, Is.EqualTo(2));
+        Assert.That(diskProfile.ActiveQuestProgressById["quest_save_progress"].CombatVictoryCount, Is.EqualTo(1));
+        Assert.That(diskProfile.CompletedQuestIds.Contains("quest_save_progress"), Is.False);
+    }
+
+    [Test]
+    public void TryCompleteQuest_PersistsCompletionAndRemovesActiveProgress()
+    {
+        PrepareCleanSaveEnvironment();
+        PlayerRemnantWallet wallet = CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        Assert.That(saveService.TrySetActiveQuestProgress("quest_complete", ActiveQuestProgressSaveData.CreateDefault()), Is.True);
+
+        QuestCompletionWriteRequest request = new();
+        request.RemnantAmount = 8;
+        request.UnlockIds.Add("unlock/test");
+        request.StoryFlagIds.Add("story/test");
+        request.LifetimeStatDeltas.Add(new QuestLifetimeStatDeltaData("kills.total", 3));
+
+        Assert.That(saveService.TryCompleteQuest("quest_complete", request, out string errorMessage), Is.True, errorMessage);
+
+        PermanentProfileData diskProfile = ReadProfileFromDisk(0);
+
+        Assert.That(diskProfile.CompletedQuestIds.Contains("quest_complete"), Is.True);
+        Assert.That(diskProfile.ActiveQuestProgressById.ContainsKey("quest_complete"), Is.False);
+        Assert.That(diskProfile.RemnantCount, Is.EqualTo(8));
+        Assert.That(diskProfile.UnlockedIds.Contains("unlock/test"), Is.True);
+        Assert.That(diskProfile.StoryFlags.Contains("story/test"), Is.True);
+        Assert.That(diskProfile.LifetimeStats["kills.total"], Is.EqualTo(3));
+        Assert.That(wallet.CurrentRemnants, Is.EqualTo(8));
+
+        Assert.That(saveService.ReloadProfile(), Is.True);
+        Assert.That(saveService.HasCompletedQuest("quest_complete"), Is.True);
+        Assert.That(saveService.GetActiveQuestProgressSnapshot().ContainsKey("quest_complete"), Is.False);
     }
 
     private PlayerRemnantWallet CreateWallet(int initialCount)

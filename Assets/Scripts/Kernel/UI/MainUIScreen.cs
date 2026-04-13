@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Kernel.Bullet;
 using Kernel.GameState;
+using Kernel.Quest;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -30,6 +31,12 @@ namespace Kernel.UI
         [SerializeField] private Button pauseButton;
         [SerializeField] private TMP_Text pauseButtonText;
 
+        [Header("Quest Panel")]
+        [SerializeField] private RectTransform questPanel;
+        [SerializeField] private RectTransform questListRoot;
+        [SerializeField] private QuestEntryView questEntryPrefab;
+        [SerializeField, Min(0.01f)] private float questEntryFadeDuration = 0.18f;
+
         [Header("Danger Edge")]
         [SerializeField] private RectTransform dangerEdge;
         [SerializeField] private Image dangerEdgeImage;
@@ -45,6 +52,8 @@ namespace Kernel.UI
 
         private readonly List<BackPackGridSlotView> runtimeSpellSlots = new();
         private readonly List<LinkedTokenOutlineView> runtimeSpellOutlines = new();
+        private readonly Dictionary<string, QuestEntryView> runtimeQuestEntries = new(System.StringComparer.Ordinal);
+        private readonly Dictionary<string, Coroutine> questEntryFadeCoroutines = new(System.StringComparer.Ordinal);
         private PlayerPlaneMovement currentPlayer;
         private AttackFormulaLoadout currentLoadout;
         private bool hasLoggedMissingSpellTemplate;
@@ -53,6 +62,7 @@ namespace Kernel.UI
         private PlayerHealth currentPlayerHealth;
         private Coroutine dangerEdgeFlashCoroutine;
         private bool isDangerEdgeVisible;
+        private QuestService currentQuestService;
 
         public override Status currentStatus { get; } = StatusList.PlayingStatus;
 
@@ -66,6 +76,9 @@ namespace Kernel.UI
         public RectTransform PauseButtonRoot => pauseButtonRoot;
         public Button PauseButton => pauseButton;
         public TMP_Text PauseButtonText => pauseButtonText;
+        public RectTransform QuestPanel => questPanel;
+        public RectTransform QuestListRoot => questListRoot;
+        public QuestEntryView QuestEntryPrefab => questEntryPrefab;
         public RectTransform DangerEdge => dangerEdge;
         public Image DangerEdgeImage => dangerEdgeImage;
 
@@ -75,6 +88,7 @@ namespace Kernel.UI
             SanitizeDangerEdgeConfiguration();
             BindButtonCallbacks();
             RefreshSpellPanel();
+            RefreshQuestEntries();
             ResetDangerEdgeDisplay();
             ui?.EnsureOverlay<BossInfoUIScreen>();
         }
@@ -82,12 +96,16 @@ namespace Kernel.UI
         protected override void OnBeforeShow()
         {
             RefreshSpellPanel();
+            SubscribeToQuestEvents();
+            RefreshQuestEntries();
             SubscribeToPlayerHealthEvents();
             SyncDangerEdgeToCurrentHealth();
         }
 
         protected override void OnAfterHide()
         {
+            DisposeQuestSubscriptions();
+            ClearRuntimeQuestEntries();
             ReleaseLoadoutBinding();
             ClearRuntimeSpellSlots();
             currentPlayerHealth = null;
@@ -98,6 +116,8 @@ namespace Kernel.UI
         private void OnDestroy()
         {
             UnbindButtonCallbacks();
+            DisposeQuestSubscriptions();
+            ClearRuntimeQuestEntries();
             ReleaseLoadoutBinding();
             ClearRuntimeSpellSlots();
             currentPlayerHealth = null;
@@ -155,6 +175,12 @@ namespace Kernel.UI
             if (spellPanel != null && (spellSlotTemplate == null || !spellSlotTemplate.transform.IsChildOf(spellPanel)))
             {
                 spellSlotTemplate = ResolveSpellSlotTemplate(spellPanel);
+            }
+
+            questPanel ??= transform.Find("Quest Panel") as RectTransform;
+            if (questPanel != null)
+            {
+                questListRoot ??= questPanel.Find("Quests") as RectTransform;
             }
 
             pauseButtonRoot ??= ResolvePauseButtonRoot(topPanel);
@@ -391,6 +417,227 @@ namespace Kernel.UI
         private void HandleLoadoutChanged()
         {
             RefreshSpellPanel();
+        }
+
+        /// <summary>
+        /// summary: 订阅任务服务的激活列表与完成通知，驱动 Quest Panel 的运行时刷新。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void SubscribeToQuestEvents()
+        {
+            QuestService service = QuestService.GetOrCreateInstance();
+            if (currentQuestService == service)
+            {
+                return;
+            }
+
+            DisposeQuestSubscriptions();
+            currentQuestService = service;
+            if (currentQuestService == null)
+            {
+                return;
+            }
+
+            currentQuestService.ActiveQuestsChanged += HandleActiveQuestsChanged;
+            currentQuestService.QuestCompleted += HandleQuestCompleted;
+        }
+
+        /// <summary>
+        /// summary: 释放 Quest Panel 对任务服务的事件订阅。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void DisposeQuestSubscriptions()
+        {
+            if (currentQuestService != null)
+            {
+                currentQuestService.ActiveQuestsChanged -= HandleActiveQuestsChanged;
+                currentQuestService.QuestCompleted -= HandleQuestCompleted;
+                currentQuestService = null;
+            }
+        }
+
+        /// <summary>
+        /// summary: 当任务激活列表变化时，重建或更新 Quest Panel 下的条目实例。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HandleActiveQuestsChanged()
+        {
+            RefreshQuestEntries();
+        }
+
+        /// <summary>
+        /// summary: 当任务完成时，为对应条目播放一次淡出并在结束后销毁该条目。
+        /// param name="snapshot": 刚完成任务的只读通知
+        /// returns: 无
+        /// </summary>
+        private void HandleQuestCompleted(QuestCompletedSnapshot snapshot)
+        {
+            if (!runtimeQuestEntries.TryGetValue(snapshot.QuestId, out QuestEntryView entryView) || entryView == null)
+            {
+                return;
+            }
+
+            if (questEntryFadeCoroutines.ContainsKey(snapshot.QuestId))
+            {
+                return;
+            }
+
+            questEntryFadeCoroutines[snapshot.QuestId] = StartCoroutine(PlayQuestEntryFadeOutCo(snapshot.QuestId, entryView));
+        }
+
+        /// <summary>
+        /// summary: 按任务服务当前快照同步 Quest Panel 条目，只创建缺失条目并移除非激活条目。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void RefreshQuestEntries()
+        {
+            TryAutoBindReferences();
+            QuestService service = currentQuestService ?? QuestService.Instance;
+            IReadOnlyList<QuestActiveSnapshot> snapshots = service != null ? service.GetActiveQuestSnapshots() : null;
+            SetQuestPanelVisible(snapshots != null && snapshots.Count > 0);
+
+            if (questListRoot == null || questEntryPrefab == null)
+            {
+                return;
+            }
+
+            HashSet<string> activeQuestIds = new(System.StringComparer.Ordinal);
+            if (snapshots != null)
+            {
+                for (int index = 0; index < snapshots.Count; index++)
+                {
+                    QuestActiveSnapshot snapshot = snapshots[index];
+                    activeQuestIds.Add(snapshot.QuestId);
+                    if (questEntryFadeCoroutines.ContainsKey(snapshot.QuestId))
+                    {
+                        continue;
+                    }
+
+                    if (!runtimeQuestEntries.TryGetValue(snapshot.QuestId, out QuestEntryView entryView) || entryView == null)
+                    {
+                        entryView = Instantiate(questEntryPrefab, questListRoot);
+                        entryView.name = $"Quest Entry - {snapshot.QuestId}";
+                        runtimeQuestEntries[snapshot.QuestId] = entryView;
+                    }
+
+                    if (entryView.CanvasGroup != null)
+                    {
+                        entryView.CanvasGroup.alpha = 1f;
+                    }
+
+                    entryView.gameObject.SetActive(true);
+                    entryView.SetText(snapshot.Text);
+                }
+            }
+
+            List<string> staleQuestIds = new();
+            foreach (KeyValuePair<string, QuestEntryView> pair in runtimeQuestEntries)
+            {
+                if (!activeQuestIds.Contains(pair.Key) && !questEntryFadeCoroutines.ContainsKey(pair.Key))
+                {
+                    staleQuestIds.Add(pair.Key);
+                }
+            }
+
+            for (int index = 0; index < staleQuestIds.Count; index++)
+            {
+                DestroyQuestEntry(staleQuestIds[index]);
+            }
+        }
+
+        /// <summary>
+        /// summary: 按当前任务状态控制 Quest Panel 的整体显隐。
+        /// param name="visible": Quest Panel 是否显示
+        /// returns: 无
+        /// </summary>
+        private void SetQuestPanelVisible(bool visible)
+        {
+            if (questPanel == null)
+            {
+                return;
+            }
+
+            questPanel.gameObject.SetActive(visible);
+        }
+
+        /// <summary>
+        /// summary: 清理 Quest Panel 下所有运行时条目和正在执行的淡出协程。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ClearRuntimeQuestEntries()
+        {
+            foreach (KeyValuePair<string, Coroutine> pair in questEntryFadeCoroutines)
+            {
+                if (pair.Value != null)
+                {
+                    StopCoroutine(pair.Value);
+                }
+            }
+
+            questEntryFadeCoroutines.Clear();
+
+            List<string> questIds = new(runtimeQuestEntries.Keys);
+            for (int index = 0; index < questIds.Count; index++)
+            {
+                DestroyQuestEntry(questIds[index]);
+            }
+
+            runtimeQuestEntries.Clear();
+        }
+
+        /// <summary>
+        /// summary: 播放单个任务条目的淡出动画，结束后销毁对应 runtime 实例。
+        /// param name="questId": 当前正在淡出的任务标识
+        /// param name="entryView": 需要执行淡出的 Quest Entry 视图
+        /// returns: 淡出协程
+        /// </summary>
+        private IEnumerator PlayQuestEntryFadeOutCo(string questId, QuestEntryView entryView)
+        {
+            CanvasGroup canvasGroup = entryView != null ? entryView.CanvasGroup : null;
+            if (canvasGroup != null)
+            {
+                float startAlpha = canvasGroup.alpha;
+                float elapsed = 0f;
+                while (elapsed < questEntryFadeDuration)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    float t = questEntryFadeDuration <= 0f ? 1f : Mathf.Clamp01(elapsed / questEntryFadeDuration);
+                    canvasGroup.alpha = Mathf.Lerp(startAlpha, 0f, t);
+                    yield return null;
+                }
+
+                canvasGroup.alpha = 0f;
+            }
+
+            questEntryFadeCoroutines.Remove(questId);
+            DestroyQuestEntry(questId);
+            RefreshQuestEntries();
+        }
+
+        /// <summary>
+        /// summary: 销毁单个 Quest Entry 运行时实例，并清理内部索引。
+        /// param name="questId": 需要移除的任务标识
+        /// returns: 无
+        /// </summary>
+        private void DestroyQuestEntry(string questId)
+        {
+            if (string.IsNullOrEmpty(questId))
+            {
+                return;
+            }
+
+            if (runtimeQuestEntries.TryGetValue(questId, out QuestEntryView entryView) && entryView != null)
+            {
+                DestroyChild(entryView.gameObject);
+            }
+
+            runtimeQuestEntries.Remove(questId);
+            questEntryFadeCoroutines.Remove(questId);
         }
 
         /// <summary>

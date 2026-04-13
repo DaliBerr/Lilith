@@ -1,10 +1,13 @@
+using System.IO;
 using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
+using Kernel.Quest;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 public sealed class BackPackUIScreenTests
@@ -14,6 +17,8 @@ public sealed class BackPackUIScreenTests
     [TearDown]
     public void TearDown()
     {
+        DestroyExistingRuntimeSaveService();
+
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {
             if (createdObjects[i] != null)
@@ -23,6 +28,7 @@ public sealed class BackPackUIScreenTests
         }
 
         createdObjects.Clear();
+        DeleteSaveDirectory();
     }
 
     [Test]
@@ -74,6 +80,267 @@ public sealed class BackPackUIScreenTests
         Assert.That(dragPreview.gameObject.activeSelf, Is.False);
     }
 
+    [Test]
+    public void NotifySlotHoverEnter_WithOccupiedSlot_ShowsHoverPreviewAndBindsToken()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_fire", "Fire");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        PointerEventData hoverEventData = CreatePointerEventData(new Vector2(320f, 240f));
+        screen.NotifySlotHoverEnter(inventorySlots[0], hoverEventData);
+
+        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
+        Assert.That(hoverPreview, Is.Not.Null);
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.True);
+        Assert.That(hoverPreview.BoundToken, Is.SameAs(inventoryToken));
+        Assert.That(hoverPreview.SelectButton, Is.Not.Null);
+        Assert.That(hoverPreview.SelectButton.gameObject.activeSelf, Is.False);
+    }
+
+    [Test]
+    public void NotifySlotHoverMove_UpdatesHoverPreviewPosition()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_move", "Move");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        screen.NotifySlotHoverEnter(inventorySlots[0], CreatePointerEventData(new Vector2(120f, 120f)));
+
+        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
+        RectTransform hoverRect = hoverPreview.transform as RectTransform;
+        Assert.That(hoverRect, Is.Not.Null);
+        Vector2 before = hoverRect.anchoredPosition;
+
+        screen.NotifySlotHoverMove(inventorySlots[0], CreatePointerEventData(new Vector2(420f, 220f)));
+        Vector2 after = hoverRect.anchoredPosition;
+        Assert.That(after, Is.Not.EqualTo(before));
+    }
+
+    [Test]
+    public void NotifySlotHoverExit_HidesHoverPreview()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_exit", "Exit");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        screen.NotifySlotHoverEnter(inventorySlots[0], CreatePointerEventData(new Vector2(220f, 180f)));
+
+        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.True);
+
+        screen.NotifySlotHoverExit(inventorySlots[0]);
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.False);
+    }
+
+    [Test]
+    public void NotifySlotBeginDrag_HidesHoverPreview()
+    {
+        LinkedTokenData inventoryLinked = CreateLinkedToken("hover_drag_hide",
+            CreateToken<CoreTokenData>("hover_drag_core", "Core"),
+            CreateToken<ResultTokenData>("hover_drag_result", "Result"));
+        CreatePlayerWithState(inventoryLinked, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        screen.NotifySlotHoverEnter(inventorySlots[0], CreatePointerEventData(new Vector2(200f, 200f)));
+
+        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.True);
+
+        screen.NotifySlotBeginDrag(inventorySlots[0], CreatePointerEventData(new Vector2(200f, 200f)));
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.False);
+    }
+
+    [Test]
+    public void NotifySlotDrop_InventoryToInventory_SwapsEqualSpanLinkedItems()
+    {
+        LinkedTokenData sourceLinked = CreateLinkedToken("source_linked",
+            CreateToken<CoreTokenData>("source_core", "SourceCore"),
+            CreateToken<ResultTokenData>("source_result", "SourceResult"));
+        LinkedTokenData targetLinked = CreateLinkedToken("target_linked",
+            CreateToken<CoreTokenData>("target_core", "TargetCore"),
+            CreateToken<ResultTokenData>("target_result", "TargetResult"));
+
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out _);
+        Assert.That(inventory.TryPlaceItem(0, sourceLinked), Is.True);
+        Assert.That(inventory.TryPlaceItem(2, targetLinked), Is.True);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        screen.NotifySlotBeginDrag(inventorySlots[0], null);
+        screen.NotifySlotDrop(inventorySlots[2]);
+        screen.NotifySlotEndDrag(inventorySlots[0]);
+
+        AssertInventoryItem(inventory, 0, targetLinked, 2);
+        AssertInventoryItem(inventory, 2, sourceLinked, 2);
+    }
+
+    [Test]
+    public void NotifySlotDrop_InventoryToInventory_DoesNotSwapWhenSpanMismatch()
+    {
+        LinkedTokenData sourceLinked = CreateLinkedToken("source_linked_mismatch",
+            CreateToken<CoreTokenData>("source_mismatch_core", "SourceCore"),
+            CreateToken<ResultTokenData>("source_mismatch_result", "SourceResult"));
+        CoreTokenData targetSingle = CreateToken<CoreTokenData>("target_single", "TargetSingle");
+
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out _);
+        Assert.That(inventory.TryPlaceItem(0, sourceLinked), Is.True);
+        Assert.That(inventory.TryPlaceItem(2, targetSingle), Is.True);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        screen.NotifySlotBeginDrag(inventorySlots[0], null);
+        screen.NotifySlotDrop(inventorySlots[2]);
+        screen.NotifySlotEndDrag(inventorySlots[0]);
+
+        AssertInventoryItem(inventory, 0, sourceLinked, 2);
+        Assert.That(inventory.GetCell(2).item, Is.SameAs(targetSingle));
+        Assert.That(inventory.GetCell(3).IsOccupied, Is.False);
+    }
+
+    [Test]
+    public void NotifySlotDrop_InventoryToSpellBook_SwapsEqualSpanLinkedItems()
+    {
+        LinkedTokenData inventoryLinked = CreateLinkedToken("inventory_linked_swap",
+            CreateToken<CoreTokenData>("inventory_swap_core", "InventoryCore"),
+            CreateToken<ResultTokenData>("inventory_swap_result", "InventoryResult"));
+        LinkedTokenData spellLinked = CreateLinkedToken("spell_linked_swap",
+            CreateToken<CoreTokenData>("spell_swap_core", "SpellCore"),
+            CreateToken<ResultTokenData>("spell_swap_result", "SpellResult"));
+
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout);
+        Assert.That(inventory.TryPlaceItem(0, inventoryLinked), Is.True);
+        loadout.SetItems(new[] { spellLinked });
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        List<BackPackGridSlotView> spellBookSlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "spellBookSlots");
+        screen.NotifySlotBeginDrag(inventorySlots[0], null);
+        screen.NotifySlotDrop(spellBookSlots[0]);
+        screen.NotifySlotEndDrag(inventorySlots[0]);
+
+        AssertInventoryItem(inventory, 0, spellLinked, 2);
+        Assert.That(loadout.Items.Count, Is.EqualTo(1));
+        Assert.That(loadout.Items[0], Is.SameAs(inventoryLinked));
+    }
+
+    [Test]
+    public void NotifySlotDrop_SpellBookToInventory_SwapsEqualSpanLinkedItems()
+    {
+        LinkedTokenData inventoryLinked = CreateLinkedToken("inventory_linked_swap_back",
+            CreateToken<CoreTokenData>("inventory_swap_back_core", "InventoryBackCore"),
+            CreateToken<ResultTokenData>("inventory_swap_back_result", "InventoryBackResult"));
+        LinkedTokenData spellLinked = CreateLinkedToken("spell_linked_swap_back",
+            CreateToken<CoreTokenData>("spell_swap_back_core", "SpellBackCore"),
+            CreateToken<ResultTokenData>("spell_swap_back_result", "SpellBackResult"));
+
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout);
+        Assert.That(inventory.TryPlaceItem(0, inventoryLinked), Is.True);
+        loadout.SetItems(new[] { spellLinked });
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        List<BackPackGridSlotView> spellBookSlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "spellBookSlots");
+        screen.NotifySlotBeginDrag(spellBookSlots[0], null);
+        screen.NotifySlotDrop(inventorySlots[0]);
+        screen.NotifySlotEndDrag(spellBookSlots[0]);
+
+        AssertInventoryItem(inventory, 0, spellLinked, 2);
+        Assert.That(loadout.Items.Count, Is.EqualTo(1));
+        Assert.That(loadout.Items[0], Is.SameAs(inventoryLinked));
+    }
+
+    [Test]
+    public void NotifySlotDrop_InventoryToSpellBook_DoesNotSwapWhenSpanMismatch()
+    {
+        LinkedTokenData inventoryLinked = CreateLinkedToken("inventory_linked_no_swap",
+            CreateToken<CoreTokenData>("inventory_no_swap_core", "InventoryNoSwapCore"),
+            CreateToken<ResultTokenData>("inventory_no_swap_result", "InventoryNoSwapResult"));
+        CoreTokenData spellSingle = CreateToken<CoreTokenData>("spell_single_no_swap", "SpellSingleNoSwap");
+
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout);
+        Assert.That(inventory.TryPlaceItem(0, inventoryLinked), Is.True);
+        loadout.SetItems(new[] { spellSingle });
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        List<BackPackGridSlotView> spellBookSlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "spellBookSlots");
+        screen.NotifySlotBeginDrag(inventorySlots[0], null);
+        screen.NotifySlotDrop(spellBookSlots[0]);
+        screen.NotifySlotEndDrag(inventorySlots[0]);
+
+        AssertInventoryItem(inventory, 0, inventoryLinked, 2);
+        Assert.That(loadout.Items.Count, Is.EqualTo(1));
+        Assert.That(loadout.Items[0], Is.SameAs(spellSingle));
+    }
+
+    [Test]
+    public void OnBeforeShow_PersistsBackpackOpenedStoryFlag()
+    {
+        PrepareCleanSaveEnvironment();
+        RuntimeSaveService saveService = CreateSaveService();
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+
+        CreatePlayerWithState(null, null);
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        InvokeNonPublic(screen, "OnBeforeShow");
+
+        Assert.That(saveService.HasStoryFlag(TutorialQuestConstants.BackpackOpenedFlagId), Is.True);
+    }
+
+    [Test]
+    public void SyncSpellBookToLoadout_WithCompilableSpellBook_PersistsCompiledStoryFlag()
+    {
+        PrepareCleanSaveEnvironment();
+        RuntimeSaveService saveService = CreateSaveService();
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+
+        CreatePlayerWithState(null, null);
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        CoreTokenData coreToken = CreateToken<CoreTokenData>("tutorial_core", "TutorialCore");
+        List<TokenCellOccupancy> spellBookCells = GetPrivateField<List<TokenCellOccupancy>>(screen, "spellBookCells");
+        spellBookCells[0] = new TokenCellOccupancy(coreToken, 0, 0, true);
+
+        InvokeNonPublic(screen, "SyncSpellBookToLoadout");
+
+        Assert.That(saveService.HasStoryFlag(TutorialQuestConstants.SpellBookCompiledFlagId), Is.True);
+    }
+
     private BackPackUIScreen CreateBackPackUIScreen()
     {
         GameObject root = CreateUiObject("BackPackUI");
@@ -97,25 +364,80 @@ public sealed class BackPackUIScreenTests
         GameObject backPackGridObject = CreateUiObject("Grid", backPackGridPanel);
         backPackGridObject.AddComponent<GridLayoutGroup>();
 
+        SetPrivateField(screen, "hoverPreviewPrefab", CreateHoverPreviewTemplate());
+
         return screen;
+    }
+
+    private BulletTokenSelectionView CreateHoverPreviewTemplate()
+    {
+        GameObject root = CreateUiObject("Hover Preview Template");
+        root.AddComponent<CanvasGroup>();
+        BulletTokenSelectionView selectionView = root.AddComponent<BulletTokenSelectionView>();
+
+        GameObject tokenRoot = CreateUiObject("Token", root.transform);
+        GameObject tokenText = CreateUiObject("Text", tokenRoot.transform);
+        tokenText.AddComponent<TextMeshProUGUI>();
+
+        GameObject descriptionRoot = CreateUiObject("Description", root.transform);
+        GameObject descriptionText = CreateUiObject("Text", descriptionRoot.transform);
+        descriptionText.AddComponent<TextMeshProUGUI>();
+
+        GameObject buttonObject = CreateUiObject("Button", root.transform);
+        buttonObject.AddComponent<Image>();
+        buttonObject.AddComponent<Button>();
+        GameObject buttonText = CreateUiObject("Text", buttonObject.transform);
+        buttonText.AddComponent<TextMeshProUGUI>();
+
+        return selectionView;
+    }
+
+    private PointerEventData CreatePointerEventData(Vector2 position)
+    {
+        EventSystem eventSystem = Object.FindAnyObjectByType<EventSystem>();
+        if (eventSystem == null)
+        {
+            GameObject eventSystemObject = CreateGameObject("EventSystem");
+            eventSystem = eventSystemObject.AddComponent<EventSystem>();
+            eventSystemObject.AddComponent<StandaloneInputModule>();
+        }
+
+        PointerEventData eventData = new(eventSystem)
+        {
+            position = position,
+        };
+
+        return eventData;
     }
 
     private void CreatePlayerWithState(PlaceableTokenData inventoryItem, PlaceableTokenData spellBookItem)
     {
-        GameObject player = CreateGameObject("Player");
-        player.AddComponent<PlayerPlaneMovement>();
-        PlayerBulletTokenInventory inventory = player.AddComponent<PlayerBulletTokenInventory>();
-        inventory.EnsureInitialized();
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout);
         if (inventoryItem != null)
         {
             Assert.That(inventory.TryPlaceItem(0, inventoryItem), Is.True);
         }
 
-        AttackFormulaLoadout loadout = player.AddComponent<AttackFormulaLoadout>();
         if (spellBookItem != null)
         {
             loadout.SetItems(new[] { spellBookItem });
         }
+    }
+
+    private void CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout)
+    {
+        GameObject player = CreateGameObject("Player");
+        player.AddComponent<PlayerPlaneMovement>();
+        inventory = player.AddComponent<PlayerBulletTokenInventory>();
+        inventory.EnsureInitialized();
+        loadout = player.AddComponent<AttackFormulaLoadout>();
+    }
+
+    private RuntimeSaveService CreateSaveService()
+    {
+        DestroyExistingRuntimeSaveService();
+        GameObject saveObject = CreateGameObject("RuntimeSaveService");
+        return saveObject.AddComponent<RuntimeSaveService>();
     }
 
     private BackPackGridSlotView CreateSlotView(string name, Transform parent)
@@ -195,10 +517,51 @@ public sealed class BackPackUIScreenTests
         return (T)field.GetValue(target);
     }
 
+    private static void SetPrivateField(object target, string fieldName, object value)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"{target.GetType().Name}.{fieldName} should exist.");
+        field.SetValue(target, value);
+    }
+
     private static void InvokeNonPublic(object target, string methodName)
     {
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null, $"{target.GetType().Name}.{methodName} should exist.");
         method.Invoke(target, null);
+    }
+
+    private static void AssertInventoryItem(PlayerBulletTokenInventory inventory, int anchorIndex, PlaceableTokenData expectedItem, int expectedSpan)
+    {
+        for (int i = 0; i < expectedSpan; i++)
+        {
+            TokenCellOccupancy cell = inventory.GetCell(anchorIndex + i);
+            Assert.That(cell.item, Is.SameAs(expectedItem));
+            Assert.That(cell.anchorIndex, Is.EqualTo(anchorIndex));
+        }
+    }
+
+    private static void PrepareCleanSaveEnvironment()
+    {
+        DeleteSaveDirectory();
+        GlobalModeSettingsService.LoadMode(GameMode.Normal, forceReload: true);
+    }
+
+    private static void DeleteSaveDirectory()
+    {
+        string saveDirectoryPath = Path.Combine(Application.persistentDataPath, "Saves");
+        if (Directory.Exists(saveDirectoryPath))
+        {
+            Directory.Delete(saveDirectoryPath, recursive: true);
+        }
+    }
+
+    private static void DestroyExistingRuntimeSaveService()
+    {
+        RuntimeSaveService existingService = Object.FindFirstObjectByType<RuntimeSaveService>();
+        if (existingService != null)
+        {
+            Object.DestroyImmediate(existingService.gameObject);
+        }
     }
 }

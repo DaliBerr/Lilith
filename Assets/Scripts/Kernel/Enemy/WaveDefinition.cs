@@ -2,6 +2,9 @@ using UnityEngine;
 using System.Collections.Generic;
 using Kernel.Bullet;
 using VocalithRandom = Vocalith.Random;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 /// <summary>
 /// 描述单个波次的刷怪节奏，以及多个敌人的刷新条目。
@@ -10,6 +13,12 @@ using VocalithRandom = Vocalith.Random;
 public sealed class WaveDefinition : ScriptableObject
 {
     private const float MinimumSpawnIntervalSeconds = 0.05f;
+    private const float DefaultRemnantDropChance = 0.001f;
+    private const float DefaultHealingDropChance = 0.2f;
+#if UNITY_EDITOR
+    private const string RemnantPickupTokenAssetPath = "Assets/Data/BulletTokens/RemnantToken.asset";
+    private const string HealingPickupTokenAssetPath = "Assets/Data/BulletTokens/HealingToken.asset";
+#endif
 
     [SerializeField, Min(0f)] private float spawnIntervalSeconds = 1f;
     [SerializeField] private bool randomizeEnemySpawns;
@@ -56,10 +65,133 @@ public sealed class WaveDefinition : ScriptableObject
             enemySpawns = new List<WaveEnemySpawnEntry>();
         }
 
+        List<EnemyBulletTokenDropEntry> defaultTokenDrops = null;
         for (int i = 0; i < enemySpawns.Count; i++)
         {
-            enemySpawns[i] = enemySpawns[i].GetSanitized();
+            WaveEnemySpawnEntry sanitizedEntry = enemySpawns[i].GetSanitized();
+            if (sanitizedEntry.enemyDefinition != null)
+            {
+                if (defaultTokenDrops == null)
+                {
+                    defaultTokenDrops = BuildDefaultTokenDrops();
+                }
+
+                if (defaultTokenDrops.Count > 0)
+                {
+                    if (!HasAssignedTokenDrop(sanitizedEntry.tokenDrops))
+                    {
+                        sanitizedEntry.tokenDrops = new List<EnemyBulletTokenDropEntry>(defaultTokenDrops);
+                    }
+                    else
+                    {
+                        AppendMissingDefaultTokenDrops(sanitizedEntry.tokenDrops, defaultTokenDrops);
+                    }
+                }
+            }
+
+            enemySpawns[i] = sanitizedEntry;
         }
+    }
+
+    /// <summary>
+    /// summary: 在编辑器里读取当前项目约定的默认敌人掉落项。
+    /// param: 无
+    /// returns: 默认的 Remnant 与 Healing 掉落条目集合
+    /// </summary>
+    private static List<EnemyBulletTokenDropEntry> BuildDefaultTokenDrops()
+    {
+        List<EnemyBulletTokenDropEntry> defaultTokenDrops = new();
+#if UNITY_EDITOR
+        RemnantPickupTokenData remnantToken = AssetDatabase.LoadAssetAtPath<RemnantPickupTokenData>(RemnantPickupTokenAssetPath);
+        if (remnantToken != null)
+        {
+            defaultTokenDrops.Add(new EnemyBulletTokenDropEntry(remnantToken, DefaultRemnantDropChance));
+        }
+
+        HealingPickupTokenData healingToken = AssetDatabase.LoadAssetAtPath<HealingPickupTokenData>(HealingPickupTokenAssetPath);
+        if (healingToken != null)
+        {
+            defaultTokenDrops.Add(new EnemyBulletTokenDropEntry(healingToken, DefaultHealingDropChance));
+        }
+#endif
+
+        return defaultTokenDrops;
+    }
+
+    /// <summary>
+    /// summary: 判断当前掉落表里是否已经显式配置了至少一个有效 token。
+    /// param: tokenDrops 当前敌人条目的掉落表
+    /// returns: 只要存在一个非空 token 引用就返回 true
+    /// </summary>
+    private static bool HasAssignedTokenDrop(IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops)
+    {
+        if (tokenDrops == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < tokenDrops.Count; i++)
+        {
+            if (tokenDrops[i].token != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// summary: 把默认掉落项补到已有掉落表里，避免重复挂载同一个 token。
+    /// param: tokenDrops 需要补全的敌人掉落表
+    /// param: defaultTokenDrops 需要补入的默认掉落项
+    /// returns: 实际补入了至少一项时返回 true
+    /// </summary>
+    private static bool AppendMissingDefaultTokenDrops(List<EnemyBulletTokenDropEntry> tokenDrops, IReadOnlyList<EnemyBulletTokenDropEntry> defaultTokenDrops)
+    {
+        if (tokenDrops == null || defaultTokenDrops == null || defaultTokenDrops.Count <= 0)
+        {
+            return false;
+        }
+
+        bool addedAny = false;
+        for (int i = 0; i < defaultTokenDrops.Count; i++)
+        {
+            EnemyBulletTokenDropEntry defaultEntry = defaultTokenDrops[i];
+            if (defaultEntry.token == null || HasToken(tokenDrops, defaultEntry.token))
+            {
+                continue;
+            }
+
+            tokenDrops.Add(defaultEntry);
+            addedAny = true;
+        }
+
+        return addedAny;
+    }
+
+    /// <summary>
+    /// summary: 判断一个掉落表里是否已经包含指定 token。
+    /// param: tokenDrops 需要检查的掉落表
+    /// param: token 目标 token 引用
+    /// returns: 已经存在同一引用时返回 true
+    /// </summary>
+    private static bool HasToken(IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops, PlaceableTokenData token)
+    {
+        if (tokenDrops == null || token == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < tokenDrops.Count; i++)
+        {
+            if (tokenDrops[i].token == token)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

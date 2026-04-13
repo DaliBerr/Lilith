@@ -50,6 +50,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Editor\Test\BackPackAttackPreviewControllerTests.cs" />
+    <Compile Include="Assets\Editor\Test\QuestServiceTests.cs" />
     <Compile Include="Assets\Editor\Test\WaveDefinitionTests.cs" />
     <Compile Include="Assets\Editor\Test\BossInfoUIScreenTests.cs" />
     <Compile Include="Assets\Editor\SystemCallBlocker.cs" />
@@ -61,6 +62,7 @@
     <Compile Include="Assets\Editor\Test\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\Test\PlayerFollowCameraTests.cs" />
     <Compile Include="Assets\Editor\Test\GridPathfinderTests.cs" />
+    <Compile Include="Assets\Editor\Test\GlobalStartupTests.cs" />
     <Compile Include="Assets\Editor\EnemyDefinitionEditor.cs" />
     <Compile Include="Assets\Editor\Test\CameraOcclusionFaderTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyBulletTokenDropperTests.cs" />
@@ -76,8 +78,10 @@
     <Compile Include="Assets\Editor\Test\CharEnemyMovementTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\CharEnemyVisualPresenterTests.cs" />
+    <Compile Include="Assets\Editor\WallTagColliderBatchTool.cs" />
     <Compile Include="Assets\Editor\Test\StorySequenceParserTests.cs" />
     <Compile Include="Assets\Editor\Test\AttackFormulaCompilerTests.cs" />
+    <Compile Include="Assets\Editor\Test\StartRoomBattleTeleporterTests.cs" />
     <Compile Include="Assets\Editor\Test\ArenaSeedMapGenerationTests.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
     <Compile Include="Assets\Editor\Test\PermanentUpgradeServiceTests.cs" />
@@ -89,6 +93,7 @@
     <Compile Include="Assets\Editor\Test\PlayerVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\DialogUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthTests.cs" />
+    <Compile Include="Assets\Editor\Test\QuestCatalogJsonUtilityTests.cs" />
     <Compile Include="Assets\Editor\Test\MapGridAuthoringTests.cs" />
     <Compile Include="Assets\Editor\Test\StrokeRevealUIWordTests.cs" />
     <Compile Include="Assets\Editor\Test\CharBulletPrefabTests.cs" />

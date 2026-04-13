@@ -69,6 +69,36 @@ public sealed class StoryTellerUIScreenTests
         Assert.That(skipButtonRoot.activeSelf, Is.False);
     }
 
+    [Test]
+    public void StoryTellerUIScreen_PointerClickRequestsAdvance()
+    {
+        GameObject parserObject = new(nameof(StorySequenceParser));
+        createdObjects.Add(parserObject);
+        TestStorySequenceParser parser = parserObject.AddComponent<TestStorySequenceParser>();
+        parser.InitializeForTest();
+
+        StoryTellerUIScreen screen = CreateStoryTellerScreen(out TMP_Text storyText, out GameObject skipButtonRoot, out Button skipButton);
+        InvokeNonPublic(screen, "OnInit");
+        InvokeNonPublic(screen, "OnAfterShow");
+
+        parser.EmitSnapshot(new StorySequenceSnapshot(
+            "narrator",
+            "旁白",
+            "Hello World",
+            11,
+            0,
+            1,
+            true,
+            true));
+
+        screen.OnPointerClick(null);
+
+        Assert.That(parser.AdvanceToNextEntryRequested, Is.True);
+        Assert.That(storyText.text, Is.EqualTo("Hello World"));
+        Assert.That(skipButtonRoot.activeSelf, Is.True);
+        Assert.That(skipButton, Is.Not.Null);
+    }
+
     private StoryTellerUIScreen CreateStoryTellerScreen(out TMP_Text storyText, out GameObject skipButtonRoot, out Button skipButton)
     {
         GameObject root = new("Storyteller Panel", typeof(RectTransform));
@@ -103,6 +133,7 @@ public sealed class StoryTellerUIScreenTests
     private sealed class TestStorySequenceParser : StorySequenceParser
     {
         public bool SkipToNextReplaceRequested { get; private set; }
+        public bool AdvanceToNextEntryRequested { get; private set; }
 
         public void InitializeForTest()
         {
@@ -117,6 +148,11 @@ public sealed class StoryTellerUIScreenTests
         public override void RequestSkipToNextReplaceOrFinish()
         {
             SkipToNextReplaceRequested = true;
+        }
+
+        public override void RequestAdvanceToNextEntryOrFinish()
+        {
+            AdvanceToNextEntryRequested = true;
         }
     }
 }

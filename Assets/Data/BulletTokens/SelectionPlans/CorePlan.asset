@@ -10,6 +10,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c3a3db369fe4b8c4292588498cf5c44e, type: 3}
-  m_Name: CombatEntryTokenSelectionPlan
+  m_Name: CorePlan
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CombatEntryTokenSelectionPlan
-  libraryEntries: []
+  libraryEntries:
+  - library: {fileID: 0}
+    selectionWeight: 0

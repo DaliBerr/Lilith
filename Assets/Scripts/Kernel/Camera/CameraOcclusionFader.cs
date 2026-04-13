@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// 让相机与玩家焦点之间的墙体暂时切换为幽灵材质，降低透视镜头下的遮挡问题。
+/// 让相机与玩家焦点之间的墙体（含 Wall Tag 对象）暂时切换为幽灵材质，降低透视镜头下的遮挡问题。
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Camera))]
@@ -11,11 +11,13 @@ public sealed class CameraOcclusionFader : MonoBehaviour
 {
     private const int MinimumMaxHits = 1;
     private const float MinimumRayDistance = 0.01f;
+    private const float MinimumOcclusionRadius = 0f;
     private const float DefaultGhostAlpha = 0.2f;
 
     [SerializeField] private Transform targetTransform;
     [SerializeField] private Material occludedWallMaterial;
     [SerializeField] private LayerMask occlusionMask = Physics.DefaultRaycastLayers;
+    [SerializeField, Min(MinimumOcclusionRadius)] private float occlusionRadius = 1f;
     [SerializeField, Min(MinimumMaxHits)] private int maxHits = 32;
 
     private readonly Dictionary<Renderer, Material[]> occludedRendererMaterials = new();
@@ -60,6 +62,7 @@ public sealed class CameraOcclusionFader : MonoBehaviour
     private void OnValidate()
     {
         maxHits = Mathf.Max(MinimumMaxHits, maxHits);
+        occlusionRadius = Mathf.Max(MinimumOcclusionRadius, occlusionRadius);
         EnsureReferences();
         EnsureHitBuffer();
     }
@@ -91,13 +94,7 @@ public sealed class CameraOcclusionFader : MonoBehaviour
             return false;
         }
 
-        int hitCount = Physics.RaycastNonAlloc(
-            origin,
-            direction / distance,
-            hitBuffer,
-            distance,
-            occlusionMask,
-            QueryTriggerInteraction.Ignore);
+        int hitCount = CastOcclusionHits(origin, direction, distance);
 
         for (int i = 0; i < hitCount; i++)
         {
@@ -124,6 +121,37 @@ public sealed class CameraOcclusionFader : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 按当前半径配置执行遮挡检测；半径大于 0 时使用 SphereCast 扩展命中范围，便于让临近墙体一并淡出。
+    /// param: origin 检测起点（通常是相机位置）
+    /// param: direction 指向玩家焦点的方向向量
+    /// param: distance 目标距离
+    /// returns: 本帧命中的碰撞体数量
+    /// </summary>
+    private int CastOcclusionHits(Vector3 origin, Vector3 direction, float distance)
+    {
+        Vector3 normalizedDirection = direction / distance;
+        if (occlusionRadius <= MinimumOcclusionRadius)
+        {
+            return Physics.RaycastNonAlloc(
+                origin,
+                normalizedDirection,
+                hitBuffer,
+                distance,
+                occlusionMask,
+                QueryTriggerInteraction.Ignore);
+        }
+
+        return Physics.SphereCastNonAlloc(
+            origin,
+            occlusionRadius,
+            normalizedDirection,
+            hitBuffer,
+            distance,
+            occlusionMask,
+            QueryTriggerInteraction.Ignore);
+    }
+
+    /// <summary>
     /// summary: 获取当前遮挡检测应该命中的玩家焦点；若存在 PlayerFollowCamera，则优先使用它的焦点坐标。
     /// param: 无
     /// returns: 当前遮挡检测使用的世界坐标
@@ -139,10 +167,10 @@ public sealed class CameraOcclusionFader : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 尝试把一次 Physics 命中的碰撞体解析为墙体 cell 的 renderer 集合。
+    /// summary: 尝试把一次 Physics 命中的碰撞体解析为可淡出的墙体 renderer 集合；优先走 CellData 墙体绑定，其次回退到 Wall Tag 对象。
     /// param: hitCollider 当前命中的碰撞体
     /// param: renderers 输出的墙体 renderer 集合
-    /// returns: 命中确实属于墙体 cell 且存在可淡出的 renderer 时返回 true
+    /// returns: 命中属于墙体 Cell 或 Wall Tag 对象，且存在可淡出的 renderer 时返回 true
     /// </summary>
     private static bool TryResolveWallRenderers(Collider hitCollider, out Renderer[] renderers)
     {
@@ -155,11 +183,39 @@ public sealed class CameraOcclusionFader : MonoBehaviour
         CellData cellData = hitCollider.GetComponentInParent<CellData>();
         if (cellData == null || cellData.SurfaceType != CellData.CellSurfaceType.Wall || cellData.WallModelRoot == null)
         {
-            return false;
+            Transform wallTagRoot = ResolveWallTagRoot(hitCollider.transform);
+            if (wallTagRoot == null)
+            {
+                return false;
+            }
+
+            renderers = wallTagRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
+            return renderers != null && renderers.Length > 0;
         }
 
         renderers = cellData.WallModelRoot.GetComponentsInChildren<Renderer>(includeInactive: true);
         return renderers != null && renderers.Length > 0;
+    }
+
+    /// <summary>
+    /// summary: 从命中层级向上回溯，找到最近的 Wall Tag 节点作为淡出渲染根节点。
+    /// param: source 当前命中碰撞体所在 Transform
+    /// returns: 找到 Wall Tag 节点时返回其 Transform，否则返回 null
+    /// </summary>
+    private static Transform ResolveWallTagRoot(Transform source)
+    {
+        Transform current = source;
+        while (current != null)
+        {
+            if (current.tag == Kernel.MapGrid.MapGridAuthoring.WallTagName)
+            {
+                return current;
+            }
+
+            current = current.parent;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -340,7 +396,7 @@ public sealed class CameraOcclusionFader : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 补齐当前命中缓冲区大小，确保 RaycastNonAlloc 始终有足够空间容纳命中结果。
+    /// summary: 补齐当前命中缓冲区大小，确保 Raycast/SphereCast NonAlloc 始终有足够空间容纳命中结果。
     /// param: 无
     /// returns: 无
     /// </summary>

@@ -166,7 +166,7 @@ public sealed class TokenSelectModalTests
     }
 
     [Test]
-    public void TokenSelectUIScreen_BuildsExpectedNumberOfCards()
+    public void TokenSelectUIScreen_BuildsThreeCardsByDefault()
     {
         BulletTokenLibrary library = CreateRuntimeLibrary(
             CreateToken<CoreTokenData>("fire", "Fire", "Hot core"),
@@ -176,7 +176,6 @@ public sealed class TokenSelectModalTests
             CreateToken<ResultTokenData>("boom", "Boom", "Explosion result"));
 
         TokenSelectUIScreen screen = CreateScreenRoot(library);
-        screen.SetChoiceCountOverride(3);
         screen.SetSelectionRandom(new VocalithRandom(1));
 
         InvokeNonPublic(screen, "OnInit");

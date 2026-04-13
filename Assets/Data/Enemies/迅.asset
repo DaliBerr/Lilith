@@ -12,13 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
   m_Name: "\u8FC5"
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  enemyId: 迅
-  displayName: 迅
+  enemyId: "\u8FC5"
+  displayName: "\u8FC5"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 2
   attackKind: 1
   dashMovement:
-    triggerDistance: 24
+    triggerDistance: 48
     windupSeconds: 0.45
     dashSpeedMultiplier: 3
     dashDurationSeconds: 0.3
@@ -34,7 +34,7 @@ MonoBehaviour:
     orbitSpeedMultiplier: 1
     clockwise: 0
   visual:
-    glyphText: 迅
+    glyphText: "\u8FC5"
     glyphColor: {r: 1, g: 0.904488, b: 0.5235849, a: 1}
     runeBaseSprite: {fileID: 21300000, guid: 102f1e024a95ffd458c822de641b670c, type: 3}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}

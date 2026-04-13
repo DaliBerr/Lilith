@@ -1,5 +1,6 @@
 using System.Collections;
 using Kernel.GameState;
+using Kernel.Quest;
 using Kernel.UI;
 using Vocalith.Localization;
 using Vocalith.Logging;
@@ -316,7 +317,12 @@ namespace Kernel
         {
             UnsubscribeFromNarrativeSequence();
 
-            if (result.Status == StorySequenceCompletionStatus.Failed)
+            if (result.Status == StorySequenceCompletionStatus.Completed)
+            {
+                RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
+                saveService?.SetStoryFlag(TutorialQuestConstants.IntroductionReadFlagId, true);
+            }
+            else if (result.Status == StorySequenceCompletionStatus.Failed)
             {
                 GameDebug.LogWarning($"[GlobalStartup] Story intro failed: {result.ErrorMessage}");
             }

@@ -182,8 +182,8 @@ RectTransform:
   - {fileID: 4777214138812732119}
   m_Father: {fileID: 3137487572792317454}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.11, y: 0.05}
-  m_AnchorMax: {x: 0.89, y: 0.87}
+  m_AnchorMin: {x: 0.08, y: 0.05}
+  m_AnchorMax: {x: 0.86, y: 0.87}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -498,6 +498,8 @@ MonoBehaviour:
   backPackGrid: {fileID: 5746976692072046182}
   slotPrefab: {fileID: 1960404090531532465, guid: b38ac7e42c21c7e40b5dec428fdbe892, type: 3}
   attackPreviewController: {fileID: 2688562547220516590}
+  hoverPreviewPrefab: {fileID: 4845717621748364334, guid: e5b98263adf94d04ab18ac63ad9168e8, type: 3}
+  hoverPreviewScreenOffset: {x: 0, y: 0}
   linkedOutlineColor: {r: 1, g: 0.84, b: 0.35, a: 0.95}
   linkedOutlineThickness: 4
   linkedOutlinePadding: {x: 6, y: 6}

@@ -28,28 +28,28 @@ MonoBehaviour:
   - {fileID: 11400000, guid: e02b38fe83ce18b46ad2b5d99f774f85, type: 2}
   tokenWeights:
   - token: {fileID: 11400000, guid: 60ae7cfbc364cfd42be3310cae27c72d, type: 2}
-    drawWeight: 1
+    drawWeight: 5
   - token: {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
-    drawWeight: 1
+    drawWeight: 5
   - token: {fileID: 11400000, guid: 43b717043b8e70f42a5133f5f171aac9, type: 2}
-    drawWeight: 1
+    drawWeight: 5
   - token: {fileID: 11400000, guid: d003c8ca439ab0a43920510c3f8ed8b2, type: 2}
-    drawWeight: 1
+    drawWeight: 5
   - token: {fileID: 11400000, guid: a94bb00697b08684ebb196df6a126394, type: 2}
     drawWeight: 1
   - token: {fileID: 11400000, guid: 619db91a1ef104c4fbb3072a17ae9e15, type: 2}
-    drawWeight: 1
+    drawWeight: 0.5
   - token: {fileID: 11400000, guid: 7fdec109bdb8a4249ac2c5ddbd680095, type: 2}
-    drawWeight: 1
+    drawWeight: 0.5
   - token: {fileID: 11400000, guid: ced695a1e67dacd46836273b90e439ba, type: 2}
-    drawWeight: 1
+    drawWeight: 0.5
   - token: {fileID: 11400000, guid: 416a9aef644354e46a0d92ac0882b88e, type: 2}
-    drawWeight: 1
+    drawWeight: 0.5
   - token: {fileID: 11400000, guid: 75ab13e681202c044b784abc69d81992, type: 2}
-    drawWeight: 1
+    drawWeight: 0.5
   - token: {fileID: 11400000, guid: f34b2ee987af5e04fb918b5bb0d5309f, type: 2}
-    drawWeight: 1
+    drawWeight: 0.4
   - token: {fileID: 11400000, guid: 590b26c9560d7ec42a021e97cd9f3626, type: 2}
-    drawWeight: 1
+    drawWeight: 0.4
   - token: {fileID: 11400000, guid: e02b38fe83ce18b46ad2b5d99f774f85, type: 2}
-    drawWeight: 1
+    drawWeight: 0.4

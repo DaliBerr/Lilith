@@ -32,7 +32,7 @@ MonoBehaviour:
   maxTravelDistance: 216
   impactMask:
     serializedVersion: 2
-    m_Bits: 4294967291
+    m_Bits: 2035
   armoredEnemyId: 
   armoredDamageMultiplier: 1
   burnTriggerCount: 3

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
 using NUnit.Framework;
+using TMPro;
 using UnityEditor;
 using UnityEngine;
 
@@ -161,6 +162,31 @@ public sealed class BulletTokenPickupTests
             Assert.That(shadow, Is.Not.Null);
             Assert.That(glyph.GetComponent<GameplayBillboard>(), Is.Null);
             Assert.That(shadow.GetComponent<GameplayBillboard>(), Is.Null);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
+    public void Prefab_ShadowTextStartsEmptyAndCanSyncWithGlyphText()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/Bullet/BulletTokenPickup.prefab");
+
+        try
+        {
+            BulletTokenPickup pickup = prefabRoot.GetComponent<BulletTokenPickup>();
+            Transform glyph = prefabRoot.transform.Find("Glyph");
+            Transform shadow = prefabRoot.transform.Find("Shadow");
+            TMP_Text glyphText = glyph.GetComponent<TMP_Text>();
+            TMP_Text shadowText = shadow.GetComponent<TMP_Text>();
+            CoreTokenData token = CreateToken<CoreTokenData>("pickup_fire", "Pickup Fire");
+
+            Assert.That(shadowText.text, Is.Empty);
+            Assert.That(pickup.TrySetToken(token), Is.True);
+            Assert.That(glyphText.text, Is.EqualTo("Pickup Fire"));
+            Assert.That(shadowText.text, Is.EqualTo("Pickup Fire"));
         }
         finally
         {

@@ -1,4 +1,5 @@
 using Kernel.GameState;
+using UnityEngine.EventSystems;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -11,7 +12,7 @@ namespace Kernel.UI
     /// </summary>
     [DisallowMultipleComponent]
     [UIPrefab("Assets/Prefabs/UI/Storyteller Panel")]
-    public sealed class StoryTellerUIScreen : GameUIScreen
+    public sealed class StoryTellerUIScreen : GameUIScreen, IPointerClickHandler
     {
         [Header("Bindings")]
         [SerializeField] private TMP_Text storyText;
@@ -198,6 +199,16 @@ namespace Kernel.UI
         private void HandleSkipButtonClicked()
         {
             StorySequenceParser.Instance?.RequestSkipToNextReplaceOrFinish();
+        }
+
+        /// <summary>
+        /// summary: 响应面板本体点击，按 Story 对话的“继续/结束”规则推进到下一步。
+        /// param name="eventData": Unity UI 指针点击事件
+        /// returns: 无
+        /// </summary>
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            StorySequenceParser.Instance?.RequestAdvanceToNextEntryOrFinish();
         }
 
         /// <summary>

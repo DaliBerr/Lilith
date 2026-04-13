@@ -1,6 +1,8 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
+using Kernel.Quest;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
@@ -14,6 +16,8 @@ public sealed class MainUIScreenTests
     [TearDown]
     public void TearDown()
     {
+        DestroyExistingQuestService();
+
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {
             if (createdObjects[i] != null)
@@ -55,7 +59,7 @@ public sealed class MainUIScreenTests
             boomToken,
         });
 
-        MainUIScreen screen = CreateMainUIScreen(out RectTransform spellPanel, out BackPackGridSlotView templateSlot);
+        MainUIScreen screen = CreateMainUIScreen(out RectTransform spellPanel, out BackPackGridSlotView templateSlot, out _);
         InvokeNonPublic(screen, "OnInit");
 
         List<BackPackGridSlotView> visibleSlots = GetVisibleSpellSlots(spellPanel);
@@ -80,7 +84,7 @@ public sealed class MainUIScreenTests
             fireToken,
         });
 
-        MainUIScreen screen = CreateMainUIScreen(out RectTransform spellPanel, out _);
+        MainUIScreen screen = CreateMainUIScreen(out RectTransform spellPanel, out _, out _);
         InvokeNonPublic(screen, "OnInit");
 
         loadout.SetTokens(new BaseTokenData[]
@@ -112,7 +116,7 @@ public sealed class MainUIScreenTests
             linked,
         });
 
-        MainUIScreen screen = CreateMainUIScreen(out RectTransform spellPanel, out _);
+        MainUIScreen screen = CreateMainUIScreen(out RectTransform spellPanel, out _, out _);
         InvokeNonPublic(screen, "OnInit");
 
         List<BackPackGridSlotView> visibleSlots = GetVisibleSpellSlots(spellPanel);
@@ -129,7 +133,60 @@ public sealed class MainUIScreenTests
         Assert.That(GetActiveLinkedOutlines(screen.gameObject).Count, Is.EqualTo(0));
     }
 
-    private MainUIScreen CreateMainUIScreen(out RectTransform spellPanel, out BackPackGridSlotView templateSlot)
+    [Test]
+    public void MainUIScreen_RebuildsQuestPanelFromActiveQuestSnapshots()
+    {
+        QuestService questService = CreateQuestService();
+        SetQuestSnapshots(questService, new[]
+        {
+            new QuestActiveSnapshot("quest_1", "First quest"),
+            new QuestActiveSnapshot("quest_2", "Second quest")
+        });
+
+        MainUIScreen screen = CreateMainUIScreen(out _, out _, out RectTransform questListRoot);
+        SetNonPublicField(screen, "currentQuestService", questService);
+        SetNonPublicField(screen, "questEntryPrefab", CreateQuestEntryTemplate("Quest Entry Template"));
+
+        InvokeNonPublic(screen, "OnInit");
+
+        QuestEntryView[] entries = questListRoot.GetComponentsInChildren<QuestEntryView>(true);
+
+        Assert.That(screen.QuestPanel, Is.Not.Null);
+        Assert.That(screen.QuestListRoot, Is.SameAs(questListRoot));
+        Assert.That(entries.Length, Is.EqualTo(2));
+        Assert.That(entries[0].QuestText.text, Is.EqualTo("First quest"));
+        Assert.That(entries[1].QuestText.text, Is.EqualTo("Second quest"));
+    }
+
+    [Test]
+    public void MainUIScreen_QuestCompletionFadeDestroysRuntimeEntry()
+    {
+        QuestService questService = CreateQuestService();
+        SetQuestSnapshots(questService, new[]
+        {
+            new QuestActiveSnapshot("quest_done", "Fade me")
+        });
+
+        MainUIScreen screen = CreateMainUIScreen(out _, out _, out _);
+        SetNonPublicField(screen, "currentQuestService", questService);
+        SetNonPublicField(screen, "questEntryPrefab", CreateQuestEntryTemplate("Quest Entry Template"));
+        SetNonPublicField(screen, "questEntryFadeDuration", 0f);
+
+        InvokeNonPublic(screen, "OnInit");
+
+        Dictionary<string, QuestEntryView> runtimeEntries = GetNonPublicField<Dictionary<string, QuestEntryView>>(screen, "runtimeQuestEntries");
+        Assert.That(runtimeEntries.ContainsKey("quest_done"), Is.True);
+
+        SetQuestSnapshots(questService, System.Array.Empty<QuestActiveSnapshot>());
+        IEnumerator fade = InvokeNonPublic<IEnumerator>(screen, "PlayQuestEntryFadeOutCo", "quest_done", runtimeEntries["quest_done"]);
+        while (fade.MoveNext())
+        {
+        }
+
+        Assert.That(runtimeEntries.ContainsKey("quest_done"), Is.False);
+    }
+
+    private MainUIScreen CreateMainUIScreen(out RectTransform spellPanel, out BackPackGridSlotView templateSlot, out RectTransform questListRoot)
     {
         GameObject root = CreateUiObject("MainUI");
         root.AddComponent<Image>();
@@ -151,7 +208,39 @@ public sealed class MainUIScreenTests
         spellPanel = spellPanelObject.GetComponent<RectTransform>();
         templateSlot = CreateSpellSlot("BackPack Grid Prefab", spellPanelObject.transform);
 
+        GameObject questPanel = CreateUiObject("Quest Panel", root.transform);
+        questPanel.AddComponent<Image>();
+        GameObject questTitle = CreateUiObject("Tittle", questPanel.transform);
+        questTitle.AddComponent<Image>();
+        CreateTextObject("Text (TMP)", questTitle.transform);
+        GameObject quests = CreateUiObject("Quests", questPanel.transform);
+        quests.AddComponent<Image>();
+        quests.AddComponent<VerticalLayoutGroup>();
+        quests.AddComponent<ContentSizeFitter>();
+        questListRoot = quests.GetComponent<RectTransform>();
+
         return screen;
+    }
+
+    private QuestEntryView CreateQuestEntryTemplate(string name)
+    {
+        GameObject templateObject = CreateUiObject(name);
+        templateObject.AddComponent<Image>();
+        CanvasGroup canvasGroup = templateObject.AddComponent<CanvasGroup>();
+        templateObject.AddComponent<LayoutElement>();
+        QuestEntryView entryView = templateObject.AddComponent<QuestEntryView>();
+        TMP_Text questText = CreateTextObject("Quest Text", templateObject.transform).GetComponent<TMP_Text>();
+        SetNonPublicField(entryView, "questText", questText);
+        SetNonPublicField(entryView, "canvasGroup", canvasGroup);
+        templateObject.SetActive(false);
+        return entryView;
+    }
+
+    private QuestService CreateQuestService()
+    {
+        DestroyExistingQuestService();
+        GameObject questObject = CreateGameObject("QuestService");
+        return questObject.AddComponent<QuestService>();
     }
 
     private AttackFormulaLoadout CreatePlayerWithLoadout(IEnumerable<BaseTokenData> tokens)
@@ -240,6 +329,34 @@ public sealed class MainUIScreenTests
         method.Invoke(target, null);
     }
 
+    private static T InvokeNonPublic<T>(object target, string methodName, params object[] arguments)
+    {
+        MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null, $"{target.GetType().Name}.{methodName} should exist.");
+        return (T)method.Invoke(target, arguments);
+    }
+
+    private static void SetQuestSnapshots(QuestService service, IEnumerable<QuestActiveSnapshot> snapshots)
+    {
+        List<QuestActiveSnapshot> runtimeSnapshots = GetNonPublicField<List<QuestActiveSnapshot>>(service, "activeQuestSnapshots");
+        runtimeSnapshots.Clear();
+        runtimeSnapshots.AddRange(snapshots);
+    }
+
+    private static T GetNonPublicField<T>(object target, string fieldName)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"{target.GetType().Name}.{fieldName} should exist.");
+        return (T)field.GetValue(target);
+    }
+
+    private static void SetNonPublicField(object target, string fieldName, object value)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"{target.GetType().Name}.{fieldName} should exist.");
+        field.SetValue(target, value);
+    }
+
     private static List<BackPackGridSlotView> GetVisibleSpellSlots(RectTransform spellPanel)
     {
         List<BackPackGridSlotView> result = new();
@@ -275,5 +392,14 @@ public sealed class MainUIScreenTests
         }
 
         return result;
+    }
+
+    private static void DestroyExistingQuestService()
+    {
+        QuestService existingService = Object.FindFirstObjectByType<QuestService>();
+        if (existingService != null)
+        {
+            Object.DestroyImmediate(existingService.gameObject);
+        }
     }
 }

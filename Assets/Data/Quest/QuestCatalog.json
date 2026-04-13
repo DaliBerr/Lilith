@@ -1,0 +1,70 @@
+{
+  "quests": [
+    {
+      "id": "tutorial_open_backpack",
+      "text": "打开背包检查情况",
+      "prerequisites": [
+        {
+          "kind": "story_flag_set",
+          "storyFlagId": "tutorial.introduction_read"
+        }
+      ],
+      "completion": [
+        {
+          "kind": "story_flag_set",
+          "storyFlagId": "tutorial.backpack_opened_once"
+        }
+      ],
+      "rewards": [
+        {
+          "kind": "inventory_token",
+          "tokenAddress": "Assets/Data/BulletTokens/Core/InitCore"
+        }
+      ]
+    },
+    {
+      "id": "tutorial_compile_spellbook",
+      "text": "将核心拖动放置于背包上方的格子中",
+      "prerequisites": [
+        {
+          "kind": "inventory_contains_token",
+          "tokenAddress": "Assets/Data/BulletTokens/Core/InitCore"
+        }
+      ],
+      "completion": [
+        {
+          "kind": "story_flag_set",
+          "storyFlagId": "tutorial.spellbook_compiled_once"
+        }
+      ],
+      "rewards": [
+        {
+          "kind": "story_flag_set",
+          "storyFlagId": "tutorial.teleporter_unlocked"
+        }
+      ]
+    },
+    {
+      "id": "tutorial_enter_teleporter",
+      "text": "走进书籍传送门",
+      "prerequisites": [
+        {
+          "kind": "story_flag_set",
+          "storyFlagId": "tutorial.teleporter_unlocked"
+        }
+      ],
+      "completion": [
+        {
+          "kind": "story_flag_set",
+          "storyFlagId": "tutorial.teleporter_triggered_once"
+        }
+      ],
+      "rewards": [
+        {
+          "kind": "story_flag_set",
+          "storyFlagId": "tutorial.guide_chain_finished"
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Kernel.Bullet;
 using Kernel.GameState;
+using Kernel.Quest;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -30,6 +31,10 @@ namespace Kernel.UI
         [SerializeField] private BackPackGridSlotView slotPrefab;
         [SerializeField] private BackPackAttackPreviewController attackPreviewController;
 
+        [Header("Hover Preview")]
+        [SerializeField] private BulletTokenSelectionView hoverPreviewPrefab;
+        [SerializeField] private Vector2 hoverPreviewScreenOffset = new(28f, -28f);
+
         [Header("Linked Outline")]
         [SerializeField] private Color linkedOutlineColor = new(1f, 0.84f, 0.35f, 0.95f);
         [SerializeField, Min(1f)] private float linkedOutlineThickness = 4f;
@@ -56,6 +61,9 @@ namespace Kernel.UI
         private LinkedTokenOutlineView dragLinkedOutlineView;
         private Vector2 dragPreviewScreenOffset;
         private Vector2 dragLinkedOutlineScreenOffset;
+        private BulletTokenSelectionView hoverPreviewView;
+        private BackPackGridSlotView activeHoverSlot;
+        private PlaceableTokenData activeHoverItem;
 
         public override Status currentStatus { get; } = StatusList.InBackPackStatus;
 
@@ -68,11 +76,13 @@ namespace Kernel.UI
             EnsureDragPreviewLayer();
             EnsureLinkedOutlineLayers();
             ApplyBackPackGridLayoutDefaults();
+            HideHoverPreview();
         }
 
         protected override void OnBeforeShow()
         {
             RefreshFromCurrentPlayer();
+            TryMarkStoryFlag(TutorialQuestConstants.BackpackOpenedFlagId);
         }
 
         protected override void OnAfterHide()
@@ -108,6 +118,7 @@ namespace Kernel.UI
         public void RefreshFromCurrentPlayer()
         {
             CancelActiveDragSession();
+            HideHoverPreview();
             TryAutoBindReferences();
             ApplyBackPackGridLayoutDefaults();
             EnsureSpellBookCellsInitialized();
@@ -129,7 +140,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 供后续输入层调用，请求关闭当前背包界面。
+        /// summary: 供后续输入层调用，请求关闭当前背包界面；优先走 modal 关闭路径，兼容旧的 screen 打开方式。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -143,7 +154,7 @@ namespace Kernel.UI
 
             if (ui.GetTopModal() == this)
             {
-                ui.CloseTopModal();
+                ui.CloseModal(this);
                 return;
             }
 
@@ -167,6 +178,7 @@ namespace Kernel.UI
             }
 
             CancelActiveDragSession();
+            HideHoverPreview();
             activeDragSource = source;
             activeDragItem = source.Item;
             activeDragSourceAnchorIndex = source.AnchorIndex >= 0 ? source.AnchorIndex : source.SlotIndex - source.LocalOffset;
@@ -255,9 +267,89 @@ namespace Kernel.UI
             RefreshLinkedOutlines();
         }
 
+        /// <summary>
+        /// summary: 响应槽位悬停进入事件，显示当前槽位承载 token 的效果预览。
+        /// param: source 当前悬停进入的槽位
+        /// param: eventData 当前指针事件数据
+        /// returns: 无
+        /// </summary>
+        public void NotifySlotHoverEnter(BackPackGridSlotView source, PointerEventData eventData)
+        {
+            if (activeDragSource != null)
+            {
+                HideHoverPreview();
+                return;
+            }
+
+            ShowHoverPreview(source, eventData);
+        }
+
+        /// <summary>
+        /// summary: 响应槽位悬停移动事件，驱动预览卡片跟随当前鼠标位置。
+        /// param: source 当前悬停中的槽位
+        /// param: eventData 当前指针事件数据
+        /// returns: 无
+        /// </summary>
+        public void NotifySlotHoverMove(BackPackGridSlotView source, PointerEventData eventData)
+        {
+            if (source == null || source != activeHoverSlot || activeDragSource != null)
+            {
+                return;
+            }
+
+            if (source.Item == null)
+            {
+                HideHoverPreview();
+                return;
+            }
+
+            if (hoverPreviewView == null || !hoverPreviewView.gameObject.activeSelf)
+            {
+                ShowHoverPreview(source, eventData);
+                return;
+            }
+
+            if (activeHoverItem != source.Item)
+            {
+                BindHoverPreviewToken(source.Item);
+            }
+
+            MoveHoverPreview(ResolveHoverScreenPosition(source, eventData), ResolvePointerEventCamera(eventData));
+        }
+
+        /// <summary>
+        /// summary: 响应槽位悬停离开事件，隐藏当前预览卡片。
+        /// param: source 当前离开的槽位
+        /// returns: 无
+        /// </summary>
+        public void NotifySlotHoverExit(BackPackGridSlotView source)
+        {
+            if (source == null || source != activeHoverSlot)
+            {
+                return;
+            }
+
+            HideHoverPreview();
+        }
+
         private bool TryMoveInventoryItem(int targetAnchorIndex)
         {
-            return currentInventory != null && currentInventory.TryMoveItem(activeDragSourceAnchorIndex, targetAnchorIndex);
+            if (currentInventory == null || activeDragItem == null)
+            {
+                return false;
+            }
+
+            if (currentInventory.TryMoveItem(activeDragSourceAnchorIndex, targetAnchorIndex))
+            {
+                return true;
+            }
+
+            if (!TryGetSingleInventoryConflict(targetAnchorIndex, activeDragItem, activeDragSourceAnchorIndex, out PlaceableTokenData targetItem, out int targetItemAnchorIndex))
+            {
+                return false;
+            }
+
+            return TrySwapInventoryItems(activeDragSourceAnchorIndex, targetAnchorIndex, activeDragItem, targetItemAnchorIndex, targetItem);
         }
 
         private bool TryMoveInventoryItemToSpellBook(int targetAnchorIndex)
@@ -267,24 +359,29 @@ namespace Kernel.UI
                 return false;
             }
 
-            if (!TryPlaceSpellBookItem(targetAnchorIndex, activeDragItem))
+            if (TryPlaceSpellBookItem(targetAnchorIndex, activeDragItem))
+            {
+                if (!currentInventory.TryRemoveItemAtCell(activeDragSourceAnchorIndex, out PlaceableTokenData removedItem, out _))
+                {
+                    return false;
+                }
+
+                if (removedItem != activeDragItem)
+                {
+                    currentInventory.TryPlaceItem(activeDragSourceAnchorIndex, removedItem);
+                    return false;
+                }
+
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, targetAnchorIndex, removedItem);
+                return true;
+            }
+
+            if (!TryGetSingleSpellBookConflict(targetAnchorIndex, activeDragItem, -1, out PlaceableTokenData targetItem, out int targetItemAnchorIndex))
             {
                 return false;
             }
 
-            if (!currentInventory.TryRemoveItemAtCell(activeDragSourceAnchorIndex, out PlaceableTokenData removedItem, out _))
-            {
-                return false;
-            }
-
-            if (removedItem != activeDragItem)
-            {
-                currentInventory.TryPlaceItem(activeDragSourceAnchorIndex, removedItem);
-                return false;
-            }
-
-            BackPackTokenLayoutUtility.WriteItem(spellBookCells, targetAnchorIndex, removedItem);
-            return true;
+            return TrySwapInventoryAndSpellBook(activeDragSourceAnchorIndex, targetAnchorIndex, activeDragItem, targetItemAnchorIndex, targetItem);
         }
 
         private bool TryMoveSpellBookItemToInventory(int targetAnchorIndex)
@@ -294,23 +391,28 @@ namespace Kernel.UI
                 return false;
             }
 
-            if (!currentInventory.CanPlaceItem(targetAnchorIndex, activeDragItem))
+            if (currentInventory.CanPlaceItem(targetAnchorIndex, activeDragItem))
+            {
+                if (!TryRemoveSpellBookItemAtCell(activeDragSourceAnchorIndex, out PlaceableTokenData removedItem, out int sourceAnchorIndex))
+                {
+                    return false;
+                }
+
+                if (!currentInventory.TryPlaceItem(targetAnchorIndex, removedItem))
+                {
+                    BackPackTokenLayoutUtility.WriteItem(spellBookCells, sourceAnchorIndex, removedItem);
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (!TryGetSingleInventoryConflict(targetAnchorIndex, activeDragItem, -1, out PlaceableTokenData targetItem, out int targetItemAnchorIndex))
             {
                 return false;
             }
 
-            if (!TryRemoveSpellBookItemAtCell(activeDragSourceAnchorIndex, out PlaceableTokenData removedItem, out int sourceAnchorIndex))
-            {
-                return false;
-            }
-
-            if (!currentInventory.TryPlaceItem(targetAnchorIndex, removedItem))
-            {
-                BackPackTokenLayoutUtility.WriteItem(spellBookCells, sourceAnchorIndex, removedItem);
-                return false;
-            }
-
-            return true;
+            return TrySwapSpellBookAndInventory(activeDragSourceAnchorIndex, targetAnchorIndex, activeDragItem, targetItemAnchorIndex, targetItem);
         }
 
         private bool TryMoveSpellBookItem(int targetAnchorIndex)
@@ -325,14 +427,19 @@ namespace Kernel.UI
                 return true;
             }
 
-            if (!TryPlaceSpellBookItem(targetAnchorIndex, activeDragItem, activeDragSourceAnchorIndex))
+            if (TryPlaceSpellBookItem(targetAnchorIndex, activeDragItem, activeDragSourceAnchorIndex))
+            {
+                BackPackTokenLayoutUtility.ClearItem(spellBookCells, activeDragSourceAnchorIndex);
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, targetAnchorIndex, activeDragItem);
+                return true;
+            }
+
+            if (!TryGetSingleSpellBookConflict(targetAnchorIndex, activeDragItem, activeDragSourceAnchorIndex, out PlaceableTokenData targetItem, out int targetItemAnchorIndex))
             {
                 return false;
             }
 
-            BackPackTokenLayoutUtility.ClearItem(spellBookCells, activeDragSourceAnchorIndex);
-            BackPackTokenLayoutUtility.WriteItem(spellBookCells, targetAnchorIndex, activeDragItem);
-            return true;
+            return TrySwapSpellBookItems(activeDragSourceAnchorIndex, targetAnchorIndex, activeDragItem, targetItemAnchorIndex, targetItem);
         }
 
         private bool TryPlaceSpellBookItem(int targetAnchorIndex, PlaceableTokenData item, int anchorIndexToIgnore = -1)
@@ -359,6 +466,319 @@ namespace Kernel.UI
             anchorIndex = cell.anchorIndex;
             BackPackTokenLayoutUtility.ClearItem(spellBookCells, anchorIndex);
             return true;
+        }
+
+        private bool TryGetSingleInventoryConflict(int targetAnchorIndex, PlaceableTokenData movingItem, int anchorIndexToIgnore, out PlaceableTokenData conflictItem, out int conflictAnchorIndex)
+        {
+            conflictItem = null;
+            conflictAnchorIndex = -1;
+            if (currentInventory == null)
+            {
+                return false;
+            }
+
+            int span = ResolveItemSpan(movingItem);
+            if (!IsPlacementInBounds(targetAnchorIndex, span, InventorySlotCount, PlayerBulletTokenInventory.Columns))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < span; i++)
+            {
+                TokenCellOccupancy cell = currentInventory.GetCell(targetAnchorIndex + i);
+                if (!cell.IsOccupied || cell.anchorIndex == anchorIndexToIgnore)
+                {
+                    continue;
+                }
+
+                if (conflictItem == null)
+                {
+                    conflictItem = cell.item;
+                    conflictAnchorIndex = cell.anchorIndex;
+                    continue;
+                }
+
+                if (cell.anchorIndex != conflictAnchorIndex || cell.item != conflictItem)
+                {
+                    conflictItem = null;
+                    conflictAnchorIndex = -1;
+                    return false;
+                }
+            }
+
+            return conflictItem != null && conflictAnchorIndex >= 0;
+        }
+
+        private bool TryGetSingleSpellBookConflict(int targetAnchorIndex, PlaceableTokenData movingItem, int anchorIndexToIgnore, out PlaceableTokenData conflictItem, out int conflictAnchorIndex)
+        {
+            conflictItem = null;
+            conflictAnchorIndex = -1;
+            int span = ResolveItemSpan(movingItem);
+            if (!IsPlacementInBounds(targetAnchorIndex, span, SpellBookSlotCount, SpellBookSlotCount))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < span; i++)
+            {
+                TokenCellOccupancy cell = spellBookCells[targetAnchorIndex + i];
+                if (!cell.IsOccupied || cell.anchorIndex == anchorIndexToIgnore)
+                {
+                    continue;
+                }
+
+                if (conflictItem == null)
+                {
+                    conflictItem = cell.item;
+                    conflictAnchorIndex = cell.anchorIndex;
+                    continue;
+                }
+
+                if (cell.anchorIndex != conflictAnchorIndex || cell.item != conflictItem)
+                {
+                    conflictItem = null;
+                    conflictAnchorIndex = -1;
+                    return false;
+                }
+            }
+
+            return conflictItem != null && conflictAnchorIndex >= 0;
+        }
+
+        private bool TrySwapInventoryItems(int sourceAnchorIndex, int targetAnchorIndex, PlaceableTokenData sourceItem, int conflictAnchorIndex, PlaceableTokenData conflictItem)
+        {
+            if (currentInventory == null || sourceItem == null || conflictItem == null)
+            {
+                return false;
+            }
+
+            if (ResolveItemSpan(sourceItem) != ResolveItemSpan(conflictItem))
+            {
+                return false;
+            }
+
+            if (!currentInventory.TryRemoveItemAtCell(sourceAnchorIndex, out PlaceableTokenData removedSourceItem, out int removedSourceAnchorIndex))
+            {
+                return false;
+            }
+
+            if (removedSourceItem != sourceItem || removedSourceAnchorIndex != sourceAnchorIndex)
+            {
+                currentInventory.TryPlaceItem(sourceAnchorIndex, removedSourceItem);
+                return false;
+            }
+
+            if (!currentInventory.TryRemoveItemAtCell(conflictAnchorIndex, out PlaceableTokenData removedConflictItem, out int removedConflictAnchorIndex))
+            {
+                currentInventory.TryPlaceItem(sourceAnchorIndex, removedSourceItem);
+                return false;
+            }
+
+            if (removedConflictItem != conflictItem || removedConflictAnchorIndex != conflictAnchorIndex)
+            {
+                currentInventory.TryPlaceItem(sourceAnchorIndex, removedSourceItem);
+                if (removedConflictItem != null)
+                {
+                    currentInventory.TryPlaceItem(conflictAnchorIndex, removedConflictItem);
+                }
+
+                return false;
+            }
+
+            if (!currentInventory.TryPlaceItem(sourceAnchorIndex, removedConflictItem))
+            {
+                currentInventory.TryPlaceItem(sourceAnchorIndex, removedSourceItem);
+                currentInventory.TryPlaceItem(conflictAnchorIndex, removedConflictItem);
+                return false;
+            }
+
+            if (currentInventory.TryPlaceItem(targetAnchorIndex, removedSourceItem))
+            {
+                return true;
+            }
+
+            currentInventory.TryRemoveItemAtCell(sourceAnchorIndex, out _, out _);
+            currentInventory.TryPlaceItem(sourceAnchorIndex, removedSourceItem);
+            currentInventory.TryPlaceItem(conflictAnchorIndex, removedConflictItem);
+            return false;
+        }
+
+        private bool TrySwapInventoryAndSpellBook(int inventorySourceAnchorIndex, int spellBookTargetAnchorIndex, PlaceableTokenData inventoryItem, int spellBookConflictAnchorIndex, PlaceableTokenData spellBookConflictItem)
+        {
+            if (currentInventory == null || inventoryItem == null || spellBookConflictItem == null)
+            {
+                return false;
+            }
+
+            if (ResolveItemSpan(inventoryItem) != ResolveItemSpan(spellBookConflictItem))
+            {
+                return false;
+            }
+
+            if (!currentInventory.TryRemoveItemAtCell(inventorySourceAnchorIndex, out PlaceableTokenData removedInventoryItem, out int removedInventoryAnchorIndex))
+            {
+                return false;
+            }
+
+            if (removedInventoryItem != inventoryItem || removedInventoryAnchorIndex != inventorySourceAnchorIndex)
+            {
+                currentInventory.TryPlaceItem(inventorySourceAnchorIndex, removedInventoryItem);
+                return false;
+            }
+
+            if (!TryRemoveSpellBookItemAtCell(spellBookConflictAnchorIndex, out PlaceableTokenData removedSpellBookItem, out int removedSpellBookAnchorIndex))
+            {
+                currentInventory.TryPlaceItem(inventorySourceAnchorIndex, removedInventoryItem);
+                return false;
+            }
+
+            if (removedSpellBookItem != spellBookConflictItem || removedSpellBookAnchorIndex != spellBookConflictAnchorIndex)
+            {
+                currentInventory.TryPlaceItem(inventorySourceAnchorIndex, removedInventoryItem);
+                if (removedSpellBookItem != null && removedSpellBookAnchorIndex >= 0)
+                {
+                    BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedSpellBookItem);
+                }
+
+                return false;
+            }
+
+            if (!currentInventory.TryPlaceItem(inventorySourceAnchorIndex, removedSpellBookItem))
+            {
+                currentInventory.TryPlaceItem(inventorySourceAnchorIndex, removedInventoryItem);
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedSpellBookItem);
+                return false;
+            }
+
+            if (TryPlaceSpellBookItem(spellBookTargetAnchorIndex, removedInventoryItem))
+            {
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, spellBookTargetAnchorIndex, removedInventoryItem);
+                return true;
+            }
+
+            currentInventory.TryRemoveItemAtCell(inventorySourceAnchorIndex, out _, out _);
+            currentInventory.TryPlaceItem(inventorySourceAnchorIndex, removedInventoryItem);
+            BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedSpellBookItem);
+            return false;
+        }
+
+        private bool TrySwapSpellBookAndInventory(int spellBookSourceAnchorIndex, int inventoryTargetAnchorIndex, PlaceableTokenData spellBookItem, int inventoryConflictAnchorIndex, PlaceableTokenData inventoryConflictItem)
+        {
+            if (currentInventory == null || spellBookItem == null || inventoryConflictItem == null)
+            {
+                return false;
+            }
+
+            if (ResolveItemSpan(spellBookItem) != ResolveItemSpan(inventoryConflictItem))
+            {
+                return false;
+            }
+
+            if (!TryRemoveSpellBookItemAtCell(spellBookSourceAnchorIndex, out PlaceableTokenData removedSpellBookItem, out int removedSpellBookAnchorIndex))
+            {
+                return false;
+            }
+
+            if (removedSpellBookItem != spellBookItem || removedSpellBookAnchorIndex != spellBookSourceAnchorIndex)
+            {
+                if (removedSpellBookItem != null && removedSpellBookAnchorIndex >= 0)
+                {
+                    BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedSpellBookItem);
+                }
+
+                return false;
+            }
+
+            if (!currentInventory.TryRemoveItemAtCell(inventoryConflictAnchorIndex, out PlaceableTokenData removedInventoryItem, out int removedInventoryAnchorIndex))
+            {
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedSpellBookItem);
+                return false;
+            }
+
+            if (removedInventoryItem != inventoryConflictItem || removedInventoryAnchorIndex != inventoryConflictAnchorIndex)
+            {
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedSpellBookItem);
+                if (removedInventoryItem != null)
+                {
+                    currentInventory.TryPlaceItem(inventoryConflictAnchorIndex, removedInventoryItem);
+                }
+
+                return false;
+            }
+
+            if (!TryPlaceSpellBookItem(removedSpellBookAnchorIndex, removedInventoryItem))
+            {
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedSpellBookItem);
+                currentInventory.TryPlaceItem(inventoryConflictAnchorIndex, removedInventoryItem);
+                return false;
+            }
+
+            BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedInventoryItem);
+            if (currentInventory.TryPlaceItem(inventoryTargetAnchorIndex, removedSpellBookItem))
+            {
+                return true;
+            }
+
+            BackPackTokenLayoutUtility.ClearItem(spellBookCells, removedSpellBookAnchorIndex);
+            BackPackTokenLayoutUtility.WriteItem(spellBookCells, removedSpellBookAnchorIndex, removedSpellBookItem);
+            currentInventory.TryPlaceItem(inventoryConflictAnchorIndex, removedInventoryItem);
+            return false;
+        }
+
+        private bool TrySwapSpellBookItems(int sourceAnchorIndex, int targetAnchorIndex, PlaceableTokenData sourceItem, int conflictAnchorIndex, PlaceableTokenData conflictItem)
+        {
+            if (sourceItem == null || conflictItem == null || sourceAnchorIndex == conflictAnchorIndex)
+            {
+                return false;
+            }
+
+            if (ResolveItemSpan(sourceItem) != ResolveItemSpan(conflictItem))
+            {
+                return false;
+            }
+
+            BackPackTokenLayoutUtility.ClearItem(spellBookCells, sourceAnchorIndex);
+            BackPackTokenLayoutUtility.ClearItem(spellBookCells, conflictAnchorIndex);
+
+            if (!TryPlaceSpellBookItem(sourceAnchorIndex, conflictItem))
+            {
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, sourceAnchorIndex, sourceItem);
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, conflictAnchorIndex, conflictItem);
+                return false;
+            }
+
+            BackPackTokenLayoutUtility.WriteItem(spellBookCells, sourceAnchorIndex, conflictItem);
+            if (TryPlaceSpellBookItem(targetAnchorIndex, sourceItem))
+            {
+                BackPackTokenLayoutUtility.WriteItem(spellBookCells, targetAnchorIndex, sourceItem);
+                return true;
+            }
+
+            BackPackTokenLayoutUtility.ClearItem(spellBookCells, sourceAnchorIndex);
+            BackPackTokenLayoutUtility.WriteItem(spellBookCells, sourceAnchorIndex, sourceItem);
+            BackPackTokenLayoutUtility.WriteItem(spellBookCells, conflictAnchorIndex, conflictItem);
+            return false;
+        }
+
+        private static int ResolveItemSpan(PlaceableTokenData item)
+        {
+            return item != null && item.SlotSpan > 0 ? item.SlotSpan : 1;
+        }
+
+        private static bool IsPlacementInBounds(int anchorIndex, int span, int capacity, int columns)
+        {
+            if (anchorIndex < 0 || span <= 0 || capacity <= 0 || columns <= 0)
+            {
+                return false;
+            }
+
+            int endIndex = anchorIndex + span - 1;
+            if (endIndex >= capacity)
+            {
+                return false;
+            }
+
+            return (anchorIndex / columns) == (endIndex / columns);
         }
 
         /// <summary>
@@ -482,6 +902,227 @@ namespace Kernel.UI
             dragLinkedOutlineView.gameObject.SetActive(false);
         }
 
+        private void EnsureHoverPreviewView()
+        {
+            if (hoverPreviewView != null)
+            {
+                return;
+            }
+
+            EnsureDragPreviewLayer();
+            if (dragPreviewLayer == null || hoverPreviewPrefab == null)
+            {
+                return;
+            }
+
+            hoverPreviewView = Instantiate(hoverPreviewPrefab, dragPreviewLayer, false);
+            hoverPreviewView.name = "BackPack Hover Preview";
+            SetLayerRecursively(hoverPreviewView.gameObject, gameObject.layer);
+
+            RectTransform previewRect = hoverPreviewView.transform as RectTransform;
+            if (previewRect != null)
+            {
+                previewRect.anchorMin = new Vector2(0.5f, 0.5f);
+                previewRect.anchorMax = new Vector2(0.5f, 0.5f);
+                previewRect.pivot = new Vector2(0.5f, 0.5f);
+                previewRect.anchoredPosition = Vector2.zero;
+            }
+
+            CanvasGroup canvasGroup = hoverPreviewView.GetComponent<CanvasGroup>();
+            if (canvasGroup == null)
+            {
+                canvasGroup = hoverPreviewView.gameObject.AddComponent<CanvasGroup>();
+            }
+
+            canvasGroup.alpha = 1f;
+            canvasGroup.blocksRaycasts = false;
+            canvasGroup.interactable = false;
+
+            Graphic[] graphics = hoverPreviewView.GetComponentsInChildren<Graphic>(true);
+            for (int i = 0; i < graphics.Length; i++)
+            {
+                if (graphics[i] != null)
+                {
+                    graphics[i].raycastTarget = false;
+                }
+            }
+
+            if (hoverPreviewView.SelectButton != null)
+            {
+                hoverPreviewView.SelectButton.gameObject.SetActive(false);
+            }
+
+            hoverPreviewView.gameObject.SetActive(false);
+        }
+
+        private void ShowHoverPreview(BackPackGridSlotView source, PointerEventData eventData)
+        {
+            if (source == null || source.Item == null)
+            {
+                HideHoverPreview();
+                return;
+            }
+
+            EnsureHoverPreviewView();
+            if (hoverPreviewView == null)
+            {
+                return;
+            }
+
+            activeHoverSlot = source;
+            BindHoverPreviewToken(source.Item);
+            hoverPreviewView.gameObject.SetActive(true);
+            RectTransform previewRect = hoverPreviewView.transform as RectTransform;
+            if (previewRect != null)
+            {
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(previewRect);
+            }
+
+            hoverPreviewView.transform.SetAsLastSibling();
+            MoveHoverPreview(ResolveHoverScreenPosition(source, eventData), ResolvePointerEventCamera(eventData));
+        }
+
+        private void MoveHoverPreview(Vector2 screenPosition, Camera eventCamera)
+        {
+            if (hoverPreviewView == null || dragPreviewLayer == null || !hoverPreviewView.gameObject.activeSelf)
+            {
+                return;
+            }
+
+            RectTransform previewRect = hoverPreviewView.transform as RectTransform;
+            if (previewRect == null)
+            {
+                return;
+            }
+
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(dragPreviewLayer, screenPosition + hoverPreviewScreenOffset, eventCamera, out Vector2 localPoint))
+            {
+                return;
+            }
+
+            previewRect.anchoredPosition = ClampHoverPreviewLocalPosition(previewRect, localPoint);
+            previewRect.SetAsLastSibling();
+        }
+
+        private Vector2 ClampHoverPreviewLocalPosition(RectTransform previewRect, Vector2 targetLocalPosition)
+        {
+            if (dragPreviewLayer == null || previewRect == null)
+            {
+                return targetLocalPosition;
+            }
+
+            Rect layerRect = dragPreviewLayer.rect;
+            Rect previewRectBounds = previewRect.rect;
+            Vector2 previewPivot = previewRect.pivot;
+
+            float minX = layerRect.xMin + previewRectBounds.width * previewPivot.x;
+            float maxX = layerRect.xMax - previewRectBounds.width * (1f - previewPivot.x);
+            float minY = layerRect.yMin + previewRectBounds.height * previewPivot.y;
+            float maxY = layerRect.yMax - previewRectBounds.height * (1f - previewPivot.y);
+            if (minX > maxX || minY > maxY)
+            {
+                return targetLocalPosition;
+            }
+
+            return new Vector2(
+                Mathf.Clamp(targetLocalPosition.x, minX, maxX),
+                Mathf.Clamp(targetLocalPosition.y, minY, maxY));
+        }
+
+        private void BindHoverPreviewToken(PlaceableTokenData token)
+        {
+            if (hoverPreviewView == null)
+            {
+                return;
+            }
+
+            activeHoverItem = token;
+            hoverPreviewView.Bind(null, token);
+            if (hoverPreviewView.SelectButton != null)
+            {
+                hoverPreviewView.SelectButton.gameObject.SetActive(false);
+            }
+        }
+
+        private void HideHoverPreview()
+        {
+            if (hoverPreviewView != null)
+            {
+                hoverPreviewView.gameObject.SetActive(false);
+            }
+
+            activeHoverSlot = null;
+            activeHoverItem = null;
+        }
+
+        private void RefreshHoverPreviewFromActiveSlot()
+        {
+            if (activeHoverSlot == null || hoverPreviewView == null || !hoverPreviewView.gameObject.activeSelf)
+            {
+                return;
+            }
+
+            if (activeDragSource != null)
+            {
+                HideHoverPreview();
+                return;
+            }
+
+            PlaceableTokenData currentItem = activeHoverSlot.Item;
+            if (currentItem == null)
+            {
+                HideHoverPreview();
+                return;
+            }
+
+            if (currentItem != activeHoverItem)
+            {
+                BindHoverPreviewToken(currentItem);
+            }
+        }
+
+        private Vector2 ResolveHoverScreenPosition(BackPackGridSlotView source, PointerEventData eventData)
+        {
+            if (eventData != null)
+            {
+                return eventData.position;
+            }
+
+            RectTransform slotRect = source != null ? source.SlotRectTransform : null;
+            if (slotRect == null)
+            {
+                return Vector2.zero;
+            }
+
+            return LinkedTokenOutlineView.GetScreenCenter(slotRect, null);
+        }
+
+        private static Camera ResolvePointerEventCamera(PointerEventData eventData)
+        {
+            if (eventData == null)
+            {
+                return null;
+            }
+
+            return eventData.enterEventCamera != null ? eventData.enterEventCamera : eventData.pressEventCamera;
+        }
+
+        private static void SetLayerRecursively(GameObject target, int layer)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            target.layer = layer;
+            Transform targetTransform = target.transform;
+            for (int i = 0; i < targetTransform.childCount; i++)
+            {
+                SetLayerRecursively(targetTransform.GetChild(i).gameObject, layer);
+            }
+        }
+
         private void ShowDragPreview(BackPackGridSlotView source, PointerEventData eventData)
         {
             EnsureDragPreviewView();
@@ -586,6 +1227,7 @@ namespace Kernel.UI
 
         private void CancelActiveDragSession()
         {
+            HideHoverPreview();
             if (activeDragSource != null)
             {
                 activeDragSource.ResetDragPresentation();
@@ -760,6 +1402,7 @@ namespace Kernel.UI
             }
 
             RefreshInventoryLinkedOutlines();
+            RefreshHoverPreviewFromActiveSlot();
         }
 
         private void RefreshSpellBookSlots()
@@ -772,6 +1415,7 @@ namespace Kernel.UI
             }
 
             RefreshSpellBookLinkedOutlines();
+            RefreshHoverPreviewFromActiveSlot();
         }
 
         /// <summary>
@@ -815,7 +1459,23 @@ namespace Kernel.UI
             }
 
             currentLoadout.SetItems(nextItems);
+            if (currentLoadout.TryGetCompiledAttack(out _))
+            {
+                TryMarkStoryFlag(TutorialQuestConstants.SpellBookCompiledFlagId);
+            }
+
             RefreshAttackPreview();
+        }
+
+        /// <summary>
+        /// summary: 把一次已达成的新手引导节点写入永久剧情标记；未选档时静默跳过。
+        /// param name="storyFlagId": 需要写入的稳定剧情标记
+        /// returns: 无
+        /// </summary>
+        private static void TryMarkStoryFlag(string storyFlagId)
+        {
+            RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
+            saveService?.SetStoryFlag(storyFlagId, true);
         }
 
         private BackPackGridSlotView ResolveTemplateSlot()

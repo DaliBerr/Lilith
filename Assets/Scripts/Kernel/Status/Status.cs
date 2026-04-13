@@ -103,7 +103,7 @@ namespace Kernel.GameState
         {   
             StatusName = "BackPack",
             InActiveWith = null,
-            allowSwitchWith = new List<string> { "Paused", "Playing", "SaveLoading" },
+            allowSwitchWith = new List<string> { "Paused", "SaveLoading" },
             Persistent = false
         };
         public static Status InUpgradeScreenStatus = new Status

@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Collections.Generic;
+using Kernel.Quest;
 using Newtonsoft.Json;
 using UnityEngine;
 using Vocalith.Logging;
@@ -333,6 +335,189 @@ public sealed class RuntimeSaveService : MonoBehaviour
         return !string.IsNullOrEmpty(trimmedKey) && currentProfile.LifetimeStats.TryGetValue(trimmedKey, out int value)
             ? Mathf.Max(0, value)
             : 0;
+    }
+
+    /// <summary>
+    /// summary: 判断当前永久档是否已经记录了指定剧情标记。
+    /// param name="id": 需要查询的剧情标记稳定标识
+    /// returns: 当前 profile 中存在该剧情标记时返回 true
+    /// </summary>
+    public bool HasStoryFlag(string id)
+    {
+        if (!EnsureProfileLoadedInternal(applyToRuntime: false))
+        {
+            return false;
+        }
+
+        string trimmedId = id != null ? id.Trim() : string.Empty;
+        return !string.IsNullOrEmpty(trimmedId) && currentProfile.StoryFlags.Contains(trimmedId);
+    }
+
+    /// <summary>
+    /// summary: 判断当前永久档是否已经完成过指定任务。
+    /// param name="questId": 需要查询的任务稳定标识
+    /// returns: 当前 profile 中存在该完成标记时返回 true
+    /// </summary>
+    public bool HasCompletedQuest(string questId)
+    {
+        if (!EnsureProfileLoadedInternal(applyToRuntime: false))
+        {
+            return false;
+        }
+
+        string trimmedQuestId = questId != null ? questId.Trim() : string.Empty;
+        return !string.IsNullOrEmpty(trimmedQuestId) && currentProfile.CompletedQuestIds.Contains(trimmedQuestId);
+    }
+
+    /// <summary>
+    /// summary: 返回当前永久档里所有已完成任务的只读快照。
+    /// param: 无
+    /// returns: 当前已完成任务集合的副本
+    /// </summary>
+    public HashSet<string> GetCompletedQuestIdsSnapshot()
+    {
+        return EnsureProfileLoadedInternal(applyToRuntime: false)
+            ? new HashSet<string>(currentProfile.CompletedQuestIds ?? new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// summary: 返回当前永久档里所有已激活任务进度的只读快照。
+    /// param: 无
+    /// returns: 当前激活任务进度字典的深拷贝副本
+    /// </summary>
+    public Dictionary<string, ActiveQuestProgressSaveData> GetActiveQuestProgressSnapshot()
+    {
+        Dictionary<string, ActiveQuestProgressSaveData> snapshot = new(StringComparer.Ordinal);
+        if (!EnsureProfileLoadedInternal(applyToRuntime: false) || currentProfile.ActiveQuestProgressById == null)
+        {
+            return snapshot;
+        }
+
+        foreach (KeyValuePair<string, ActiveQuestProgressSaveData> pair in currentProfile.ActiveQuestProgressById)
+        {
+            if (!string.IsNullOrEmpty(pair.Key))
+            {
+                snapshot[pair.Key] = pair.Value != null ? pair.Value.Clone() : ActiveQuestProgressSaveData.CreateDefault();
+            }
+        }
+
+        return snapshot;
+    }
+
+    /// <summary>
+    /// summary: 覆盖指定激活任务的进度，并立即写回当前永久档。
+    /// param name="questId": 目标任务的稳定标识
+    /// param name="progress": 需要写入的新任务进度
+    /// returns: 任务进度发生变化并成功持久化时返回 true
+    /// </summary>
+    public bool TrySetActiveQuestProgress(string questId, ActiveQuestProgressSaveData progress)
+    {
+        if (!EnsureProfileLoadedInternal(applyToRuntime: false))
+        {
+            return false;
+        }
+
+        string trimmedQuestId = questId != null ? questId.Trim() : string.Empty;
+        if (string.IsNullOrEmpty(trimmedQuestId))
+        {
+            return false;
+        }
+
+        ActiveQuestProgressSaveData sanitizedProgress = progress != null ? progress.Clone() : ActiveQuestProgressSaveData.CreateDefault();
+        sanitizedProgress.Sanitize();
+        if (currentProfile.ActiveQuestProgressById.TryGetValue(trimmedQuestId, out ActiveQuestProgressSaveData existingProgress)
+            && existingProgress != null
+            && existingProgress.ContentEquals(sanitizedProgress))
+        {
+            return false;
+        }
+
+        currentProfile.ActiveQuestProgressById[trimmedQuestId] = sanitizedProgress;
+        PersistProfileMutation("set active quest progress");
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 以一次写盘把任务完成标记、激活进度移除和永久奖励一并写入当前档位。
+    /// param name="questId": 刚刚完成的任务稳定标识
+    /// param name="completionWriteRequest": 本次需要写入永久档的奖励增量
+    /// param name="errorMessage": 写盘失败时的错误原因
+    /// returns: 成功完成写入时返回 true
+    /// </summary>
+    public bool TryCompleteQuest(string questId, QuestCompletionWriteRequest completionWriteRequest, out string errorMessage)
+    {
+        errorMessage = null;
+        if (!EnsureProfileLoadedInternal(applyToRuntime: false))
+        {
+            errorMessage = "Profile is not loaded.";
+            return false;
+        }
+
+        string trimmedQuestId = questId != null ? questId.Trim() : string.Empty;
+        if (string.IsNullOrEmpty(trimmedQuestId))
+        {
+            errorMessage = "Quest id is empty.";
+            return false;
+        }
+
+        if (currentProfile.CompletedQuestIds.Contains(trimmedQuestId))
+        {
+            errorMessage = $"Quest '{trimmedQuestId}' is already completed.";
+            return false;
+        }
+
+        QuestCompletionWriteRequest sanitizedRequest = completionWriteRequest ?? new QuestCompletionWriteRequest();
+        sanitizedRequest.Sanitize();
+
+        currentProfile.ActiveQuestProgressById.Remove(trimmedQuestId);
+        currentProfile.CompletedQuestIds.Add(trimmedQuestId);
+
+        if (sanitizedRequest.RemnantAmount > 0)
+        {
+            long nextRemnantCount = (long)currentProfile.RemnantCount + sanitizedRequest.RemnantAmount;
+            currentProfile.RemnantCount = nextRemnantCount >= int.MaxValue ? int.MaxValue : (int)nextRemnantCount;
+        }
+
+        for (int index = 0; index < sanitizedRequest.UnlockIds.Count; index++)
+        {
+            currentProfile.UnlockedIds.Add(sanitizedRequest.UnlockIds[index]);
+        }
+
+        for (int index = 0; index < sanitizedRequest.StoryFlagIds.Count; index++)
+        {
+            currentProfile.StoryFlags.Add(sanitizedRequest.StoryFlagIds[index]);
+        }
+
+        for (int index = 0; index < sanitizedRequest.LifetimeStatDeltas.Count; index++)
+        {
+            QuestLifetimeStatDeltaData delta = sanitizedRequest.LifetimeStatDeltas[index];
+            if (delta == null || string.IsNullOrEmpty(delta.Key) || delta.Delta == 0)
+            {
+                continue;
+            }
+
+            currentProfile.LifetimeStats.TryGetValue(delta.Key, out int currentValue);
+            long nextValue = (long)currentValue + delta.Delta;
+            if (nextValue <= 0L)
+            {
+                currentProfile.LifetimeStats.Remove(delta.Key);
+            }
+            else
+            {
+                currentProfile.LifetimeStats[delta.Key] = nextValue >= int.MaxValue ? int.MaxValue : (int)nextValue;
+            }
+        }
+
+        currentProfile.Sanitize();
+        if (!WriteProfileToDisk())
+        {
+            errorMessage = $"Failed to persist quest '{trimmedQuestId}'.";
+            return false;
+        }
+
+        SynchronizeWalletRemnantsIfNeeded();
+        return true;
     }
 
     /// <summary>

@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
   m_Name: "\u53EC"
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  enemyId: 召
-  displayName: 召
+  enemyId: "\u53EC"
+  displayName: "\u53EC"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 3
   attackKind: 2
@@ -24,7 +24,7 @@ MonoBehaviour:
     dashDurationSeconds: 0.3
     dashCooldownSeconds: 1
   keepDistanceMovement:
-    preferredDistance: 20
+    preferredDistance: 256
     distanceTolerance: 4
   aggroOnHitMovement:
     aggroSpeedMultiplier: 1.5
@@ -34,17 +34,12 @@ MonoBehaviour:
     orbitSpeedMultiplier: 1
     clockwise: 0
   visual:
-    glyphText: 召
+    glyphText: "\u53EC"
     glyphColor: {r: 0.86, g: 0.42, b: 1, a: 1}
     runeBaseSprite: {fileID: 0}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
     groundShadowSprite: {fileID: 0}
     groundShadowTint: {r: 0, g: 0, b: 0, a: 0.28}
-  rangedBulletAttack:
-    bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
-    formulaItems:
-    - {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
-    targetPolicy: 1
   combat:
     maxHealth: 26
     moveSpeed: 28
@@ -53,6 +48,11 @@ MonoBehaviour:
     attackDamage: 1
     damageReductionPercent: 0
     visualScaleMultiplier: 1
+  rangedBulletAttack:
+    bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
+    formulaItems:
+    - {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
+    targetPolicy: 1
   explosiveAttack:
     explosionRadius: 0
     windupSeconds: 0.8
@@ -60,11 +60,11 @@ MonoBehaviour:
     maxSkillCastsPerTick: 1
   skillSlots:
   - skillKind: 1
-    cooldownSeconds: 4.5
+    cooldownSeconds: 2
     castRange: 24
     summonSkill:
       summonedEnemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
       minSummonCountPerCast: 1
-      maxSummonCountPerCast: 2
-      summonRadius: 8
-      maxAliveSummons: 6
+      maxSummonCountPerCast: 3
+      summonRadius: 64
+      maxAliveSummons: 12

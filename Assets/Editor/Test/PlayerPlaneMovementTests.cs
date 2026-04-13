@@ -164,6 +164,36 @@ public sealed class PlayerPlaneMovementTests
         Assert.That(resolvedDelta.z, Is.GreaterThan(3f));
     }
 
+    [Test]
+    public void TryGetRaycastAimPoint_PrefersNonWallHitOverNearWallCollider()
+    {
+        PlayerPlaneMovement movement = CreateMovementSubject(
+            out _,
+            out _,
+            out _);
+        SetPrivateField(movement, "aimRaycastMask", new LayerMask { value = 1 << 0 });
+
+        GameObject wall = CreateGameObject("WallOccluder");
+        wall.tag = MapGridAuthoring.WallTagName;
+        wall.transform.position = new Vector3(0f, 1f, 2f);
+        BoxCollider wallCollider = wall.AddComponent<BoxCollider>();
+        wallCollider.size = new Vector3(2f, 2f, 0.5f);
+
+        GameObject ground = CreateGameObject("GroundTarget");
+        ground.transform.position = new Vector3(0f, 1f, 8f);
+        BoxCollider groundCollider = ground.AddComponent<BoxCollider>();
+        groundCollider.size = new Vector3(2f, 2f, 0.5f);
+
+        Physics.SyncTransforms();
+        Ray ray = new(new Vector3(0f, 1f, -10f), Vector3.forward);
+
+        bool success = InvokePrivateMethodWithOutVector3(movement, "TryGetRaycastAimPoint", ray, out Vector3 aimPoint);
+
+        Assert.That(success, Is.True);
+        Assert.That(aimPoint.z, Is.GreaterThan(7f));
+        Assert.That(aimPoint.z, Is.LessThan(9f));
+    }
+
     [TearDown]
     public void TearDown()
     {

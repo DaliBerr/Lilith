@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 public sealed class WaveDefinitionTests
@@ -58,6 +59,73 @@ public sealed class WaveDefinitionTests
         Assert.That(sanitizedEntry.tokenDrops[2].token, Is.SameAs(keptHighChanceToken));
         Assert.That(sanitizedEntry.tokenDrops[2].dropChance, Is.EqualTo(1f));
         Assert.That(sanitizedEntry.tokenDrops[2].dropCount, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void OnValidate_AutoFillsHealingAndRemnantDropsWhenEntryHasNoTokens()
+    {
+        const string remnantTokenPath = "Assets/Data/BulletTokens/RemnantToken.asset";
+        const string healingTokenPath = "Assets/Data/BulletTokens/HealingToken.asset";
+
+        WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
+        createdObjects.Add(waveDefinition);
+
+        EnemyDefinition enemyDefinition = CreateEnemyDefinition("Norm1");
+        SetPrivateField(waveDefinition, "enemySpawns", new List<WaveEnemySpawnEntry>
+        {
+            new(enemyDefinition, 3),
+        });
+
+        InvokePrivateMethod(waveDefinition, "OnValidate");
+
+        RemnantPickupTokenData remnantToken = AssetDatabase.LoadAssetAtPath<RemnantPickupTokenData>(remnantTokenPath);
+        HealingPickupTokenData healingToken = AssetDatabase.LoadAssetAtPath<HealingPickupTokenData>(healingTokenPath);
+
+        Assert.That(remnantToken, Is.Not.Null);
+        Assert.That(healingToken, Is.Not.Null);
+        Assert.That(waveDefinition.TryGetSpawnEntryAt(0, out WaveEnemySpawnEntry sanitizedEntry), Is.True);
+        Assert.That(sanitizedEntry.tokenDrops, Has.Count.EqualTo(2));
+        Assert.That(sanitizedEntry.tokenDrops[0].token, Is.SameAs(remnantToken));
+        Assert.That(sanitizedEntry.tokenDrops[0].dropChance, Is.EqualTo(0.001f));
+        Assert.That(sanitizedEntry.tokenDrops[0].dropCount, Is.EqualTo(1));
+        Assert.That(sanitizedEntry.tokenDrops[1].token, Is.SameAs(healingToken));
+        Assert.That(sanitizedEntry.tokenDrops[1].dropChance, Is.EqualTo(0.2f));
+        Assert.That(sanitizedEntry.tokenDrops[1].dropCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void OnValidate_AppendsMissingDefaultDropsToEntriesWithCustomTokens()
+    {
+        const string remnantTokenPath = "Assets/Data/BulletTokens/RemnantToken.asset";
+        const string healingTokenPath = "Assets/Data/BulletTokens/HealingToken.asset";
+
+        WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
+        createdObjects.Add(waveDefinition);
+
+        EnemyDefinition enemyDefinition = CreateEnemyDefinition("Norm1");
+        CoreTokenData customToken = CreateToken<CoreTokenData>("custom_token", "Custom");
+        SetPrivateField(waveDefinition, "enemySpawns", new List<WaveEnemySpawnEntry>
+        {
+            new(enemyDefinition, 3, new[]
+            {
+                new EnemyBulletTokenDropEntry(customToken, 0.4f),
+            }),
+        });
+
+        InvokePrivateMethod(waveDefinition, "OnValidate");
+
+        RemnantPickupTokenData remnantToken = AssetDatabase.LoadAssetAtPath<RemnantPickupTokenData>(remnantTokenPath);
+        HealingPickupTokenData healingToken = AssetDatabase.LoadAssetAtPath<HealingPickupTokenData>(healingTokenPath);
+
+        Assert.That(remnantToken, Is.Not.Null);
+        Assert.That(healingToken, Is.Not.Null);
+        Assert.That(waveDefinition.TryGetSpawnEntryAt(0, out WaveEnemySpawnEntry sanitizedEntry), Is.True);
+        Assert.That(sanitizedEntry.tokenDrops, Has.Count.EqualTo(3));
+        Assert.That(sanitizedEntry.tokenDrops[0].token, Is.SameAs(customToken));
+        Assert.That(sanitizedEntry.tokenDrops[1].token, Is.SameAs(remnantToken));
+        Assert.That(sanitizedEntry.tokenDrops[1].dropChance, Is.EqualTo(0.001f));
+        Assert.That(sanitizedEntry.tokenDrops[2].token, Is.SameAs(healingToken));
+        Assert.That(sanitizedEntry.tokenDrops[2].dropChance, Is.EqualTo(0.2f));
     }
 
     [Test]

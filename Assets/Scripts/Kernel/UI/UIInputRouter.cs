@@ -357,6 +357,12 @@ namespace Kernel.UI
                     yield break;
                 }
 
+                if (uiManager.GetTopModal() is BackPackUIScreen)
+                {
+                    yield return uiManager.PopModalAndWait();
+                    yield break;
+                }
+
                 if (uiManager.GetTopScreen() is BackPackUIScreen)
                 {
                     yield return uiManager.PopScreenAndWait();
@@ -368,7 +374,7 @@ namespace Kernel.UI
                     yield break;
                 }
 
-                yield return uiManager.PushScreenAndWait<BackPackUIScreen>();
+                yield return uiManager.ShowModalAndWait<BackPackUIScreen>();
             }
             finally
             {
@@ -613,17 +619,24 @@ namespace Kernel.UI
                 return false;
             }
 
-            if (uiManager.GetTopModal() != null)
-            {
-                return false;
-            }
-
-            if (uiManager.GetTopScreen() is BackPackUIScreen)
+            UIScreen topModal = uiManager.GetTopModal();
+            if (topModal is BackPackUIScreen)
             {
                 return true;
             }
 
-            if (uiManager.GetTopScreen() is not MainUIScreen)
+            if (topModal != null)
+            {
+                return false;
+            }
+
+            UIScreen topScreen = uiManager.GetTopScreen();
+            if (topScreen is BackPackUIScreen)
+            {
+                return true;
+            }
+
+            if (topScreen is not MainUIScreen)
             {
                 return false;
             }

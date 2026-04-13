@@ -31,7 +31,7 @@ namespace Kernel.UI
     /// 背包单槽位视图，负责显示当前格上的视觉 token 并把拖拽事件转发给 BackPackUIScreen。
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class BackPackGridSlotView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
+    public sealed class BackPackGridSlotView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler, IPointerEnterHandler, IPointerExitHandler, IPointerMoveHandler
     {
         [Header("View")]
         [SerializeField] private Image background;
@@ -177,6 +177,36 @@ namespace Kernel.UI
             }
 
             owner?.NotifySlotDrop(this);
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (isDisplayOnly || isDragging)
+            {
+                return;
+            }
+
+            owner?.NotifySlotHoverEnter(this, eventData);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (isDisplayOnly || isDragging)
+            {
+                return;
+            }
+
+            owner?.NotifySlotHoverExit(this);
+        }
+
+        public void OnPointerMove(PointerEventData eventData)
+        {
+            if (isDisplayOnly || isDragging)
+            {
+                return;
+            }
+
+            owner?.NotifySlotHoverMove(this, eventData);
         }
 
         /// <summary>

@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3a3db369fe4b8c4292588498cf5c44e, type: 3}
+  m_Name: Plan2
+  m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CombatEntryTokenSelectionPlan
+  libraryEntries:
+  - library: {fileID: 11400000, guid: a8fcb56ab6b8b37458a0deb54388d697, type: 2}
+    selectionWeight: 0.4
+  - library: {fileID: 11400000, guid: a36c68952bb14cd43a365d8a0399fe44, type: 2}
+    selectionWeight: 1
+  - library: {fileID: 11400000, guid: a930f34149d762d408d43a534a79af93, type: 2}
+    selectionWeight: 0.8

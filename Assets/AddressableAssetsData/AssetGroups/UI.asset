@@ -69,6 +69,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - UI
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a16101b937e73a44881b34d0679e72e8
+    m_Address: Assets/Prefabs/UI/Quest Entry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: b5f17e7d729b2fa41988052758c3d005
     m_Address: Assets/Prefabs/UI/Dialog UI
     m_ReadOnly: 0
