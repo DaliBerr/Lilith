@@ -1,9 +1,11 @@
+using System.Collections;
 using System.Collections.Generic;
 using Kernel.Bullet;
 using Kernel.GameState;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Vocalith.EventSystem;
 using Vocalith.Logging;
 using Vocalith.UI;
 
@@ -28,6 +30,14 @@ namespace Kernel.UI
         [SerializeField] private Button pauseButton;
         [SerializeField] private TMP_Text pauseButtonText;
 
+        [Header("Danger Edge")]
+        [SerializeField] private RectTransform dangerEdge;
+        [SerializeField] private Image dangerEdgeImage;
+        [SerializeField, Range(0f, 1f)] private float dangerHealthRatioThreshold = 0.2f;
+        [SerializeField, Range(0f, 1f)] private float dangerVisibleAlpha = 1f;
+        [SerializeField, Range(0f, 1f)] private float dangerFlashAlpha = 0.35f;
+        [SerializeField, Min(0.01f)] private float dangerFlashDuration = 0.16f;
+
         [Header("Linked Outline")]
         [SerializeField] private Color linkedOutlineColor = new(1f, 0.84f, 0.35f, 0.95f);
         [SerializeField, Min(1f)] private float linkedOutlineThickness = 4f;
@@ -39,6 +49,10 @@ namespace Kernel.UI
         private AttackFormulaLoadout currentLoadout;
         private bool hasLoggedMissingSpellTemplate;
         private RectTransform spellLinkedOutlineLayer;
+        private System.IDisposable playerHealthChangedSubscription;
+        private PlayerHealth currentPlayerHealth;
+        private Coroutine dangerEdgeFlashCoroutine;
+        private bool isDangerEdgeVisible;
 
         public override Status currentStatus { get; } = StatusList.PlayingStatus;
 
@@ -52,24 +66,33 @@ namespace Kernel.UI
         public RectTransform PauseButtonRoot => pauseButtonRoot;
         public Button PauseButton => pauseButton;
         public TMP_Text PauseButtonText => pauseButtonText;
+        public RectTransform DangerEdge => dangerEdge;
+        public Image DangerEdgeImage => dangerEdgeImage;
 
         protected override void OnInit()
         {
             TryAutoBindReferences();
+            SanitizeDangerEdgeConfiguration();
             BindButtonCallbacks();
             RefreshSpellPanel();
+            ResetDangerEdgeDisplay();
             ui?.EnsureOverlay<BossInfoUIScreen>();
         }
 
         protected override void OnBeforeShow()
         {
             RefreshSpellPanel();
+            SubscribeToPlayerHealthEvents();
+            SyncDangerEdgeToCurrentHealth();
         }
 
         protected override void OnAfterHide()
         {
             ReleaseLoadoutBinding();
             ClearRuntimeSpellSlots();
+            currentPlayerHealth = null;
+            DisposePlayerHealthSubscription();
+            ResetDangerEdgeDisplay();
         }
 
         private void OnDestroy()
@@ -77,11 +100,15 @@ namespace Kernel.UI
             UnbindButtonCallbacks();
             ReleaseLoadoutBinding();
             ClearRuntimeSpellSlots();
+            currentPlayerHealth = null;
+            DisposePlayerHealthSubscription();
+            ResetDangerEdgeDisplay();
         }
 
         private void OnValidate()
         {
             TryAutoBindReferences();
+            SanitizeDangerEdgeConfiguration();
         }
 
         [ContextMenu("Auto Bind Main UI Template")]
@@ -96,6 +123,17 @@ namespace Kernel.UI
         /// <returns>无。</returns>
         private void TryAutoBindReferences()
         {
+            if (dangerEdgeImage != null && dangerEdge == null)
+            {
+                dangerEdge = dangerEdgeImage.rectTransform;
+            }
+
+            dangerEdge ??= transform.Find("Danger Edge") as RectTransform;
+            if (dangerEdge != null)
+            {
+                dangerEdgeImage ??= dangerEdge.GetComponent<Image>();
+            }
+
             topPanel ??= transform.Find("TopPanel") as RectTransform;
             if (topPanel == null)
             {
@@ -252,6 +290,7 @@ namespace Kernel.UI
             }
 
             currentPlayer = resolvedPlayer;
+            currentPlayerHealth = ResolvePlayerHealthFromPlayer(resolvedPlayer);
             if (currentLoadout == resolvedLoadout)
             {
                 return true;
@@ -352,6 +391,281 @@ namespace Kernel.UI
         private void HandleLoadoutChanged()
         {
             RefreshSpellPanel();
+        }
+
+        /// <summary>
+        /// summary: 订阅玩家生命变化事件，驱动 Danger Edge 的显隐与受击闪烁。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void SubscribeToPlayerHealthEvents()
+        {
+            if (playerHealthChangedSubscription != null)
+            {
+                return;
+            }
+
+            playerHealthChangedSubscription = EventManager.eventBus.Subscribe<PlayerHealthChangedEvent>(HandlePlayerHealthChanged);
+        }
+
+        /// <summary>
+        /// summary: 释放 Danger Edge 的生命事件订阅。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void DisposePlayerHealthSubscription()
+        {
+            playerHealthChangedSubscription?.Dispose();
+            playerHealthChangedSubscription = null;
+        }
+
+        /// <summary>
+        /// summary: 在界面显示时按当前生命值立即刷新 Danger Edge 的可见状态。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void SyncDangerEdgeToCurrentHealth()
+        {
+            if (!TryResolveTargetPlayerHealth())
+            {
+                SetDangerEdgeVisible(false);
+                return;
+            }
+
+            UpdateDangerEdgeState(currentPlayerHealth.CurrentHealth, currentPlayerHealth.MaxHealth, triggerFlashOnDamage: false);
+        }
+
+        /// <summary>
+        /// summary: 解析当前 HUD 需要跟踪的玩家生命组件。
+        /// param: 无
+        /// returns: 成功解析到玩家生命组件时返回 true
+        /// </summary>
+        private bool TryResolveTargetPlayerHealth()
+        {
+            if (currentPlayerHealth != null)
+            {
+                return true;
+            }
+
+            currentPlayerHealth = ResolvePlayerHealthFromPlayer(currentPlayer);
+            if (currentPlayerHealth != null)
+            {
+                return true;
+            }
+
+            currentPlayerHealth = FindAnyObjectByType<PlayerHealth>();
+            return currentPlayerHealth != null;
+        }
+
+        /// <summary>
+        /// summary: 生命值变化后刷新 Danger Edge；低血已显示时再次受击会触发一次闪烁。
+        /// param: evt 本次生命变化事件
+        /// returns: 无
+        /// </summary>
+        private void HandlePlayerHealthChanged(PlayerHealthChangedEvent evt)
+        {
+            if (!IsTrackedPlayerHealth(evt.source))
+            {
+                return;
+            }
+
+            currentPlayerHealth = evt.source;
+            bool tookDamage = evt.delta < 0f;
+            UpdateDangerEdgeState(evt.currentHealth, evt.maxHealth, tookDamage);
+        }
+
+        /// <summary>
+        /// summary: 判断本次事件是否来自当前 MainUI 跟踪的玩家生命组件。
+        /// param: playerHealth 事件携带的生命组件
+        /// returns: 命中当前跟踪目标时返回 true
+        /// </summary>
+        private bool IsTrackedPlayerHealth(PlayerHealth playerHealth)
+        {
+            if (playerHealth == null)
+            {
+                return false;
+            }
+
+            if (currentPlayerHealth != null)
+            {
+                return playerHealth == currentPlayerHealth;
+            }
+
+            if (currentPlayer != null)
+            {
+                return playerHealth.transform.root == currentPlayer.transform.root;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 根据生命百分比决定 Danger Edge 显示状态，并按需触发受击闪烁。
+        /// param: currentHealth 当前生命值
+        /// param: maxHealth 当前最大生命值
+        /// param: triggerFlashOnDamage 本次是否需要触发受击闪烁
+        /// returns: 无
+        /// </summary>
+        private void UpdateDangerEdgeState(float currentHealth, float maxHealth, bool triggerFlashOnDamage)
+        {
+            float safeMaxHealth = Mathf.Max(0f, maxHealth);
+            float healthRatio = safeMaxHealth > 0f ? Mathf.Clamp01(currentHealth / safeMaxHealth) : 1f;
+            bool shouldShowDanger = safeMaxHealth > 0f && healthRatio <= dangerHealthRatioThreshold;
+            bool wasVisible = isDangerEdgeVisible;
+
+            SetDangerEdgeVisible(shouldShowDanger);
+            if (shouldShowDanger && wasVisible && triggerFlashOnDamage)
+            {
+                PlayDangerEdgeFlash();
+            }
+        }
+
+        /// <summary>
+        /// summary: 统一控制 Danger Edge 的显示与基础透明度。
+        /// param: visible 目标是否显示
+        /// returns: 无
+        /// </summary>
+        private void SetDangerEdgeVisible(bool visible)
+        {
+            isDangerEdgeVisible = visible;
+            if (dangerEdgeImage == null)
+            {
+                return;
+            }
+
+            dangerEdgeImage.enabled = visible;
+            StopDangerEdgeFlash(resetToVisibleAlpha: false);
+            ApplyDangerEdgeAlpha(visible ? dangerVisibleAlpha : 0f);
+        }
+
+        /// <summary>
+        /// summary: 触发一次 Danger Edge 透明度闪烁动画。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void PlayDangerEdgeFlash()
+        {
+            if (!isDangerEdgeVisible || dangerEdgeImage == null || !gameObject.activeInHierarchy)
+            {
+                return;
+            }
+
+            StopDangerEdgeFlash(resetToVisibleAlpha: true);
+            dangerEdgeFlashCoroutine = StartCoroutine(PlayDangerEdgeFlashCoroutine());
+        }
+
+        /// <summary>
+        /// summary: 执行一次低血边缘从常亮到暗、再回到常亮的闪烁过渡。
+        /// param: 无
+        /// returns: 闪烁协程
+        /// </summary>
+        private IEnumerator PlayDangerEdgeFlashCoroutine()
+        {
+            float halfDuration = Mathf.Max(0.01f, dangerFlashDuration * 0.5f);
+            yield return LerpDangerEdgeAlpha(dangerVisibleAlpha, dangerFlashAlpha, halfDuration);
+            yield return LerpDangerEdgeAlpha(dangerFlashAlpha, dangerVisibleAlpha, halfDuration);
+            dangerEdgeFlashCoroutine = null;
+        }
+
+        /// <summary>
+        /// summary: 在指定时长内线性插值 Danger Edge 的透明度。
+        /// param: from 起始透明度
+        /// param: to 目标透明度
+        /// param: duration 插值时长
+        /// returns: 插值协程
+        /// </summary>
+        private IEnumerator LerpDangerEdgeAlpha(float from, float to, float duration)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = duration <= 0f ? 1f : Mathf.Clamp01(elapsed / duration);
+                ApplyDangerEdgeAlpha(Mathf.Lerp(from, to, t));
+                yield return null;
+            }
+
+            ApplyDangerEdgeAlpha(to);
+        }
+
+        /// <summary>
+        /// summary: 停止当前正在执行的 Danger Edge 闪烁协程。
+        /// param: resetToVisibleAlpha 为 true 且当前可见时会恢复到常亮透明度
+        /// returns: 无
+        /// </summary>
+        private void StopDangerEdgeFlash(bool resetToVisibleAlpha)
+        {
+            if (dangerEdgeFlashCoroutine != null)
+            {
+                StopCoroutine(dangerEdgeFlashCoroutine);
+                dangerEdgeFlashCoroutine = null;
+            }
+
+            if (resetToVisibleAlpha && isDangerEdgeVisible)
+            {
+                ApplyDangerEdgeAlpha(dangerVisibleAlpha);
+            }
+        }
+
+        /// <summary>
+        /// summary: 把 Danger Edge 立即复位到默认隐藏状态。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ResetDangerEdgeDisplay()
+        {
+            StopDangerEdgeFlash(resetToVisibleAlpha: false);
+            SetDangerEdgeVisible(false);
+        }
+
+        /// <summary>
+        /// summary: 实际写入 Danger Edge Image 的透明度。
+        /// param: alpha 目标透明度
+        /// returns: 无
+        /// </summary>
+        private void ApplyDangerEdgeAlpha(float alpha)
+        {
+            if (dangerEdgeImage == null)
+            {
+                return;
+            }
+
+            Color color = dangerEdgeImage.color;
+            color.a = Mathf.Clamp01(alpha);
+            dangerEdgeImage.color = color;
+        }
+
+        /// <summary>
+        /// summary: 统一规整 Danger Edge 的可调参数，避免阈值和时长非法。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void SanitizeDangerEdgeConfiguration()
+        {
+            dangerHealthRatioThreshold = Mathf.Clamp01(dangerHealthRatioThreshold);
+            dangerVisibleAlpha = Mathf.Clamp01(dangerVisibleAlpha);
+            dangerFlashAlpha = Mathf.Clamp01(dangerFlashAlpha);
+            dangerFlashDuration = Mathf.Max(0.01f, dangerFlashDuration);
+            if (dangerFlashAlpha > dangerVisibleAlpha)
+            {
+                dangerFlashAlpha = dangerVisibleAlpha;
+            }
+        }
+
+        /// <summary>
+        /// summary: 从玩家移动根节点解析其绑定的 PlayerHealth 组件。
+        /// param: player 玩家移动组件
+        /// returns: 找到的 PlayerHealth；未找到时返回 null
+        /// </summary>
+        private static PlayerHealth ResolvePlayerHealthFromPlayer(PlayerPlaneMovement player)
+        {
+            if (player == null)
+            {
+                return null;
+            }
+
+            return player.GetComponent<PlayerHealth>()
+                ?? player.GetComponentInChildren<PlayerHealth>(true);
         }
 
         /// <summary>

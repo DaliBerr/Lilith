@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Kernel;
 using Kernel.MapGrid;
 using UnityEngine;
@@ -18,10 +19,12 @@ public sealed class EnemyGenerator : MonoBehaviour
     [SerializeField] private Transform pickupParent;
     [SerializeField, Min(0f)] private float spawnDistance = 30f;
     [SerializeField, Min(MinimumGroundSpawnRolls)] private int maxGroundSpawnRolls = 16;
+    [SerializeField, Min(0)] private int completedWaveCount;
 
     private VocalithRandom randomSource;
 
     public float SpawnDistance => spawnDistance;
+    public int CompletedWaveCount => completedWaveCount;
 
     private void Awake()
     {
@@ -89,6 +92,30 @@ public sealed class EnemyGenerator : MonoBehaviour
         }
 
         return TrySpawnEnemyAt(definition, config, spawnPosition, out spawnedEnemy);
+    }
+
+    /// <summary>
+    /// summary: 把当前战斗里已清空的波次数同步给生成器，供后续刷怪和召唤统一解算成长层级。
+    /// param: waveCount 当前战斗里已经完成的波次数量
+    /// returns: 无论传入值是否合法都会完成归一化写入，因此恒为 true
+    /// </summary>
+    public bool TrySetCompletedWaveCount(int waveCount)
+    {
+        completedWaveCount = Mathf.Max(0, waveCount);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 基于当前成长层级和定义资产，解算一份可直接应用到运行时实例的敌人数值。
+    /// param: definition 当前要生成的敌人定义
+    /// param: tokenDrops 当前刷怪条目额外声明的掉落表
+    /// returns: 当前生成器层级下应使用的运行时敌人数值
+    /// </summary>
+    public EnemyWaveConfig ResolveRuntimeConfig(EnemyDefinition definition, IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops = null)
+    {
+        return definition != null
+            ? definition.ResolveRuntimeConfig(completedWaveCount, tokenDrops)
+            : new EnemyWaveConfig(1f, 0f, 0f, 0f, 0f);
     }
 
     /// <summary>
@@ -327,6 +354,12 @@ public sealed class EnemyGenerator : MonoBehaviour
             rangedTokenAttacker.TrySetTarget(targetPlayer);
         }
 
+        EnemyExplosiveAttacker explosiveAttacker = spawnedRoot.GetComponent<EnemyExplosiveAttacker>();
+        if (explosiveAttacker != null)
+        {
+            explosiveAttacker.TrySetTarget(targetPlayer);
+        }
+
         EnemySummoner summoner = spawnedRoot.GetComponent<EnemySummoner>();
         if (summoner != null)
         {
@@ -391,6 +424,7 @@ public sealed class EnemyGenerator : MonoBehaviour
     {
         spawnDistance = Mathf.Max(0f, spawnDistance);
         maxGroundSpawnRolls = Mathf.Max(MinimumGroundSpawnRolls, maxGroundSpawnRolls);
+        completedWaveCount = Mathf.Max(0, completedWaveCount);
         if (spawnedEnemyParent == null)
         {
             spawnedEnemyParent = transform;

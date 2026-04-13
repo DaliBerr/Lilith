@@ -155,6 +155,7 @@ namespace Kernel.Bullet
             CharBullet bulletInstance = parentOverride != null
                 ? Object.Instantiate(bulletPrefab, spawnPosition, Quaternion.identity, parentOverride)
                 : Object.Instantiate(bulletPrefab, spawnPosition, Quaternion.identity);
+            bulletInstance.SetSpawnTemplate(bulletPrefab);
             bulletInstance.InitializeShot(owner, spawnPosition, shotDirection, compiledAttack.AttackSpec, compiledAttack, targetPolicy);
             spawnedBullets?.Add(bulletInstance);
             return 1;

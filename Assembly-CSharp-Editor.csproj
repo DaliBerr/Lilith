@@ -57,6 +57,7 @@
     <Compile Include="Assets\Editor\Test\EnemyDefinitionBinderTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyGeneratorTests.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Editor\ReadmeEditor.cs" />
+    <Compile Include="Assets\Editor\Test\MapRunFlowControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\Test\PlayerFollowCameraTests.cs" />
     <Compile Include="Assets\Editor\Test\GridPathfinderTests.cs" />
@@ -67,8 +68,11 @@
     <Compile Include="Assets\Editor\Test\ScriptableObjectOnValidateTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackInventoryTests.cs" />
     <Compile Include="Assets\Editor\Test\BulletTokenPickupTests.cs" />
+    <Compile Include="Assets\Editor\Test\CombatEntryTokenSelectionPlanTests.cs" />
     <Compile Include="Assets\Editor\Test\GlobalModeSettingsServiceTests.cs" />
     <Compile Include="Assets\Editor\Test\CharBulletImpactTests.cs" />
+    <Compile Include="Assets\Editor\Test\SettlementUIScreenTests.cs" />
+    <Compile Include="Assets\Editor\Test\EnemyExplosiveAttackerTests.cs" />
     <Compile Include="Assets\Editor\Test\CharEnemyMovementTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\CharEnemyVisualPresenterTests.cs" />
@@ -76,6 +80,7 @@
     <Compile Include="Assets\Editor\Test\AttackFormulaCompilerTests.cs" />
     <Compile Include="Assets\Editor\Test\ArenaSeedMapGenerationTests.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
+    <Compile Include="Assets\Editor\Test\PermanentUpgradeServiceTests.cs" />
     <Compile Include="Assets\Editor\Test\CharBulletVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\TokenSelectModalTests.cs" />
     <Compile Include="Assets\Editor\LinkedTokenDataEditor.cs" />
@@ -88,6 +93,7 @@
     <Compile Include="Assets\Editor\Test\StrokeRevealUIWordTests.cs" />
     <Compile Include="Assets\Editor\Test\CharBulletPrefabTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerPlaneMovementTests.cs" />
+    <Compile Include="Assets\Editor\Test\EnemyStatusEffectControllerTests.cs" />
     <Compile Include="Assets\Editor\CompileBeforePlay.cs" />
     <Compile Include="Assets\Editor\Test\CharGlyphPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\MapSpawnUtilityTests.cs" />

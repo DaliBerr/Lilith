@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
 using NUnit.Framework;
 using TMPro;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 public sealed class AttackFormulaCompilerTests
 {
@@ -169,9 +171,9 @@ public sealed class AttackFormulaCompilerTests
         Assert.That(compiledAttack.BehaviorType, Is.EqualTo(AttackBehaviorType.Spread));
         Assert.That(compiledAttack.ResultType, Is.EqualTo(AttackResultType.Explosion));
         Assert.That(compiledAttack.SpreadProjectileCount, Is.EqualTo(3));
-        Assert.That(compiledAttack.ExplosionRadius, Is.EqualTo(2f));
+        Assert.That(compiledAttack.ExplosionRadius, Is.EqualTo(1.5f));
         Assert.That(compiledAttack.HasExplosion, Is.True);
-        Assert.That(compiledAttack.Messages, Is.Empty);
+        Assert.That(CountMessages(compiledAttack, AttackCompileMessageSeverity.Warning), Is.EqualTo(1));
     }
 
     [Test]
@@ -202,29 +204,70 @@ public sealed class AttackFormulaCompilerTests
     }
 
     [Test]
-    public void Compile_WithExtraValueAfterResultValue_LeavesTrailingValueAsWarning()
+    public void Compile_WithSplitAndControlValues_ConsumeOnlySupportedResultValues()
     {
         CoreTokenData coreToken = CreateCoreToken("edge_core", "Edge", AttackCoreType.Edge);
-        BehaviorTokenData spreadToken = CreateBehaviorToken("spread", "Spread", AttackBehaviorType.Spread, acceptsNumericValue: true, defaultProjectileCount: 2, spreadAngleStep: 10f);
-        ValueTokenData behaviorValue = CreateValueToken("two", "2", 2f);
-        ResultTokenData explosionToken = CreateResultToken("explosion", "Boom", AttackResultType.Explosion, acceptsNumericValue: true, defaultExplosionRadius: 1f);
-        ValueTokenData resultValue = CreateValueToken("five", "5", 5f);
-        ValueTokenData trailingValue = CreateValueToken("three", "3", 3f);
-
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        ResultTokenData splitToken = CreateResultToken("split", "Split", AttackResultType.Split, acceptsNumericValue: true, defaultExplosionRadius: 0f);
+        splitToken.DefaultTriggerCount = 2;
+        splitToken.ChildDamageMultiplier = 0.5f;
+        ValueTokenData splitValue = CreateValueToken("five", "5", 5f);
+        CompiledAttack splitAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
         {
             coreToken,
-            spreadToken,
-            behaviorValue,
-            explosionToken,
-            resultValue,
-            trailingValue,
+            splitToken,
+            splitValue,
         });
 
-        Assert.That(compiledAttack.CanFire, Is.True);
-        Assert.That(compiledAttack.SpreadProjectileCount, Is.EqualTo(2));
-        Assert.That(compiledAttack.ExplosionRadius, Is.EqualTo(5f));
-        Assert.That(CountMessages(compiledAttack, AttackCompileMessageSeverity.Warning), Is.EqualTo(1));
+        ResultTokenData controlToken = CreateResultToken("control", "Control", AttackResultType.StatusEffect, acceptsNumericValue: true, defaultExplosionRadius: 0f);
+        controlToken.DefaultTriggerCount = 5;
+        controlToken.EffectDuration = 1f;
+        ValueTokenData controlValue = CreateValueToken("two", "2", 2f);
+        CompiledAttack controlAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            controlToken,
+            controlValue,
+        });
+
+        Assert.That(splitAttack.CanFire, Is.True);
+        Assert.That(splitAttack.ResultEffects.splitProjectileCount, Is.EqualTo(5));
+        Assert.That(splitAttack.ResultEffects.splitDamageMultiplier, Is.EqualTo(0.5f));
+        Assert.That(controlAttack.CanFire, Is.True);
+        Assert.That(controlAttack.ResultEffects.controlTriggerCount, Is.EqualTo(2));
+        Assert.That(controlAttack.ResultEffects.controlDuration, Is.EqualTo(1f));
+    }
+
+    [Test]
+    public void Compile_WithBounceAndPierceValues_AssignsBehaviorCountsAndPierceExtension()
+    {
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        BehaviorTokenData bounceToken = CreateBehaviorToken("bounce", "Bounce", AttackBehaviorType.Bounce, acceptsNumericValue: true, defaultProjectileCount: 1, spreadAngleStep: 0f);
+        ValueTokenData valueThree = CreateValueToken("three", "3", 3f);
+        CompiledAttack bounceAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            bounceToken,
+            valueThree,
+        });
+
+        BehaviorTokenData pierceToken = CreateBehaviorToken("pierce", "Pierce", AttackBehaviorType.Pierce, acceptsNumericValue: true, defaultProjectileCount: 1, spreadAngleStep: 0f);
+        pierceToken.PierceLifetimeDistanceScalePerCount = 0.2f;
+        ValueTokenData valueFive = CreateValueToken("five", "5", 5f);
+        CompiledAttack pierceAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            pierceToken,
+            valueFive,
+        });
+
+        Assert.That(bounceAttack.CanFire, Is.True);
+        Assert.That(bounceAttack.AttackSpec.bounceCount, Is.EqualTo(3));
+        Assert.That(bounceAttack.AttackSpec.pierceCount, Is.EqualTo(0));
+        Assert.That(pierceAttack.CanFire, Is.True);
+        Assert.That(pierceAttack.AttackSpec.pierceCount, Is.EqualTo(5));
+        Assert.That(pierceAttack.AttackSpec.projectileLife, Is.EqualTo(6));
+        Assert.That(pierceAttack.AttackSpec.maxLifetime, Is.EqualTo(4f).Within(0.0001f));
+        Assert.That(pierceAttack.AttackSpec.maxTravelDistance, Is.EqualTo(1024f).Within(0.0001f));
     }
 
     [Test]
@@ -560,12 +603,11 @@ public sealed class AttackFormulaCompilerTests
         TestEnemy secondaryEnemy = CreateEnemy("SecondaryEnemy", new Vector3(1f, 0f, 2f), 5f);
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
         ResultTokenData explosionToken = CreateResultToken("explosion", "Boom", AttackResultType.Explosion, acceptsNumericValue: true, defaultExplosionRadius: 1f);
-        ValueTokenData radiusValue = CreateValueToken("two", "2", 2f);
+        explosionToken.ExplosionDamageMultiplier = 0.3f;
         CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
         {
             coreToken,
             explosionToken,
-            radiusValue,
         });
 
         Assert.That(compiledAttack.CanFire, Is.True);
@@ -579,8 +621,131 @@ public sealed class AttackFormulaCompilerTests
         bool handled = (bool)tryRegisterImpact.Invoke(bullet, new object[] { primaryCollider });
 
         Assert.That(handled, Is.True);
-        Assert.That(primaryEnemy.CurrentHealth, Is.EqualTo(3f));
-        Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(4f));
+        Assert.That(primaryEnemy.CurrentHealth, Is.EqualTo(3.7f).Within(0.0001f));
+        Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(4.7f).Within(0.0001f));
+    }
+
+    [Test]
+    public void RegisterImpact_WithEdgeCore_OnlyShieldEnemyGetsArmoredBonus()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBulletPrefab();
+        TestEnemy shieldEnemy = CreateEnemy("ShieldEnemy", new Vector3(0f, 0f, 2f), 20f);
+        shieldEnemy.TryBindDefinition(CreateEnemyDefinition("shield"));
+        TestEnemy normalEnemy = CreateEnemy("NormalEnemy", new Vector3(0f, 0f, 4f), 20f);
+        normalEnemy.TryBindDefinition(CreateEnemyDefinition("normal"));
+
+        CoreTokenData coreToken = CreateCoreToken("edge_core", "Edge", AttackCoreType.Edge);
+        coreToken.Damage = 10f;
+        coreToken.ArmoredEnemyId = "shield";
+        coreToken.ArmoredDamageMultiplier = 1.2f;
+        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[] { coreToken });
+
+        bullet.InitializeShot(owner.transform, Vector3.zero, Vector3.forward, compiledAttack.AttackSpec, compiledAttack);
+        bool shieldHandled = InvokeTryRegisterImpact(bullet, shieldEnemy.GetComponent<BoxCollider>());
+        Assert.That(shieldHandled, Is.True);
+        Assert.That(shieldEnemy.CurrentHealth, Is.EqualTo(8f).Within(0.0001f));
+
+        CharBullet secondBullet = CreateBulletPrefab();
+        secondBullet.InitializeShot(owner.transform, Vector3.zero, Vector3.forward, compiledAttack.AttackSpec, compiledAttack);
+        bool normalHandled = InvokeTryRegisterImpact(secondBullet, normalEnemy.GetComponent<BoxCollider>());
+        Assert.That(normalHandled, Is.True);
+        Assert.That(normalEnemy.CurrentHealth, Is.EqualTo(10f).Within(0.0001f));
+    }
+
+    [Test]
+    public void RegisterImpact_WithThunderCore_DamagesOnlyOneNearbySecondaryEnemy()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBulletPrefab();
+        TestEnemy primaryEnemy = CreateEnemy("PrimaryEnemy", new Vector3(0f, 0f, 2f), 20f);
+        TestEnemy secondaryEnemy = CreateEnemy("SecondaryEnemy", new Vector3(1f, 0f, 2f), 20f);
+        TestEnemy farEnemy = CreateEnemy("FarEnemy", new Vector3(60f, 0f, 2f), 20f);
+
+        CoreTokenData coreToken = CreateCoreToken("thunder_core", "Thunder", AttackCoreType.Thunder);
+        coreToken.Damage = 7f;
+        coreToken.ThunderChainTargetCount = 1;
+        coreToken.ThunderChainRadius = 48f;
+        coreToken.ThunderChainDamage = 4f;
+        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[] { coreToken });
+
+        bullet.InitializeShot(owner.transform, Vector3.zero, Vector3.forward, compiledAttack.AttackSpec, compiledAttack);
+        bool handled = InvokeTryRegisterImpact(bullet, primaryEnemy.GetComponent<BoxCollider>());
+
+        Assert.That(handled, Is.True);
+        Assert.That(primaryEnemy.CurrentHealth, Is.EqualTo(13f).Within(0.0001f));
+        Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(16f).Within(0.0001f));
+        Assert.That(farEnemy.CurrentHealth, Is.EqualTo(20f).Within(0.0001f));
+    }
+
+    [Test]
+    public void RegisterImpact_WithSplitResult_SpawnedChildrenLoseSplitResult()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        CharBullet bullet = Object.Instantiate(bulletPrefab);
+        createdObjects.Add(bullet.gameObject);
+        bullet.SetSpawnTemplate(bulletPrefab);
+        TestEnemy primaryEnemy = CreateEnemy("PrimaryEnemy", new Vector3(0f, 0f, 2f), 20f);
+
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        ResultTokenData splitToken = CreateResultToken("split", "Split", AttackResultType.Split, acceptsNumericValue: true, defaultExplosionRadius: 0f);
+        splitToken.DefaultTriggerCount = 2;
+        splitToken.ChildDamageMultiplier = 0.5f;
+        ValueTokenData splitValue = CreateValueToken("three", "3", 3f);
+        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            splitToken,
+            splitValue,
+        });
+
+        bullet.InitializeShot(owner.transform, Vector3.zero, Vector3.forward, compiledAttack.AttackSpec, compiledAttack);
+        bool handled = InvokeTryRegisterImpact(bullet, primaryEnemy.GetComponent<BoxCollider>());
+        CharBullet[] bullets = Object.FindObjectsByType<CharBullet>(FindObjectsSortMode.None);
+
+        Assert.That(handled, Is.True);
+        Assert.That(bullets.Length, Is.GreaterThanOrEqualTo(4));
+        for (int i = 0; i < bullets.Length; i++)
+        {
+            if (bullets[i] == null || bullets[i] == bullet || bullets[i] == bulletPrefab)
+            {
+                continue;
+            }
+
+            Assert.That(bullets[i].CurrentCompiledAttack, Is.Not.Null);
+            Assert.That(bullets[i].CurrentCompiledAttack.ResultType, Is.EqualTo(AttackResultType.DirectDamage));
+        }
+    }
+
+    [Test]
+    public void RegisterImpact_WithPierceBehavior_DamagesMultipleEnemiesAtFullDamage()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBulletPrefab();
+        TestEnemy firstEnemy = CreateEnemy("FirstEnemy", new Vector3(0f, 0f, 2f), 20f);
+        TestEnemy secondEnemy = CreateEnemy("SecondEnemy", new Vector3(0f, 0f, 4f), 20f);
+
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        coreToken.Damage = 5f;
+        BehaviorTokenData pierceToken = CreateBehaviorToken("pierce", "Pierce", AttackBehaviorType.Pierce, acceptsNumericValue: true, defaultProjectileCount: 1, spreadAngleStep: 0f);
+        ValueTokenData valueOne = CreateValueToken("one", "1", 1f);
+        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            pierceToken,
+            valueOne,
+        });
+
+        bullet.InitializeShot(owner.transform, Vector3.zero, Vector3.forward, compiledAttack.AttackSpec, compiledAttack);
+
+        bool firstHandled = InvokeTryRegisterImpact(bullet, firstEnemy.GetComponent<BoxCollider>());
+        bool secondHandled = InvokeTryRegisterImpact(bullet, secondEnemy.GetComponent<BoxCollider>());
+
+        Assert.That(firstHandled, Is.True);
+        Assert.That(secondHandled, Is.True);
+        Assert.That(firstEnemy.CurrentHealth, Is.EqualTo(15f).Within(0.0001f));
+        Assert.That(secondEnemy.CurrentHealth, Is.EqualTo(15f).Within(0.0001f));
     }
 
     private CoreTokenData CreateCoreToken(string tokenId, string displayText, AttackCoreType coreType)
@@ -596,6 +761,16 @@ public sealed class AttackFormulaCompilerTests
         token.MaxLifetime = 2f;
         token.MaxTravelDistance = 512f;
         token.ImpactMask = ~0;
+        token.ArmoredEnemyId = string.Empty;
+        token.ArmoredDamageMultiplier = 1f;
+        token.BurnTriggerCount = 0;
+        token.BurnDamagePerSecond = 0f;
+        token.BurnDuration = 0f;
+        token.SlowPercent = 0f;
+        token.SlowDuration = 0f;
+        token.ThunderChainTargetCount = 0;
+        token.ThunderChainRadius = 0f;
+        token.ThunderChainDamage = 0f;
         return token;
     }
 
@@ -608,6 +783,8 @@ public sealed class AttackFormulaCompilerTests
         token.AcceptsNumericValue = acceptsNumericValue;
         token.DefaultProjectileCount = defaultProjectileCount;
         token.SpreadAngleStep = spreadAngleStep;
+        token.ProjectileDamageMultiplier = 1f;
+        token.PierceLifetimeDistanceScalePerCount = 0.2f;
         return token;
     }
 
@@ -619,7 +796,20 @@ public sealed class AttackFormulaCompilerTests
         token.ResultType = resultType;
         token.AcceptsNumericValue = acceptsNumericValue;
         token.DefaultExplosionRadius = defaultExplosionRadius;
+        token.ExplosionDamageMultiplier = 1f;
+        token.DefaultTriggerCount = 0;
+        token.EffectDuration = 0f;
+        token.ChildDamageMultiplier = 0.5f;
         return token;
+    }
+
+    private EnemyDefinition CreateEnemyDefinition(string enemyId)
+    {
+        EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        createdObjects.Add(definition);
+        SetPrivateField(definition, "enemyId", enemyId);
+        SetPrivateField(definition, "displayName", enemyId);
+        return definition;
     }
 
     private ValueTokenData CreateValueToken(string tokenId, string displayText, float numericValue)
@@ -715,6 +905,31 @@ public sealed class AttackFormulaCompilerTests
         }
 
         return count;
+    }
+
+    private static bool InvokeTryRegisterImpact(CharBullet bullet, Collider collider)
+    {
+        MethodInfo tryRegisterImpact = typeof(CharBullet).GetMethod("TryRegisterImpact", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(tryRegisterImpact, Is.Not.Null);
+        return (bool)tryRegisterImpact.Invoke(bullet, new object[] { collider });
+    }
+
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    {
+        Type currentType = target.GetType();
+        while (currentType != null)
+        {
+            FieldInfo field = currentType.GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (field != null)
+            {
+                field.SetValue(target, value);
+                return;
+            }
+
+            currentType = currentType.BaseType;
+        }
+
+        Assert.Fail($"Missing private field '{fieldName}'.");
     }
 
     private CharBullet FindEmittedBullet(CharBullet bulletPrefab)

@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0443682c09f53a34a8ac6389751dbd18, type: 3}
+  m_Name: Split
+  m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.ResultTokenData
+  tokenId: result_split
+  displayText: "\u6563"
+  description: "\u547D\u4E2D\u540E\u968F\u673A\u6563\u5C04\u5B50\u5F39\uFF1B\u9ED8\u8BA4
+    2 \u53D1\uFF0C\u503C\u8BCD\u53EF\u6539\u6210 2/3/5 \u53D1\u3002"
+  tokenType: 5
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
+  resultType: 5
+  acceptsNumericValue: 1
+  defaultExplosionRadius: 0
+  explosionDamageMultiplier: 0
+  defaultTriggerCount: 2
+  effectDuration: 0
+  childDamageMultiplier: 0.5

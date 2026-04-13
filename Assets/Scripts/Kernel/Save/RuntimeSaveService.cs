@@ -318,6 +318,24 @@ public sealed class RuntimeSaveService : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 读取当前永久档中的单个 lifetime stat。
+    /// param name="key": 需要查询的稳定键名
+    /// returns: 当前 profile 里的统计值；不存在或无效键名返回 0
+    /// </summary>
+    public int GetLifetimeStat(string key)
+    {
+        if (!EnsureProfileLoadedInternal(applyToRuntime: false))
+        {
+            return 0;
+        }
+
+        string trimmedKey = key != null ? key.Trim() : string.Empty;
+        return !string.IsNullOrEmpty(trimmedKey) && currentProfile.LifetimeStats.TryGetValue(trimmedKey, out int value)
+            ? Mathf.Max(0, value)
+            : 0;
+    }
+
+    /// <summary>
     /// summary: 用来自运行时钱包的新遗珍总数覆盖当前永久档缓存，不立即写盘。
     /// param name="remnantCount": 当前运行时钱包的总遗珍数量
     /// returns: 数据发生变化时返回 true

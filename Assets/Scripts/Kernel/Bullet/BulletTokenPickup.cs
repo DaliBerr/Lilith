@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using Vocalith.EventSystem;
 
 namespace Kernel.Bullet
 {
@@ -128,6 +129,7 @@ namespace Kernel.Bullet
                 return false;
             }
 
+            EventManager.eventBus.Publish(new RunRewardCollectedEvent("残卷", remnantToken.RemnantAmount));
             ConsumePickup();
             return true;
         }

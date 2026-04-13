@@ -378,6 +378,35 @@ public sealed class PlayerBulletTokenInventory : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// summary: 把当前运行时库存恢复到 Inspector 预置的起始 token 布局。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    public void ResetToStartingTokens()
+    {
+        EnsureInitialized();
+        runtimeCells.Clear();
+        for (int i = 0; i < Capacity; i++)
+        {
+            runtimeCells.Add(TokenCellOccupancy.Empty);
+        }
+
+        if (startingTokens != null)
+        {
+            for (int i = 0; i < startingTokens.Count; i++)
+            {
+                PlaceableTokenData item = startingTokens[i];
+                if (item != null)
+                {
+                    TryAddItemInternal(item, out _);
+                }
+            }
+        }
+
+        NotifyChanged();
+    }
+
     private bool TryAddItemInternal(PlaceableTokenData item, out int insertedIndex)
     {
         insertedIndex = -1;

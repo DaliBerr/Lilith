@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: DirectDamage
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.ResultTokenData
   tokenId: result_direct_damage
-  displayText: Hit
-  description: Single target direct damage.
+  displayText: "\u51FB"
+  description: "\u53EA\u7ED3\u7B97\u76F4\u51FB\u4F24\u5BB3\u3002"
   tokenType: 5
   hasBulletTextOverride: 0
   bulletTextOverride: 
@@ -22,3 +22,7 @@ MonoBehaviour:
   resultType: 1
   acceptsNumericValue: 0
   defaultExplosionRadius: 0
+  explosionDamageMultiplier: 0
+  defaultTriggerCount: 0
+  effectDuration: 0
+  childDamageMultiplier: 0

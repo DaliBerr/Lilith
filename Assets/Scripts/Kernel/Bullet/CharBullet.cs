@@ -68,7 +68,9 @@ public sealed class CharBullet : MonoBehaviour
     private bool hasPreviousImpactCheckCenter;
     private bool isActiveShot;
     private CompiledAttack compiledAttack;
+    private CharBullet spawnTemplate;
     private BulletTargetPolicy targetPolicy = BulletTargetPolicy.EnemiesOnly;
+    private int remainingBounceCount;
 
     public TMP_Text GlyphText
     {
@@ -147,6 +149,8 @@ public sealed class CharBullet : MonoBehaviour
         EnsureCompatiblePhysicsBindings(allowFallbackCreation: false);
         EnsureImpactColliderConfiguration();
         attackSpec = attackSpec.GetSanitized();
+        spawnTemplate ??= this;
+        remainingBounceCount = attackSpec.bounceCount;
         CaptureCurrentScaleAsBase();
         CaptureImpactColliderBaseRadius();
         ApplyScaleMultiplier();
@@ -176,6 +180,7 @@ public sealed class CharBullet : MonoBehaviour
         AttackSpec resolvedAttackSpec = shotCompiledAttack != null ? shotCompiledAttack.AttackSpec : shotAttackSpec;
         attackSpec = resolvedAttackSpec.GetSanitized();
         compiledAttack = shotCompiledAttack;
+        spawnTemplate ??= this;
         targetPolicy = shotTargetPolicy;
         ownerRoot = owner;
         spawnWorldPosition = spawnPosition;
@@ -183,6 +188,7 @@ public sealed class CharBullet : MonoBehaviour
         impactedTargetRoots.Clear();
         hasPreviousImpactCheckCenter = false;
         remainingLife = attackSpec.projectileLife;
+        remainingBounceCount = attackSpec.bounceCount;
         isActiveShot = true;
         autoMove = true;
         movementSpace = Space.World;
@@ -200,6 +206,32 @@ public sealed class CharBullet : MonoBehaviour
 
         // LogShotInitialized(spawnPosition, shotDirection, attackSpec.projectileSpeed);
         // LogSpawnOverlapIfNeeded();
+    }
+
+    /// <summary>
+    /// summary: 记录当前子弹后续二次发射应复用的模板实例，避免从运行态子弹复制污染过的运行时状态。
+    /// param: template 发射子弹时使用的模板对象
+    /// returns: 无
+    /// </summary>
+    public void SetSpawnTemplate(CharBullet template)
+    {
+        spawnTemplate = template != null ? template : this;
+    }
+
+    /// <summary>
+    /// summary: 把一个目标根节点加入本发子弹的忽略命中集合，避免分裂子弹出生瞬间再次命中原目标。
+    /// param: targetRoot 需要忽略的目标根节点
+    /// returns: 传入目标有效并成功加入集合时返回 true
+    /// </summary>
+    public bool RegisterIgnoredTargetRoot(Transform targetRoot)
+    {
+        if (targetRoot == null)
+        {
+            return false;
+        }
+
+        impactedTargetRoots.Add(targetRoot.GetInstanceID());
+        return true;
     }
 
     /// <summary>
@@ -1178,12 +1210,12 @@ public sealed class CharBullet : MonoBehaviour
                 Array.Sort(hits, CompareRaycastDistance);
                 for (int i = 0; i < hits.Length; i++)
                 {
-                    if (!TryRegisterImpact(hits[i].collider))
+                    if (!TryRegisterImpactInternal(hits[i].collider, hits[i].normal, out bool stopFurtherProcessing))
                     {
                         continue;
                     }
 
-                    if (!isActiveShot)
+                    if (!isActiveShot || stopFurtherProcessing)
                     {
                         return;
                     }
@@ -1211,12 +1243,12 @@ public sealed class CharBullet : MonoBehaviour
         Collider[] overlaps = Physics.OverlapSphere(center, radius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < overlaps.Length; i++)
         {
-            if (!TryRegisterImpact(overlaps[i]))
+            if (!TryRegisterImpactInternal(overlaps[i], null, out bool stopFurtherProcessing))
             {
                 continue;
             }
 
-            if (!isActiveShot)
+            if (!isActiveShot || stopFurtherProcessing)
             {
                 return;
             }
@@ -1230,6 +1262,19 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool TryRegisterImpact(Collider other)
     {
+        return TryRegisterImpactInternal(other, null, out _);
+    }
+
+    /// <summary>
+    /// summary: 统一处理一次有效命中，按环境反弹、敌人/玩家直伤和命中后效果进行分发。
+    /// param: other 本次检测到的命中碰撞体
+    /// param: impactNormal sweep 命中时可用的法线；重叠检测时可为空
+    /// param: stopFurtherProcessing 本次命中是否应立即停止当前帧的剩余命中检测
+    /// returns: 命中被接受并完成处理时返回 true
+    /// </summary>
+    private bool TryRegisterImpactInternal(Collider other, Vector3? impactNormal, out bool stopFurtherProcessing)
+    {
+        stopFurtherProcessing = false;
         if (!isActiveShot || other == null || other.isTrigger)
         {
             return false;
@@ -1251,6 +1296,11 @@ public sealed class CharBullet : MonoBehaviour
             return false;
         }
 
+        if (isEnvironmentImpact)
+        {
+            return TryHandleEnvironmentImpact(other, impactNormal, out stopFurtherProcessing);
+        }
+
         int targetRootId = targetRoot.GetInstanceID();
         if (!impactedTargetRoots.Add(targetRootId))
         {
@@ -1258,30 +1308,102 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         Vector3 impactPoint = GetImpactPoint(other);
-        TryApplyConfiguredDirectDamage(other, targetRoot, "Direct");
-        TryApplyExplosionDamageAt(impactPoint);
+        Enemy primaryEnemy = other.GetComponentInParent<Enemy>();
+        float directDamage = ResolveDirectDamage(primaryEnemy);
+        bool dealtDamage = TryApplyConfiguredDirectDamage(other, targetRoot, "Direct", directDamage, out Enemy damagedEnemy, out _);
+        if (dealtDamage)
+        {
+            TryApplyPostHitEffects(targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy);
+        }
+
         ApplyLifeCost(attackSpec.impactLifeCost);
+        stopFurtherProcessing = !isActiveShot;
         return true;
     }
 
     /// <summary>
-    /// summary: 当命中的对象符合当前目标策略时，尝试把当前子弹伤害应用到该 actor 上。
+    /// summary: 处理环境碰撞；Bounce 行为会反射方向并保留生命，其他行为维持旧的墙体扣命语义。
+    /// param: other 本次命中的环境碰撞体
+    /// param: impactNormal 命中法线；为空时会自行估算法线
+    /// param: stopFurtherProcessing 本次命中是否应立即停止当前帧的剩余命中检测
+    /// returns: 环境碰撞被消费时返回 true
+    /// </summary>
+    private bool TryHandleEnvironmentImpact(Collider other, Vector3? impactNormal, out bool stopFurtherProcessing)
+    {
+        stopFurtherProcessing = false;
+        if (!ShouldBounceOnEnvironment())
+        {
+            ApplyLifeCost(attackSpec.impactLifeCost);
+            stopFurtherProcessing = true;
+            return true;
+        }
+
+        if (remainingBounceCount <= 0)
+        {
+            Expire();
+            stopFurtherProcessing = true;
+            return true;
+        }
+
+        Vector3 bounceNormal = ResolveImpactNormal(other, impactNormal);
+        if (bounceNormal.sqrMagnitude <= MinimumVectorSqrMagnitude)
+        {
+            Expire();
+            stopFurtherProcessing = true;
+            return true;
+        }
+
+        Vector3 incomingVelocity = GetVelocity(Space.World);
+        Vector3 incomingDirection = incomingVelocity.sqrMagnitude > MinimumVectorSqrMagnitude
+            ? incomingVelocity.normalized
+            : MovementTarget.forward;
+        Vector3 reflectedDirection = Vector3.Reflect(incomingDirection, bounceNormal.normalized);
+        if (reflectedDirection.sqrMagnitude <= MinimumVectorSqrMagnitude)
+        {
+            Expire();
+            stopFurtherProcessing = true;
+            return true;
+        }
+
+        remainingBounceCount = Mathf.Max(0, remainingBounceCount - 1);
+        float reboundOffset = Mathf.Max(ResolveImpactRadius() + 0.02f, 0.1f);
+        TrySetWorldPosition(GetImpactPoint(other) + (bounceNormal.normalized * reboundOffset));
+        TrySetDirectionAndSpeed(reflectedDirection, Mathf.Max(0f, speed), Space.World);
+        ApplyFacingDirection(reflectedDirection);
+        ResetImpactCheckState();
+        stopFurtherProcessing = true;
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 当命中的对象符合当前目标策略时，尝试把给定伤害应用到该 actor 上。
     /// param: other 本次命中的碰撞体
     /// param: targetRoot 当前命中去重使用的根节点
-    /// param: damageSource 本次伤害来源，便于区分直击和爆炸日志
+    /// param: damageSource 本次伤害来源，便于区分直击、爆炸和链雷日志
+    /// param: damageAmount 本次应结算的实际伤害值
+    /// param: damagedEnemy 若成功伤害到敌人，则输出该敌人引用
+    /// param: damagedPlayer 若成功伤害到玩家，则输出该生命组件引用
     /// returns: 成功对任一有效 actor 结算伤害时返回 true
     /// </summary>
-    private bool TryApplyConfiguredDirectDamage(Collider other, Transform targetRoot, string damageSource)
+    private bool TryApplyConfiguredDirectDamage(
+        Collider other,
+        Transform targetRoot,
+        string damageSource,
+        float damageAmount,
+        out Enemy damagedEnemy,
+        out PlayerHealth damagedPlayer)
     {
+        damagedEnemy = null;
+        damagedPlayer = null;
         bool damagedAnyTarget = false;
         if (ShouldDamageEnemies())
         {
-            damagedAnyTarget |= TryApplyDamageToEnemy(other, targetRoot, damageSource);
+            damagedAnyTarget |= TryApplyDamageToEnemy(other, targetRoot, damageSource, damageAmount, out damagedEnemy);
         }
 
         if (ShouldDamagePlayer())
         {
-            damagedAnyTarget |= TryApplyDamageToPlayer(other, targetRoot, damageSource);
+            damagedAnyTarget |= TryApplyDamageToPlayer(other, targetRoot, damageSource, damageAmount, out damagedPlayer);
         }
 
         return damagedAnyTarget;
@@ -1292,12 +1414,15 @@ public sealed class CharBullet : MonoBehaviour
     /// param: other 本次命中的碰撞体
     /// param: targetRoot 当前命中的根节点
     /// param: damageSource 本次伤害来源，便于区分直击和爆炸日志
+    /// param: damageAmount 本次应结算的伤害值
+    /// param: damagedEnemy 若成功造成伤害则输出被命中的敌人组件
     /// returns: 成功对敌人结算伤害时返回 true
     /// </summary>
-    private bool TryApplyDamageToEnemy(Collider other, Transform targetRoot, string damageSource)
+    private bool TryApplyDamageToEnemy(Collider other, Transform targetRoot, string damageSource, float damageAmount, out Enemy damagedEnemy)
     {
+        damagedEnemy = null;
         Enemy enemy = other.GetComponentInParent<Enemy>();
-        if (Damage <= 0f || !ShouldDamageEnemies() || !IsEnemyImpactTarget(other, targetRoot, enemy))
+        if (damageAmount <= 0f || !ShouldDamageEnemies() || !IsEnemyImpactTarget(other, targetRoot, enemy))
         {
             return false;
         }
@@ -1312,13 +1437,13 @@ public sealed class CharBullet : MonoBehaviour
 
         string targetName = targetRoot != null ? targetRoot.name : "<destroyed>";
         float previousHealth = enemy.CurrentHealth;
-        if (!enemy.TryApplyDamage(Damage, out float remainingHealth, out bool isDead))
+        if (!enemy.TryApplyDamage(damageAmount, out float remainingHealth, out bool isDead))
         {
             GameDebug.LogFormat(
                 "[CharBullet] Enemy target='{0}' ignored {1} damage={2} health={3}/{4}",
                 targetName,
                 damageSource,
-                Damage,
+                damageAmount,
                 previousHealth,
                 enemy.MaxHealth);
             return false;
@@ -1338,6 +1463,7 @@ public sealed class CharBullet : MonoBehaviour
             GameDebug.LogFormat("[CharBullet] Enemy target='{0}' died from {1}.", targetName, damageSource);
         }
 
+        damagedEnemy = enemy;
         return true;
     }
 
@@ -1346,25 +1472,28 @@ public sealed class CharBullet : MonoBehaviour
     /// param: other 本次命中的碰撞体
     /// param: targetRoot 当前命中的根节点
     /// param: damageSource 本次伤害来源，便于区分直击和爆炸日志
+    /// param: damageAmount 本次应结算的伤害值
+    /// param: damagedPlayer 若成功造成伤害则输出被命中的玩家生命组件
     /// returns: 成功对玩家结算伤害时返回 true
     /// </summary>
-    private bool TryApplyDamageToPlayer(Collider other, Transform targetRoot, string damageSource)
+    private bool TryApplyDamageToPlayer(Collider other, Transform targetRoot, string damageSource, float damageAmount, out PlayerHealth damagedPlayer)
     {
+        damagedPlayer = null;
         PlayerHealth playerHealth = other.GetComponentInParent<PlayerHealth>();
-        if (Damage <= 0f || !ShouldDamagePlayer() || playerHealth == null)
+        if (damageAmount <= 0f || !ShouldDamagePlayer() || playerHealth == null)
         {
             return false;
         }
 
         string targetName = targetRoot != null ? targetRoot.name : "<destroyed>";
         float previousHealth = playerHealth.CurrentHealth;
-        if (!playerHealth.TryApplyDamage(Damage, out float remainingHealth, out bool isDead))
+        if (!playerHealth.TryApplyDamage(damageAmount, out float remainingHealth, out bool isDead))
         {
             GameDebug.LogFormat(
                 "[CharBullet] Player target='{0}' ignored {1} damage={2} health={3}/{4}",
                 targetName,
                 damageSource,
-                Damage,
+                damageAmount,
                 previousHealth,
                 playerHealth.MaxHealth);
             return false;
@@ -1375,29 +1504,172 @@ public sealed class CharBullet : MonoBehaviour
             GameDebug.LogFormat("[CharBullet] Player target='{0}' died from {1}.", targetName, damageSource);
         }
 
+        damagedPlayer = playerHealth;
         return true;
+    }
+
+    /// <summary>
+    /// summary: 在一次有效 actor 命中后按结果词和核心词顺序结算爆炸、分裂、状态与链雷等二级效果。
+    /// param: targetRoot 当前主命中的目标根节点
+    /// param: impactPoint 当前命中的世界位置
+    /// param: directDamage 当前直击实际造成的伤害值
+    /// param: primaryEnemy 当前主命中在受伤前解析到的 Enemy
+    /// param: damagedEnemy 当前主命中若为敌人且仍存活则输出对应 Enemy
+    /// returns: 无
+    /// </summary>
+    private void TryApplyPostHitEffects(Transform targetRoot, Vector3 impactPoint, float directDamage, Enemy primaryEnemy, Enemy damagedEnemy)
+    {
+        TryApplyExplosionDamageAt(impactPoint, directDamage);
+        TryEmitSplitProjectiles(impactPoint, targetRoot, directDamage);
+        if (primaryEnemy != null)
+        {
+            TryApplyThunderChain(targetRoot);
+        }
+
+        if (damagedEnemy == null || damagedEnemy.Equals(null))
+        {
+            return;
+        }
+
+        TryApplyCoreEnemyEffects(damagedEnemy);
+        TryApplyResultEnemyEffects(damagedEnemy);
+    }
+
+    /// <summary>
+    /// summary: 若当前核心词声明了 burn 或 slow，则把这些效果结算到当前命中的敌人控制器上。
+    /// param: enemy 当前主命中的敌人
+    /// returns: 无
+    /// </summary>
+    private void TryApplyCoreEnemyEffects(Enemy enemy)
+    {
+        if (enemy == null || enemy.Equals(null))
+        {
+            return;
+        }
+
+        if (!enemy.TryGetComponent(out EnemyStatusEffectController statusController))
+        {
+            return;
+        }
+
+        CoreEffectPayload coreEffects = GetCoreEffects();
+        if (coreEffects.HasBurn)
+        {
+            statusController.RegisterFireHit(coreEffects.burnTriggerCount, coreEffects.burnDamagePerSecond, coreEffects.burnDuration);
+        }
+
+        if (coreEffects.HasSlow)
+        {
+            statusController.ApplySlow(coreEffects.slowPercent, coreEffects.slowDuration);
+        }
+    }
+
+    /// <summary>
+    /// summary: 若当前结果词声明了控制阈值，则把本次命中计入目标敌人的控制控制器。
+    /// param: enemy 当前主命中的敌人
+    /// returns: 无
+    /// </summary>
+    private void TryApplyResultEnemyEffects(Enemy enemy)
+    {
+        if (enemy == null || enemy.Equals(null) || !ShouldTriggerControl())
+        {
+            return;
+        }
+
+        if (!enemy.TryGetComponent(out EnemyStatusEffectController statusController))
+        {
+            return;
+        }
+
+        ResultEffectPayload resultEffects = GetResultEffects();
+        statusController.RegisterControlHit(resultEffects.controlTriggerCount, resultEffects.controlDuration);
+    }
+
+    /// <summary>
+    /// summary: Thunder 核心命中主目标后，对附近一个额外敌人补一段固定伤害且不递归触发其他效果。
+    /// param: primaryRoot 当前主命中的敌人根节点
+    /// returns: 无
+    /// </summary>
+    private void TryApplyThunderChain(Transform primaryRoot)
+    {
+        CoreEffectPayload coreEffects = GetCoreEffects();
+        if (primaryRoot == null || !coreEffects.HasThunderChain)
+        {
+            return;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(primaryRoot.position, coreEffects.thunderChainRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        HashSet<int> visitedRoots = new();
+        int primaryRootId = primaryRoot.GetInstanceID();
+        Enemy bestEnemy = null;
+        Collider bestCollider = null;
+        Transform bestRoot = null;
+        float bestDistanceSqr = float.MaxValue;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Enemy chainedEnemy = overlap.GetComponentInParent<Enemy>();
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            int overlapRootId = overlapRoot.GetInstanceID();
+            if (chainedEnemy == null ||
+                overlapRootId == primaryRootId ||
+                !visitedRoots.Add(overlapRootId) ||
+                !IsEnemyImpactTarget(overlap, overlapRoot, chainedEnemy))
+            {
+                continue;
+            }
+
+            float distanceSqr = (overlapRoot.position - primaryRoot.position).sqrMagnitude;
+            if (distanceSqr >= bestDistanceSqr)
+            {
+                continue;
+            }
+
+            bestDistanceSqr = distanceSqr;
+            bestEnemy = chainedEnemy;
+            bestCollider = overlap;
+            bestRoot = overlapRoot;
+        }
+
+        if (bestEnemy == null || bestCollider == null)
+        {
+            return;
+        }
+
+        TryApplyDamageToEnemy(bestCollider, bestRoot, "ThunderChain", coreEffects.thunderChainDamage, out _);
     }
 
     /// <summary>
     /// summary: 若当前编译结果带有爆炸语义，则在命中点附近再做一次 AoE 伤害结算。
     /// param: impactPoint 当前命中的世界位置
+    /// param: directDamage 当前直击实际造成的伤害值
     /// returns: 无
     /// </summary>
-    private void TryApplyExplosionDamageAt(Vector3 impactPoint)
+    private void TryApplyExplosionDamageAt(Vector3 impactPoint, float directDamage)
     {
         if (!ShouldTriggerExplosion())
         {
             return;
         }
 
+        ResultEffectPayload resultEffects = GetResultEffects();
         float explosionRadius = GetExplosionRadius();
-        if (explosionRadius <= 0f || Damage <= 0f)
+        float explosionDamage = directDamage * resultEffects.explosionDamageMultiplier;
+        if (explosionRadius <= 0f || explosionDamage <= 0f)
         {
             return;
         }
 
         Collider[] overlaps = Physics.OverlapSphere(impactPoint, explosionRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
-        var damagedRoots = new HashSet<int>();
+        HashSet<int> damagedRoots = new();
         for (int i = 0; i < overlaps.Length; i++)
         {
             Collider overlap = overlaps[i];
@@ -1415,8 +1687,173 @@ public sealed class CharBullet : MonoBehaviour
                 continue;
             }
 
-            TryApplyConfiguredDirectDamage(overlap, overlapRoot, "Explosion");
+            TryApplyConfiguredDirectDamage(overlap, overlapRoot, "Explosion", explosionDamage, out _, out _);
         }
+    }
+
+    /// <summary>
+    /// summary: 若当前结果词带有分裂语义，则在命中点附近按随机方向再次发射子弹，并忽略原命中目标。
+    /// param: impactPoint 当前命中的世界位置
+    /// param: targetRoot 当前主命中的目标根节点
+    /// param: directDamage 当前直击实际造成的伤害值
+    /// returns: 无
+    /// </summary>
+    private void TryEmitSplitProjectiles(Vector3 impactPoint, Transform targetRoot, float directDamage)
+    {
+        if (!ShouldTriggerSplit() || compiledAttack == null)
+        {
+            return;
+        }
+
+        ResultEffectPayload resultEffects = GetResultEffects();
+        CharBullet template = spawnTemplate != null ? spawnTemplate : this;
+        CompiledAttack childAttack = compiledAttack.Clone();
+        AttackSpec childSpec = childAttack.AttackSpec;
+        childSpec.damage = Mathf.Max(0f, directDamage * resultEffects.splitDamageMultiplier);
+        childSpec.resultType = AttackResultType.DirectDamage;
+        childAttack.AttackSpec = childSpec.GetSanitized();
+        childAttack.ResultType = AttackResultType.DirectDamage;
+        childAttack.ResultEffects = default;
+        childAttack.HasExplosion = false;
+        childAttack.ExplosionRadius = 0f;
+
+        for (int i = 0; i < resultEffects.splitProjectileCount; i++)
+        {
+            Vector3 splitDirection = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, 360f), Vector3.up) * Vector3.forward;
+            Vector3 spawnOffset = splitDirection * Mathf.Max(ResolveImpactRadius() + 0.05f, 0.1f);
+            List<CharBullet> spawnedBullets = new();
+            AttackProjectileEmitter.Emit(
+                template,
+                ownerRoot != null ? ownerRoot : transform,
+                impactPoint + spawnOffset,
+                splitDirection,
+                childAttack,
+                targetPolicy,
+                null,
+                spawnedBullets);
+
+            for (int bulletIndex = 0; bulletIndex < spawnedBullets.Count; bulletIndex++)
+            {
+                spawnedBullets[bulletIndex]?.RegisterIgnoredTargetRoot(targetRoot);
+            }
+        }
+    }
+
+    /// <summary>
+    /// summary: 根据当前核心词和目标敌人决定本次直击应使用的实际伤害值。
+    /// param: enemy 当前直击命中的敌人；若命中的是玩家或环境则可为空
+    /// returns: 已应用 Edge 护甲倍率后的直击伤害
+    /// </summary>
+    private float ResolveDirectDamage(Enemy enemy)
+    {
+        float resolvedDamage = Damage;
+        CoreEffectPayload coreEffects = GetCoreEffects();
+        if (enemy == null || enemy.Equals(null) || !coreEffects.HasArmoredBonus || enemy.Definition == null)
+        {
+            return resolvedDamage;
+        }
+
+        if (string.Equals(enemy.Definition.EnemyId, coreEffects.armoredEnemyId, StringComparison.Ordinal))
+        {
+            resolvedDamage *= coreEffects.armoredDamageMultiplier;
+        }
+
+        return resolvedDamage;
+    }
+
+    /// <summary>
+    /// summary: 读取当前命中的法线；优先使用 sweep 法线，重叠检测时回退为由命中点估算的离面方向。
+    /// param: other 当前命中的碰撞体
+    /// param: impactNormal sweep 阶段得到的法线
+    /// returns: 可用于反射的归一化法线
+    /// </summary>
+    private Vector3 ResolveImpactNormal(Collider other, Vector3? impactNormal)
+    {
+        if (impactNormal.HasValue && impactNormal.Value.sqrMagnitude > MinimumVectorSqrMagnitude)
+        {
+            return impactNormal.Value.normalized;
+        }
+
+        Vector3 impactPoint = GetImpactPoint(other);
+        Vector3 referencePoint = MovementTarget != null ? MovementTarget.position : transform.position;
+        Vector3 estimatedNormal = referencePoint - impactPoint;
+        if (estimatedNormal.sqrMagnitude > MinimumVectorSqrMagnitude)
+        {
+            return estimatedNormal.normalized;
+        }
+
+        Vector3 fallbackNormal = -GetVelocity(Space.World);
+        return fallbackNormal.sqrMagnitude > MinimumVectorSqrMagnitude ? fallbackNormal.normalized : Vector3.back;
+    }
+
+    /// <summary>
+    /// summary: 读取当前命中球的世界半径，供反弹回退和分裂出生偏移使用。
+    /// param: 无
+    /// returns: 当前命中球的世界半径；缺失时返回 0
+    /// </summary>
+    private float ResolveImpactRadius()
+    {
+        return TryGetImpactSphere(out _, out float radius) ? radius : 0f;
+    }
+
+    /// <summary>
+    /// summary: 判断当前行为是否允许在命中环境时执行反弹。
+    /// param: 无
+    /// returns: 当前行为词为 Bounce 且仍有剩余反弹次数时返回 true
+    /// </summary>
+    private bool ShouldBounceOnEnvironment()
+    {
+        return attackSpec.behaviorType == AttackBehaviorType.Bounce || compiledAttack?.BehaviorType == AttackBehaviorType.Bounce;
+    }
+
+    /// <summary>
+    /// summary: 读取当前核心词对应的二级效果载荷。
+    /// param: 无
+    /// returns: 当前编译结果携带的 burn/slow/thunder/armor bonus 配置
+    /// </summary>
+    private CoreEffectPayload GetCoreEffects()
+    {
+        return compiledAttack != null ? compiledAttack.CoreEffects.GetSanitized() : default;
+    }
+
+    /// <summary>
+    /// summary: 读取当前结果词对应的二级效果载荷。
+    /// param: 无
+    /// returns: 当前编译结果携带的爆炸、分裂与控制配置
+    /// </summary>
+    private ResultEffectPayload GetResultEffects()
+    {
+        return compiledAttack != null ? compiledAttack.ResultEffects.GetSanitized() : default;
+    }
+
+    /// <summary>
+    /// summary: 判断当前这发子弹是否需要在命中时触发分裂散射。
+    /// param: 无
+    /// returns: 结果词为 Split 且已配置有效子弹数量时返回 true
+    /// </summary>
+    private bool ShouldTriggerSplit()
+    {
+        if (compiledAttack != null)
+        {
+            return compiledAttack.ResultType == AttackResultType.Split && compiledAttack.ResultEffects.HasSplit;
+        }
+
+        return attackSpec.resultType == AttackResultType.Split;
+    }
+
+    /// <summary>
+    /// summary: 判断当前这发子弹是否需要在命中敌人时累计控制计数。
+    /// param: 无
+    /// returns: 结果词为 StatusEffect 且配置了有效控制阈值时返回 true
+    /// </summary>
+    private bool ShouldTriggerControl()
+    {
+        if (compiledAttack != null)
+        {
+            return compiledAttack.ResultType == AttackResultType.StatusEffect && compiledAttack.ResultEffects.HasControl;
+        }
+
+        return attackSpec.resultType == AttackResultType.StatusEffect;
     }
 
     /// <summary>
@@ -1659,6 +2096,7 @@ public sealed class CharBullet : MonoBehaviour
     private void ApplyAttackSpec(AttackSpec newAttackSpec, bool syncCurrentSpeed, bool syncRemainingLife)
     {
         attackSpec = newAttackSpec.GetSanitized();
+        remainingBounceCount = attackSpec.bounceCount;
         if (syncCurrentSpeed)
         {
             speed = attackSpec.projectileSpeed;

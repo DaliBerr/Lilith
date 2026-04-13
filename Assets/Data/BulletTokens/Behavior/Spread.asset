@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: Spread
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.BehaviorTokenData
   tokenId: behavior_spread
-  displayText: Spread
-  description: Symmetric spread shot.
+  displayText: "\u6563"
+  description: "\u53D1\u5C04\u6563\u5C04\u5B50\u5F39\uFF1B\u9ED8\u8BA4 3 \u53D1\uFF0C\u6BCF\u53D1\u4F24\u5BB3\u4E3A\u5F53\u524D\u76F4\u4F24\u7684
+    50%\u3002"
   tokenType: 3
   hasBulletTextOverride: 0
   bulletTextOverride: 
@@ -23,3 +24,5 @@ MonoBehaviour:
   acceptsNumericValue: 1
   defaultProjectileCount: 3
   spreadAngleStep: 12
+  projectileDamageMultiplier: 0.5
+  pierceLifetimeDistanceScalePerCount: 0.2

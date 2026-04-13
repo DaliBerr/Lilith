@@ -230,8 +230,52 @@ public sealed class EnemyGeneratorTests
         Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<EnemyMeleeAttacker>(), "targetPlayer"), Is.SameAs(player));
         Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<EnemyRangedTokenAttacker>(), "targetPlayer"), Is.SameAs(player));
         Assert.That(GetPrivateField<PlayerHealth>(spawnedEnemy.GetComponent<EnemyRangedTokenAttacker>(), "targetPlayerHealth"), Is.SameAs(playerHealth));
+        Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<EnemyExplosiveAttacker>(), "targetPlayer"), Is.SameAs(player));
         Assert.That(GetPrivateField<Transform>(spawnedEnemy.GetComponent<EnemySummoner>(), "targetPlayer"), Is.SameAs(player));
         Assert.That(GetPrivateField<EnemyGenerator>(spawnedEnemy.GetComponent<EnemySummoner>(), "enemyGenerator"), Is.SameAs(generator));
+    }
+
+    [Test]
+    public void ResolveRuntimeConfig_UsesDefinitionStatsGrowthAndWaveDropOverrides()
+    {
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        EnemyDefinition definition = CreateEnemyDefinition("ScaledEnemy", runtimePrefab: null);
+        CoreTokenData droppedToken = CreateToken<CoreTokenData>("scaled_drop", "Scaled Drop");
+        SetPrivateField(definition, "combat", new EnemyDefinition.EnemyCombatDefinition
+        {
+            maxHealth = 20f,
+            moveSpeed = 30f,
+            attackRange = 10f,
+            attackCooldown = 1.5f,
+            attackDamage = 2f,
+            damageReductionPercent = 0.2f,
+            visualScaleMultiplier = 1.25f,
+        });
+        SetPrivateField(definition, "explosiveAttack", new EnemyDefinition.ExplosiveAttackDefinition
+        {
+            explosionRadius = 12f,
+            windupSeconds = 0.8f,
+        });
+        generator.TrySetCompletedWaveCount(2);
+
+        EnemyWaveConfig resolvedConfig = generator.ResolveRuntimeConfig(
+            definition,
+            new[]
+            {
+                new EnemyBulletTokenDropEntry(droppedToken, 0.5f, 2),
+            });
+
+        Assert.That(resolvedConfig.maxHealth, Is.EqualTo(21.6f).Within(0.001f));
+        Assert.That(resolvedConfig.moveSpeed, Is.EqualTo(32.4f).Within(0.001f));
+        Assert.That(resolvedConfig.attackRange, Is.EqualTo(10.8f).Within(0.001f));
+        Assert.That(resolvedConfig.attackCooldown, Is.EqualTo(1.5f).Within(0.001f));
+        Assert.That(resolvedConfig.attackDamage, Is.EqualTo(2.16f).Within(0.001f));
+        Assert.That(resolvedConfig.damageReductionPercent, Is.EqualTo(0.2f).Within(0.001f));
+        Assert.That(resolvedConfig.visualScaleMultiplier, Is.EqualTo(1.25f).Within(0.001f));
+        Assert.That(resolvedConfig.explosionRadius, Is.EqualTo(12.96f).Within(0.001f));
+        Assert.That(resolvedConfig.tokenDrops, Has.Count.EqualTo(1));
+        Assert.That(resolvedConfig.tokenDrops[0].token, Is.SameAs(droppedToken));
+        Assert.That(resolvedConfig.tokenDrops[0].dropCount, Is.EqualTo(2));
     }
 
     [Test]
@@ -327,6 +371,7 @@ public sealed class EnemyGeneratorTests
         enemyObject.AddComponent<CharEnemyMovement>();
         enemyObject.AddComponent<EnemyMeleeAttacker>();
         enemyObject.AddComponent<EnemyRangedTokenAttacker>();
+        enemyObject.AddComponent<EnemyExplosiveAttacker>();
         enemyObject.AddComponent<EnemySummoner>();
         enemyObject.AddComponent<EnemyDefinitionBinder>();
         BaseCharEnemyNorm1 enemyData = enemyObject.AddComponent<BaseCharEnemyNorm1>();

@@ -105,15 +105,27 @@
 
 ## Subagent for Unity test tail / Unity 测试收尾子代理约定
 - 当任务进入“修改后验证”阶段，且需要等待 Unity MCP 测试结果、轮询测试任务、整理失败摘要时，优先委托 `test_runner` 子代理执行
-- `test_runner` 负责：
+- **默认分工是：主模型先启动测试，`test_runner` 再接管收尾**
+- 推荐默认顺序：
+  1. 主模型先读取 `mcpforunity://editor/state`，确认 `ready_for_tools`
+  2. 主模型决定测试范围，并优先自己调用一次 `run_tests`
+  3. 主模型拿到 `job_id` 后，再把 `job_id` 交给 `test_runner`
+  4. `test_runner` 负责持续调用 `get_test_job`
+  5. `test_runner` 在必要时补读 `read_console`
+  6. 主模型根据汇总结果判断是否继续修复、扩大验证范围或结束任务
+- `test_runner` 默认负责：
   - 读取 `mcpforunity://editor/state`
-  - 调用 `run_tests` / `get_test_job`
+  - 轮询 `get_test_job`
   - 必要时调用 `read_console`
   - 汇总测试通过/失败情况与关键错误线索
-- 主模型负责：
+- 主模型默认负责：
   - 判断应该跑哪些测试
+  - 启动 `run_tests` 并保留 `job_id`
   - 判断失败是否与本次改动直接相关
   - 决定是否继续修复、扩大验证范围或结束任务
+- 只有当主模型**不需要立刻使用 `job_id`**、且后续不会频繁改派/中断该任务时，才可以把“启动测试 + 轮询测试”整段一起委托给 `test_runner`
+- **不要在 `test_runner` 还没返回 `job_id` 前用 `interrupt=true` 打断它**，除非你明确决定放弃当前这次测试委托并改为主模型自己启动测试；否则很容易出现“测试并未真正启动，但主模型误以为它在后台运行”的空转
+- 如果主模型已经自己启动测试，就不要再让 `test_runner` 重新调用 `run_tests`；直接把现成 `job_id` 发给它，避免重复启动同一轮验证
 - 默认不要让 `test_runner` 在未获明确授权时执行全量长耗时测试；优先跑与改动影响面最相关的测试
 - 若测试任务耗时较长，主模型可在等待测试期间并行委托其他只读子代理执行 diff 审查、README/memory 评估或影响面复查
 

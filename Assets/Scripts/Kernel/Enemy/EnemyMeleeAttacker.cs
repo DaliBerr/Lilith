@@ -7,6 +7,7 @@ using UnityEngine;
 public sealed class EnemyMeleeAttacker : MonoBehaviour
 {
     [SerializeField] private Enemy enemyData;
+    [SerializeField] private EnemyStatusEffectController statusEffects;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private PlayerHealth targetPlayerHealth;
 
@@ -15,6 +16,7 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
     private void Awake()
     {
         TryResolveEnemyData();
+        TryResolveStatusEffects();
         TryResolveTargetPlayer();
     }
 
@@ -30,12 +32,18 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
             return;
         }
 
+        if (TryResolveStatusEffects() && !statusEffects.CanAct)
+        {
+            return;
+        }
+
         TryPerformAttack(Time.time);
     }
 
     private void OnValidate()
     {
         TryResolveEnemyData();
+        TryResolveStatusEffects();
         TryResolveTargetPlayer();
     }
 
@@ -63,6 +71,11 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
     /// </summary>
     private bool TryPerformAttack(float currentTime)
     {
+        if (TryResolveStatusEffects() && !statusEffects.CanAct)
+        {
+            return false;
+        }
+
         if (currentTime < nextAttackTime || !TryResolveEnemyData() || !TryResolveTargetPlayer())
         {
             return false;
@@ -115,6 +128,22 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
 
         enemyData = null;
         return TryGetComponent(out enemyData);
+    }
+
+    /// <summary>
+    /// summary: 解析当前敌人根节点上的状态效果控制器，供眩晕阻断攻击使用。
+    /// param: 无
+    /// returns: 成功拿到状态控制器时返回 true
+    /// </summary>
+    private bool TryResolveStatusEffects()
+    {
+        if (statusEffects != null && statusEffects.transform == transform)
+        {
+            return true;
+        }
+
+        statusEffects = null;
+        return TryGetComponent(out statusEffects);
     }
 
     /// <summary>

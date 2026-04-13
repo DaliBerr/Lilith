@@ -281,6 +281,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 4194609742540283869}
   m_SourcePrefab: {fileID: 100100000, guid: 3c6f4a16c5a388845ab4982df95538c9, type: 3}
+--- !u!4 &215781830275387871 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 70904860241870535, guid: 3c6f4a16c5a388845ab4982df95538c9, type: 3}
+  m_PrefabInstance: {fileID: 145658860812431128}
+  m_PrefabAsset: {fileID: 0}
 --- !u!224 &2858060222930140859 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 2714726469005758883, guid: 3c6f4a16c5a388845ab4982df95538c9, type: 3}
@@ -305,6 +310,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameplayBillboard
   targetCamera: {fileID: 0}
   automaticFacingEnabled: 1
+  motionOffsetEnabled: 1
+  motionSource: {fileID: 215781830275387871}
+  playerMovementSource: {fileID: 0}
+  movementSwayAmplitude: 0.75
+  movementSwayFrequency: 5.5
+  movementSwayBlendSpeed: 8
+  movementSpeedForMaxSway: 168
+  dashPulseAmplitude: 1.2
+  dashPulseDuration: 0.3
 --- !u!1 &9040077734227831188 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 9183320383876335244, guid: 3c6f4a16c5a388845ab4982df95538c9, type: 3}

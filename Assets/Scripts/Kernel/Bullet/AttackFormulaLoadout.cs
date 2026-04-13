@@ -15,6 +15,8 @@ namespace Kernel.Bullet
 
         private CompiledAttack compiledAttack;
         private readonly List<BaseTokenData> expandedTokens = new();
+        private readonly List<PlaceableTokenData> startingItems = new();
+        private bool hasCapturedStartingItems;
         private bool isDirty = true;
         private int revision;
 
@@ -36,6 +38,7 @@ namespace Kernel.Bullet
 
         private void Awake()
         {
+            CaptureStartingItemsIfNeeded();
             RebuildExpandedTokens();
             EnsureCompiled();
         }
@@ -66,6 +69,7 @@ namespace Kernel.Bullet
         /// </summary>
         public void SetItems(IEnumerable<PlaceableTokenData> orderedItems)
         {
+            CaptureStartingItemsIfNeeded();
             items.Clear();
             if (orderedItems != null)
             {
@@ -88,6 +92,7 @@ namespace Kernel.Bullet
         /// </summary>
         public void SetTokens(IEnumerable<BaseTokenData> orderedTokens)
         {
+            CaptureStartingItemsIfNeeded();
             items.Clear();
             if (orderedTokens != null)
             {
@@ -127,6 +132,17 @@ namespace Kernel.Bullet
         }
 
         /// <summary>
+        /// summary: 把当前装备词元恢复到对象初次启用时的起始配置。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void ResetToStartingItems()
+        {
+            CaptureStartingItemsIfNeeded();
+            SetItems(startingItems);
+        }
+
+        /// <summary>
         /// summary: 统一广播 loadout 内容已变化，供 HUD 和其他只读观察者实时刷新。
         /// param: 无
         /// returns: 无
@@ -134,6 +150,34 @@ namespace Kernel.Bullet
         private void NotifyChanged()
         {
             Changed?.Invoke();
+        }
+
+        /// <summary>
+        /// summary: 缓存当前对象的起始词元布局，供 run-end reset 时恢复默认装配。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void CaptureStartingItemsIfNeeded()
+        {
+            if (hasCapturedStartingItems)
+            {
+                return;
+            }
+
+            startingItems.Clear();
+            if (items != null)
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    PlaceableTokenData item = items[i];
+                    if (item != null)
+                    {
+                        startingItems.Add(item);
+                    }
+                }
+            }
+
+            hasCapturedStartingItems = true;
         }
 
         private void RebuildExpandedTokens()

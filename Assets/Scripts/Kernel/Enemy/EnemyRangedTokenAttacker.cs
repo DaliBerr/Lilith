@@ -11,6 +11,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     private const float MinimumAimDirectionSqrMagnitude = 0.0001f;
 
     [SerializeField] private Enemy enemyData;
+    [SerializeField] private EnemyStatusEffectController statusEffects;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private PlayerHealth targetPlayerHealth;
     [SerializeField] private Transform bulletSpawnOrigin;
@@ -24,6 +25,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     private void Awake()
     {
         TryResolveEnemyData();
+        TryResolveStatusEffects();
         TryResolveTargetPlayer();
         InvalidateCompiledAttack();
     }
@@ -35,12 +37,18 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
             return;
         }
 
+        if (TryResolveStatusEffects() && !statusEffects.CanAct)
+        {
+            return;
+        }
+
         TryPerformAttack(Time.time);
     }
 
     private void OnValidate()
     {
         TryResolveEnemyData();
+        TryResolveStatusEffects();
         TryResolveTargetPlayer();
         InvalidateCompiledAttack();
     }
@@ -69,6 +77,11 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     /// </summary>
     private bool TryPerformAttack(float currentTime)
     {
+        if (TryResolveStatusEffects() && !statusEffects.CanAct)
+        {
+            return false;
+        }
+
         if (currentTime < nextAttackTime || !TryResolveEnemyData() || !TryResolveTargetPlayer())
         {
             return false;
@@ -97,6 +110,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
             return false;
         }
 
+        ApplyConfiguredDamageOverride(compiledAttack);
         if (AttackProjectileEmitter.Emit(
                 rangedAttack.bulletPrefab,
                 transform,
@@ -110,6 +124,29 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
 
         nextAttackTime = currentTime + Mathf.Max(0f, enemyData.AttackCooldown);
         return true;
+    }
+
+    /// <summary>
+    /// summary: 当敌人本身声明了明确攻击伤害时，用该数值覆盖编译结果里的子弹伤害。
+    /// param: compiledAttack 当前准备发射的编译攻击结果
+    /// returns: 无
+    /// </summary>
+    private void ApplyConfiguredDamageOverride(CompiledAttack compiledAttack)
+    {
+        if (compiledAttack == null || !TryResolveEnemyData())
+        {
+            return;
+        }
+
+        float configuredDamage = enemyData.AttackDamage;
+        if (configuredDamage <= 0f)
+        {
+            return;
+        }
+
+        AttackSpec shotSpec = compiledAttack.AttackSpec;
+        shotSpec.damage = configuredDamage;
+        compiledAttack.AttackSpec = shotSpec.GetSanitized();
     }
 
     /// <summary>
@@ -213,6 +250,22 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
 
         enemyData = null;
         return TryGetComponent(out enemyData);
+    }
+
+    /// <summary>
+    /// summary: 解析当前敌人根节点上的状态效果控制器，供眩晕阻断远程攻击使用。
+    /// param: 无
+    /// returns: 成功拿到状态控制器时返回 true
+    /// </summary>
+    private bool TryResolveStatusEffects()
+    {
+        if (statusEffects != null && statusEffects.transform == transform)
+        {
+            return true;
+        }
+
+        statusEffects = null;
+        return TryGetComponent(out statusEffects);
     }
 
     private bool TryResolveTargetPlayer()

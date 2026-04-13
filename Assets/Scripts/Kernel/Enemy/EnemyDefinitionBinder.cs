@@ -14,6 +14,7 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
     [SerializeField] private CharEnemyMovement movement;
     [SerializeField] private EnemyMeleeAttacker meleeAttacker;
     [SerializeField] private EnemyRangedTokenAttacker rangedTokenAttacker;
+    [SerializeField] private EnemyExplosiveAttacker explosiveAttacker;
     [SerializeField] private EnemySummoner summoner;
     [SerializeField] private CharGlyphPresenter glyphPresenter;
     [SerializeField] private CharEnemyVisualPresenter visualPresenter;
@@ -87,6 +88,11 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
             rangedTokenAttacker = GetComponent<EnemyRangedTokenAttacker>();
         }
 
+        if (overwriteExisting || explosiveAttacker == null || explosiveAttacker.transform != transform)
+        {
+            explosiveAttacker = GetComponent<EnemyExplosiveAttacker>();
+        }
+
         if (overwriteExisting || summoner == null || summoner.transform != transform)
         {
             summoner = GetComponent<EnemySummoner>();
@@ -152,8 +158,10 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
     {
         bool shouldEnableMelee = attackKind == EnemyAttackKind.MeleeContact;
         bool shouldEnableRanged = attackKind == EnemyAttackKind.RangedBulletToken;
+        bool shouldEnableExplosive = attackKind == EnemyAttackKind.ProximityExplosion;
         if ((shouldEnableMelee && meleeAttacker == null) ||
-            (shouldEnableRanged && rangedTokenAttacker == null))
+            (shouldEnableRanged && rangedTokenAttacker == null) ||
+            (shouldEnableExplosive && explosiveAttacker == null))
         {
             return false;
         }
@@ -166,6 +174,11 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
         if (rangedTokenAttacker != null)
         {
             rangedTokenAttacker.enabled = shouldEnableRanged;
+        }
+
+        if (explosiveAttacker != null)
+        {
+            explosiveAttacker.enabled = shouldEnableExplosive;
         }
 
         return true;

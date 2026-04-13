@@ -133,6 +133,24 @@ public sealed class PlayerRemnantWallet : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 尝试扣除当前全局残卷数量；若余额不足或实例缺失则会失败。
+    /// param: amount 需要扣除的残卷数量
+    /// param: resultingCount 输出扣除后的残卷总数
+    /// returns: 成功扣除时返回 true
+    /// </summary>
+    public static bool TrySpendCurrentRemnants(int amount, out int resultingCount)
+    {
+        PlayerRemnantWallet instance = EnsureInstance();
+        if (instance == null)
+        {
+            resultingCount = 0;
+            return false;
+        }
+
+        return instance.TrySpendRemnants(amount, out resultingCount);
+    }
+
+    /// <summary>
     /// summary: 增加当前实例持有的残卷数量。
     /// param: amount 需要增加的残卷数量
     /// param: resultingCount 输出增加后的残卷总数
@@ -155,6 +173,25 @@ public sealed class PlayerRemnantWallet : MonoBehaviour
         RuntimeSaveService.GetOrCreateInstance()?.SetRemnantCount(remnantCount);
         PublishChanged(previousCount);
         return true;
+    }
+
+    /// <summary>
+    /// summary: 扣除当前实例持有的残卷数量；余额不足时不会发生任何变更。
+    /// param: amount 需要扣除的残卷数量
+    /// param: resultingCount 输出扣除后的残卷总数
+    /// returns: 成功扣除时返回 true
+    /// </summary>
+    public bool TrySpendRemnants(int amount, out int resultingCount)
+    {
+        RuntimeSaveService.EnsureProfileLoaded();
+        EnsureInitialized();
+        resultingCount = remnantCount;
+        if (amount <= 0 || remnantCount < amount)
+        {
+            return false;
+        }
+
+        return TrySetRemnantsInternal(remnantCount - amount, out resultingCount, persistProfile: true);
     }
 
     /// <summary>

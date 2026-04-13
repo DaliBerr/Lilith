@@ -14,12 +14,41 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaveDefinition
   spawnIntervalSeconds: 1
   randomizeEnemySpawns: 1
+  postWaveTokenSelectionPlan: {fileID: 11400000, guid: 97d2ba8c2378c9243ba010f7ea1e42cb, type: 2}
   enemySpawns:
+  - enemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
+    spawnCount: 20
+    tokenDrops:
+    - token: {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
+      dropChance: 0.1
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
+      dropChance: 0.001
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 43b717043b8e70f42a5133f5f171aac9, type: 2}
+      dropChance: 0.1
+      dropCount: 1
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
   - enemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
-    spawnCount: 6
-    enemyConfig:
-      maxHealth: 90
-      moveSpeed: 110
-      attackRange: 18
-      attackCooldown: 0.75
-      attackDamage: 8
+    spawnCount: 5
+    tokenDrops:
+    - token: {fileID: 0}
+      dropChance: 0
+      dropCount: 1
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: e92152659a1ea184395551246961e6e2, type: 2}
+    spawnCount: 2
+    tokenDrops:
+    - token: {fileID: 11400000, guid: 29b3f0bc5983cf741b89c9df972f21ab, type: 2}
+      dropChance: 0.15
+      dropCount: 1
+    isBossEncounter: 0
+    bossDisplayNameOverride: 

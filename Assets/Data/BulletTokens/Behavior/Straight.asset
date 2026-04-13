@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Straight
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.BehaviorTokenData
   tokenId: behavior_straight
-  displayText: Straight
-  description: Default straight projectile.
+  displayText: "\u76F4"
+  description: "\u9ED8\u8BA4\u76F4\u5C04\u5F39\u9053\uFF0C\u4E0D\u6D88\u8017\u6570\u503C\u8BCD\u3002"
   tokenType: 3
   hasBulletTextOverride: 0
   bulletTextOverride: 
@@ -23,3 +23,5 @@ MonoBehaviour:
   acceptsNumericValue: 0
   defaultProjectileCount: 1
   spreadAngleStep: 0
+  projectileDamageMultiplier: 1
+  pierceLifetimeDistanceScalePerCount: 0.2

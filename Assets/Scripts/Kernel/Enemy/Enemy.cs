@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Kernel.Bullet;
 using Kernel.GameState;
 using UnityEngine;
+using Vocalith.EventSystem;
 
 /// <summary>
 /// 定义敌人运行时数据契约，具体数据由派生类自行持有。
@@ -88,7 +89,23 @@ public abstract class Enemy : MonoBehaviour
 
         hasRaisedDeathNotification = true;
         Died?.Invoke(this);
+        EventManager.eventBus.Publish(new EnemyDiedEvent(this, ResolveDisplayName()));
         return true;
+    }
+
+    /// <summary>
+    /// summary: 解析当前敌人在结算与日志中应展示的名称；优先使用定义里的 DisplayName。
+    /// param: 无
+    /// returns: 当前敌人的展示名称
+    /// </summary>
+    private string ResolveDisplayName()
+    {
+        if (enemyDefinition != null && !string.IsNullOrWhiteSpace(enemyDefinition.DisplayName))
+        {
+            return enemyDefinition.DisplayName;
+        }
+
+        return EnemyName;
     }
 }
 
@@ -121,10 +138,13 @@ public struct EnemyWaveConfig
     [Min(0f)] public float attackRange;
     [Min(0f)] public float attackCooldown;
     [Min(0f)] public float attackDamage;
+    [Range(0f, 1f)] public float damageReductionPercent;
+    [Min(0f)] public float visualScaleMultiplier;
+    [Min(0f)] public float explosionRadius;
     public List<EnemyBulletTokenDropEntry> tokenDrops;
 
     public EnemyWaveConfig(float maxHealth, float moveSpeed, float attackRange, float attackCooldown, float attackDamage)
-        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, null)
+        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, 0f, 1f, 0f, null)
     {
     }
 
@@ -135,12 +155,29 @@ public struct EnemyWaveConfig
         float attackCooldown,
         float attackDamage,
         IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
+        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, 0f, 1f, 0f, tokenDrops)
+    {
+    }
+
+    public EnemyWaveConfig(
+        float maxHealth,
+        float moveSpeed,
+        float attackRange,
+        float attackCooldown,
+        float attackDamage,
+        float damageReductionPercent,
+        float visualScaleMultiplier,
+        float explosionRadius,
+        IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
     {
         this.maxHealth = maxHealth;
         this.moveSpeed = moveSpeed;
         this.attackRange = attackRange;
         this.attackCooldown = attackCooldown;
         this.attackDamage = attackDamage;
+        this.damageReductionPercent = damageReductionPercent;
+        this.visualScaleMultiplier = visualScaleMultiplier;
+        this.explosionRadius = explosionRadius;
         this.tokenDrops = tokenDrops != null ? new List<EnemyBulletTokenDropEntry>(tokenDrops) : new List<EnemyBulletTokenDropEntry>();
     }
 
@@ -157,11 +194,14 @@ public struct EnemyWaveConfig
         sanitized.attackRange = SanitizeValue(sanitized.attackRange, 0f);
         sanitized.attackCooldown = SanitizeValue(sanitized.attackCooldown, 0f);
         sanitized.attackDamage = SanitizeValue(sanitized.attackDamage, 0f);
+        sanitized.damageReductionPercent = Mathf.Clamp01(sanitized.damageReductionPercent);
+        sanitized.visualScaleMultiplier = SanitizePositiveValue(sanitized.visualScaleMultiplier, 1f);
+        sanitized.explosionRadius = SanitizeValue(sanitized.explosionRadius, 0f);
         sanitized.tokenDrops = clearTokenDrops ? new List<EnemyBulletTokenDropEntry>() : SanitizeTokenDrops(sanitized.tokenDrops);
         return sanitized;
     }
 
-    private static List<EnemyBulletTokenDropEntry> SanitizeTokenDrops(IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
+    internal static List<EnemyBulletTokenDropEntry> SanitizeTokenDrops(IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
     {
         List<EnemyBulletTokenDropEntry> sanitizedDrops = new();
         if (tokenDrops == null)
@@ -209,15 +249,20 @@ public struct WaveEnemySpawnEntry
 {
     public EnemyDefinition enemyDefinition;
     [Min(0)] public int spawnCount;
-    public EnemyWaveConfig enemyConfig;
+    public List<EnemyBulletTokenDropEntry> tokenDrops;
     public bool isBossEncounter;
     public string bossDisplayNameOverride;
 
-    public WaveEnemySpawnEntry(EnemyDefinition enemyDefinition, int spawnCount, EnemyWaveConfig enemyConfig, bool isBossEncounter = false, string bossDisplayNameOverride = "")
+    public WaveEnemySpawnEntry(
+        EnemyDefinition enemyDefinition,
+        int spawnCount,
+        IEnumerable<EnemyBulletTokenDropEntry> tokenDrops = null,
+        bool isBossEncounter = false,
+        string bossDisplayNameOverride = "")
     {
         this.enemyDefinition = enemyDefinition;
         this.spawnCount = spawnCount;
-        this.enemyConfig = enemyConfig;
+        this.tokenDrops = tokenDrops != null ? new List<EnemyBulletTokenDropEntry>(tokenDrops) : new List<EnemyBulletTokenDropEntry>();
         this.isBossEncounter = isBossEncounter;
         this.bossDisplayNameOverride = bossDisplayNameOverride ?? string.Empty;
     }
@@ -233,6 +278,7 @@ public struct WaveEnemySpawnEntry
     {
         WaveEnemySpawnEntry sanitized = this;
         sanitized.spawnCount = Mathf.Max(0, sanitized.spawnCount);
+        sanitized.tokenDrops = EnemyWaveConfig.SanitizeTokenDrops(sanitized.tokenDrops);
         sanitized.bossDisplayNameOverride = sanitized.bossDisplayNameOverride != null
             ? sanitized.bossDisplayNameOverride.Trim()
             : string.Empty;
@@ -309,7 +355,9 @@ public static class EnemyGameplayPauseGuard
     public static bool ShouldSuspendEnemyActions()
     {
         return StatusController.HasStatus(StatusList.InBackPackStatus)
+            || StatusController.HasStatus(StatusList.InUpgradeScreenStatus)
             || StatusController.HasStatus(StatusList.InPauseMenuStatus)
+            || StatusController.HasStatus(StatusList.InSettlementScreenStatus)
             || StatusController.HasStatus(StatusList.InDialogStatus)
             || StatusController.HasStatus(StatusList.PausedStatus);
     }

@@ -35,6 +35,7 @@ public sealed class CharEnemyMovement : MonoBehaviour
     };
 
     [SerializeField] private Enemy enemyData;
+    [SerializeField] private EnemyStatusEffectController statusEffects;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private Transform orbitTarget;
     [SerializeField] private Rigidbody targetRigidbody;
@@ -61,6 +62,7 @@ public sealed class CharEnemyMovement : MonoBehaviour
     {
         ResolveMovementRigidbody();
         TryResolveEnemyData();
+        TryResolveStatusEffects();
         MigrateLegacyMovementDataIfNeeded();
         TryResolveTargetPlayer();
         TryResolveTargetMapGrid();
@@ -191,6 +193,7 @@ public sealed class CharEnemyMovement : MonoBehaviour
     {
         ResolveMovementRigidbody();
         TryResolveEnemyData();
+        TryResolveStatusEffects();
         MigrateLegacyMovementDataIfNeeded();
         TryResolveTargetMapGrid();
         TryResolveGroundingReferenceCollider();
@@ -213,6 +216,12 @@ public sealed class CharEnemyMovement : MonoBehaviour
         }
 
         if (deltaTime <= 0f || !TryResolveEnemyData())
+        {
+            StopMovement();
+            return;
+        }
+
+        if (TryResolveStatusEffects() && !statusEffects.CanMove)
         {
             StopMovement();
             return;
@@ -561,7 +570,8 @@ public sealed class CharEnemyMovement : MonoBehaviour
             return 0f;
         }
 
-        return enemyData.MoveSpeed * Mathf.Max(0f, speedMultiplier) * Mathf.Max(0f, deltaTime);
+        float statusSpeedMultiplier = TryResolveStatusEffects() ? statusEffects.MovementSpeedMultiplier : 1f;
+        return enemyData.MoveSpeed * Mathf.Max(0f, speedMultiplier) * Mathf.Max(0f, statusSpeedMultiplier) * Mathf.Max(0f, deltaTime);
     }
 
     /// <summary>
@@ -1217,7 +1227,8 @@ public sealed class CharEnemyMovement : MonoBehaviour
             return;
         }
 
-        float moveSpeed = enemyData.MoveSpeed * Mathf.Max(0f, speedMultiplier);
+        float statusSpeedMultiplier = TryResolveStatusEffects() ? statusEffects.MovementSpeedMultiplier : 1f;
+        float moveSpeed = enemyData.MoveSpeed * Mathf.Max(0f, speedMultiplier) * Mathf.Max(0f, statusSpeedMultiplier);
         Vector3 movementDelta = direction * moveSpeed * deltaTime;
         if (targetRigidbody == null)
         {
@@ -1652,6 +1663,22 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
         enemyData = null;
         return TryGetComponent(out enemyData);
+    }
+
+    /// <summary>
+    /// summary: 解析当前敌人根节点上的状态效果控制器，供移动速度与眩晕阻断统一读取。
+    /// param: 无
+    /// returns: 成功拿到状态控制器时返回 true
+    /// </summary>
+    private bool TryResolveStatusEffects()
+    {
+        if (statusEffects != null && statusEffects.transform == transform)
+        {
+            return true;
+        }
+
+        statusEffects = null;
+        return TryGetComponent(out statusEffects);
     }
 
     /// <summary>

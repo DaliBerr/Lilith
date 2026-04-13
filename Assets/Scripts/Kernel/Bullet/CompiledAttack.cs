@@ -39,6 +39,90 @@ namespace Kernel.Bullet
         }
     }
 
+    [Serializable]
+    public struct CoreEffectPayload
+    {
+        public string armoredEnemyId;
+        public float armoredDamageMultiplier;
+        public int burnTriggerCount;
+        public float burnDamagePerSecond;
+        public float burnDuration;
+        public float slowPercent;
+        public float slowDuration;
+        public int thunderChainTargetCount;
+        public float thunderChainRadius;
+        public float thunderChainDamage;
+
+        public CoreEffectPayload GetSanitized()
+        {
+            CoreEffectPayload sanitized = this;
+            sanitized.armoredEnemyId = sanitized.armoredEnemyId != null ? sanitized.armoredEnemyId.Trim() : string.Empty;
+            sanitized.armoredDamageMultiplier = Mathf.Max(1f, sanitized.armoredDamageMultiplier);
+            sanitized.burnTriggerCount = Mathf.Max(0, sanitized.burnTriggerCount);
+            sanitized.burnDamagePerSecond = Mathf.Max(0f, sanitized.burnDamagePerSecond);
+            sanitized.burnDuration = Mathf.Max(0f, sanitized.burnDuration);
+            sanitized.slowPercent = Mathf.Clamp01(sanitized.slowPercent);
+            sanitized.slowDuration = Mathf.Max(0f, sanitized.slowDuration);
+            sanitized.thunderChainTargetCount = Mathf.Max(0, sanitized.thunderChainTargetCount);
+            sanitized.thunderChainRadius = Mathf.Max(0f, sanitized.thunderChainRadius);
+            sanitized.thunderChainDamage = Mathf.Max(0f, sanitized.thunderChainDamage);
+            return sanitized;
+        }
+
+        public bool HasArmoredBonus =>
+            !string.IsNullOrWhiteSpace(armoredEnemyId) &&
+            armoredDamageMultiplier > 1f;
+
+        public bool HasBurn =>
+            burnTriggerCount > 0 &&
+            burnDamagePerSecond > 0f &&
+            burnDuration > 0f;
+
+        public bool HasSlow =>
+            slowPercent > 0f &&
+            slowDuration > 0f;
+
+        public bool HasThunderChain =>
+            thunderChainTargetCount > 0 &&
+            thunderChainRadius > 0f &&
+            thunderChainDamage > 0f;
+    }
+
+    [Serializable]
+    public struct ResultEffectPayload
+    {
+        public float explosionRadius;
+        public float explosionDamageMultiplier;
+        public int splitProjectileCount;
+        public float splitDamageMultiplier;
+        public int controlTriggerCount;
+        public float controlDuration;
+
+        public ResultEffectPayload GetSanitized()
+        {
+            ResultEffectPayload sanitized = this;
+            sanitized.explosionRadius = Mathf.Max(0f, sanitized.explosionRadius);
+            sanitized.explosionDamageMultiplier = Mathf.Clamp01(sanitized.explosionDamageMultiplier);
+            sanitized.splitProjectileCount = Mathf.Max(0, sanitized.splitProjectileCount);
+            sanitized.splitDamageMultiplier = Mathf.Clamp01(sanitized.splitDamageMultiplier);
+            sanitized.controlTriggerCount = Mathf.Max(0, sanitized.controlTriggerCount);
+            sanitized.controlDuration = Mathf.Max(0f, sanitized.controlDuration);
+            return sanitized;
+        }
+
+        public bool HasExplosion =>
+            explosionRadius > 0f &&
+            explosionDamageMultiplier > 0f;
+
+        public bool HasSplit =>
+            splitProjectileCount > 0 &&
+            splitDamageMultiplier > 0f;
+
+        public bool HasControl =>
+            controlTriggerCount > 0 &&
+            controlDuration > 0f;
+    }
+
     /// <summary>
     /// 表示一串词元被编译后的可执行攻击结果。
     /// </summary>
@@ -66,6 +150,8 @@ namespace Kernel.Bullet
         public Color TextColor { get; set; } = Color.white;
         public bool HasFontSizeOverride { get; set; }
         public float FontSize { get; set; }
+        public CoreEffectPayload CoreEffects { get; set; }
+        public ResultEffectPayload ResultEffects { get; set; }
 
         public IReadOnlyList<AttackCompileMessage> Messages => messages;
         public IReadOnlyList<BaseTokenData> PreTokens => preTokens;
@@ -203,6 +289,58 @@ namespace Kernel.Bullet
             }
 
             return Mathf.Max(0f, resolvedSize);
+        }
+
+        /// <summary>
+        /// summary: 复制当前编译结果，供运行时派生出子弹分裂或临时伤害覆写版本。
+        /// param: 无
+        /// returns: 一份与当前结果数值等价、但列表已独立拷贝的新实例
+        /// </summary>
+        public CompiledAttack Clone()
+        {
+            CompiledAttack clone = new()
+            {
+                AttackSpec = AttackSpec,
+                CoreType = CoreType,
+                BehaviorType = BehaviorType,
+                ResultType = ResultType,
+                DisplayText = DisplayText,
+                CanFire = CanFire,
+                SpreadProjectileCount = SpreadProjectileCount,
+                SpreadAngleStep = SpreadAngleStep,
+                ExplosionRadius = ExplosionRadius,
+                HasExplosion = HasExplosion,
+                ScaleMultiplier = ScaleMultiplier,
+                ImpactRadiusMultiplier = ImpactRadiusMultiplier,
+                HasTextColorOverride = HasTextColorOverride,
+                TextColor = TextColor,
+                HasFontSizeOverride = HasFontSizeOverride,
+                FontSize = FontSize,
+                CoreEffects = CoreEffects,
+                ResultEffects = ResultEffects,
+            };
+
+            for (int i = 0; i < messages.Count; i++)
+            {
+                clone.messages.Add(messages[i]);
+            }
+
+            for (int i = 0; i < preTokens.Count; i++)
+            {
+                clone.preTokens.Add(preTokens[i]);
+            }
+
+            for (int i = 0; i < postTokens.Count; i++)
+            {
+                clone.postTokens.Add(postTokens[i]);
+            }
+
+            for (int i = 0; i < fontSizeModifiers.Count; i++)
+            {
+                clone.fontSizeModifiers.Add(fontSizeModifiers[i]);
+            }
+
+            return clone;
         }
 
     }

@@ -11,8 +11,23 @@ public sealed class CellData : MonoBehaviour
         "Mover",
     };
 
-    private const string WallModelPath = "Model/wall Model";
-    private const string GroundModelPath = "Model/Ground Model";
+    private static readonly string[] PreferredWallModelPaths =
+    {
+        "Model/wall Model",
+        "Model/Wall Model",
+        "Model/wall",
+        "Model/Wall",
+    };
+
+    private static readonly string[] PreferredGroundModelPaths =
+    {
+        "Model/Ground Model",
+        "Model/ground Model",
+        "Model/ground",
+        "Model/Ground",
+    };
+
+    private const string ModelRootPath = "Model";
 
     public enum CellSurfaceType
     {
@@ -131,12 +146,12 @@ public sealed class CellData : MonoBehaviour
 
         if (overwriteExisting || !IsModelReferenceValid(wallModelRoot))
         {
-            wallModelRoot = FindPreferredModelRoot(WallModelPath);
+            wallModelRoot = FindPreferredModelRoot(PreferredWallModelPaths, fallbackNameToken: "wall");
         }
 
         if (overwriteExisting || !IsModelReferenceValid(groundModelRoot))
         {
-            groundModelRoot = FindPreferredModelRoot(GroundModelPath);
+            groundModelRoot = FindPreferredModelRoot(PreferredGroundModelPaths, fallbackNameToken: "ground");
         }
 
         return ResolveManagedColliderForSurface(surfaceType) != null;
@@ -428,8 +443,8 @@ public sealed class CellData : MonoBehaviour
 
     private void OnValidate()
     {
-        TryCacheSurfaceBindings(overwriteExisting: true);
-        TryCacheMovementReferences(overwriteExisting: true);
+        TryCacheSurfaceBindings(overwriteExisting: false);
+        TryCacheMovementReferences(overwriteExisting: false);
         SanitizeStaticMapRigidbody();
         TryRefreshSurfacePresentation(syncTags: false);
     }
@@ -664,12 +679,57 @@ public sealed class CellData : MonoBehaviour
         };
     }
 
-    private Transform FindPreferredModelRoot(string relativePath)
+    private Transform FindPreferredModelRoot(string[] preferredRelativePaths, string fallbackNameToken)
     {
-        Transform namedTransform = transform.Find(relativePath);
-        if (namedTransform != null)
+        for (int i = 0; i < preferredRelativePaths.Length; i++)
         {
-            return namedTransform;
+            string relativePath = preferredRelativePaths[i];
+            if (string.IsNullOrEmpty(relativePath))
+            {
+                continue;
+            }
+
+            Transform namedTransform = transform.Find(relativePath);
+            if (namedTransform != null)
+            {
+                return namedTransform;
+            }
+        }
+
+        Transform modelRoot = transform.Find(ModelRootPath);
+        if (modelRoot != null)
+        {
+            return FindDescendantByNameToken(modelRoot, fallbackNameToken);
+        }
+
+        return null;
+    }
+
+    private static Transform FindDescendantByNameToken(Transform root, string token)
+    {
+        if (root == null || string.IsNullOrEmpty(token))
+        {
+            return null;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child == null)
+            {
+                continue;
+            }
+
+            if (child.name.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return child;
+            }
+
+            Transform nestedMatch = FindDescendantByNameToken(child, token);
+            if (nestedMatch != null)
+            {
+                return nestedMatch;
+            }
         }
 
         return null;

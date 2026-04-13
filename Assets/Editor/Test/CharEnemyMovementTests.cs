@@ -42,7 +42,9 @@ public sealed class CharEnemyMovementTests
     {
         BaseCharEnemyNorm1 enemy = CreateEnemy(out CharEnemyMovement movement, out GameObject enemyObject);
         GameObject playerObject = CreateGameObject("Player");
-        playerObject.transform.position = new Vector3(10f, 0f, 0f);
+        MapGridAuthoring mapGrid = CreateMapAuthoring(32, 32, Vector2.one);
+        enemyObject.transform.position = mapGrid.GetCellWorldPosition(10, 10);
+        playerObject.transform.position = mapGrid.GetCellWorldPosition(20, 10);
 
         EnemyDefinition definition = CreateDefinition(EnemyMovementKind.AggroOnHit, EnemyAttackKind.None);
         SetPrivateField(definition, "aggroOnHitMovement", new EnemyDefinition.AggroOnHitMovementDefinition
@@ -52,6 +54,7 @@ public sealed class CharEnemyMovementTests
         enemy.TryBindDefinition(definition);
         enemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 5f, 0f, 0f, 0f));
         Assert.That(movement.TrySetTarget(playerObject.transform), Is.True);
+        Assert.That(movement.TrySetTargetMapGrid(mapGrid), Is.True);
         InvokePrivateMethod(movement, "Awake");
 
         Vector3 initialPosition = enemyObject.transform.position;
@@ -68,7 +71,9 @@ public sealed class CharEnemyMovementTests
     {
         BaseCharEnemyNorm1 enemy = CreateEnemy(out CharEnemyMovement movement, out GameObject enemyObject);
         GameObject playerObject = CreateGameObject("Player");
-        playerObject.transform.position = new Vector3(10f, 0f, 0f);
+        MapGridAuthoring mapGrid = CreateMapAuthoring(32, 32, Vector2.one);
+        enemyObject.transform.position = mapGrid.GetCellWorldPosition(10, 10);
+        playerObject.transform.position = mapGrid.GetCellWorldPosition(20, 10);
 
         EnemyDefinition definition = CreateDefinition(EnemyMovementKind.KeepDistance, EnemyAttackKind.None);
         SetPrivateField(definition, "keepDistanceMovement", new EnemyDefinition.KeepDistanceMovementDefinition
@@ -79,15 +84,17 @@ public sealed class CharEnemyMovementTests
         enemy.TryBindDefinition(definition);
         enemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 5f, 0f, 0f, 0f));
         Assert.That(movement.TrySetTarget(playerObject.transform), Is.True);
+        Assert.That(movement.TrySetTargetMapGrid(mapGrid), Is.True);
         InvokePrivateMethod(movement, "Awake");
 
-        enemyObject.transform.position = Vector3.zero;
+        enemyObject.transform.position = mapGrid.GetCellWorldPosition(10, 10);
+        Vector3 firstStartPosition = enemyObject.transform.position;
         InvokePrivateMethod(movement, "TickMovement", 0.2f, 0f);
-        Assert.That(enemyObject.transform.position.x, Is.GreaterThan(0f));
+        Assert.That(enemyObject.transform.position.x, Is.GreaterThan(firstStartPosition.x));
 
-        enemyObject.transform.position = new Vector3(7f, 0f, 0f);
+        enemyObject.transform.position = mapGrid.GetCellWorldPosition(17, 10);
         InvokePrivateMethod(movement, "TickMovement", 0.2f, 0.25f);
-        Assert.That(enemyObject.transform.position.x, Is.LessThan(7f));
+        Assert.That(enemyObject.transform.position.x, Is.LessThan(mapGrid.GetCellWorldPosition(17, 10).x));
     }
 
     [Test]

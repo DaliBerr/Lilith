@@ -7,22 +7,40 @@
       "text": "当旧日传说落下最后一个字，你已真正踏入这片废墟与火焰交织的旅途。"
     },
     {
-      "speakerId": "lilith",
-      "displayName": "莉莉丝",
+      "speakerId": "player",
+      "displayName": "你",
       "displayMode": "replace",
-      "text": "别急着迈步，先记住三件事。第一，这里不会有人替你把路标一直点亮，很多出口都藏在你自己对场景与敌人的观察里。第二，你手中的文字与符号不只是道具，它们会决定攻击怎么生成、怎么扩散，又会在什么时候把你从绝境里拉回来。第三，就算眼前的房间暂时安静，也别把它当成真正的安全地带；每一次整理背包、每一次调整槽位，都是在为下一场冲突提前下注。你现在看到的界面会跟着你的进展一起变化，所以学会在战斗前后切换视角、确认状态、理解手里每一枚 token 的位置，会比盲目向前更重要。"
+      "text": "所以这就是我变成一个字的原因吗？要求我帮你们回收文字和力量？"
     },
     {
-      "speakerId": "watcher",
-      "displayName": "引导者",
+      "speakerId": "narrator",
+      "displayName": "旁白",
       "displayMode": "replace",
-      "text": "进入主界面后，你可以先观察顶部信息，再确认自己手里有哪些可用配置。真正的危险不会等你准备好，但糟糕的准备会让危险来得更快。"
+      "text": "你手中的书微微发亮，它的封面上刻着一个古老的符号，似乎在等待着你的触碰。"
     },
     {
-      "speakerId": "lilith",
-      "displayName": "莉莉丝",
+      "speakerId": "book",
+      "displayName": "书",
       "displayMode": "replace",
-      "text": "明白了就继续向前。接下来，主界面会留给你自己操作，而这段引导不会再替你做选择。"
+      "text": "留意地上的指南。走向前方的门，从那里开始你的旅程。"
+    },
+    {
+      "speakerId": "book",
+      "displayName": "书",
+      "displayMode": "replace",
+      "text": "利用好我，字符的力量将是你在这片废墟中生存的关键。每个字符都有独特的能力，学会使用它们，你就能克服前方的挑战。"
+    },
+    {
+      "speakerId": "book",
+      "displayName": "书",
+      "displayMode": "replace",
+      "text": "记住，你不是一个人在战斗。"
+    },
+    {
+      "speakerId": "player",
+      "displayName": "你",
+      "displayMode": "replace",
+      "text": "就当是沉浸式体验故事了，先上吧。"
     }
   ]
 }

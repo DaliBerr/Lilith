@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
+using Kernel.Bullet;
 using Kernel.MapGrid;
 using NUnit.Framework;
 using UnityEngine;
@@ -59,7 +60,7 @@ public sealed class WaveManagerTests
             WaveEnemySpawnEntry bossEntry = new(
                 enemyDefinition: null,
                 spawnCount: 1,
-                enemyConfig: new EnemyWaveConfig(120f, 0f, 0f, 0f, 0f),
+                tokenDrops: null,
                 isBossEncounter: true,
                 bossDisplayNameOverride: "Final Boss");
 
@@ -84,6 +85,105 @@ public sealed class WaveManagerTests
             startSubscription.Dispose();
             endSubscription.Dispose();
         }
+    }
+
+    [Test]
+    public void CompleteSequence_PublishesCombatVictoryEventWithCompletedWaveCount()
+    {
+        WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
+        CombatVictoryEvent? victoryEvent = null;
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<CombatVictoryEvent>(evt => victoryEvent = evt);
+
+        try
+        {
+            SetPrivateField(waveManager, "isSequenceRunning", true);
+            SetPrivateField(waveManager, "hasCompletedSequence", false);
+            SetPrivateField(waveManager, "completedWaveCount", 3);
+
+            InvokePrivateMethod<object>(waveManager, "CompleteSequence");
+            InvokePrivateMethod<object>(waveManager, "CompleteSequence");
+
+            Assert.That(victoryEvent.HasValue, Is.True);
+            Assert.That(victoryEvent.Value.source, Is.SameAs(waveManager));
+            Assert.That(victoryEvent.Value.completedWaveCount, Is.EqualTo(3));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
+    }
+
+    [Test]
+    public void TryStartSequence_ResetsEnemyGeneratorCompletedWaveCount()
+    {
+        WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        EnemyDefinition enemyDefinition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        createdObjects.Add(enemyDefinition);
+        WaveDefinition wave = CreateWaveDefinition(0.5f, null, new WaveEnemySpawnEntry(enemyDefinition, 1));
+
+        Assert.That(generator.TrySetCompletedWaveCount(3), Is.True);
+        SetPrivateField(waveManager, "enemyGenerator", generator);
+        SetPrivateField(waveManager, "waves", new List<WaveDefinition> { wave });
+        SetPrivateField(waveManager, "autoStartOnEnable", false);
+
+        bool started = waveManager.TryStartSequence();
+
+        Assert.That(started, Is.True);
+        Assert.That(waveManager.CompletedWaveCount, Is.EqualTo(0));
+        Assert.That(generator.CompletedWaveCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void TryAdvanceWave_PausesForRewardSelectionUntilResumed()
+    {
+        WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        CombatEntryTokenSelectionPlan selectionPlan = ScriptableObject.CreateInstance<CombatEntryTokenSelectionPlan>();
+        createdObjects.Add(selectionPlan);
+
+        EnemyDefinition enemyDefinition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        createdObjects.Add(enemyDefinition);
+
+        WaveDefinition firstWave = CreateWaveDefinition(
+            0.5f,
+            selectionPlan,
+            new WaveEnemySpawnEntry(enemyDefinition, 1));
+        WaveDefinition secondWave = CreateWaveDefinition(
+            0.5f,
+            null,
+            new WaveEnemySpawnEntry(enemyDefinition, 1));
+
+        SetPrivateField(waveManager, "enemyGenerator", generator);
+        SetPrivateField(waveManager, "waves", new List<WaveDefinition> { firstWave, secondWave });
+        SetPrivateField(waveManager, "currentWaveIndex", 0);
+        SetPrivateField(waveManager, "spawnedCountInCurrentWave", firstWave.TotalSpawnCount);
+        SetPrivateField(waveManager, "nextWaveStartTime", 0f);
+        SetPrivateField(waveManager, "isSequenceRunning", true);
+        SetPrivateField(waveManager, "hasCompletedSequence", false);
+
+        int requestedWaveIndex = -1;
+        WaveDefinition requestedWave = null;
+        waveManager.WaveRewardSelectionRequested += (waveIndex, wave) =>
+        {
+            requestedWaveIndex = waveIndex;
+            requestedWave = wave;
+        };
+
+        InvokePrivateMethod<object>(waveManager, "TryAdvanceWave", firstWave, 1f);
+
+        Assert.That(requestedWaveIndex, Is.EqualTo(0));
+        Assert.That(requestedWave, Is.SameAs(firstWave));
+        Assert.That(waveManager.CompletedWaveCount, Is.EqualTo(1));
+        Assert.That(generator.CompletedWaveCount, Is.EqualTo(1));
+        Assert.That(waveManager.IsAwaitingWaveRewardSelection, Is.True);
+
+        bool resumed = waveManager.TryContinueAfterWaveRewardSelection();
+
+        Assert.That(resumed, Is.True);
+        Assert.That(waveManager.IsAwaitingWaveRewardSelection, Is.False);
+        Assert.That(GetPrivateField<int>(waveManager, "currentWaveIndex"), Is.EqualTo(1));
+        Assert.That(waveManager.HasCompletedSequence, Is.False);
     }
 
     // [Test]
@@ -216,11 +316,12 @@ public sealed class WaveManagerTests
         return definition;
     }
 
-    private WaveDefinition CreateWaveDefinition(float spawnIntervalSeconds, params WaveEnemySpawnEntry[] enemySpawns)
+    private WaveDefinition CreateWaveDefinition(float spawnIntervalSeconds, CombatEntryTokenSelectionPlan selectionPlan, params WaveEnemySpawnEntry[] enemySpawns)
     {
         WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
         createdObjects.Add(waveDefinition);
         SetPrivateField(waveDefinition, "spawnIntervalSeconds", spawnIntervalSeconds);
+        SetPrivateField(waveDefinition, "postWaveTokenSelectionPlan", selectionPlan);
         SetPrivateField(waveDefinition, "enemySpawns", new List<WaveEnemySpawnEntry>(enemySpawns));
         return waveDefinition;
     }
@@ -246,6 +347,13 @@ public sealed class WaveManagerTests
         FieldInfo field = FindInstanceField(target.GetType(), fieldName);
         Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
         field.SetValue(target, value);
+    }
+
+    private static T GetPrivateField<T>(object target, string fieldName)
+    {
+        FieldInfo field = FindInstanceField(target.GetType(), fieldName);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        return field.GetValue(target) is T typedValue ? typedValue : default;
     }
 
     private static T InvokePrivateMethod<T>(object target, string methodName, params object[] args)

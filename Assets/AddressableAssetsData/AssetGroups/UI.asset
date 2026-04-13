@@ -15,6 +15,12 @@ MonoBehaviour:
   m_GroupName: UI
   m_GUID: 3d8500dabd131694dbbd021695a725c1
   m_SerializeEntries:
+  - m_GUID: 2cba28b6b97f029408105e5b273a45c3
+    m_Address: Assets/Prefabs/UI/Upgrage Section Prefab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 450bdcc12e49510429d7ff846980a24f
     m_Address: Assets/Prefabs/UI/Token Select Panel
     m_ReadOnly: 0
@@ -29,6 +35,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 59d03886b44b91d4ca4a8ac3ed4d43c8
     m_Address: Assets/Prefabs/UI/Profile Popup
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5b1a6318a3aefc64da57729ef0f206e5
+    m_Address: Assets/Prefabs/UI/Update UI Screen
     m_ReadOnly: 0
     m_SerializedLabels:
     - UI
@@ -63,6 +75,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - UI
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c105cc0da4d46934f82a9242f9111138
+    m_Address: Assets/Prefabs/UI/Settlement UI Screen
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: c3e902a6fc9d0054f9222a9300dffe8b
     m_Address: Assets/Prefabs/UI/PauseUI
     m_ReadOnly: 0
@@ -77,6 +95,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e5b98263adf94d04ab18ac63ad9168e8
     m_Address: Assets/Prefabs/UI/BulletToken Selection Prefab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f29cb597246c826408e6a9609dea57d9
+    m_Address: Assets/Prefabs/UI/Upgrade Grid Prefab
     m_ReadOnly: 0
     m_SerializedLabels:
     - UI

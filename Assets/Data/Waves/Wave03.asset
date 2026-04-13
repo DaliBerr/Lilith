@@ -14,12 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WaveDefinition
   spawnIntervalSeconds: 0.8
   randomizeEnemySpawns: 1
+  postWaveTokenSelectionPlan: {fileID: 11400000, guid: 97d2ba8c2378c9243ba010f7ea1e42cb, type: 2}
   enemySpawns:
+  - enemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
+    spawnCount: 10
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
   - enemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
-    spawnCount: 8
-    enemyConfig:
-      maxHealth: 120
-      moveSpeed: 130
-      attackRange: 20
-      attackCooldown: 0.6
-      attackDamage: 12
+    spawnCount: 4
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: e92152659a1ea184395551246961e6e2, type: 2}
+    spawnCount: 2
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 

@@ -13,6 +13,7 @@ public sealed class WaveManager : MonoBehaviour
     private const float NoScheduledTime = -1f;
 
     public event Action SequenceCompleted;
+    public event Action<int, WaveDefinition> WaveRewardSelectionRequested;
 
     [SerializeField] private EnemyGenerator enemyGenerator;
     [SerializeField] private List<WaveDefinition> waves = new();
@@ -22,11 +23,14 @@ public sealed class WaveManager : MonoBehaviour
     private readonly List<Enemy> aliveEnemies = new();
     private readonly List<int> spawnedCountsPerEntry = new();
     private int currentWaveIndex = -1;
+    private int completedWaveCount;
     private int spawnedCountInCurrentWave;
+    private int pendingNextWaveIndex = -1;
     private float nextSpawnTime = NoScheduledTime;
     private float nextWaveStartTime = NoScheduledTime;
     private bool isSequenceRunning;
     private bool hasCompletedSequence;
+    private bool isAwaitingWaveRewardSelection;
     private VocalithRandom randomSource;
     private Enemy activeBossEnemy;
     private string activeBossDisplayName = string.Empty;
@@ -34,6 +38,10 @@ public sealed class WaveManager : MonoBehaviour
     public bool IsSequenceRunning => isSequenceRunning;
 
     public bool HasCompletedSequence => hasCompletedSequence;
+
+    public int CompletedWaveCount => completedWaveCount;
+
+    public bool IsAwaitingWaveRewardSelection => isAwaitingWaveRewardSelection;
 
     private void Awake()
     {
@@ -88,11 +96,15 @@ public sealed class WaveManager : MonoBehaviour
         aliveEnemies.Clear();
         spawnedCountsPerEntry.Clear();
         currentWaveIndex = -1;
+        completedWaveCount = 0;
         spawnedCountInCurrentWave = 0;
+        pendingNextWaveIndex = -1;
         nextSpawnTime = NoScheduledTime;
         nextWaveStartTime = NoScheduledTime;
         hasCompletedSequence = false;
         isSequenceRunning = true;
+        isAwaitingWaveRewardSelection = false;
+        enemyGenerator.TrySetCompletedWaveCount(0);
 
         if (TryStartNextValidWave(0, Time.time))
         {
@@ -116,6 +128,11 @@ public sealed class WaveManager : MonoBehaviour
         }
 
         PruneDeadEnemies();
+        if (isAwaitingWaveRewardSelection)
+        {
+            return;
+        }
+
         WaveDefinition currentWave = GetCurrentWave();
         if (currentWave == null)
         {
@@ -149,7 +166,8 @@ public sealed class WaveManager : MonoBehaviour
             return;
         }
 
-        if (!enemyGenerator.TrySpawnEnemy(spawnEntry.enemyDefinition, spawnEntry.enemyConfig, out Enemy spawnedEnemy))
+        EnemyWaveConfig runtimeConfig = enemyGenerator.ResolveRuntimeConfig(spawnEntry.enemyDefinition, spawnEntry.tokenDrops);
+        if (!enemyGenerator.TrySpawnEnemy(spawnEntry.enemyDefinition, runtimeConfig, out Enemy spawnedEnemy))
         {
             return;
         }
@@ -190,10 +208,42 @@ public sealed class WaveManager : MonoBehaviour
             return;
         }
 
+        completedWaveCount++;
+        enemyGenerator.TrySetCompletedWaveCount(completedWaveCount);
+        if (TryPauseForWaveRewardSelection(currentWave))
+        {
+            return;
+        }
+
+        pendingNextWaveIndex = -1;
         if (!TryStartNextValidWave(currentWaveIndex + 1, currentTime))
         {
             CompleteSequence();
         }
+    }
+
+    /// <summary>
+    /// summary: 在奖励选择完成后恢复波次推进；若已无下一波则直接结算整套序列。
+    /// param: 无
+    /// returns: 当前确实存在待恢复的奖励停顿时返回 true
+    /// </summary>
+    public bool TryContinueAfterWaveRewardSelection()
+    {
+        if (!isSequenceRunning || hasCompletedSequence || !isAwaitingWaveRewardSelection)
+        {
+            return false;
+        }
+
+        int nextWaveIndex = pendingNextWaveIndex;
+        pendingNextWaveIndex = -1;
+        isAwaitingWaveRewardSelection = false;
+        nextWaveStartTime = NoScheduledTime;
+        if (!TryStartNextValidWave(nextWaveIndex, Time.time))
+        {
+            CompleteSequence();
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -282,11 +332,14 @@ public sealed class WaveManager : MonoBehaviour
         hasCompletedSequence = true;
         ClearActiveBossTracking(publishEndedEvent: activeBossEnemy != null, endedByDeath: false);
         spawnedCountsPerEntry.Clear();
+        pendingNextWaveIndex = -1;
         nextSpawnTime = NoScheduledTime;
         nextWaveStartTime = NoScheduledTime;
+        isAwaitingWaveRewardSelection = false;
         if (shouldNotifyCompletion)
         {
             SequenceCompleted?.Invoke();
+            EventManager.eventBus.Publish(new CombatVictoryEvent(this, completedWaveCount));
         }
     }
 
@@ -351,6 +404,25 @@ public sealed class WaveManager : MonoBehaviour
     private void EnsureRandomSource()
     {
         randomSource ??= new VocalithRandom();
+    }
+
+    /// <summary>
+    /// summary: 当当前波配置了波后奖励计划时，暂停自动推进并通知外部先完成奖励选择。
+    /// param name="currentWave": 当前已经清空的波次配置
+    /// returns: 当前波需要先等待奖励选择时返回 true
+    /// </summary>
+    private bool TryPauseForWaveRewardSelection(WaveDefinition currentWave)
+    {
+        if (currentWave == null || currentWave.PostWaveTokenSelectionPlan == null)
+        {
+            return false;
+        }
+
+        pendingNextWaveIndex = currentWaveIndex + 1;
+        isAwaitingWaveRewardSelection = true;
+        nextWaveStartTime = NoScheduledTime;
+        WaveRewardSelectionRequested?.Invoke(currentWaveIndex, currentWave);
+        return true;
     }
 
     /// <summary>

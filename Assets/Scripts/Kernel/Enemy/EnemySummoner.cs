@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using VocalithRandom = Vocalith.Random;
 
 /// <summary>
 /// 按技能槽配置执行一次召唤技能；冷却与多技能调度由外层统一控制。
@@ -8,26 +9,32 @@ using UnityEngine;
 public sealed class EnemySummoner : MonoBehaviour, IEnemySkillCaster
 {
     [SerializeField] private Enemy enemyData;
+    [SerializeField] private EnemyStatusEffectController statusEffects;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private PlayerHealth targetPlayerHealth;
     [SerializeField] private EnemyGenerator enemyGenerator;
 
     private readonly List<Enemy> aliveSummons = new();
+    private VocalithRandom randomSource;
 
     public EnemySkillKind SkillKind => EnemySkillKind.SummonEnemy;
 
     private void Awake()
     {
         TryResolveEnemyData();
+        TryResolveStatusEffects();
         TryResolveTargetPlayer();
         TryResolveEnemyGenerator();
+        EnsureRandomSource();
     }
 
     private void OnValidate()
     {
         TryResolveEnemyData();
+        TryResolveStatusEffects();
         TryResolveTargetPlayer();
         TryResolveEnemyGenerator();
+        EnsureRandomSource();
     }
 
     /// <summary>
@@ -75,6 +82,11 @@ public sealed class EnemySummoner : MonoBehaviour, IEnemySkillCaster
             return false;
         }
 
+        if (TryResolveStatusEffects() && !statusEffects.CanAct)
+        {
+            return false;
+        }
+
         if (targetPlayerHealth == null || targetPlayerHealth.IsDead)
         {
             return false;
@@ -101,9 +113,10 @@ public sealed class EnemySummoner : MonoBehaviour, IEnemySkillCaster
             return false;
         }
 
-        int summonCount = Mathf.Min(summonSkill.summonCountPerCast, allowedCount);
+        EnsureRandomSource();
+        int summonCount = Mathf.Min(ResolveSummonCount(summonSkill), allowedCount);
         int spawnedCount = 0;
-        EnemyWaveConfig summonConfig = summonSkill.summonedEnemyConfig.GetSanitized(clearTokenDrops: true);
+        EnemyWaveConfig summonConfig = enemyGenerator.ResolveRuntimeConfig(summonSkill.summonedEnemyDefinition).GetSanitized(clearTokenDrops: true);
         for (int i = 0; i < summonCount; i++)
         {
             if (!enemyGenerator.TryGetSpawnPositionAround(transform.position, summonSkill.summonRadius, out Vector3 spawnPosition))
@@ -126,6 +139,23 @@ public sealed class EnemySummoner : MonoBehaviour, IEnemySkillCaster
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// summary: 在技能槽声明的最小和最大召唤数量之间随机解析本次实际要刷出的单位数量。
+    /// param: summonSkill 当前技能槽声明的召唤配置
+    /// returns: 本次技能应尝试生成的召唤物数量
+    /// </summary>
+    private int ResolveSummonCount(EnemyDefinition.SummonSkillDefinition summonSkill)
+    {
+        int minCount = Mathf.Max(1, summonSkill.minSummonCountPerCast);
+        int maxCount = Mathf.Max(minCount, summonSkill.maxSummonCountPerCast);
+        if (minCount == maxCount)
+        {
+            return minCount;
+        }
+
+        return randomSource.Next(minCount, maxCount + 1);
     }
 
     /// <summary>
@@ -173,6 +203,22 @@ public sealed class EnemySummoner : MonoBehaviour, IEnemySkillCaster
         return TryGetComponent(out enemyData);
     }
 
+    /// <summary>
+    /// summary: 解析当前敌人根节点上的状态效果控制器，供眩晕阻断技能释放使用。
+    /// param: 无
+    /// returns: 成功拿到状态控制器时返回 true
+    /// </summary>
+    private bool TryResolveStatusEffects()
+    {
+        if (statusEffects != null && statusEffects.transform == transform)
+        {
+            return true;
+        }
+
+        statusEffects = null;
+        return TryGetComponent(out statusEffects);
+    }
+
     private bool TryResolveTargetPlayer()
     {
         if (targetPlayer != null && !IsOwnTransform(targetPlayer))
@@ -201,6 +247,11 @@ public sealed class EnemySummoner : MonoBehaviour, IEnemySkillCaster
 
         enemyGenerator = FindFirstObjectByType<EnemyGenerator>();
         return enemyGenerator != null;
+    }
+
+    private void EnsureRandomSource()
+    {
+        randomSource ??= new VocalithRandom();
     }
 
     private static PlayerHealth ResolvePlayerHealth(Transform player)

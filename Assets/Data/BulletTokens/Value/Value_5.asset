@@ -14,7 +14,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.ValueTokenData
   tokenId: value_5
   displayText: 5
-  description: Numeric token 5.
+  description: "\u628A\u884C\u4E3A\u6216\u7ED3\u679C\u8BCD\u7684\u89E6\u53D1\u6B21\u6570\u6539\u4E3A
+    5\u3002"
   tokenType: 4
   hasBulletTextOverride: 0
   bulletTextOverride: 

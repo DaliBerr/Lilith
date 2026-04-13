@@ -12,6 +12,8 @@ namespace Kernel.Bullet
         [SerializeField] private bool acceptsNumericValue;
         [SerializeField, Min(1)] private int defaultProjectileCount = 1;
         [SerializeField, Min(0f)] private float spreadAngleStep = 10f;
+        [SerializeField, Min(0f)] private float projectileDamageMultiplier = 1f;
+        [SerializeField, Min(0f)] private float pierceLifetimeDistanceScalePerCount = 0.2f;
 
         public AttackBehaviorType BehaviorType
         {
@@ -37,6 +39,18 @@ namespace Kernel.Bullet
             set => spreadAngleStep = Mathf.Max(0f, value);
         }
 
+        public float ProjectileDamageMultiplier
+        {
+            get => projectileDamageMultiplier;
+            set => projectileDamageMultiplier = Mathf.Max(0f, value);
+        }
+
+        public float PierceLifetimeDistanceScalePerCount
+        {
+            get => pierceLifetimeDistanceScalePerCount;
+            set => pierceLifetimeDistanceScalePerCount = Mathf.Max(0f, value);
+        }
+
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -49,6 +63,8 @@ namespace Kernel.Bullet
             SetTokenType(TokenType.Behavior);
             defaultProjectileCount = Mathf.Max(1, defaultProjectileCount);
             spreadAngleStep = Mathf.Max(0f, spreadAngleStep);
+            projectileDamageMultiplier = Mathf.Max(0f, projectileDamageMultiplier);
+            pierceLifetimeDistanceScalePerCount = Mathf.Max(0f, pierceLifetimeDistanceScalePerCount);
         }
     }
 }

@@ -84,6 +84,27 @@ public sealed class PlayerHealthTests
         Assert.That(events.Count, Is.EqualTo(0));
     }
 
+    [Test]
+    public void TryApplyDamage_PlayerDies_PublishesPlayerDiedEventOnlyOnce()
+    {
+        PlayerHealth playerHealth = CreatePlayerHealth(100f, 100f);
+        List<PlayerDiedEvent> deathEvents = new();
+        subscriptions.Add(EventManager.eventBus.Subscribe<PlayerDiedEvent>(deathEvents.Add));
+
+        bool firstDamageApplied = playerHealth.TryApplyDamage(100f, out float remainingHealth, out bool isDead);
+        bool secondDamageApplied = playerHealth.TryApplyDamage(5f, out _, out _);
+
+        Assert.That(firstDamageApplied, Is.True);
+        Assert.That(secondDamageApplied, Is.False);
+        Assert.That(remainingHealth, Is.EqualTo(0f).Within(0.0001f));
+        Assert.That(isDead, Is.True);
+        Assert.That(deathEvents.Count, Is.EqualTo(1));
+        Assert.That(deathEvents[0].source, Is.SameAs(playerHealth));
+        Assert.That(deathEvents[0].previousHealth, Is.EqualTo(100f).Within(0.0001f));
+        Assert.That(deathEvents[0].currentHealth, Is.EqualTo(0f).Within(0.0001f));
+        Assert.That(deathEvents[0].maxHealth, Is.EqualTo(100f).Within(0.0001f));
+    }
+
     private PlayerHealth CreatePlayerHealth(float maxHealth, float currentHealth)
     {
         GameObject gameObject = new("Player");

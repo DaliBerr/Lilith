@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Fire-Spread
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.LinkedTokenData
   itemId: Fire_Spread
-  description: 
+  description: "\u9ED8\u8BA4\u706B\u6838 + \u6563\u5C04\u7EC4\u5408\u3002"
   linkedTokens:
   - {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
-  - {fileID: 11400000, guid: 770158462167f3d4898921c73805f874, type: 2}
-  damageMultiplier: 1.2
-  pickupDisplayTextOverride: "\u706B"
+  - {fileID: 11400000, guid: 7fdec109bdb8a4249ac2c5ddbd680095, type: 2}
+  damageMultiplier: 1
+  pickupDisplayTextOverride: "\u706B\u6563"

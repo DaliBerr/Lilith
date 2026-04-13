@@ -62,6 +62,7 @@ public sealed class EnemyAttackExtensionTests
         Assert.That(emittedBullet, Is.Not.Null);
         Assert.That(emittedBullet.TargetPolicy, Is.EqualTo(BulletTargetPolicy.PlayerOnly));
         Assert.That(emittedBullet.CurrentCompiledAttack, Is.Not.Null);
+        Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.damage, Is.EqualTo(3f));
     }
 
     [Test]
@@ -78,12 +79,16 @@ public sealed class EnemyAttackExtensionTests
         Assert.That(generator.TrySetTarget(playerObject.transform), Is.True);
         SetPrivateField(generator, "maxGroundSpawnRolls", 8);
 
-        CoreTokenData droppedToken = CreateCoreToken("drop_core", "Drop", AttackCoreType.Fire);
         GameObject summonedPrefab = CreateEnemyPrefabShell();
         EnemyDefinition summonedDefinition = CreateDefinition(
             EnemyMovementKind.None,
             EnemyAttackKind.None,
             summonedPrefab.GetComponent<EnemyDefinitionBinder>());
+        SetPrivateField(summonedDefinition, "combat", new EnemyDefinition.EnemyCombatDefinition
+        {
+            maxHealth = 6f,
+            moveSpeed = 4f,
+        });
 
         GameObject summonerObject = CreateGameObject("Summoner");
         summonerObject.transform.position = new Vector3(16f, 0f, 14f);
@@ -95,19 +100,10 @@ public sealed class EnemyAttackExtensionTests
             summonedDefinition,
             cooldownSeconds: 0.25f,
             castRange: 8f,
-            summonCountPerCast: 1,
+            minSummonCountPerCast: 1,
+            maxSummonCountPerCast: 1,
             maxAliveSummons: 1,
-            summonRadius: 3f,
-            summonedEnemyConfig: new EnemyWaveConfig(
-                6f,
-                4f,
-                0f,
-                0f,
-                1f,
-                new[]
-                {
-                    new EnemyBulletTokenDropEntry(droppedToken, 1f),
-                }));
+            summonRadius: 3f);
         EnemyDefinition summonerDefinition = CreateDefinition(
             EnemyMovementKind.None,
             EnemyAttackKind.None,
@@ -143,6 +139,77 @@ public sealed class EnemyAttackExtensionTests
     }
 
     [Test]
+    public void TryCastSkill_Summoner_UsesCurrentGrowthAndRandomizedSummonCount()
+    {
+        CreateMapAuthoring(32, 32, Vector2.one, MapGridAuthoring.GroundTagName);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        GameObject playerObject = CreateGameObject("Player");
+        playerObject.transform.position = new Vector3(16f, 0f, 16f);
+        PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
+        SetPrivateField(playerHealth, "maxHealth", 10f);
+        SetPrivateField(playerHealth, "currentHealth", 10f);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
+        Assert.That(generator.TrySetTarget(playerObject.transform), Is.True);
+        Assert.That(generator.TrySetCompletedWaveCount(2), Is.True);
+        SetPrivateField(generator, "maxGroundSpawnRolls", 8);
+
+        GameObject summonedPrefab = CreateEnemyPrefabShell();
+        EnemyDefinition summonedDefinition = CreateDefinition(
+            EnemyMovementKind.None,
+            EnemyAttackKind.None,
+            summonedPrefab.GetComponent<EnemyDefinitionBinder>());
+        SetPrivateField(summonedDefinition, "combat", new EnemyDefinition.EnemyCombatDefinition
+        {
+            maxHealth = 10f,
+            moveSpeed = 5f,
+        });
+
+        GameObject summonerObject = CreateGameObject("Summoner");
+        summonerObject.transform.position = new Vector3(16f, 0f, 14f);
+        BaseCharEnemyNorm1 summonerEnemy = summonerObject.AddComponent<BaseCharEnemyNorm1>();
+        EnemySummoner summoner = summonerObject.AddComponent<EnemySummoner>();
+        SetEnemyHealth(summonerEnemy, 10f);
+
+        EnemyDefinition.EnemySkillSlotDefinition summonSkillSlot = CreateSummonSkillSlot(
+            summonedDefinition,
+            cooldownSeconds: 0.25f,
+            castRange: 8f,
+            minSummonCountPerCast: 1,
+            maxSummonCountPerCast: 2,
+            maxAliveSummons: 3,
+            summonRadius: 3f);
+        EnemyDefinition summonerDefinition = CreateDefinition(
+            EnemyMovementKind.None,
+            EnemyAttackKind.None,
+            runtimePrefab: null,
+            skillSlots: new[] { summonSkillSlot });
+
+        summonerEnemy.TryBindDefinition(summonerDefinition);
+        summonerEnemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 0f, 8f, 1.5f, 0f));
+        Assert.That(summoner.TrySetTarget(playerObject.transform), Is.True);
+        Assert.That(summoner.TrySetEnemyGenerator(generator), Is.True);
+        SetPrivateField(summoner, "randomSource", new Vocalith.Random(7));
+        InvokePrivateMethod(summoner, "Awake");
+
+        bool didSummon = summoner.TryCastSkill(summonSkillSlot);
+        List<Enemy> aliveSummons = GetPrivateField<List<Enemy>>(summoner, "aliveSummons");
+        foreach (Enemy summon in aliveSummons)
+        {
+            createdObjects.Add(summon.gameObject);
+        }
+
+        Assert.That(didSummon, Is.True);
+        Assert.That(aliveSummons.Count, Is.InRange(1, 2));
+        foreach (Enemy summon in aliveSummons)
+        {
+            Assert.That(summon.Definition, Is.SameAs(summonedDefinition));
+            Assert.That(summon.MaxHealth, Is.EqualTo(10.8f).Within(0.001f));
+            Assert.That(summon.MoveSpeed, Is.EqualTo(5.4f).Within(0.001f));
+            Assert.That(summon.GetComponent<EnemyBulletTokenDropper>().TokenDrops, Is.Empty);
+        }
+    }
+
+    [Test]
     public void TryPerformSkills_Binder_CastsMultipleSkillSlotsWithIndependentCooldowns()
     {
         CreateMapAuthoring(32, 32, Vector2.one, MapGridAuthoring.GroundTagName);
@@ -161,6 +228,11 @@ public sealed class EnemyAttackExtensionTests
             EnemyMovementKind.None,
             EnemyAttackKind.None,
             summonedPrefab.GetComponent<EnemyDefinitionBinder>());
+        SetPrivateField(summonedDefinition, "combat", new EnemyDefinition.EnemyCombatDefinition
+        {
+            maxHealth = 6f,
+            moveSpeed = 4f,
+        });
 
         GameObject bossObject = CreateGameObject("Boss");
         bossObject.transform.position = new Vector3(16f, 0f, 14f);
@@ -173,18 +245,18 @@ public sealed class EnemyAttackExtensionTests
             summonedDefinition,
             cooldownSeconds: 0.25f,
             castRange: 8f,
-            summonCountPerCast: 1,
+            minSummonCountPerCast: 1,
+            maxSummonCountPerCast: 1,
             maxAliveSummons: 4,
-            summonRadius: 3f,
-            summonedEnemyConfig: new EnemyWaveConfig(6f, 4f, 0f, 0f, 1f));
+            summonRadius: 3f);
         EnemyDefinition.EnemySkillSlotDefinition secondSkillSlot = CreateSummonSkillSlot(
             summonedDefinition,
             cooldownSeconds: 0.5f,
             castRange: 8f,
-            summonCountPerCast: 1,
+            minSummonCountPerCast: 1,
+            maxSummonCountPerCast: 1,
             maxAliveSummons: 4,
-            summonRadius: 3f,
-            summonedEnemyConfig: new EnemyWaveConfig(6f, 4f, 0f, 0f, 1f));
+            summonRadius: 3f);
         EnemyDefinition bossDefinition = CreateDefinition(
             EnemyMovementKind.None,
             EnemyAttackKind.None,
@@ -257,6 +329,7 @@ public sealed class EnemyAttackExtensionTests
         enemyObject.AddComponent<CharEnemyMovement>();
         enemyObject.AddComponent<EnemyMeleeAttacker>();
         enemyObject.AddComponent<EnemyRangedTokenAttacker>();
+        enemyObject.AddComponent<EnemyExplosiveAttacker>();
         enemyObject.AddComponent<EnemySummoner>();
         enemyObject.AddComponent<EnemyBulletTokenDropper>();
         enemyObject.AddComponent<EnemyDefinitionBinder>();
@@ -332,10 +405,10 @@ public sealed class EnemyAttackExtensionTests
         EnemyDefinition summonedDefinition,
         float cooldownSeconds,
         float castRange,
-        int summonCountPerCast,
+        int minSummonCountPerCast,
+        int maxSummonCountPerCast,
         int maxAliveSummons,
-        float summonRadius,
-        EnemyWaveConfig summonedEnemyConfig)
+        float summonRadius)
     {
         return new EnemyDefinition.EnemySkillSlotDefinition
         {
@@ -345,8 +418,8 @@ public sealed class EnemyAttackExtensionTests
             summonSkill = new EnemyDefinition.SummonSkillDefinition
             {
                 summonedEnemyDefinition = summonedDefinition,
-                summonedEnemyConfig = summonedEnemyConfig,
-                summonCountPerCast = summonCountPerCast,
+                minSummonCountPerCast = minSummonCountPerCast,
+                maxSummonCountPerCast = maxSummonCountPerCast,
                 summonRadius = summonRadius,
                 maxAliveSummons = maxAliveSummons,
             },

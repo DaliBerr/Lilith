@@ -1,5 +1,7 @@
 using System.Collections;
+using System.Collections.Generic;
 using Kernel.GameState;
+using Kernel.MapGrid;
 using Vocalith.Logging;
 using Vocalith.UI;
 using UnityEngine;
@@ -23,6 +25,7 @@ namespace Kernel.UI
         private bool isHandlingBack;
         private bool isHandlingBackpack;
         private bool isReturningToStartUpScene;
+        private readonly HashSet<Transform> permanentUpgradeInteractorRoots = new();
 
         /// <summary>
         /// summary: 在首个场景加载前确保场景中存在 UI 输入路由实例。
@@ -108,6 +111,67 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 对接 UIControls 的 Interaction 动作；当玩家位于永久升级触发区内时切换升级界面开关。
+        /// param: context 当前输入回调上下文
+        /// returns: 无
+        /// </summary>
+        public void OnInteraction(InputAction.CallbackContext context)
+        {
+            if (!context.performed || isHandlingBack || isReturningToStartUpScene)
+            {
+                return;
+            }
+
+            if (!TryGetAvailableUIManager(out UIManager uiManager) || uiManager.GetTopModal() != null)
+            {
+                return;
+            }
+
+            if (uiManager.GetTopScreen() is UpdateUIScreen)
+            {
+                RequestClosePermanentUpgradeScreen();
+                return;
+            }
+
+            if (!HasAnyPermanentUpgradeInteractor())
+            {
+                return;
+            }
+
+            RequestOpenPermanentUpgradeScreen();
+        }
+
+        /// <summary>
+        /// summary: 标记某个玩家根节点进入了永久升级交互区，允许 Interaction 按键触发开关。
+        /// param: playerRoot 当前进入交互区的玩家根节点
+        /// returns: 无
+        /// </summary>
+        public void RegisterPermanentUpgradeInteractor(Transform playerRoot)
+        {
+            if (playerRoot == null)
+            {
+                return;
+            }
+
+            permanentUpgradeInteractorRoots.Add(playerRoot);
+        }
+
+        /// <summary>
+        /// summary: 清理某个玩家根节点的永久升级交互资格，离开交互区后 Interaction 不再触发开关。
+        /// param: playerRoot 当前离开交互区的玩家根节点
+        /// returns: 无
+        /// </summary>
+        public void UnregisterPermanentUpgradeInteractor(Transform playerRoot)
+        {
+            if (playerRoot == null)
+            {
+                return;
+            }
+
+            permanentUpgradeInteractorRoots.Remove(playerRoot);
+        }
+
+        /// <summary>
         /// summary: 供 MainUI 的暂停按钮调用，请求打开暂停菜单。
         /// param: 无
         /// returns: 无
@@ -176,6 +240,51 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 供 Book trigger 调用，请求从 MainUIScreen 打开永久升级界面。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void RequestOpenPermanentUpgradeScreen()
+        {
+            if (isHandlingBack || isReturningToStartUpScene)
+            {
+                return;
+            }
+
+            StartCoroutine(HandlePermanentUpgradeScreenOpen());
+        }
+
+        /// <summary>
+        /// summary: 请求关闭当前永久升级界面，供未来按钮或其他入口复用。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void RequestClosePermanentUpgradeScreen()
+        {
+            if (isHandlingBack)
+            {
+                return;
+            }
+
+            StartCoroutine(HandlePermanentUpgradeScreenClose());
+        }
+
+        /// <summary>
+        /// summary: 请求关闭当前结算界面，并在关闭后提交 run-end 永久档与回到 StartRoom。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void RequestCloseSettlementScreen()
+        {
+            if (isHandlingBack || isReturningToStartUpScene)
+            {
+                return;
+            }
+
+            StartCoroutine(HandleSettlementScreenClose());
+        }
+
+        /// <summary>
         /// summary: 销毁前移除输入回调，避免 InputSystem 留下失效订阅。
         /// param: 无
         /// returns: 无
@@ -183,6 +292,7 @@ namespace Kernel.UI
         private void OnDestroy()
         {
             UnbindInputCallbacks();
+            permanentUpgradeInteractorRoots.Clear();
 
             if (Instance == this)
             {
@@ -291,7 +401,13 @@ namespace Kernel.UI
                 }
 
                 UIScreen topScreen = uiManager.GetTopScreen();
-                if (topScreen is BackPackUIScreen || topScreen is PauseUIScreen)
+                if (topScreen is SettlementUIScreen)
+                {
+                    yield return CloseSettlementScreenAndResetRun(uiManager);
+                    yield break;
+                }
+
+                if (topScreen is BackPackUIScreen || topScreen is PauseUIScreen || topScreen is UpdateUIScreen)
                 {
                     yield return uiManager.PopScreenAndWait();
                     yield break;
@@ -349,6 +465,78 @@ namespace Kernel.UI
                 }
 
                 yield return uiManager.PopScreenAndWait();
+            }
+            finally
+            {
+                isHandlingBack = false;
+            }
+        }
+
+        /// <summary>
+        /// summary: 只在 MainUIScreen 位于栈顶时打开永久升级菜单，供 Book trigger 复用。
+        /// param: 无
+        /// returns: 用于协程等待的枚举器
+        /// </summary>
+        private IEnumerator HandlePermanentUpgradeScreenOpen()
+        {
+            isHandlingBack = true;
+
+            try
+            {
+                if (!CanOpenPermanentUpgradeScreen(out UIManager uiManager))
+                {
+                    yield break;
+                }
+
+                yield return uiManager.PushScreenAndWait<UpdateUIScreen>();
+            }
+            finally
+            {
+                isHandlingBack = false;
+            }
+        }
+
+        /// <summary>
+        /// summary: 只在永久升级菜单位于栈顶时关闭它。
+        /// param: 无
+        /// returns: 用于协程等待的枚举器
+        /// </summary>
+        private IEnumerator HandlePermanentUpgradeScreenClose()
+        {
+            isHandlingBack = true;
+
+            try
+            {
+                if (!CanClosePermanentUpgradeScreen(out UIManager uiManager))
+                {
+                    yield break;
+                }
+
+                yield return uiManager.PopScreenAndWait();
+            }
+            finally
+            {
+                isHandlingBack = false;
+            }
+        }
+
+        /// <summary>
+        /// summary: 只在结算界面位于栈顶时关闭它，并在关闭后提交存档与重置本局状态。
+        /// param: 无
+        /// returns: 用于协程等待的枚举器
+        /// </summary>
+        private IEnumerator HandleSettlementScreenClose()
+        {
+            isHandlingBack = true;
+
+            try
+            {
+                if (!CanCloseSettlementScreen(out UIManager uiManager))
+                {
+                    yield break;
+                }
+
+                yield return CloseSettlementScreenAndResetRun(uiManager);
             }
             finally
             {
@@ -495,6 +683,66 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 判断当前是否允许从 MainUIScreen 打开永久升级菜单。
+        /// param: uiManager 输出当前可用的 UI 管理器
+        /// returns: 只有当 MainUIScreen 位于栈顶且当前处于 Playing 状态时返回 true
+        /// </summary>
+        private static bool CanOpenPermanentUpgradeScreen(out UIManager uiManager)
+        {
+            if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            if (uiManager.GetTopModal() != null)
+            {
+                return false;
+            }
+
+            if (uiManager.GetTopScreen() is UpdateUIScreen)
+            {
+                return false;
+            }
+
+            if (uiManager.GetTopScreen() is not MainUIScreen)
+            {
+                return false;
+            }
+
+            return StatusController.HasStatus(StatusList.PlayingStatus) && FindFirstObjectByType<PlayerPlaneMovement>() != null;
+        }
+
+        /// <summary>
+        /// summary: 判断当前是否允许关闭永久升级菜单。
+        /// param: uiManager 输出当前可用的 UI 管理器
+        /// returns: 只有当 UpdateUIScreen 位于栈顶时返回 true
+        /// </summary>
+        private static bool CanClosePermanentUpgradeScreen(out UIManager uiManager)
+        {
+            if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            return uiManager.GetTopScreen() is UpdateUIScreen;
+        }
+
+        /// <summary>
+        /// summary: 判断当前是否允许关闭结算界面。
+        /// param: uiManager 输出当前可用的 UI 管理器
+        /// returns: 只有当 SettlementUIScreen 位于栈顶时返回 true
+        /// </summary>
+        private static bool CanCloseSettlementScreen(out UIManager uiManager)
+        {
+            if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            return uiManager.GetTopModal() == null && uiManager.GetTopScreen() is SettlementUIScreen;
+        }
+
+        /// <summary>
         /// summary: 判断当前是否允许从暂停菜单直接返回 StartUp 场景。
         /// param: uiManager 输出当前可用的 UI 管理器
         /// returns: 只有当 PauseUIScreen 位于栈顶且没有 modal 遮挡时返回 true
@@ -526,6 +774,22 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 判断当前是否至少有一个仍有效的玩家根节点处于永久升级交互区内。
+        /// param: 无
+        /// returns: 存在有效交互者时返回 true
+        /// </summary>
+        private bool HasAnyPermanentUpgradeInteractor()
+        {
+            if (permanentUpgradeInteractorRoots.Count == 0)
+            {
+                return false;
+            }
+
+            permanentUpgradeInteractorRoots.RemoveWhere(root => root == null);
+            return permanentUpgradeInteractorRoots.Count > 0;
+        }
+
+        /// <summary>
         /// summary: 在原生返回路由关闭 modal 前，补充各界面自有的收尾逻辑。
         /// param: modal 即将被关闭的顶层界面
         /// returns: 无
@@ -536,6 +800,39 @@ namespace Kernel.UI
             {
                 // 对话 modal 被 Esc 关闭时，需要同时结束剧情序列，避免启动协程一直等待完成事件。
                 StorySequenceParser.Instance?.StopCurrentSequence();
+            }
+        }
+
+        /// <summary>
+        /// summary: 执行结算页关闭后的完整收尾流程：弹栈、提交 run-end 永久档并回到 StartRoom。
+        /// param name="uiManager": 当前可用的 UIManager
+        /// returns: 用于协程等待的枚举器
+        /// </summary>
+        private static IEnumerator CloseSettlementScreenAndResetRun(UIManager uiManager)
+        {
+            if (uiManager == null || uiManager.GetTopScreen() is not SettlementUIScreen)
+            {
+                yield break;
+            }
+
+            yield return uiManager.PopScreenAndWait();
+
+            RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
+            if (saveService != null && !saveService.CommitRunEndProfileState())
+            {
+                GameDebug.LogWarning("[UIInputRouter] Failed to commit run-end profile state after closing SettlementUIScreen.");
+            }
+
+            MapRunFlowController flowController = FindFirstObjectByType<MapRunFlowController>();
+            if (flowController == null)
+            {
+                GameDebug.LogError("[UIInputRouter] MapRunFlowController is missing. Settlement close cannot return the player to StartRoom.");
+                yield break;
+            }
+
+            if (!flowController.TryReturnToStartRoomAndResetRun(out string error))
+            {
+                GameDebug.LogError($"[UIInputRouter] {error}");
             }
         }
     }

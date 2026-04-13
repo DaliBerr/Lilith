@@ -10,17 +10,18 @@ using VocalithRandom = Vocalith.Random;
 public sealed class WaveDefinition : ScriptableObject
 {
     private const float MinimumSpawnIntervalSeconds = 0.05f;
-    private const float MinimumHealth = 1f;
 
     [SerializeField, Min(0f)] private float spawnIntervalSeconds = 1f;
     [SerializeField] private bool randomizeEnemySpawns;
+    [SerializeField] private CombatEntryTokenSelectionPlan postWaveTokenSelectionPlan;
     [SerializeField] private List<WaveEnemySpawnEntry> enemySpawns = new()
     {
-        new WaveEnemySpawnEntry(null, 1, new EnemyWaveConfig(MinimumHealth, 120f, 16f, 0.75f, 5f))
+        new WaveEnemySpawnEntry(null, 1)
     };
 
     public float SpawnIntervalSeconds => spawnIntervalSeconds;
     public bool RandomizeEnemySpawns => randomizeEnemySpawns;
+    public CombatEntryTokenSelectionPlan PostWaveTokenSelectionPlan => postWaveTokenSelectionPlan;
     public int SpawnEntryCount => enemySpawns != null ? enemySpawns.Count : 0;
     public int TotalSpawnCount
     {
@@ -57,9 +58,7 @@ public sealed class WaveDefinition : ScriptableObject
 
         for (int i = 0; i < enemySpawns.Count; i++)
         {
-            WaveEnemySpawnEntry entry = enemySpawns[i].GetSanitized();
-            entry.enemyConfig = SanitizeEnemyConfig(entry.enemyConfig);
-            enemySpawns[i] = entry;
+            enemySpawns[i] = enemySpawns[i].GetSanitized();
         }
     }
 
@@ -201,75 +200,4 @@ public sealed class WaveDefinition : ScriptableObject
         return Mathf.Max(0, entry.spawnCount - spawnedCount);
     }
 
-    /// <summary>
-    /// summary: 修正波次敌人数值配置，避免非法数值进入运行时。
-    /// param: config 当前条目的敌人数值配置
-    /// returns: 修正后的合法配置
-    /// </summary>
-    private static EnemyWaveConfig SanitizeEnemyConfig(EnemyWaveConfig config)
-    {
-        config.maxHealth = SanitizePositiveValue(config.maxHealth, MinimumHealth);
-        config.moveSpeed = SanitizeValue(config.moveSpeed, 0f);
-        config.attackRange = SanitizeValue(config.attackRange, 0f);
-        config.attackCooldown = SanitizeValue(config.attackCooldown, 0f);
-        config.attackDamage = SanitizeValue(config.attackDamage, 0f);
-        config.tokenDrops = SanitizeTokenDrops(config.tokenDrops);
-        return config;
-    }
-
-    /// <summary>
-    /// summary: 修正掉落表里的概率与数量取值，但保留空 token 占位项，避免 Inspector 新增元素后被 OnValidate 立即删掉。
-    /// param: tokenDrops 当前条目上序列化出来的掉落表
-    /// returns: 保留原有条目顺序的掉落表副本
-    /// </summary>
-    private static List<EnemyBulletTokenDropEntry> SanitizeTokenDrops(IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops)
-    {
-        List<EnemyBulletTokenDropEntry> sanitizedDrops = new();
-        if (tokenDrops == null)
-        {
-            return sanitizedDrops;
-        }
-
-        for (int i = 0; i < tokenDrops.Count; i++)
-        {
-            EnemyBulletTokenDropEntry entry = tokenDrops[i];
-            entry.dropChance = Mathf.Clamp01(entry.dropChance);
-            entry.dropCount = Mathf.Max(1, entry.dropCount);
-            sanitizedDrops.Add(entry);
-        }
-
-        return sanitizedDrops;
-    }
-
-    /// <summary>
-    /// summary: 修正必须为正数的波次配置字段，避免生成零血敌人。
-    /// param: value 当前配置值
-    /// param: fallbackValue 当值非法时回退使用的默认值
-    /// returns: 合法正值原样返回，否则回退默认值
-    /// </summary>
-    private static float SanitizePositiveValue(float value, float fallbackValue)
-    {
-        if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
-        {
-            return fallbackValue;
-        }
-
-        return value;
-    }
-
-    /// <summary>
-    /// summary: 修正允许为零的波次配置字段，避免 NaN、Infinity 和负数进入运行时。
-    /// param: value 当前配置值
-    /// param: fallbackValue 当值非法时回退使用的默认值
-    /// returns: 合法非负值原样返回，否则回退默认值
-    /// </summary>
-    private static float SanitizeValue(float value, float fallbackValue)
-    {
-        if (float.IsNaN(value) || float.IsInfinity(value) || value < 0f)
-        {
-            return fallbackValue;
-        }
-
-        return value;
-    }
 }

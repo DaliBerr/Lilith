@@ -111,6 +111,15 @@ namespace Kernel
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Interaction"",
+                    ""type"": ""Button"",
+                    ""id"": ""a21dc9d1-633d-428e-befc-a19c14b1e799"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -135,6 +144,17 @@ namespace Kernel
                     ""action"": ""Router"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""94680396-629c-4397-ab7f-11612be7915a"",
+                    ""path"": ""<Keyboard>/e"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Interaction"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -145,6 +165,7 @@ namespace Kernel
             m_MainSceneUI = asset.FindActionMap("MainScene UI", throwIfNotFound: true);
             m_MainSceneUI_Backpack = m_MainSceneUI.FindAction("Backpack", throwIfNotFound: true);
             m_MainSceneUI_Router = m_MainSceneUI.FindAction("Router", throwIfNotFound: true);
+            m_MainSceneUI_Interaction = m_MainSceneUI.FindAction("Interaction", throwIfNotFound: true);
         }
 
         ~@UIControls()
@@ -227,6 +248,7 @@ namespace Kernel
         private List<IMainSceneUIActions> m_MainSceneUIActionsCallbackInterfaces = new List<IMainSceneUIActions>();
         private readonly InputAction m_MainSceneUI_Backpack;
         private readonly InputAction m_MainSceneUI_Router;
+        private readonly InputAction m_MainSceneUI_Interaction;
         /// <summary>
         /// Provides access to input actions defined in input action map "MainScene UI".
         /// </summary>
@@ -246,6 +268,10 @@ namespace Kernel
             /// Provides access to the underlying input action "MainSceneUI/Router".
             /// </summary>
             public InputAction @Router => m_Wrapper.m_MainSceneUI_Router;
+            /// <summary>
+            /// Provides access to the underlying input action "MainSceneUI/Interaction".
+            /// </summary>
+            public InputAction @Interaction => m_Wrapper.m_MainSceneUI_Interaction;
             /// <summary>
             /// Provides access to the underlying input action map instance.
             /// </summary>
@@ -278,6 +304,9 @@ namespace Kernel
                 @Router.started += instance.OnRouter;
                 @Router.performed += instance.OnRouter;
                 @Router.canceled += instance.OnRouter;
+                @Interaction.started += instance.OnInteraction;
+                @Interaction.performed += instance.OnInteraction;
+                @Interaction.canceled += instance.OnInteraction;
             }
 
             /// <summary>
@@ -295,6 +324,9 @@ namespace Kernel
                 @Router.started -= instance.OnRouter;
                 @Router.performed -= instance.OnRouter;
                 @Router.canceled -= instance.OnRouter;
+                @Interaction.started -= instance.OnInteraction;
+                @Interaction.performed -= instance.OnInteraction;
+                @Interaction.canceled -= instance.OnInteraction;
             }
 
             /// <summary>
@@ -349,6 +381,13 @@ namespace Kernel
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnRouter(InputAction.CallbackContext context);
+            /// <summary>
+            /// Method invoked when associated input action "Interaction" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+            /// </summary>
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+            void OnInteraction(InputAction.CallbackContext context);
         }
     }
 }

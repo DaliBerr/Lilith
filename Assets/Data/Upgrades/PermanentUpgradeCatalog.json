@@ -1,0 +1,19 @@
+{
+  "sections": [
+    {
+      "id": "combat",
+      "title": "战斗强化",
+      "entries": [
+        {
+          "id": "damage_test",
+          "title": "攻击力 +100%",
+          "costRemnants": 10,
+          "maxLevel": 1,
+          "effectType": "DamageMultiplierBonus",
+          "effectValue": 1.0
+        }
+      ]
+    }
+  ]
+
+}

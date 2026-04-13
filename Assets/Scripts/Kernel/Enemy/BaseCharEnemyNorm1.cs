@@ -23,6 +23,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     [SerializeField, Min(0f)] private float attackRange = DefaultAttackRange;
     [SerializeField, Min(0f)] private float attackCooldown = DefaultAttackCooldown;
     [SerializeField, Min(0f)] private float attackDamage = DefaultAttackDamage;
+    [SerializeField, Range(0f, 1f)] private float damageReductionPercent;
     [SerializeField, Min(0f)] private float health = DefaultHealth;
 
     public override float MoveSpeed => moveSpeed;
@@ -32,6 +33,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     public override float AttackCooldown => attackCooldown;
     public override float AttackDamage => attackDamage;
     public override float MaxHealth => health;
+    public float DamageReductionPercent => damageReductionPercent;
     public EnemyWaveConfig CurrentWaveConfig => currentWaveConfig;
     public bool HasWaveConfig => hasWaveConfig;
     public override float CurrentHealth
@@ -100,6 +102,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
         attackRange = SanitizeValue(currentWaveConfig.attackRange, attackRange);
         attackCooldown = SanitizeValue(currentWaveConfig.attackCooldown, attackCooldown);
         attackDamage = SanitizeValue(currentWaveConfig.attackDamage, attackDamage);
+        damageReductionPercent = Mathf.Clamp01(currentWaveConfig.damageReductionPercent);
         SanitizeConfiguration();
         ResetHealthToFull();
     }
@@ -121,7 +124,13 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
             return false;
         }
 
-        currentHealth = Mathf.Max(0f, currentHealth - damage);
+        float resolvedDamage = Mathf.Max(0f, damage * (1f - damageReductionPercent));
+        if (resolvedDamage <= 0f)
+        {
+            return false;
+        }
+
+        currentHealth = Mathf.Max(0f, currentHealth - resolvedDamage);
         remainingHealth = currentHealth;
         NotifyDamaged();
         isDead = IsDead;
@@ -148,6 +157,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
         attackRange = DefaultAttackRange;
         attackCooldown = DefaultAttackCooldown;
         attackDamage = DefaultAttackDamage;
+        damageReductionPercent = 0f;
         health = DefaultHealth;
         SanitizeConfiguration();
         ResetHealthToFull();
@@ -166,6 +176,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
         attackRange = SanitizeValue(attackRange, DefaultAttackRange);
         attackCooldown = SanitizeValue(attackCooldown, DefaultAttackCooldown);
         attackDamage = SanitizeValue(attackDamage, DefaultAttackDamage);
+        damageReductionPercent = Mathf.Clamp01(damageReductionPercent);
         health = SanitizePositiveValue(health, DefaultHealth);
     }
 

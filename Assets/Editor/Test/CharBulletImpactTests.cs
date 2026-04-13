@@ -60,6 +60,27 @@ public sealed class CharBulletImpactTests
     }
 
     [Test]
+    public void CheckImpactContacts_WithBounceBehavior_ReflectsWithoutConsumingLife()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(new Vector3(0f, 7.5f, 0f), 12f);
+        CreateSurfaceCollider("WallSurface", MapGridAuthoring.WallTagName, Vector3.zero, new Vector3(20f, 20f, 20f));
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 2);
+        attackSpec.behaviorType = AttackBehaviorType.Bounce;
+        attackSpec.bounceCount = 1;
+
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, null);
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(bullet, "CheckImpactContacts");
+
+        Assert.That(bullet, Is.Not.Null);
+        Assert.That(bullet.IsActiveShot, Is.True);
+        Assert.That(bullet.RemainingLife, Is.EqualTo(2));
+        Assert.That(bullet.Direction.z, Is.LessThan(0f));
+    }
+
+    [Test]
     public void CheckImpactContacts_DamagesEnemyWhenChildColliderStillCarriesGroundTag()
     {
         GameObject owner = CreateGameObject("Owner");

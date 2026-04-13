@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+using Kernel.Upgrade;
 using UnityEngine;
 
 namespace Kernel.Bullet
@@ -77,8 +78,11 @@ namespace Kernel.Bullet
             bool hasExplicitResult = false;
 
             int spreadProjectileCount = 1;
+            int bounceCount = 0;
+            int pierceCount = 0;
             float spreadAngleStep = 0f;
-            float explosionRadius = 0f;
+            CoreEffectPayload coreEffects = default;
+            ResultEffectPayload resultEffects = default;
 
             for (int i = 0; i < tokens.Count; i++)
             {
@@ -117,6 +121,7 @@ namespace Kernel.Bullet
                         }
 
                         coreToken = candidateCore;
+                        coreEffects = candidateCore.CreateCoreEffects();
                         AcceptToken(entry, acceptedDisplays, acceptedTokens);
                         break;
 
@@ -146,8 +151,12 @@ namespace Kernel.Bullet
                         }
 
                         behaviorToken = candidateBehavior;
-                        pendingValueTarget = candidateBehavior.AcceptsNumericValue ? PendingValueTarget.Behavior : PendingValueTarget.None;
+                        pendingValueTarget = ShouldBehaviorConsumeNumericValue(candidateBehavior)
+                            ? PendingValueTarget.Behavior
+                            : PendingValueTarget.None;
                         spreadProjectileCount = Mathf.Max(1, candidateBehavior.DefaultProjectileCount);
+                        bounceCount = Mathf.Max(0, candidateBehavior.DefaultProjectileCount);
+                        pierceCount = Mathf.Max(0, candidateBehavior.DefaultProjectileCount);
                         spreadAngleStep = Mathf.Max(0f, candidateBehavior.SpreadAngleStep);
                         AcceptToken(entry, acceptedDisplays, acceptedTokens);
                         break;
@@ -161,7 +170,7 @@ namespace Kernel.Bullet
 
                         if (pendingValueTarget == PendingValueTarget.Behavior && behaviorToken != null)
                         {
-                            ApplyBehaviorValue(behaviorToken, valueToken, ref spreadProjectileCount);
+                            ApplyBehaviorValue(behaviorToken, valueToken, ref spreadProjectileCount, ref bounceCount, ref pierceCount);
                             pendingValueTarget = PendingValueTarget.None;
                             AcceptToken(entry, acceptedDisplays, acceptedTokens);
                             break;
@@ -169,7 +178,7 @@ namespace Kernel.Bullet
 
                         if (pendingValueTarget == PendingValueTarget.Result && resultToken != null)
                         {
-                            ApplyResultValue(resultToken, valueToken, ref explosionRadius);
+                            ApplyResultValue(resultToken, valueToken, ref resultEffects);
                             pendingValueTarget = PendingValueTarget.None;
                             AcceptToken(entry, acceptedDisplays, acceptedTokens);
                             break;
@@ -199,8 +208,10 @@ namespace Kernel.Bullet
 
                         resultToken = candidateResult;
                         hasExplicitResult = true;
-                        pendingValueTarget = candidateResult.AcceptsNumericValue ? PendingValueTarget.Result : PendingValueTarget.None;
-                        explosionRadius = Mathf.Max(0f, candidateResult.DefaultExplosionRadius);
+                        pendingValueTarget = ShouldResultConsumeNumericValue(candidateResult)
+                            ? PendingValueTarget.Result
+                            : PendingValueTarget.None;
+                        resultEffects = candidateResult.CreateResultEffects();
                         AcceptToken(entry, acceptedDisplays, acceptedTokens);
                         break;
 
@@ -238,6 +249,8 @@ namespace Kernel.Bullet
                 compiledAttack.HasTextColorOverride = false;
                 compiledAttack.HasFontSizeOverride = false;
                 compiledAttack.ClearFontSizeModifiers();
+                compiledAttack.CoreEffects = default;
+                compiledAttack.ResultEffects = default;
                 compiledAttack.AddMessage(AttackCompileMessageSeverity.Error, "Formula cannot fire because it does not contain a core token.");
                 return compiledAttack;
             }
@@ -249,11 +262,39 @@ namespace Kernel.Bullet
             if (behaviorType == AttackBehaviorType.Spread)
             {
                 spreadProjectileCount = Mathf.Max(1, spreadProjectileCount);
+                if (behaviorToken != null)
+                {
+                    attackSpec.damage *= Mathf.Max(0f, behaviorToken.ProjectileDamageMultiplier);
+                }
             }
             else
             {
                 spreadProjectileCount = 1;
                 spreadAngleStep = 0f;
+            }
+
+            if (behaviorType == AttackBehaviorType.Bounce)
+            {
+                attackSpec.bounceCount = Mathf.Max(0, bounceCount);
+                attackSpec.pierceCount = 0;
+            }
+            else if (behaviorType == AttackBehaviorType.Pierce)
+            {
+                pierceCount = Mathf.Max(0, pierceCount);
+                attackSpec.bounceCount = 0;
+                attackSpec.pierceCount = pierceCount;
+
+                if (behaviorToken != null && pierceCount > 0)
+                {
+                    float extensionMultiplier = 1f + (pierceCount * Mathf.Max(0f, behaviorToken.PierceLifetimeDistanceScalePerCount));
+                    attackSpec.maxLifetime *= extensionMultiplier;
+                    attackSpec.maxTravelDistance *= extensionMultiplier;
+                }
+            }
+            else
+            {
+                attackSpec.bounceCount = 0;
+                attackSpec.pierceCount = 0;
             }
 
             attackSpec.behaviorType = behaviorType;
@@ -269,8 +310,8 @@ namespace Kernel.Bullet
             compiledAttack.CanFire = true;
             compiledAttack.SpreadProjectileCount = Mathf.Max(1, spreadProjectileCount);
             compiledAttack.SpreadAngleStep = Mathf.Max(0f, spreadAngleStep);
-            compiledAttack.ExplosionRadius = resultType == AttackResultType.Explosion ? Mathf.Max(0f, explosionRadius) : 0f;
-            compiledAttack.HasExplosion = resultType == AttackResultType.Explosion;
+            compiledAttack.ExplosionRadius = resultType == AttackResultType.Explosion ? Mathf.Max(0f, resultEffects.explosionRadius) : 0f;
+            compiledAttack.HasExplosion = resultType == AttackResultType.Explosion && resultEffects.HasExplosion;
             compiledAttack.ScaleMultiplier = 1f;
             compiledAttack.ImpactRadiusMultiplier = 1f;
             compiledAttack.HasTextColorOverride = false;
@@ -278,10 +319,13 @@ namespace Kernel.Bullet
             compiledAttack.HasFontSizeOverride = false;
             compiledAttack.FontSize = 0f;
             compiledAttack.ClearFontSizeModifiers();
+            compiledAttack.CoreEffects = coreEffects.GetSanitized();
+            compiledAttack.ResultEffects = resultEffects.GetSanitized();
 
             ApplyAcceptedTokenTextOverrides(compiledAttack, acceptedTokens);
             ApplyAcceptedTokenModifiers(compiledAttack, acceptedTokens);
             ApplyAcceptedItemDamageMultipliers(compiledAttack, itemInstances);
+            ApplyPermanentDamageMultiplier(compiledAttack);
             compiledAttack.AttackSpec = compiledAttack.AttackSpec.GetSanitized();
             return compiledAttack;
         }
@@ -337,20 +381,56 @@ namespace Kernel.Bullet
             return expandedTokens;
         }
 
-        private static void ApplyBehaviorValue(BehaviorTokenData behaviorToken, ValueTokenData valueToken, ref int spreadProjectileCount)
+        private static void ApplyBehaviorValue(
+            BehaviorTokenData behaviorToken,
+            ValueTokenData valueToken,
+            ref int spreadProjectileCount,
+            ref int bounceCount,
+            ref int pierceCount)
         {
+            int resolvedValue = Mathf.Max(1, valueToken.GetRoundedIntValue());
             if (behaviorToken.BehaviorType == AttackBehaviorType.Spread)
             {
-                spreadProjectileCount = Mathf.Max(1, valueToken.GetRoundedIntValue());
+                spreadProjectileCount = resolvedValue;
+            }
+            else if (behaviorToken.BehaviorType == AttackBehaviorType.Bounce)
+            {
+                bounceCount = resolvedValue;
+            }
+            else if (behaviorToken.BehaviorType == AttackBehaviorType.Pierce)
+            {
+                pierceCount = resolvedValue;
             }
         }
 
-        private static void ApplyResultValue(ResultTokenData resultToken, ValueTokenData valueToken, ref float explosionRadius)
+        private static void ApplyResultValue(ResultTokenData resultToken, ValueTokenData valueToken, ref ResultEffectPayload resultEffects)
         {
-            if (resultToken.ResultType == AttackResultType.Explosion)
+            int resolvedValue = Mathf.Max(1, valueToken.GetRoundedIntValue());
+            if (resultToken.ResultType == AttackResultType.Split)
             {
-                explosionRadius = Mathf.Max(0f, valueToken.NumericValue);
+                resultEffects.splitProjectileCount = resolvedValue;
             }
+            else if (resultToken.ResultType == AttackResultType.StatusEffect)
+            {
+                resultEffects.controlTriggerCount = resolvedValue;
+            }
+        }
+
+        private static bool ShouldBehaviorConsumeNumericValue(BehaviorTokenData behaviorToken)
+        {
+            return behaviorToken != null &&
+                   behaviorToken.AcceptsNumericValue &&
+                   (behaviorToken.BehaviorType == AttackBehaviorType.Spread ||
+                    behaviorToken.BehaviorType == AttackBehaviorType.Bounce ||
+                    behaviorToken.BehaviorType == AttackBehaviorType.Pierce);
+        }
+
+        private static bool ShouldResultConsumeNumericValue(ResultTokenData resultToken)
+        {
+            return resultToken != null &&
+                   resultToken.AcceptsNumericValue &&
+                   (resultToken.ResultType == AttackResultType.Split ||
+                    resultToken.ResultType == AttackResultType.StatusEffect);
         }
 
         private static string BuildDisplayText(IReadOnlyList<string> acceptedDisplays, CoreTokenData coreToken)
@@ -471,6 +551,24 @@ namespace Kernel.Bullet
             {
                 compiledAttack.AttackSpec = spec;
             }
+        }
+
+        private static void ApplyPermanentDamageMultiplier(CompiledAttack compiledAttack)
+        {
+            if (compiledAttack == null)
+            {
+                return;
+            }
+
+            float permanentDamageMultiplier = PermanentUpgradeService.GetCurrentDamageMultiplier();
+            if (Mathf.Approximately(permanentDamageMultiplier, 1f))
+            {
+                return;
+            }
+
+            AttackSpec spec = compiledAttack.AttackSpec;
+            spec.damage *= Mathf.Max(0f, permanentDamageMultiplier);
+            compiledAttack.AttackSpec = spec;
         }
     }
 }

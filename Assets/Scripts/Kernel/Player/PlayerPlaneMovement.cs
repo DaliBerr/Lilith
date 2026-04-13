@@ -9,13 +9,13 @@ using Vocalith.Logging;
 
 /// <summary>
 /// 使用 PlayerControls 的 Movement 输入在当前相机视角对应的 gameplay plane 上移动玩家，并让玩家朝向鼠标投影点。
-/// 同时负责根据点击地面的方向连续发射 CharBullet。
+/// 同时负责根据点击地面的方向在冷却允许时发射 CharBullet。
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class PlayerPlaneMovement : MonoBehaviour
 {
     private const float MinimumLookDirectionSqrMagnitude = 0.0001f;
-    private const float MinimumFireInterval = 0.01f;
+    private const float MinimumFireInterval = 0.1f;
     private const float FireRaycastDistance = 10000f;
 
     [Header("Movement")]
@@ -43,7 +43,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     [SerializeField] private CharBullet bulletPrefab;
     [SerializeField] private Transform bulletSpawnOrigin;
     [SerializeField] private Vector3 bulletSpawnLocalOffset = new(0f, 0f, 32f);
-    [SerializeField, Min(MinimumFireInterval)] private float fireInterval = 0.12f;
+    [SerializeField, Min(MinimumFireInterval)] private float fireInterval = 0.15f;
     [SerializeField] private LayerMask aimRaycastMask = Physics.DefaultRaycastLayers;
     [SerializeField] private AttackFormulaLoadout attackFormulaLoadout;
 
@@ -63,6 +63,35 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     /// returns: 当前配置的文字子弹 prefab；未绑定时返回 null
     /// </summary>
     public CharBullet BulletPrefab => bulletPrefab;
+
+    /// <summary>
+    /// summary: 向 billboard 等纯表现层提供当前玩家的平面运动信息；普通移动返回步行速度，冲刺期间返回冲刺速度。
+    /// param: planarVelocity 输出的当前世界平面速度
+    /// param: isDashing 输出的当前是否正在冲刺
+    /// returns: 当前存在可驱动表现层的有效平面运动时返回 true
+    /// </summary>
+    public bool TryGetBillboardMotion(out Vector3 planarVelocity, out bool isDashing)
+    {
+        planarVelocity = Vector3.zero;
+        isDashing = false;
+        if (IsGameplayInputBlockedByUI())
+        {
+            return false;
+        }
+
+        isDashing = dashRemainingDistance > 0f;
+        if (isDashing)
+        {
+            float dashSpeed = dashDuration > 0f ? dashDistance / dashDuration : 0f;
+            planarVelocity = dashDirection * dashSpeed;
+            planarVelocity.y = 0f;
+            return planarVelocity.sqrMagnitude > MinimumLookDirectionSqrMagnitude;
+        }
+
+        planarVelocity = GetMovementVelocity();
+        planarVelocity.y = 0f;
+        return planarVelocity.sqrMagnitude > MinimumLookDirectionSqrMagnitude;
+    }
 
     /// <summary>
     /// summary: 显式设置当前玩家移动与瞄准共用的地图网格，并立即重对齐到对应 gameplay plane。
@@ -323,13 +352,13 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 轮询射击输入，在按住鼠标左键时按固定间隔连续发射文字子弹。
+    /// summary: 轮询射击输入，在按住射击键时按冷却节流发射文字子弹。
     /// param: 无
     /// returns: 无
     /// </summary>
     private void HandleFireInput()
     {
-        if (!IsFiring() || Time.time < nextFireTime)
+        if (!IsFireHeld() || Time.time < nextFireTime)
         {
             return;
         }
@@ -1066,11 +1095,11 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 从 InputActionManager 读取 PlayerControls 的射击按钮状态。
+    /// summary: 从 InputActionManager 读取 PlayerControls 的射击按钮按住状态。
     /// param: 无
     /// returns: 射击按钮当前按下时返回 true
     /// </summary>
-    private static bool IsFiring()
+    private static bool IsFireHeld()
     {
         InputActionManager inputManager = InputActionManager.Instance;
         if (inputManager == null || !inputManager.IsInitialized || inputManager.IsUnloaded || inputManager.Player == null)
@@ -1089,7 +1118,9 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private static bool IsGameplayInputBlockedByUI()
     {
         return StatusController.HasStatus(StatusList.InBackPackStatus)
+            || StatusController.HasStatus(StatusList.InUpgradeScreenStatus)
             || StatusController.HasStatus(StatusList.InPauseMenuStatus)
+            || StatusController.HasStatus(StatusList.InSettlementScreenStatus)
             || StatusController.HasStatus(StatusList.InDialogStatus)
             || StatusController.HasStatus(StatusList.PausedStatus);
     }

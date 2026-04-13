@@ -1,0 +1,18 @@
+{
+  "victoryTitles": [
+    "凯旋而归",
+    "战斗胜利",
+    "仍可再战"
+  ],
+  "defeatTitles": [
+    "功亏一篑",
+    "败北",
+    "仍有余火"
+  ],
+  "victoryResultTemplate": "你击败了{waves}波敌人，{bosses}个boss。",
+  "defeatResultTemplate": "你击败了{waves}波敌人，{bosses}个boss。",
+  "harvestHeader": "你获得了：",
+  "harvestEmptyText": "本轮没有获得长期收益",
+  "summaryHeader": "你击败了：",
+  "summaryEmptyText": "本轮尚未击败任何敌人"
+}

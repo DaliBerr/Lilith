@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: FireCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: fire_core
-  displayText: Fire
-  description: Base fire core.
+  displayText: "\u706B"
+  description: "\u7A33\u5B9A\u6CDB\u7528\u6838\u5FC3\uFF0C\u8FDE\u7EED\u547D\u4E2D\u540C\u4E00\u654C\u4EBA
+    3 \u6B21\u540E\u65BD\u52A0 3 \u70B9\u6BCF\u79D2\u3001\u6301\u7EED 2 \u79D2\u7684\u707C\u70E7\u3002"
   tokenType: 2
   hasBulletTextOverride: 1
   bulletTextOverride: "\u706B"
@@ -23,12 +24,22 @@ MonoBehaviour:
     expression: =Color.red
   coreType: 1
   defaultValueType: 1
-  damage: 1
+  damage: 7
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 320
-  maxLifetime: 2
-  maxTravelDistance: 512
+  projectileSpeed: 125
+  maxLifetime: 1.8280001
+  maxTravelDistance: 216
   impactMask:
     serializedVersion: 2
     m_Bits: 4294967291
+  armoredEnemyId: 
+  armoredDamageMultiplier: 1
+  burnTriggerCount: 3
+  burnDamagePerSecond: 3
+  burnDuration: 2
+  slowPercent: 0
+  slowDuration: 0
+  thunderChainTargetCount: 0
+  thunderChainRadius: 0
+  thunderChainDamage: 0

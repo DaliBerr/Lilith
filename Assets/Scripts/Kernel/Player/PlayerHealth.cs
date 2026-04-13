@@ -73,6 +73,7 @@ public sealed class PlayerHealth : MonoBehaviour
         remainingHealth = currentHealth;
         isDead = IsDead;
         PublishHealthChanged(previousHealth);
+        PublishDeathIfNeeded(previousHealth);
         return true;
     }
 
@@ -99,6 +100,22 @@ public sealed class PlayerHealth : MonoBehaviour
         isDead = IsDead;
         PublishHealthChanged(previousHealth);
         return true;
+    }
+
+    /// <summary>
+    /// summary: 把当前生命值恢复到满血；可选是否广播一次生命变化事件。
+    /// param name="publishChangeEvent": 为 true 时，生命值实际变化后会补发一次 PlayerHealthChangedEvent
+    /// returns: 无
+    /// </summary>
+    public void RestoreFullHealth(bool publishChangeEvent = true)
+    {
+        EnsureInitialized();
+        float previousHealth = currentHealth;
+        currentHealth = maxHealth;
+        if (publishChangeEvent && !Mathf.Approximately(previousHealth, currentHealth))
+        {
+            PublishHealthChanged(previousHealth);
+        }
     }
 
     /// <summary>
@@ -142,6 +159,21 @@ public sealed class PlayerHealth : MonoBehaviour
             maxHealth,
             currentHealth - previousHealth,
             IsDead));
+    }
+
+    /// <summary>
+    /// summary: 当一次扣血把玩家从存活状态推进到死亡状态时，补发独立死亡事件。
+    /// param name="previousHealth": 变化前生命值
+    /// returns: 无
+    /// </summary>
+    private void PublishDeathIfNeeded(float previousHealth)
+    {
+        if (previousHealth <= 0f || currentHealth > 0f)
+        {
+            return;
+        }
+
+        EventManager.eventBus.Publish(new PlayerDiedEvent(this, previousHealth, currentHealth, maxHealth));
     }
 
     /// <summary>

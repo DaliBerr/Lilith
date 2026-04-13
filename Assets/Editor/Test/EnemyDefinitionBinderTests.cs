@@ -100,6 +100,7 @@ public sealed class EnemyDefinitionBinderTests
         Assert.That(movement.enabled, Is.False);
         Assert.That(meleeAttacker.enabled, Is.False);
         Assert.That(rangedTokenAttacker.enabled, Is.False);
+        Assert.That(binder.GetComponent<EnemyExplosiveAttacker>().enabled, Is.False);
         Assert.That(summoner.enabled, Is.False);
     }
 
@@ -165,9 +166,10 @@ public sealed class EnemyDefinitionBinderTests
             Assert.That(binder, Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<Enemy>(), Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<CharEnemyMovement>(), Is.Not.Null);
-            Assert.That(prefabRoot.GetComponent<EnemyMeleeAttacker>(), Is.Not.Null);
-            Assert.That(prefabRoot.GetComponent<EnemyRangedTokenAttacker>(), Is.Not.Null);
-            Assert.That(prefabRoot.GetComponent<EnemySummoner>(), Is.Not.Null);
+        Assert.That(prefabRoot.GetComponent<EnemyMeleeAttacker>(), Is.Not.Null);
+        Assert.That(prefabRoot.GetComponent<EnemyRangedTokenAttacker>(), Is.Not.Null);
+        Assert.That(prefabRoot.GetComponent<EnemyExplosiveAttacker>(), Is.Not.Null);
+        Assert.That(prefabRoot.GetComponent<EnemySummoner>(), Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<CharGlyphPresenter>(), Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<CharEnemyVisualPresenter>(), Is.Not.Null);
         }
@@ -203,6 +205,7 @@ public sealed class EnemyDefinitionBinderTests
         movement = root.AddComponent<CharEnemyMovement>();
         meleeAttacker = root.AddComponent<EnemyMeleeAttacker>();
         rangedTokenAttacker = root.AddComponent<EnemyRangedTokenAttacker>();
+        root.AddComponent<EnemyExplosiveAttacker>();
         summoner = root.AddComponent<EnemySummoner>();
         CharGlyphPresenter glyphPresenter = root.AddComponent<CharGlyphPresenter>();
         CharEnemyVisualPresenter visualPresenter = root.AddComponent<CharEnemyVisualPresenter>();
@@ -273,7 +276,8 @@ public sealed class EnemyDefinitionBinderTests
             castRange = castRange,
             summonSkill = new EnemyDefinition.SummonSkillDefinition
             {
-                summonCountPerCast = 1,
+                minSummonCountPerCast = 1,
+                maxSummonCountPerCast = 1,
                 summonRadius = 6f,
                 maxAliveSummons = 2,
             },

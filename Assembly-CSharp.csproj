@@ -51,6 +51,7 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\Kernel\Status\Status.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerFollowCamera.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\CombatVictoryEvent.cs" />
     <Compile Include="Assets\Input\UI Controls.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StartUpMenuUI.cs" />
@@ -90,6 +91,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\DialogUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ValueTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Upgrade\PermanentUpgradeService.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyRangedTokenAttacker.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarControllerBase.cs" />
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
@@ -102,6 +104,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScrobePolymorph.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\SettlementModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCollections.cs" />
@@ -109,11 +112,13 @@
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeUIImage.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\StartRoomBattleTeleporter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ResultTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDiedEvent.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\Log.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PreTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Cell\CellData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackSpec.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\TokenSelectUIUtility.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\SettlementUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\GlobalModeSettingsService.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarController.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewRig.cs" />
@@ -121,11 +126,14 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StorySequenceParser.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\RunRewardCollectedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterEndedEvent.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyStatusEffectController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenModifierExpressionUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\WorldHeightUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BulletTokenSelectionView.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\UpdateUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\CoreTokenData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UI.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\StatusController.cs" />
@@ -134,6 +142,7 @@
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealth.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\SerializedFieldConverter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PickupTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\PlayerDiedEvent.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
     <Compile Include="Assets\Scripts\Kernel\ArenaSeedMapGenerator.cs" />
     <Compile Include="Assets\Scripts\StartUp.cs" />
@@ -141,6 +150,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\CodeC.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\IsaveItem.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\GameplayBillboard.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Upgrade\PermanentUpgradeModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\RemnantPickupTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\MapRunFlowController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerRemnantWallet.cs" />
@@ -149,7 +159,9 @@
     <Compile Include="Assets\Scripts\Vocalith\Log\LogBootStrap.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerBulletTokenInventory.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerPlaneMovement.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BookPermanentUpgradeTrigger.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackUIScreen.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\CombatEntryTokenSelectionPlan.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackGridSlotView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeBootstrap.cs" />
@@ -160,6 +172,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\PauseUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BehaviorTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterStartedEvent.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyExplosiveAttacker.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\RemnantSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BossInfoUIScreen.cs" />

@@ -13,20 +13,31 @@ MonoBehaviour:
   m_Name: IceCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: ice_core
-  displayText: Ice
-  description: Base ice core.
+  displayText: "\u51B0"
+  description: "\u63A7\u5236\u578B\u6838\u5FC3\uFF0C\u547D\u4E2D\u540E\u9644\u52A0
+    25% \u51CF\u901F\uFF0C\u6301\u7EED 1.5 \u79D2\u3002"
   tokenType: 2
   hasBulletTextOverride: 1
   bulletTextOverride: "\u51B0"
   modifiers: []
   coreType: 2
   defaultValueType: 1
-  damage: 1
+  damage: 6
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 320
-  maxLifetime: 2
-  maxTravelDistance: 512
+  projectileSpeed: 118
+  maxLifetime: 1.9305085
+  maxTravelDistance: 216
   impactMask:
     serializedVersion: 2
     m_Bits: 4294967291
+  armoredEnemyId: 
+  armoredDamageMultiplier: 1
+  burnTriggerCount: 0
+  burnDamagePerSecond: 0
+  burnDuration: 0
+  slowPercent: 0.25
+  slowDuration: 1.5
+  thunderChainTargetCount: 0
+  thunderChainRadius: 0
+  thunderChainDamage: 0

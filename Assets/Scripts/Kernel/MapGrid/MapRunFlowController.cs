@@ -1,7 +1,12 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using Kernel.Bullet;
+using Kernel.UI;
 using UnityEngine;
+using Vocalith.EventSystem;
 using Vocalith.Logging;
+using Vocalith.UI;
 
 namespace Kernel.MapGrid
 {
@@ -10,11 +15,12 @@ namespace Kernel.MapGrid
         InStartRoom,
         EnteringCombat,
         InCombat,
+        ShowingSettlement,
         ReturningToStartRoom,
     }
 
     /// <summary>
-    /// 负责在同一场景中的起始房间与战斗地图之间切换，并驱动单局战斗的进入与返回。
+    /// 负责在同一场景中的起始房间与战斗地图之间切换，并驱动单局战斗的进入与结算返回。
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class MapRunFlowController : MonoBehaviour
@@ -37,7 +43,26 @@ namespace Kernel.MapGrid
         [Header("Timing")]
         [SerializeField, Min(0f)] private float postRunReturnDelay = 0.5f;
 
-        private Coroutine pendingReturnRoutine;
+        [Header("Token Selection")]
+        [SerializeField] private CombatEntryTokenSelectionPlan initialCombatTokenSelectionPlan;
+
+        private readonly Dictionary<string, int> runHarvestCounts = new(StringComparer.Ordinal);
+        private readonly List<string> runHarvestOrder = new();
+        private readonly Dictionary<string, int> defeatedEnemyCounts = new(StringComparer.Ordinal);
+        private readonly List<string> defeatedEnemyOrder = new();
+
+        private IDisposable playerDiedSubscription;
+        private IDisposable combatVictorySubscription;
+        private IDisposable enemyDiedSubscription;
+        private IDisposable bossEndedSubscription;
+        private IDisposable rewardCollectedSubscription;
+        private SettlementSnapshot currentSettlementSnapshot;
+        private int completedWaveCount;
+        private int defeatedBossCount;
+        private bool hasPresentedSettlementThisRun;
+        private Coroutine tokenSelectionRoutine;
+        private Vocalith.Random tokenSelectionRandom;
+        private WaveManager subscribedWaveManager;
         private RunFlowState currentState = RunFlowState.InStartRoom;
 
         public RunFlowState CurrentState => currentState;
@@ -50,12 +75,12 @@ namespace Kernel.MapGrid
 
         private void OnEnable()
         {
-            SubscribeToWaveManager();
+            SubscribeToRunEvents();
+            RefreshWaveManagerSubscription();
         }
 
         private void Start()
         {
-            SubscribeToWaveManager();
             if (!TryInitializeStartRoom(out string error))
             {
                 GameDebug.LogError($"[MapRunFlowController] {error}");
@@ -64,8 +89,9 @@ namespace Kernel.MapGrid
 
         private void OnDisable()
         {
-            UnsubscribeFromWaveManager();
-            CancelPendingReturnRoutine();
+            CancelPendingTokenSelection();
+            RefreshWaveManagerSubscription(clearOnly: true);
+            DisposeRunSubscriptions();
         }
 
         private void OnValidate()
@@ -80,8 +106,7 @@ namespace Kernel.MapGrid
         /// </summary>
         public bool TryEnterCombatRun()
         {
-            CancelPendingReturnRoutine();
-            if (currentState != RunFlowState.InStartRoom)
+            if (currentState != RunFlowState.InStartRoom || tokenSelectionRoutine != null)
             {
                 return false;
             }
@@ -92,36 +117,63 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            currentState = RunFlowState.EnteringCombat;
-            if (TryPrepareCombatRun(out error))
+            if (TryStartCombatRunImmediately(out error))
             {
-                currentState = RunFlowState.InCombat;
                 return true;
             }
 
             GameDebug.LogError($"[MapRunFlowController] {error}");
-            TryReturnPlayerToStartRoom(out _);
-            currentState = RunFlowState.InStartRoom;
             return false;
         }
 
         /// <summary>
+        /// summary: 在关闭结算页后返回 StartRoom，并重置本局的运行时战斗状态。
+        /// param name="error": 返回起始房间或重置运行时对象失败时输出的错误信息
+        /// returns: 成功回到起始房间并完成重置时返回 true
+        /// </summary>
+        public bool TryReturnToStartRoomAndResetRun(out string error)
+        {
+            currentState = RunFlowState.ReturningToStartRoom;
+            if (!TryReturnPlayerToStartRoom(out error))
+            {
+                return false;
+            }
+
+            RestorePlayerRuntimeState();
+            ResetRunTracking();
+            currentState = RunFlowState.InStartRoom;
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 读取当前待展示的结算快照；仅在本局已经产出结算数据时返回 true。
+        /// param name="snapshot": 输出当前待展示的结算快照
+        /// returns: 当前存在待展示的结算快照时返回 true
+        /// </summary>
+        public bool TryGetSettlementSnapshot(out SettlementSnapshot snapshot)
+        {
+            snapshot = currentSettlementSnapshot;
+            return snapshot != null;
+        }
+
+        /// <summary>
         /// summary: 在场景启动时把玩家绑定到起始房间地图，并吸附到起始房间出生格。
-        /// param: error 初始化失败时返回的错误信息
+        /// param name="error": 初始化失败时返回的错误信息
         /// returns: 成功进入起始房间待机态时返回 true
         /// </summary>
         private bool TryInitializeStartRoom(out string error)
         {
+            ResetRunTracking();
             currentState = RunFlowState.InStartRoom;
             return TryMovePlayerToMap(startRoomMapGrid, startRoomSpawnCell, out error);
         }
 
         /// <summary>
-        /// summary: 清理旧战斗残留、生成新的战斗布局、切换玩家活动地图并启动波次系统。
-        /// param: error 进入战斗流程失败时返回的错误信息
-        /// returns: 成功完成整套进入战斗准备时返回 true
+        /// summary: 清理旧战斗残留、生成新的战斗布局，并把玩家切换到战斗地图的初始位置。
+        /// param name="error": 进入战斗流程失败时返回的错误信息
+        /// returns: 成功完成进入战斗前的场景准备时返回 true
         /// </summary>
-        private bool TryPrepareCombatRun(out string error)
+        private bool TryPrepareCombatArena(out string error)
         {
             error = null;
             if (!TryResolveReferences(out error))
@@ -150,18 +202,147 @@ namespace Kernel.MapGrid
                 return false;
             }
 
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 在战斗地图准备完毕后启动 WaveManager，并把当前流程状态切到 InCombat。
+        /// param name="error": 启动波次失败时返回的错误信息
+        /// returns: 成功进入战斗进行态时返回 true
+        /// </summary>
+        private bool TryStartCombatSequenceAndEnterState(out string error)
+        {
+            error = null;
             if (!waveManager.TryStartSequence())
             {
                 error = "WaveManager failed to start a combat sequence.";
                 return false;
             }
 
+            currentState = RunFlowState.InCombat;
             return true;
         }
 
         /// <summary>
-        /// summary: 在战斗自然完成后，把玩家和活动地图切回起始房间并清理本局残留。
-        /// param: error 返回起始房间失败时返回的错误信息
+        /// summary: 在进入战斗后弹出初始 Token Select 面板；完成选择后才真正启动第一波。
+        /// param name="uiManager": 当前可用的 UI 管理器实例
+        /// param name="selectionLibrary": 初始抽取阶段要展示的 token 库
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator HandleInitialCombatSelectionCo(UIManager uiManager, BulletTokenLibrary selectionLibrary)
+        {
+            PlaceableTokenData selectedToken = null;
+            bool hasResolvedSelection = false;
+            bool selectionAccepted = false;
+
+            try
+            {
+                yield return TokenSelectUIUtility.ShowTokenSelectModal(
+                    uiManager,
+                    nameof(MapRunFlowController),
+                    token =>
+                    {
+                        selectedToken = token;
+                        selectionAccepted = token != null;
+                        hasResolvedSelection = true;
+                    },
+                    () =>
+                    {
+                        selectionAccepted = false;
+                        hasResolvedSelection = true;
+                    });
+
+                if (uiManager.GetTopModal() is not TokenSelectUIScreen tokenSelectScreen)
+                {
+                    GameDebug.LogError("[MapRunFlowController] Failed to resolve the initial combat token selection modal.");
+                }
+                else
+                {
+                    tokenSelectScreen.SetBulletTokenLibrary(selectionLibrary);
+
+                    while (!hasResolvedSelection)
+                    {
+                        yield return null;
+                    }
+
+                    if (selectionAccepted && selectedToken != null && !TryAddSelectedTokenToInventory(selectedToken, out string inventoryError))
+                    {
+                        GameDebug.LogError($"[MapRunFlowController] {inventoryError}");
+                    }
+                }
+
+                if (!TryStartCombatSequenceAndEnterState(out string error))
+                {
+                    GameDebug.LogError($"[MapRunFlowController] {error}");
+                    AbortCombatEntry();
+                }
+            }
+            finally
+            {
+                tokenSelectionRoutine = null;
+            }
+        }
+
+        /// <summary>
+        /// summary: 在波次奖励停顿期间弹出 Token Select 面板；玩家完成选择后恢复波次推进。
+        /// param name="uiManager": 当前可用的 UI 管理器实例
+        /// param name="selectionLibrary": 本次波后奖励要展示的 token 库
+        /// returns: 协程枚举器
+        /// </summary>
+        private IEnumerator HandleWaveRewardSelectionCo(UIManager uiManager, BulletTokenLibrary selectionLibrary)
+        {
+            PlaceableTokenData selectedToken = null;
+            bool hasResolvedSelection = false;
+            bool selectionAccepted = false;
+
+            try
+            {
+                yield return TokenSelectUIUtility.ShowTokenSelectModal(
+                    uiManager,
+                    nameof(MapRunFlowController),
+                    token =>
+                    {
+                        selectedToken = token;
+                        selectionAccepted = token != null;
+                        hasResolvedSelection = true;
+                    },
+                    () =>
+                    {
+                        selectionAccepted = false;
+                        hasResolvedSelection = true;
+                    });
+
+                if (uiManager.GetTopModal() is not TokenSelectUIScreen tokenSelectScreen)
+                {
+                    GameDebug.LogError("[MapRunFlowController] Failed to resolve the wave reward token selection modal.");
+                    yield break;
+                }
+
+                tokenSelectScreen.SetBulletTokenLibrary(selectionLibrary);
+
+                while (!hasResolvedSelection)
+                {
+                    yield return null;
+                }
+
+                if (selectionAccepted && selectedToken != null && !TryAddSelectedTokenToInventory(selectedToken, out string error))
+                {
+                    GameDebug.LogError($"[MapRunFlowController] {error}");
+                }
+            }
+            finally
+            {
+                tokenSelectionRoutine = null;
+                if (waveManager != null && waveManager.IsAwaitingWaveRewardSelection)
+                {
+                    waveManager.TryContinueAfterWaveRewardSelection();
+                }
+            }
+        }
+
+        /// <summary>
+        /// summary: 在本局结束后，把玩家和活动地图切回起始房间并清理本局残留。
+        /// param name="error": 返回起始房间失败时返回的错误信息
         /// returns: 成功回到起始房间时返回 true
         /// </summary>
         private bool TryReturnPlayerToStartRoom(out string error)
@@ -179,9 +360,9 @@ namespace Kernel.MapGrid
 
         /// <summary>
         /// summary: 把玩家绑定到指定地图并吸附到最近 Ground 格。
-        /// param: targetMap 当前要切换到的活动地图
-        /// param: requestedCoordinates 希望进入的目标格坐标
-        /// param: error 切图或传送失败时返回的错误信息
+        /// param name="targetMap": 当前要切换到的活动地图
+        /// param name="requestedCoordinates": 希望进入的目标格坐标
+        /// param name="error": 切图或传送失败时返回的错误信息
         /// returns: 成功完成地图切换与传送时返回 true
         /// </summary>
         private bool TryMovePlayerToMap(MapGridAuthoring targetMap, Vector2Int requestedCoordinates, out string error)
@@ -213,67 +394,392 @@ namespace Kernel.MapGrid
         }
 
         /// <summary>
-        /// summary: 监听波次序列自然结束，并延迟执行返回起始房间流程。
+        /// summary: 订阅对局结算所需的事件源，包括玩家死亡、胜利、敌人死亡、Boss 结算和长期收益拾取。
         /// param: 无
         /// returns: 无
         /// </summary>
-        private void HandleWaveSequenceCompleted()
+        private void SubscribeToRunEvents()
+        {
+            if (playerDiedSubscription == null)
+            {
+                playerDiedSubscription = EventManager.eventBus.Subscribe<PlayerDiedEvent>(HandlePlayerDied);
+            }
+
+            if (combatVictorySubscription == null)
+            {
+                combatVictorySubscription = EventManager.eventBus.Subscribe<CombatVictoryEvent>(HandleCombatVictory);
+            }
+
+            if (enemyDiedSubscription == null)
+            {
+                enemyDiedSubscription = EventManager.eventBus.Subscribe<EnemyDiedEvent>(HandleEnemyDied);
+            }
+
+            if (bossEndedSubscription == null)
+            {
+                bossEndedSubscription = EventManager.eventBus.Subscribe<BossEncounterEndedEvent>(HandleBossEncounterEnded);
+            }
+
+            if (rewardCollectedSubscription == null)
+            {
+                rewardCollectedSubscription = EventManager.eventBus.Subscribe<RunRewardCollectedEvent>(HandleRunRewardCollected);
+            }
+        }
+
+        private void DisposeRunSubscriptions()
+        {
+            playerDiedSubscription?.Dispose();
+            playerDiedSubscription = null;
+
+            combatVictorySubscription?.Dispose();
+            combatVictorySubscription = null;
+
+            enemyDiedSubscription?.Dispose();
+            enemyDiedSubscription = null;
+
+            bossEndedSubscription?.Dispose();
+            bossEndedSubscription = null;
+
+            rewardCollectedSubscription?.Dispose();
+            rewardCollectedSubscription = null;
+        }
+
+        private void HandlePlayerDied(PlayerDiedEvent evt)
+        {
+            if (!isActiveAndEnabled || currentState != RunFlowState.InCombat || !IsTrackedPlayerHealth(evt.source))
+            {
+                return;
+            }
+
+            completedWaveCount = waveManager != null ? Mathf.Max(completedWaveCount, waveManager.CompletedWaveCount) : completedWaveCount;
+            BeginSettlementPresentation(SettlementOutcome.Defeat);
+        }
+
+        private void HandleCombatVictory(CombatVictoryEvent evt)
         {
             if (!isActiveAndEnabled || currentState != RunFlowState.InCombat)
             {
                 return;
             }
 
-            CancelPendingReturnRoutine();
-            currentState = RunFlowState.ReturningToStartRoom;
-            pendingReturnRoutine = StartCoroutine(ReturnToStartRoomAfterDelay());
+            completedWaveCount = Mathf.Max(completedWaveCount, evt.completedWaveCount);
+            BeginSettlementPresentation(SettlementOutcome.Victory);
         }
 
-        private IEnumerator ReturnToStartRoomAfterDelay()
+        private void HandleEnemyDied(EnemyDiedEvent evt)
         {
-            if (postRunReturnDelay > 0f)
-            {
-                yield return new WaitForSeconds(postRunReturnDelay);
-            }
-
-            if (!TryReturnPlayerToStartRoom(out string error))
-            {
-                GameDebug.LogError($"[MapRunFlowController] {error}");
-            }
-
-            pendingReturnRoutine = null;
-        }
-
-        private void SubscribeToWaveManager()
-        {
-            if (waveManager == null)
+            if (currentState != RunFlowState.InCombat)
             {
                 return;
             }
 
-            waveManager.SequenceCompleted -= HandleWaveSequenceCompleted;
-            waveManager.SequenceCompleted += HandleWaveSequenceCompleted;
+            AccumulateCount(defeatedEnemyCounts, defeatedEnemyOrder, evt.displayName, 1);
         }
 
-        private void UnsubscribeFromWaveManager()
+        private void HandleBossEncounterEnded(BossEncounterEndedEvent evt)
         {
-            if (waveManager == null)
+            if (currentState != RunFlowState.InCombat || !evt.endedByDeath)
             {
                 return;
             }
 
-            waveManager.SequenceCompleted -= HandleWaveSequenceCompleted;
+            defeatedBossCount++;
         }
 
-        private void CancelPendingReturnRoutine()
+        private void HandleRunRewardCollected(RunRewardCollectedEvent evt)
         {
-            if (pendingReturnRoutine == null)
+            if (currentState != RunFlowState.InCombat)
             {
                 return;
             }
 
-            StopCoroutine(pendingReturnRoutine);
-            pendingReturnRoutine = null;
+            AccumulateCount(runHarvestCounts, runHarvestOrder, evt.displayName, evt.count);
+        }
+
+        private void BeginSettlementPresentation(SettlementOutcome outcome)
+        {
+            if (hasPresentedSettlementThisRun)
+            {
+                return;
+            }
+
+            hasPresentedSettlementThisRun = true;
+            currentState = RunFlowState.ShowingSettlement;
+            currentSettlementSnapshot = CreateSettlementSnapshot(outcome);
+            if (!Application.isPlaying && UIManager.Instance == null)
+            {
+                return;
+            }
+
+            StartCoroutine(PresentSettlementScreenCo());
+        }
+
+        private SettlementSnapshot CreateSettlementSnapshot(SettlementOutcome outcome)
+        {
+            return new SettlementSnapshot(
+                outcome,
+                completedWaveCount,
+                defeatedBossCount,
+                BuildEntries(runHarvestCounts, runHarvestOrder),
+                BuildEntries(defeatedEnemyCounts, defeatedEnemyOrder));
+        }
+
+        private IEnumerator PresentSettlementScreenCo()
+        {
+            UIManager uiManager = UIManager.Instance;
+            if (uiManager == null)
+            {
+                GameDebug.LogError("[MapRunFlowController] UIManager is missing. Settlement screen cannot be shown.");
+                yield break;
+            }
+
+            while (uiManager.IsNavigating())
+            {
+                yield return null;
+            }
+
+            while (uiManager.GetTopModal() != null)
+            {
+                yield return uiManager.PopModalAndWait();
+            }
+
+            while (uiManager.GetTopScreen() != null && uiManager.GetTopScreen() is not MainUIScreen)
+            {
+                yield return uiManager.PopScreenAndWait();
+            }
+
+            if (uiManager.GetTopScreen() is SettlementUIScreen)
+            {
+                yield break;
+            }
+
+            yield return uiManager.PushScreenAndWait<SettlementUIScreen>();
+        }
+
+        private void RestorePlayerRuntimeState()
+        {
+            if (targetPlayer == null)
+            {
+                return;
+            }
+
+            PlayerHealth playerHealth = targetPlayer.GetComponent<PlayerHealth>() ?? targetPlayer.GetComponentInChildren<PlayerHealth>(true);
+            playerHealth?.RestoreFullHealth();
+
+            PlayerBulletTokenInventory inventory = targetPlayer.GetComponent<PlayerBulletTokenInventory>() ?? targetPlayer.GetComponentInChildren<PlayerBulletTokenInventory>(true);
+            inventory?.ResetToStartingTokens();
+
+            AttackFormulaLoadout loadout = targetPlayer.GetComponent<AttackFormulaLoadout>() ?? targetPlayer.GetComponentInChildren<AttackFormulaLoadout>(true);
+            loadout?.ResetToStartingItems();
+        }
+
+        private void ResetRunTracking()
+        {
+            runHarvestCounts.Clear();
+            runHarvestOrder.Clear();
+            defeatedEnemyCounts.Clear();
+            defeatedEnemyOrder.Clear();
+            completedWaveCount = 0;
+            defeatedBossCount = 0;
+            hasPresentedSettlementThisRun = false;
+            currentSettlementSnapshot = null;
+        }
+
+        /// <summary>
+        /// summary: 根据当前波定义上的奖励计划，抽取本次波后奖励要展示的 token 库。
+        /// param name="completedWave": 刚刚结算完成的波次定义
+        /// param name="selectionLibrary": 输出本次波后奖励要使用的 token 库
+        /// returns: 成功解析到有效 token 库时返回 true
+        /// </summary>
+        private bool TryResolveWaveRewardSelectionLibrary(WaveDefinition completedWave, out BulletTokenLibrary selectionLibrary)
+        {
+            selectionLibrary = null;
+            CombatEntryTokenSelectionPlan selectionPlan = completedWave != null ? completedWave.PostWaveTokenSelectionPlan : null;
+            if (selectionPlan == null)
+            {
+                return false;
+            }
+
+            tokenSelectionRandom ??= new Vocalith.Random(unchecked(GetInstanceID() ^ Environment.TickCount));
+            return selectionPlan.TrySampleLibrary(tokenSelectionRandom, out selectionLibrary);
+        }
+
+        /// <summary>
+        /// summary: 根据控制器上单独配置的初始抽取计划，解析进入战斗后第一轮选择要展示的 token 库。
+        /// param name="selectionLibrary": 输出进入战斗时要展示的 token 库
+        /// returns: 成功解析到有效 token 库时返回 true
+        /// </summary>
+        private bool TryResolveInitialCombatSelectionLibrary(out BulletTokenLibrary selectionLibrary)
+        {
+            selectionLibrary = null;
+            if (initialCombatTokenSelectionPlan == null)
+            {
+                return false;
+            }
+
+            tokenSelectionRandom ??= new Vocalith.Random(unchecked(GetInstanceID() ^ Environment.TickCount));
+            return initialCombatTokenSelectionPlan.TrySampleLibrary(tokenSelectionRandom, out selectionLibrary);
+        }
+
+        /// <summary>
+        /// summary: 维持旧版同步进入战斗链路；无须选择 token 时直接复用这条路径。
+        /// param name="error": 进入战斗流程失败时返回的错误信息
+        /// returns: 成功开始进入战斗流程时返回 true
+        /// </summary>
+        private bool TryStartCombatRunImmediately(out string error)
+        {
+            ResetRunTracking();
+            currentState = RunFlowState.EnteringCombat;
+            if (!TryPrepareCombatArena(out error))
+            {
+                AbortCombatEntry();
+                return false;
+            }
+
+            if (TryResolveInitialCombatSelectionLibrary(out BulletTokenLibrary initialSelectionLibrary))
+            {
+                UIManager uiManager = UIManager.Instance;
+                if (uiManager != null)
+                {
+                    tokenSelectionRoutine = StartCoroutine(HandleInitialCombatSelectionCo(uiManager, initialSelectionLibrary));
+                    error = null;
+                    return true;
+                }
+
+                GameDebug.LogError("[MapRunFlowController] UIManager is missing. Skipping the initial combat token selection modal.");
+            }
+
+            if (TryStartCombatSequenceAndEnterState(out error))
+            {
+                return true;
+            }
+
+            AbortCombatEntry();
+            return false;
+        }
+
+        /// <summary>
+        /// summary: 把玩家在初始或波后奖励选择中选中的 token 写入背包首个合法空位。
+        /// param name="selectedToken": 当前选中的 token
+        /// param name="error": 写入失败时返回的错误信息
+        /// returns: 成功写入背包时返回 true
+        /// </summary>
+        private bool TryAddSelectedTokenToInventory(PlaceableTokenData selectedToken, out string error)
+        {
+            error = null;
+            if (!TryResolveReferences(out error))
+            {
+                return false;
+            }
+
+            if (selectedToken == null)
+            {
+                error = "Selected token is missing.";
+                return false;
+            }
+
+            PlayerBulletTokenInventory inventory = targetPlayer.GetComponent<PlayerBulletTokenInventory>() ?? targetPlayer.GetComponentInChildren<PlayerBulletTokenInventory>(true);
+            if (inventory == null)
+            {
+                error = "PlayerBulletTokenInventory is missing.";
+                return false;
+            }
+
+            inventory.EnsureInitialized();
+            if (!inventory.TryAddItem(selectedToken, out _))
+            {
+                error = $"Player inventory has no valid space for token '{selectedToken.name}'.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void HandleWaveRewardSelectionRequested(int waveIndex, WaveDefinition completedWave)
+        {
+            if (!isActiveAndEnabled || currentState != RunFlowState.InCombat)
+            {
+                waveManager?.TryContinueAfterWaveRewardSelection();
+                return;
+            }
+
+            if (tokenSelectionRoutine != null)
+            {
+                GameDebug.LogWarning($"[MapRunFlowController] Ignoring duplicate wave reward selection request for wave index {waveIndex}.");
+                return;
+            }
+
+            if (!TryResolveWaveRewardSelectionLibrary(completedWave, out BulletTokenLibrary selectionLibrary))
+            {
+                waveManager?.TryContinueAfterWaveRewardSelection();
+                return;
+            }
+
+            UIManager uiManager = UIManager.Instance;
+            if (uiManager == null)
+            {
+                GameDebug.LogError("[MapRunFlowController] UIManager is missing. Cannot show the wave reward token selection modal.");
+                waveManager?.TryContinueAfterWaveRewardSelection();
+                return;
+            }
+
+            tokenSelectionRoutine = StartCoroutine(HandleWaveRewardSelectionCo(uiManager, selectionLibrary));
+        }
+
+        private bool IsTrackedPlayerHealth(PlayerHealth playerHealth)
+        {
+            if (playerHealth == null || targetPlayer == null)
+            {
+                return false;
+            }
+
+            return playerHealth.transform.root == targetPlayer.transform.root;
+        }
+
+        private static IReadOnlyList<SettlementCountEntry> BuildEntries(
+            IReadOnlyDictionary<string, int> counts,
+            IReadOnlyList<string> order)
+        {
+            if (counts == null || order == null || order.Count <= 0)
+            {
+                return Array.Empty<SettlementCountEntry>();
+            }
+
+            List<SettlementCountEntry> entries = new(order.Count);
+            for (int i = 0; i < order.Count; i++)
+            {
+                string key = order[i];
+                if (!counts.TryGetValue(key, out int count) || count <= 0)
+                {
+                    continue;
+                }
+
+                entries.Add(new SettlementCountEntry(key, count));
+            }
+
+            return entries;
+        }
+
+        private static void AccumulateCount(
+            IDictionary<string, int> counts,
+            ICollection<string> order,
+            string displayName,
+            int delta)
+        {
+            if (counts == null || order == null || string.IsNullOrWhiteSpace(displayName) || delta <= 0)
+            {
+                return;
+            }
+
+            string key = displayName.Trim();
+            if (!counts.TryGetValue(key, out int currentCount))
+            {
+                counts[key] = delta;
+                order.Add(key);
+                return;
+            }
+
+            counts[key] = currentCount + delta;
         }
 
         private bool TryResolveReferences(out string error)
@@ -336,12 +842,40 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            if (isActiveAndEnabled)
+            return true;
+        }
+
+        private void RefreshWaveManagerSubscription(bool clearOnly = false)
+        {
+            WaveManager nextWaveManager = clearOnly ? null : waveManager;
+            if (!clearOnly && nextWaveManager == null)
             {
-                SubscribeToWaveManager();
+                nextWaveManager = FindFirstObjectByType<WaveManager>();
+                waveManager = nextWaveManager;
             }
 
-            return true;
+            if (subscribedWaveManager == nextWaveManager)
+            {
+                return;
+            }
+
+            if (subscribedWaveManager != null)
+            {
+                subscribedWaveManager.WaveRewardSelectionRequested -= HandleWaveRewardSelectionRequested;
+            }
+
+            subscribedWaveManager = nextWaveManager;
+            if (subscribedWaveManager != null)
+            {
+                subscribedWaveManager.WaveRewardSelectionRequested += HandleWaveRewardSelectionRequested;
+            }
+        }
+
+        private void AbortCombatEntry()
+        {
+            TryReturnPlayerToStartRoom(out _);
+            ResetRunTracking();
+            currentState = RunFlowState.InStartRoom;
         }
 
         private static void ClearRuntimeChildren(Transform container)
@@ -362,6 +896,21 @@ namespace Kernel.MapGrid
                 {
                     UnityEngine.Object.DestroyImmediate(child);
                 }
+            }
+        }
+
+        private void CancelPendingTokenSelection()
+        {
+            if (tokenSelectionRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(tokenSelectionRoutine);
+            tokenSelectionRoutine = null;
+            if (waveManager != null && waveManager.IsAwaitingWaveRewardSelection)
+            {
+                waveManager.TryContinueAfterWaveRewardSelection();
             }
         }
 

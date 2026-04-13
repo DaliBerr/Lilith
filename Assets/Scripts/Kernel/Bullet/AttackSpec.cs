@@ -28,6 +28,7 @@ public enum AttackBehaviorType
     Bounce = 3, //命中后弹射，优先反弹目标，反弹次数用 bounceCount 表示
     Chain = 4, //命中后链式弹射，优先弹射目标，弹射次数用 chainCount 表示
     Orbit = 5, //环绕目标飞行，持续时间用 projectileLife 表示，命中后不消失
+    Pierce = 6, //命中敌人后继续飞行，穿透次数用 pierceCount 表示
 }
 
 /// <summary>
@@ -119,7 +120,11 @@ public struct AttackSpec
         sanitized.bounceCount = Mathf.Max(0, sanitized.bounceCount);
         sanitized.chainCount = Mathf.Max(0, sanitized.chainCount);
         sanitized.pierceCount = Mathf.Max(0, sanitized.pierceCount);
-        sanitized.projectileLife = Mathf.Max(1, Mathf.Max(sanitized.projectileLife, sanitized.pierceCount + 1));
+        sanitized.projectileLife = Mathf.Max(
+            1,
+            Mathf.Max(
+                sanitized.projectileLife,
+                Mathf.Max(sanitized.pierceCount + 1, sanitized.bounceCount + 1)));
         sanitized.impactLifeCost = Mathf.Max(1, sanitized.impactLifeCost);
         sanitized.projectileSpeed = Mathf.Max(0f, sanitized.projectileSpeed);
         sanitized.maxLifetime = Mathf.Max(0f, sanitized.maxLifetime);

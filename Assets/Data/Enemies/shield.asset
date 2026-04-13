@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
   m_Name: shield
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  enemyId: shield
-  displayName: shield
+  enemyId: 甲
+  displayName: 甲
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 1
   attackKind: 1
@@ -28,17 +28,33 @@ MonoBehaviour:
     distanceTolerance: 4
   aggroOnHitMovement:
     aggroSpeedMultiplier: 1.5
+  orbitTargetMovement:
+    orbitRadius: 12
+    orbitRadiusTolerance: 2
+    orbitSpeedMultiplier: 1
+    clockwise: 0
   visual:
-    glyphText: "\u7532"
+    glyphText: 甲
     glyphColor: {r: 1, g: 1, b: 1, a: 1}
     runeBaseSprite: {fileID: 0}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
     groundShadowSprite: {fileID: 0}
     groundShadowTint: {r: 0, g: 0, b: 0, a: 0.28}
+  combat:
+    maxHealth: 42
+    moveSpeed: 22
+    attackRange: 18
+    attackCooldown: 1.2
+    attackDamage: 1
+    damageReductionPercent: 0.2
+    visualScaleMultiplier: 1.25
   rangedBulletAttack:
     bulletPrefab: {fileID: 0}
     formulaItems: []
     targetPolicy: 1
+  explosiveAttack:
+    explosionRadius: 0
+    windupSeconds: 0.8
   skillCasting:
     maxSkillCastsPerTick: 1
   skillSlots: []

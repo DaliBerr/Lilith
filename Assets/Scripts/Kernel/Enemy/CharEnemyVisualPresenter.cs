@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 /// 负责把文字敌人的主字、底座和地面阴影视觉对齐到 grounded 碰撞体底边。
 /// </summary>
 [DisallowMultipleComponent]
-public sealed class CharEnemyVisualPresenter : MonoBehaviour
+public sealed class CharEnemyVisualPresenter : MonoBehaviour, IEnemyWaveConfigReceiver
 {
     private const string TextPath = "Text";
     private const string GlyphPath = "Text/Glyph";
@@ -35,6 +35,8 @@ public sealed class CharEnemyVisualPresenter : MonoBehaviour
     [SerializeField] private Color shadowTint = new(0f, 0f, 0f, 0.28f);
     [SerializeField] private int baseSortingOrder = -10;
     [SerializeField] private int shadowSortingOrder = -20;
+
+    private float runtimeVisualScaleMultiplier = 1f;
 
     public RectTransform TextContainer => textContainer;
     public TMP_Text GlyphText => glyphText;
@@ -115,8 +117,8 @@ public sealed class CharEnemyVisualPresenter : MonoBehaviour
         float planarSize = Mathf.Max(groundingCollider.size.x, groundingCollider.size.z);
 
         ApplyTextLayout(groundYLocal);
-        ApplyFlatLayer(runeBaseRenderer, groundYLocal + baseHeightOffset, planarSize * baseScaleMultiplier, baseTint, baseSortingOrder);
-        ApplyFlatLayer(groundShadowRenderer, groundYLocal + shadowHeightOffset, planarSize * shadowScaleMultiplier, shadowTint, shadowSortingOrder);
+        ApplyFlatLayer(runeBaseRenderer, groundYLocal + baseHeightOffset, planarSize * baseScaleMultiplier * runtimeVisualScaleMultiplier, baseTint, baseSortingOrder);
+        ApplyFlatLayer(groundShadowRenderer, groundYLocal + shadowHeightOffset, planarSize * shadowScaleMultiplier * runtimeVisualScaleMultiplier, shadowTint, shadowSortingOrder);
         return true;
     }
 
@@ -157,15 +159,26 @@ public sealed class CharEnemyVisualPresenter : MonoBehaviour
         return RefreshPresentation();
     }
 
+    /// <summary>
+    /// summary: 接收当前波次解算后的视觉缩放倍率，并把当前敌人视觉统一刷新到对应尺寸。
+    /// param: config 当前实例应使用的运行时敌人数值
+    /// returns: 无
+    /// </summary>
+    public void ApplyWaveConfig(EnemyWaveConfig config)
+    {
+        runtimeVisualScaleMultiplier = SanitizePositiveValue(config.visualScaleMultiplier, 1f);
+        RefreshPresentation();
+    }
+
     private void ApplyTextLayout(float groundYLocal)
     {
         Vector3 nextLocalPosition = textContainer.localPosition;
         nextLocalPosition.x = 0f;
-        nextLocalPosition.y = groundYLocal + groundingCollider.size.y * textHeightFactor;
+        nextLocalPosition.y = groundYLocal + (groundingCollider.size.y * textHeightFactor * runtimeVisualScaleMultiplier);
         nextLocalPosition.z = 0f;
         textContainer.localPosition = nextLocalPosition;
         textContainer.localRotation = Quaternion.identity;
-        textContainer.localScale = Vector3.one;
+        textContainer.localScale = Vector3.one * runtimeVisualScaleMultiplier;
 
         RectTransform glyphRect = glyphText.rectTransform;
         glyphRect.localPosition = Vector3.zero;
@@ -237,5 +250,15 @@ public sealed class CharEnemyVisualPresenter : MonoBehaviour
     private bool IsSpriteRendererReferenceValid(SpriteRenderer target)
     {
         return target != null && target.transform != null && target.transform.IsChildOf(transform);
+    }
+
+    private static float SanitizePositiveValue(float value, float fallbackValue)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
+        {
+            return fallbackValue;
+        }
+
+        return value;
     }
 }

@@ -13,20 +13,31 @@ MonoBehaviour:
   m_Name: ThunderCore
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CoreTokenData
   tokenId: thunder_core
-  displayText: Thunder
-  description: Base thunder core.
+  displayText: "\u96F7"
+  description: "\u529F\u80FD\u578B\u6838\u5FC3\uFF0C\u547D\u4E2D\u4E3B\u76EE\u6807\u540E\u4F1A\u989D\u5916\u8DF3\u5411
+    1 \u4E2A\u9644\u8FD1\u654C\u4EBA\u3002"
   tokenType: 2
   hasBulletTextOverride: 1
   bulletTextOverride: "\u96F7"
   modifiers: []
   coreType: 3
   defaultValueType: 1
-  damage: 1
+  damage: 7
   projectileLife: 1
   impactLifeCost: 1
-  projectileSpeed: 320
-  maxLifetime: 2
-  maxTravelDistance: 512
+  projectileSpeed: 133
+  maxLifetime: 1.7240602
+  maxTravelDistance: 216
   impactMask:
     serializedVersion: 2
     m_Bits: 4294967291
+  armoredEnemyId: 
+  armoredDamageMultiplier: 1
+  burnTriggerCount: 0
+  burnDamagePerSecond: 0
+  burnDuration: 0
+  slowPercent: 0
+  slowDuration: 0
+  thunderChainTargetCount: 1
+  thunderChainRadius: 48
+  thunderChainDamage: 4

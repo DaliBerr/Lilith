@@ -27,6 +27,18 @@ MonoBehaviour:
     m_SerializedLabels:
     - Json
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eade859664fdd3b479ac7ba5ba1309d1
+    m_Address: Assets/Data/Upgrades/PermanentUpgradeCatalog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Json
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 28797e04c60a8604e964bb2c7cad09a5
+    m_Address: Assets/Data/UI/SettlementPresentationCatalog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Json
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: a97f81f4f974e444f9502500f16d9321, type: 2}
   m_SchemaSet:
