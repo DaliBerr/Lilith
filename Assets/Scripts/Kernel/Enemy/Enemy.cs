@@ -40,6 +40,15 @@ public abstract class Enemy : MonoBehaviour
     public abstract bool TryApplyDamage(float damage, out float remainingHealth, out bool isDead);
 
     /// <summary>
+    /// summary: 对当前敌人结算一次治疗，并在不超上限前提下返回最新生命状态。
+    /// param: healing 本次要恢复的生命值
+    /// param: resultingHealth 本次治疗结算后的生命值
+    /// param: isDead 本次治疗结算后是否已经死亡
+    /// returns: 成功处理本次治疗时返回 true
+    /// </summary>
+    public abstract bool TryApplyHealing(float healing, out float resultingHealth, out bool isDead);
+
+    /// <summary>
     /// summary: 把当前敌人实例绑定到一个敌人定义资产上，供行为与调试读取稳定标识。
     /// param: definition 当前实例应持有的敌人定义
     /// returns: 传入定义有效时返回 true
@@ -252,22 +261,29 @@ public struct WaveEnemySpawnEntry
     public List<EnemyBulletTokenDropEntry> tokenDrops;
     public bool isBossEncounter;
     public string bossDisplayNameOverride;
+    public EnemyDefinition bossPhaseTwoDefinition;
+    [Range(0f, 1f)] public float bossPhaseTransitionHealthRatio;
 
     public WaveEnemySpawnEntry(
         EnemyDefinition enemyDefinition,
         int spawnCount,
         IEnumerable<EnemyBulletTokenDropEntry> tokenDrops = null,
         bool isBossEncounter = false,
-        string bossDisplayNameOverride = "")
+        string bossDisplayNameOverride = "",
+        EnemyDefinition bossPhaseTwoDefinition = null,
+        float bossPhaseTransitionHealthRatio = 0.5f)
     {
         this.enemyDefinition = enemyDefinition;
         this.spawnCount = spawnCount;
         this.tokenDrops = tokenDrops != null ? new List<EnemyBulletTokenDropEntry>(tokenDrops) : new List<EnemyBulletTokenDropEntry>();
         this.isBossEncounter = isBossEncounter;
         this.bossDisplayNameOverride = bossDisplayNameOverride ?? string.Empty;
+        this.bossPhaseTwoDefinition = bossPhaseTwoDefinition;
+        this.bossPhaseTransitionHealthRatio = bossPhaseTransitionHealthRatio;
     }
 
     public bool IsBossEncounter => isBossEncounter;
+    public bool HasBossPhaseTransition => isBossEncounter && bossPhaseTwoDefinition != null;
 
     /// <summary>
     /// summary: 规整当前波次敌人条目里的基础配置与 Boss 展示文案。
@@ -282,6 +298,17 @@ public struct WaveEnemySpawnEntry
         sanitized.bossDisplayNameOverride = sanitized.bossDisplayNameOverride != null
             ? sanitized.bossDisplayNameOverride.Trim()
             : string.Empty;
+        sanitized.bossPhaseTransitionHealthRatio = Mathf.Clamp01(sanitized.bossPhaseTransitionHealthRatio);
+        if (sanitized.bossPhaseTransitionHealthRatio <= 0f)
+        {
+            sanitized.bossPhaseTransitionHealthRatio = 0.5f;
+        }
+
+        if (!sanitized.isBossEncounter)
+        {
+            sanitized.bossPhaseTwoDefinition = null;
+        }
+
         return sanitized;
     }
 
@@ -303,6 +330,17 @@ public struct WaveEnemySpawnEntry
         }
 
         return string.Empty;
+    }
+
+    /// <summary>
+    /// summary: 解析当前 Boss 条目应使用的生命阈值；非法值会回退到默认 50%。
+    /// param: 无
+    /// returns: 当前 Boss 阶段切换应使用的生命百分比阈值
+    /// </summary>
+    public float ResolveBossPhaseTransitionHealthRatio()
+    {
+        float resolvedRatio = Mathf.Clamp01(bossPhaseTransitionHealthRatio);
+        return resolvedRatio > 0f ? resolvedRatio : 0.5f;
     }
 }
 
@@ -355,6 +393,7 @@ public static class EnemyGameplayPauseGuard
     public static bool ShouldSuspendEnemyActions()
     {
         return StatusController.HasStatus(StatusList.InBackPackStatus)
+            || StatusController.HasStatus(StatusList.InHintStatus)
             || StatusController.HasStatus(StatusList.InUpgradeScreenStatus)
             || StatusController.HasStatus(StatusList.InPauseMenuStatus)
             || StatusController.HasStatus(StatusList.InSettlementScreenStatus)

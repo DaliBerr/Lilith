@@ -73,6 +73,26 @@ public sealed class CharEnemyVisualPresenterTests
         }
     }
 
+    [Test]
+    public void ApplyVisualDefinition_GlyphScaleMultiplier_OnlyScalesTextContainer()
+    {
+        CharEnemyVisualPresenter presenter = CreatePresenter(out RectTransform textContainer, out _, out SpriteRenderer runeBaseRenderer, out SpriteRenderer groundShadowRenderer);
+
+        Assert.That(presenter.TryCacheBindings(overwriteExisting: true), Is.True);
+        Assert.That(presenter.ApplyVisualDefinition(new EnemyDefinition.EnemyVisualDefinition
+        {
+            glyphText = "测试",
+            glyphScaleMultiplier = 3f,
+            glyphColor = Color.white,
+            runeBaseTint = new Color(0.92f, 0.94f, 0.98f, 0.45f),
+            groundShadowTint = new Color(0f, 0f, 0f, 0.28f),
+        }), Is.True);
+
+        Assert.That(textContainer.localScale, Is.EqualTo(Vector3.one * 3f));
+        Assert.That(runeBaseRenderer.transform.localScale, Is.EqualTo(Vector3.one * 16f));
+        Assert.That(groundShadowRenderer.transform.localScale, Is.EqualTo(Vector3.one * 18.4f));
+    }
+
     private CharEnemyVisualPresenter CreatePresenter(
         out RectTransform textContainer,
         out RectTransform glyphRect,

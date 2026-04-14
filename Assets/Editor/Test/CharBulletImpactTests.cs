@@ -138,6 +138,80 @@ public sealed class CharBulletImpactTests
         Assert.That(bullet.RemainingLife, Is.EqualTo(2));
     }
 
+    [Test]
+    public void CheckImpactContacts_HealingResultRestoresEnemyHealth()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(Vector3.zero, 6f);
+        BaseCharEnemyNorm1 enemy = CreateEnemyWithTaggedChildCollider(MapGridAuthoring.GroundTagName);
+        SetEnemyHealth(enemy, 5f);
+        Assert.That(enemy.TryApplyDamage(2f, out _, out _), Is.True);
+
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 2);
+        attackSpec.damage = 1f;
+        attackSpec.resultType = AttackResultType.Healing;
+
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, null, BulletTargetPolicy.EnemiesOnly);
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(bullet, "CheckImpactContacts");
+
+        Assert.That(enemy.CurrentHealth, Is.EqualTo(4f));
+        Assert.That(bullet.RemainingLife, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CheckImpactContacts_ExplosionResultWithDelay_DamagesNearbyEnemyAfterDelay()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(Vector3.zero, 2f);
+
+        BaseCharEnemyNorm1 primaryEnemy = CreateEnemyWithTaggedChildCollider(MapGridAuthoring.GroundTagName);
+        SetEnemyHealth(primaryEnemy, 6f);
+
+        BaseCharEnemyNorm1 secondaryEnemy = CreateEnemyWithTaggedChildCollider(MapGridAuthoring.GroundTagName);
+        secondaryEnemy.transform.position = new Vector3(7f, 0f, 0f);
+        SetEnemyHealth(secondaryEnemy, 6f);
+
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 2);
+        attackSpec.damage = 2f;
+        attackSpec.resultType = AttackResultType.Explosion;
+
+        CompiledAttack compiledAttack = new()
+        {
+            AttackSpec = attackSpec,
+            CoreType = attackSpec.coreType,
+            BehaviorType = attackSpec.behaviorType,
+            ResultType = AttackResultType.Explosion,
+            CanFire = true,
+            ExplosionRadius = 10f,
+            HasExplosion = true,
+            ResultEffects = new ResultEffectPayload
+            {
+                explosionRadius = 10f,
+                explosionDamageMultiplier = 1f,
+                explosionDelaySeconds = 0.5f,
+            }.GetSanitized(),
+        };
+
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, compiledAttack, BulletTargetPolicy.EnemiesOnly);
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(bullet, "CheckImpactContacts");
+
+        Assert.That(primaryEnemy.CurrentHealth, Is.EqualTo(4f));
+        Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(6f));
+
+        DelayedExplosionEffectRuntime delayedExplosion = Object.FindAnyObjectByType<DelayedExplosionEffectRuntime>();
+        Assert.That(delayedExplosion, Is.Not.Null);
+
+        delayedExplosion.Tick(0.25f);
+        Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(6f));
+
+        delayedExplosion.Tick(0.35f);
+        Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(4f));
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);

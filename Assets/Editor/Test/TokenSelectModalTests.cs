@@ -135,6 +135,10 @@ public sealed class TokenSelectModalTests
 
         Assert.That(view.TokenText.text, Is.EqualTo("Fire"));
         Assert.That(view.DescriptionText.text, Is.EqualTo("Hot core"));
+        Assert.That(view.CatalogText, Is.Not.Null);
+        Assert.That(view.CatalogText.text, Is.EqualTo("核心"));
+        Assert.That(view.RootImage, Is.Not.Null);
+        AssertColorApproximately(view.RootImage.color, new Color(1f, 0.73f, 0.36f, 1f));
         Assert.That(view.SelectButton.interactable, Is.True);
         Assert.That(GetSelectButtonText(view), Is.Not.Null);
         Assert.That(GetSelectButtonText(view).text, Is.Not.Empty);
@@ -150,19 +154,40 @@ public sealed class TokenSelectModalTests
     {
         BulletTokenSelectionView view = CreateSelectionViewInstance();
         CoreTokenData firstToken = CreateToken<CoreTokenData>("fire", "Fire", "Hot core");
-        CoreTokenData secondToken = CreateToken<CoreTokenData>("ice", "Ice", "Cold core");
+        BehaviorTokenData secondToken = CreateToken<BehaviorTokenData>("spray", "Spray", "Spread behavior");
         TokenSelectUIScreen firstScreen = CreateScreenRoot();
 
         view.Bind(firstScreen, firstToken);
         Assert.That(GetRuntimeListenerCount(view.SelectButton), Is.EqualTo(1));
         Assert.That(view.BoundToken, Is.SameAs(firstToken));
         Assert.That(view.TokenText.text, Is.EqualTo("Fire"));
+        Assert.That(view.CatalogText.text, Is.EqualTo("核心"));
 
         TokenSelectUIScreen secondScreen = CreateScreenRoot();
         view.Bind(secondScreen, secondToken);
         Assert.That(GetRuntimeListenerCount(view.SelectButton), Is.EqualTo(1));
         Assert.That(view.BoundToken, Is.SameAs(secondToken));
-        Assert.That(view.TokenText.text, Is.EqualTo("Ice"));
+        Assert.That(view.TokenText.text, Is.EqualTo("Spray"));
+        Assert.That(view.CatalogText.text, Is.EqualTo("行为"));
+        AssertColorApproximately(view.RootImage.color, new Color(0.48f, 0.74f, 1f, 1f));
+    }
+
+    [Test]
+    public void SelectionView_BindsLinkedToken_UsesFirstCompileTokenTypeForCatalog()
+    {
+        BulletTokenSelectionView view = CreateSelectionViewInstance();
+        TokenSelectUIScreen screen = CreateScreenRoot();
+        LinkedTokenData linkedToken = CreateLinkedToken(
+            "linked_fire_boom",
+            "Linked fire and boom",
+            CreateToken<CoreTokenData>("fire", "Fire", "Fire core"),
+            CreateToken<ResultTokenData>("boom", "Boom", "Boom result"));
+
+        view.Bind(screen, linkedToken);
+
+        Assert.That(view.TokenText.text, Is.EqualTo("FireBoom"));
+        Assert.That(view.CatalogText.text, Is.EqualTo("核心"));
+        AssertColorApproximately(view.RootImage.color, new Color(1f, 0.73f, 0.36f, 1f));
     }
 
     [Test]
@@ -396,6 +421,17 @@ public sealed class TokenSelectModalTests
         return token;
     }
 
+    private LinkedTokenData CreateLinkedToken(string itemId, string description, params BaseTokenData[] linkedTokens)
+    {
+        LinkedTokenData token = ScriptableObject.CreateInstance<LinkedTokenData>();
+        token.ItemId = itemId;
+        token.Description = description;
+        token.SetLinkedTokens(linkedTokens);
+        token.name = itemId;
+        createdObjects.Add(token);
+        return token;
+    }
+
     private static TMP_Text GetSelectButtonText(BulletTokenSelectionView view)
     {
         return view.SelectButton != null ? view.SelectButton.GetComponentInChildren<TMP_Text>(true) : null;
@@ -433,6 +469,14 @@ public sealed class TokenSelectModalTests
             Assert.That(cards[i].BoundToken, Is.Not.Null);
             Assert.That(cards[i].TokenText.text, Is.Not.Empty);
         }
+    }
+
+    private static void AssertColorApproximately(Color actual, Color expected, float tolerance = 0.0001f)
+    {
+        Assert.That(actual.r, Is.EqualTo(expected.r).Within(tolerance));
+        Assert.That(actual.g, Is.EqualTo(expected.g).Within(tolerance));
+        Assert.That(actual.b, Is.EqualTo(expected.b).Within(tolerance));
+        Assert.That(actual.a, Is.EqualTo(expected.a).Within(tolerance));
     }
 
     private static void AssertUniqueInstanceIds(IReadOnlyList<PlaceableTokenData> tokens)

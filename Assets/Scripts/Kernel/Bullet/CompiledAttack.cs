@@ -93,6 +93,7 @@ namespace Kernel.Bullet
     {
         public float explosionRadius;
         public float explosionDamageMultiplier;
+        public float explosionDelaySeconds;
         public int splitProjectileCount;
         public float splitDamageMultiplier;
         public int controlTriggerCount;
@@ -103,6 +104,7 @@ namespace Kernel.Bullet
             ResultEffectPayload sanitized = this;
             sanitized.explosionRadius = Mathf.Max(0f, sanitized.explosionRadius);
             sanitized.explosionDamageMultiplier = Mathf.Clamp01(sanitized.explosionDamageMultiplier);
+            sanitized.explosionDelaySeconds = Mathf.Max(0f, sanitized.explosionDelaySeconds);
             sanitized.splitProjectileCount = Mathf.Max(0, sanitized.splitProjectileCount);
             sanitized.splitDamageMultiplier = Mathf.Clamp01(sanitized.splitDamageMultiplier);
             sanitized.controlTriggerCount = Mathf.Max(0, sanitized.controlTriggerCount);

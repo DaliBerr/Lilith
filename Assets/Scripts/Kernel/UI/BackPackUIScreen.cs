@@ -28,6 +28,7 @@ namespace Kernel.UI
         [SerializeField] private RectTransform previewAnimation;
         [SerializeField] private RectTransform backPackGridPanel;
         [SerializeField] private RectTransform backPackGrid;
+        [SerializeField] private Button hintButton;
         [SerializeField] private BackPackGridSlotView slotPrefab;
         [SerializeField] private BackPackAttackPreviewController attackPreviewController;
 
@@ -70,6 +71,7 @@ namespace Kernel.UI
         protected override void OnInit()
         {
             TryAutoBindReferences();
+            BindButtonCallbacks();
             EnsureSpellBookCellsInitialized();
             BindStaticSpellBookSlots();
             EnsureInventorySlotsBuilt();
@@ -99,6 +101,7 @@ namespace Kernel.UI
 
         private void OnDestroy()
         {
+            UnbindButtonCallbacks();
             ReleaseBindings();
             RemoveCurrentStatus();
         }
@@ -1257,8 +1260,50 @@ namespace Kernel.UI
             previewAnimation ??= leftPanel?.Find("Preview Animation") as RectTransform;
             backPackGridPanel ??= mainContent.Find("BackPack Grid Panel") as RectTransform;
             backPackGrid ??= backPackGridPanel?.Find("Grid") as RectTransform;
+            hintButton ??= topPanel?.Find("Hint Button")?.GetComponent<Button>();
             slotPrefab ??= ResolveTemplateSlot();
             attackPreviewController ??= GetComponent<BackPackAttackPreviewController>();
+        }
+
+        /// <summary>
+        /// summary: 绑定背包顶部 Hint 按钮到统一输入路由，保持与 Tab 快捷键行为一致。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void BindButtonCallbacks()
+        {
+            if (hintButton == null)
+            {
+                return;
+            }
+
+            hintButton.onClick.RemoveListener(HandleHintButtonClicked);
+            hintButton.onClick.AddListener(HandleHintButtonClicked);
+        }
+
+        /// <summary>
+        /// summary: 清理背包顶部 Hint 按钮事件，避免销毁后残留无效回调。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void UnbindButtonCallbacks()
+        {
+            if (hintButton == null)
+            {
+                return;
+            }
+
+            hintButton.onClick.RemoveListener(HandleHintButtonClicked);
+        }
+
+        /// <summary>
+        /// summary: 点击背包 Hint 按钮时请求切换 Hint 弹窗。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private static void HandleHintButtonClicked()
+        {
+            UIInputRouter.Instance?.RequestToggleHint();
         }
 
         private void EnsureSpellBookCellsInitialized()

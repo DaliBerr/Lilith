@@ -15,14 +15,16 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
     private float slowPercent;
     private float slowRemainingDuration;
     private float stunRemainingDuration;
+    private float skillActionLockRemainingDuration;
 
     public int FireHitCount => fireHitCount;
     public int ControlHitCount => controlHitCount;
     public bool IsBurning => burnRemainingDuration > 0f && burnDamagePerSecond > 0f;
     public bool IsSlowed => slowRemainingDuration > 0f && slowPercent > 0f;
     public bool IsStunned => stunRemainingDuration > 0f;
+    public bool IsSkillActionLocked => skillActionLockRemainingDuration > 0f;
     public bool CanMove => !IsStunned;
-    public bool CanAct => !IsStunned;
+    public bool CanAct => !IsStunned && !IsSkillActionLocked;
     public float MovementSpeedMultiplier => IsStunned ? 0f : Mathf.Clamp01(1f - GetActiveSlowPercent());
 
     private void Awake()
@@ -38,6 +40,7 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         slowPercent = Mathf.Clamp01(slowPercent);
         slowRemainingDuration = Mathf.Max(0f, slowRemainingDuration);
         stunRemainingDuration = Mathf.Max(0f, stunRemainingDuration);
+        skillActionLockRemainingDuration = Mathf.Max(0f, skillActionLockRemainingDuration);
         fireHitCount = Mathf.Max(0, fireHitCount);
         controlHitCount = Mathf.Max(0, controlHitCount);
     }
@@ -110,6 +113,22 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// summary: 施加一次技能动作锁，在持续时间内禁止敌人执行攻击与技能动作。
+    /// param: duration 技能动作锁持续时间
+    /// returns: 参数合法并成功写入动作锁时返回 true
+    /// </summary>
+    public bool ApplySkillActionLock(float duration)
+    {
+        if (duration <= 0f)
+        {
+            return false;
+        }
+
+        skillActionLockRemainingDuration = Mathf.Max(skillActionLockRemainingDuration, duration);
+        return true;
+    }
+
     private void Update()
     {
         if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
@@ -126,6 +145,7 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         TickBurn(deltaTime);
         TickSlow(deltaTime);
         TickStun(deltaTime);
+        TickSkillActionLock(deltaTime);
     }
 
     private void TickBurn(float deltaTime)
@@ -171,6 +191,16 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         }
 
         stunRemainingDuration = Mathf.Max(0f, stunRemainingDuration - deltaTime);
+    }
+
+    private void TickSkillActionLock(float deltaTime)
+    {
+        if (!IsSkillActionLocked)
+        {
+            return;
+        }
+
+        skillActionLockRemainingDuration = Mathf.Max(0f, skillActionLockRemainingDuration - deltaTime);
     }
 
     private float GetActiveSlowPercent()

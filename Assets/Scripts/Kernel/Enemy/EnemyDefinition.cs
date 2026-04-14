@@ -99,9 +99,41 @@ public sealed class EnemyDefinition : ScriptableObject
     }
 
     [Serializable]
+    public struct BossSmartRoamMovementDefinition
+    {
+        [Min(0f)] public float preferredDistance;
+        [Min(0f)] public float distanceTolerance;
+        [Min(0f)] public float strafeSpeedMultiplier;
+        [Min(0f)] public float radialCorrectionStrength;
+        [Min(0f)] public float approachSpeedMultiplier;
+        [Min(0f)] public float retreatSpeedMultiplier;
+        [Min(0f)] public float sideSwitchIntervalSeconds;
+        public bool startClockwise;
+
+        /// <summary>
+        /// summary: 修正 Boss 主动游走配置中的非法取值，确保运行时拿到稳定参数。
+        /// param: 无
+        /// returns: 经过规范化后的 Boss 游走配置副本
+        /// </summary>
+        public BossSmartRoamMovementDefinition GetSanitized()
+        {
+            BossSmartRoamMovementDefinition sanitized = this;
+            sanitized.preferredDistance = Mathf.Max(0f, sanitized.preferredDistance);
+            sanitized.distanceTolerance = Mathf.Max(0f, sanitized.distanceTolerance);
+            sanitized.strafeSpeedMultiplier = SanitizePositiveValue(sanitized.strafeSpeedMultiplier, 1f);
+            sanitized.radialCorrectionStrength = Mathf.Clamp(sanitized.radialCorrectionStrength, 0f, 2f);
+            sanitized.approachSpeedMultiplier = SanitizePositiveValue(sanitized.approachSpeedMultiplier, 1f);
+            sanitized.retreatSpeedMultiplier = SanitizePositiveValue(sanitized.retreatSpeedMultiplier, 1f);
+            sanitized.sideSwitchIntervalSeconds = Mathf.Max(0f, sanitized.sideSwitchIntervalSeconds);
+            return sanitized;
+        }
+    }
+
+    [Serializable]
     public struct EnemyVisualDefinition
     {
         public string glyphText;
+        [Min(0f)] public float glyphScaleMultiplier;
         public Color glyphColor;
         public Sprite runeBaseSprite;
         public Color runeBaseTint;
@@ -117,6 +149,7 @@ public sealed class EnemyDefinition : ScriptableObject
         {
             EnemyVisualDefinition sanitized = this;
             sanitized.glyphText ??= string.Empty;
+            sanitized.glyphScaleMultiplier = SanitizePositiveValue(sanitized.glyphScaleMultiplier, 1f);
             sanitized.glyphColor.a = Mathf.Clamp01(sanitized.glyphColor.a);
             sanitized.runeBaseTint.a = Mathf.Clamp01(sanitized.runeBaseTint.a);
             sanitized.groundShadowTint.a = Mathf.Clamp01(sanitized.groundShadowTint.a);
@@ -160,6 +193,7 @@ public sealed class EnemyDefinition : ScriptableObject
         public CharBullet bulletPrefab;
         public List<PlaceableTokenData> formulaItems;
         public BulletTargetPolicy targetPolicy;
+        [Min(0f)] public float projectileSpeedMultiplier;
 
         /// <summary>
         /// summary: 修正远程词元攻击配置中的空列表，并按需清理空元素。
@@ -170,6 +204,13 @@ public sealed class EnemyDefinition : ScriptableObject
         {
             RangedBulletAttackDefinition sanitized = this;
             sanitized.formulaItems ??= new List<PlaceableTokenData>();
+            if (float.IsNaN(sanitized.projectileSpeedMultiplier) ||
+                float.IsInfinity(sanitized.projectileSpeedMultiplier) ||
+                sanitized.projectileSpeedMultiplier < 0f)
+            {
+                sanitized.projectileSpeedMultiplier = 0f;
+            }
+
             if (removeNullFormulaItems)
             {
                 sanitized.formulaItems.RemoveAll(item => item == null);
@@ -225,12 +266,48 @@ public sealed class EnemyDefinition : ScriptableObject
     }
 
     [Serializable]
+    public struct DelayedGroundBombSkillDefinition
+    {
+        [Min(0f)] public float delaySeconds;
+        [Min(0f)] public float explosionRadius;
+        [Min(0f)] public float explosionDamage;
+        [Min(1)] public int bombsPerSequence;
+        [Min(0f)] public float bombIntervalSeconds;
+        [Min(0f)] public float randomCooldownMinSeconds;
+        [Min(0f)] public float randomCooldownMaxSeconds;
+        [Min(0.01f)] public float indicatorWidth;
+        public Color indicatorColor;
+
+        /// <summary>
+        /// summary: 修正延时地雷技能配置中的非法值，保证投放与爆炸逻辑可稳定执行。
+        /// param: 无
+        /// returns: 经过规范化后的延时地雷配置副本
+        /// </summary>
+        public DelayedGroundBombSkillDefinition GetSanitized()
+        {
+            DelayedGroundBombSkillDefinition sanitized = this;
+            sanitized.delaySeconds = SanitizePositiveValue(sanitized.delaySeconds, 1.5f);
+            sanitized.explosionRadius = SanitizePositiveValue(sanitized.explosionRadius, 100f);
+            sanitized.explosionDamage = SanitizePositiveValue(sanitized.explosionDamage, 1f);
+            sanitized.bombsPerSequence = Mathf.Max(1, sanitized.bombsPerSequence);
+            sanitized.bombIntervalSeconds = Mathf.Max(0f, sanitized.bombIntervalSeconds);
+            sanitized.randomCooldownMinSeconds = Mathf.Max(0f, sanitized.randomCooldownMinSeconds);
+            sanitized.randomCooldownMaxSeconds = Mathf.Max(sanitized.randomCooldownMinSeconds, sanitized.randomCooldownMaxSeconds);
+            sanitized.indicatorWidth = SanitizePositiveValue(sanitized.indicatorWidth, 0.2f);
+            sanitized.indicatorColor.a = Mathf.Clamp01(sanitized.indicatorColor.a);
+            return sanitized;
+        }
+    }
+
+    [Serializable]
     public struct EnemySkillSlotDefinition
     {
         public EnemySkillKind skillKind;
         [Min(0f)] public float cooldownSeconds;
         [Min(0f)] public float castRange;
+        [Min(0f)] public float actionLockSeconds;
         public SummonSkillDefinition summonSkill;
+        public DelayedGroundBombSkillDefinition delayedGroundBombSkill;
 
         /// <summary>
         /// summary: 修正单个技能槽中的非法值，保证运行时调度器拿到稳定配置。
@@ -242,7 +319,9 @@ public sealed class EnemyDefinition : ScriptableObject
             EnemySkillSlotDefinition sanitized = this;
             sanitized.cooldownSeconds = Mathf.Max(0f, sanitized.cooldownSeconds);
             sanitized.castRange = Mathf.Max(0f, sanitized.castRange);
+            sanitized.actionLockSeconds = Mathf.Max(0f, sanitized.actionLockSeconds);
             sanitized.summonSkill = sanitized.summonSkill.GetSanitized();
+            sanitized.delayedGroundBombSkill = sanitized.delayedGroundBombSkill.GetSanitized();
             return sanitized;
         }
 
@@ -254,6 +333,16 @@ public sealed class EnemyDefinition : ScriptableObject
         public float ResolveCastRange(float fallbackCastRange)
         {
             return castRange > 0f ? castRange : Mathf.Max(0f, fallbackCastRange);
+        }
+
+        /// <summary>
+        /// summary: 解析当前技能触发后应施加的行动锁时长；未显式填写时返回统一默认值。
+        /// param: fallbackActionLockSeconds 兜底行动锁时长
+        /// returns: 技能触发后应使用的行动锁时长
+        /// </summary>
+        public float ResolveActionLockSeconds(float fallbackActionLockSeconds = 0.15f)
+        {
+            return actionLockSeconds > 0f ? actionLockSeconds : Mathf.Max(0f, fallbackActionLockSeconds);
         }
     }
 
@@ -277,6 +366,7 @@ public sealed class EnemyDefinition : ScriptableObject
 
     [SerializeField] private string enemyId = string.Empty;
     [SerializeField] private string displayName = string.Empty;
+    [TextArea(3, 8)] [SerializeField] private string description = string.Empty;
     [SerializeField] private EnemyDefinitionBinder runtimePrefab;
     [SerializeField] private EnemyMovementKind movementKind = EnemyMovementKind.ChaseTarget;
     [SerializeField] private EnemyAttackKind attackKind = EnemyAttackKind.MeleeContact;
@@ -303,9 +393,21 @@ public sealed class EnemyDefinition : ScriptableObject
         orbitRadiusTolerance = 2f,
         orbitSpeedMultiplier = 1f,
     };
+    [SerializeField] private BossSmartRoamMovementDefinition bossSmartRoamMovement = new()
+    {
+        preferredDistance = 24f,
+        distanceTolerance = 4f,
+        strafeSpeedMultiplier = 1f,
+        radialCorrectionStrength = 0.5f,
+        approachSpeedMultiplier = 1.15f,
+        retreatSpeedMultiplier = 1.25f,
+        sideSwitchIntervalSeconds = 1.5f,
+        startClockwise = true,
+    };
     [SerializeField] private EnemyVisualDefinition visual = new()
     {
         glyphText = string.Empty,
+        glyphScaleMultiplier = 1f,
         glyphColor = Color.white,
         runeBaseTint = new Color(0.92f, 0.94f, 0.98f, 0.45f),
         groundShadowTint = new Color(0f, 0f, 0f, 0.28f),
@@ -323,6 +425,7 @@ public sealed class EnemyDefinition : ScriptableObject
     [SerializeField] private RangedBulletAttackDefinition rangedBulletAttack = new()
     {
         targetPolicy = BulletTargetPolicy.PlayerOnly,
+        projectileSpeedMultiplier = 0f,
     };
     [SerializeField] private ExplosiveAttackDefinition explosiveAttack = new()
     {
@@ -337,6 +440,7 @@ public sealed class EnemyDefinition : ScriptableObject
 
     public string EnemyId => string.IsNullOrWhiteSpace(enemyId) ? name : enemyId.Trim();
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? EnemyId : displayName.Trim();
+    public string Description => string.IsNullOrWhiteSpace(description) ? string.Empty : description.Trim();
     public EnemyDefinitionBinder RuntimePrefabBinder => runtimePrefab;
     public GameObject RuntimePrefab => runtimePrefab != null ? runtimePrefab.gameObject : null;
     public EnemyMovementKind MovementKind => movementKind;
@@ -345,6 +449,7 @@ public sealed class EnemyDefinition : ScriptableObject
     public KeepDistanceMovementDefinition KeepDistanceMovement => ResolveKeepDistanceMovementDefinition();
     public AggroOnHitMovementDefinition AggroOnHitMovement => aggroOnHitMovement;
     public OrbitTargetMovementDefinition OrbitTargetMovement => orbitTargetMovement;
+    public BossSmartRoamMovementDefinition BossSmartRoamMovement => ResolveBossSmartRoamMovementDefinition();
     public EnemyVisualDefinition Visual => visual;
     public EnemyCombatDefinition Combat => combat.GetSanitized();
     public RangedBulletAttackDefinition RangedBulletAttack => rangedBulletAttack;
@@ -356,10 +461,12 @@ public sealed class EnemyDefinition : ScriptableObject
     {
         enemyId = enemyId != null ? enemyId.Trim() : string.Empty;
         displayName = displayName != null ? displayName.Trim() : string.Empty;
+        description = description != null ? description.Trim() : string.Empty;
         dashMovement = dashMovement.GetSanitized();
         keepDistanceMovement = keepDistanceMovement.GetSanitized();
         aggroOnHitMovement = aggroOnHitMovement.GetSanitized();
         orbitTargetMovement = orbitTargetMovement.GetSanitized();
+        bossSmartRoamMovement = bossSmartRoamMovement.GetSanitized();
         visual = visual.GetSanitized();
         combat = combat.GetSanitized();
         rangedBulletAttack = rangedBulletAttack.GetSanitized(removeNullFormulaItems: false);
@@ -372,6 +479,7 @@ public sealed class EnemyDefinition : ScriptableObject
         }
 
         keepDistanceMovement = ResolveKeepDistanceMovementDefinition();
+        bossSmartRoamMovement = ResolveBossSmartRoamMovementDefinition();
     }
 
     /// <summary>
@@ -417,11 +525,51 @@ public sealed class EnemyDefinition : ScriptableObject
     private KeepDistanceMovementDefinition ResolveKeepDistanceMovementDefinition()
     {
         KeepDistanceMovementDefinition resolvedKeepDistance = keepDistanceMovement.GetSanitized();
-        if (movementKind != EnemyMovementKind.KeepDistance)
+        if (movementKind != EnemyMovementKind.KeepDistance
+            && movementKind != EnemyMovementKind.FollowNearestEnemyKeepDistance)
         {
             return resolvedKeepDistance;
         }
 
+        float reachableAbilityRange = ResolveReachableAbilityRange();
+
+        if (reachableAbilityRange > 0f)
+        {
+            resolvedKeepDistance.preferredDistance = Mathf.Min(resolvedKeepDistance.preferredDistance, reachableAbilityRange);
+        }
+
+        return resolvedKeepDistance;
+    }
+
+    /// <summary>
+    /// summary: Boss 主动游走模式下，限制首选距离不要超过当前有效施法范围。
+    /// param: 无
+    /// returns: 经过约束后的 Boss 主动游走配置
+    /// </summary>
+    private BossSmartRoamMovementDefinition ResolveBossSmartRoamMovementDefinition()
+    {
+        BossSmartRoamMovementDefinition resolvedSmartRoam = bossSmartRoamMovement.GetSanitized();
+        if (movementKind != EnemyMovementKind.BossSmartRoam)
+        {
+            return resolvedSmartRoam;
+        }
+
+        float reachableAbilityRange = ResolveReachableAbilityRange();
+        if (reachableAbilityRange > 0f)
+        {
+            resolvedSmartRoam.preferredDistance = Mathf.Min(resolvedSmartRoam.preferredDistance, reachableAbilityRange);
+        }
+
+        return resolvedSmartRoam;
+    }
+
+    /// <summary>
+    /// summary: 解析当前定义在移动约束中可用的最远有效施法距离。
+    /// param: 无
+    /// returns: 当前定义可用的最远施法距离；无可用能力时返回 0
+    /// </summary>
+    private float ResolveReachableAbilityRange()
+    {
         EnemyCombatDefinition sanitizedCombat = combat.GetSanitized();
         float reachableAbilityRange = 0f;
         if (attackKind == EnemyAttackKind.RangedBulletToken)
@@ -443,12 +591,7 @@ public sealed class EnemyDefinition : ScriptableObject
             }
         }
 
-        if (reachableAbilityRange > 0f)
-        {
-            resolvedKeepDistance.preferredDistance = Mathf.Min(resolvedKeepDistance.preferredDistance, reachableAbilityRange);
-        }
-
-        return resolvedKeepDistance;
+        return reachableAbilityRange;
     }
 
     private static float SanitizeValue(float value, float fallbackValue)
@@ -480,6 +623,8 @@ public enum EnemyMovementKind
     KeepDistance = 3,
     AggroOnHit = 4,
     OrbitTarget = 5,
+    FollowNearestEnemyKeepDistance = 6,
+    BossSmartRoam = 7,
 }
 
 public enum EnemyAttackKind
@@ -494,4 +639,5 @@ public enum EnemySkillKind
 {
     None = 0,
     SummonEnemy = 1,
+    DelayedGroundBomb = 2,
 }

@@ -85,6 +85,7 @@
     <Compile Include="Assets\Editor\Test\ArenaSeedMapGenerationTests.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
     <Compile Include="Assets\Editor\Test\PermanentUpgradeServiceTests.cs" />
+    <Compile Include="Assets\Editor\Test\HintCatalogTests.cs" />
     <Compile Include="Assets\Editor\Test\CharBulletVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\TokenSelectModalTests.cs" />
     <Compile Include="Assets\Editor\LinkedTokenDataEditor.cs" />
@@ -94,11 +95,13 @@
     <Compile Include="Assets\Editor\Test\DialogUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthTests.cs" />
     <Compile Include="Assets\Editor\Test\QuestCatalogJsonUtilityTests.cs" />
+    <Compile Include="Assets\Editor\Test\BossPhaseControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\MapGridAuthoringTests.cs" />
     <Compile Include="Assets\Editor\Test\StrokeRevealUIWordTests.cs" />
     <Compile Include="Assets\Editor\Test\CharBulletPrefabTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerPlaneMovementTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyStatusEffectControllerTests.cs" />
+    <Compile Include="Assets\Editor\Test\EnemyResultVisualFeedbackTests.cs" />
     <Compile Include="Assets\Editor\CompileBeforePlay.cs" />
     <Compile Include="Assets\Editor\Test\CharGlyphPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\MapSpawnUtilityTests.cs" />

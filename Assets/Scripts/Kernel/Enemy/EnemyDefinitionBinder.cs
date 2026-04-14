@@ -9,8 +9,11 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public sealed class EnemyDefinitionBinder : MonoBehaviour
 {
+    private const float DefaultSkillActionLockSeconds = 0.15f;
+
     [SerializeField] private EnemyDefinition definition;
     [SerializeField] private Enemy enemyData;
+    [SerializeField] private EnemyStatusEffectController statusEffects;
     [SerializeField] private CharEnemyMovement movement;
     [SerializeField] private EnemyMeleeAttacker meleeAttacker;
     [SerializeField] private EnemyRangedTokenAttacker rangedTokenAttacker;
@@ -18,6 +21,7 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
     [SerializeField] private EnemySummoner summoner;
     [SerializeField] private CharGlyphPresenter glyphPresenter;
     [SerializeField] private CharEnemyVisualPresenter visualPresenter;
+    [SerializeField] private EnemyResultVisualFeedback resultVisualFeedback;
 
     private readonly List<IEnemySkillCaster> skillCasters = new();
     private float[] nextSkillReadyTimes = Array.Empty<float>();
@@ -73,6 +77,11 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
             enemyData = GetComponent<Enemy>();
         }
 
+        if (overwriteExisting || statusEffects == null || statusEffects.transform != transform)
+        {
+            statusEffects = GetComponent<EnemyStatusEffectController>();
+        }
+
         if (overwriteExisting || movement == null || movement.transform != transform)
         {
             movement = GetComponent<CharEnemyMovement>();
@@ -108,6 +117,11 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
             visualPresenter = GetComponent<CharEnemyVisualPresenter>();
         }
 
+        if (overwriteExisting || resultVisualFeedback == null || resultVisualFeedback.transform != transform)
+        {
+            resultVisualFeedback = GetComponent<EnemyResultVisualFeedback>();
+        }
+
         return enemyData != null;
     }
 
@@ -133,6 +147,11 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
         if (!ApplyMovementKind(definition.MovementKind) ||
             !ApplyAttackKind(definition.AttackKind) ||
             !ApplySkillSlots(definition.SkillSlots))
+        {
+            return false;
+        }
+
+        if (!TryResolveResultVisualFeedback())
         {
             return false;
         }
@@ -257,6 +276,11 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
                 continue;
             }
 
+            if (TryResolveStatusEffects())
+            {
+                statusEffects.ApplySkillActionLock(skillSlot.ResolveActionLockSeconds(DefaultSkillActionLockSeconds));
+            }
+
             nextSkillReadyTimes[i] = currentTime + Mathf.Max(0f, skillSlot.cooldownSeconds);
             remainingSkillCasts--;
             hasCastAnySkill = true;
@@ -362,8 +386,79 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
             return true;
         }
 
+        if (TryEnsureSkillCasterComponent(skillKind, out skillCaster))
+        {
+            if (requireEnabled && skillCaster is Behaviour behavior && !behavior.enabled)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         skillCaster = null;
         return false;
+    }
+
+    /// <summary>
+    /// summary: 按技能类型按需补齐缺失的技能执行器组件，避免定义新增后旧 prefab 壳无法调度。
+    /// param: skillKind 当前要调度的技能类型
+    /// param: skillCaster 输出的技能执行器引用
+    /// returns: 成功拿到可用执行器时返回 true
+    /// </summary>
+    private bool TryEnsureSkillCasterComponent(EnemySkillKind skillKind, out IEnemySkillCaster skillCaster)
+    {
+        skillCaster = null;
+        if (skillKind == EnemySkillKind.None)
+        {
+            return false;
+        }
+
+        if (skillKind == EnemySkillKind.DelayedGroundBomb)
+        {
+            if (!TryGetComponent(out EnemyDelayedGroundBombCaster delayedBombCaster) || delayedBombCaster == null)
+            {
+                delayedBombCaster = gameObject.AddComponent<EnemyDelayedGroundBombCaster>();
+            }
+
+            CacheSkillCasters();
+            skillCaster = delayedBombCaster;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryResolveStatusEffects()
+    {
+        if (statusEffects != null && statusEffects.transform == transform)
+        {
+            return true;
+        }
+
+        statusEffects = null;
+        return TryGetComponent(out statusEffects);
+    }
+
+    private bool TryResolveResultVisualFeedback()
+    {
+        if (resultVisualFeedback != null && resultVisualFeedback.transform == transform)
+        {
+            return true;
+        }
+
+        if (!TryGetComponent(out resultVisualFeedback) || resultVisualFeedback == null)
+        {
+            resultVisualFeedback = gameObject.AddComponent<EnemyResultVisualFeedback>();
+        }
+
+        if (resultVisualFeedback == null)
+        {
+            return false;
+        }
+
+        resultVisualFeedback.TryCacheBindings();
+        return true;
     }
 
     private void ApplyVisuals(EnemyDefinition.EnemyVisualDefinition visual)

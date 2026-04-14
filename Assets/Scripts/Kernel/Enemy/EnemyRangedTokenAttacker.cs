@@ -110,7 +110,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
             return false;
         }
 
-        ApplyConfiguredCombatOverrides(compiledAttack);
+        ApplyConfiguredCombatOverrides(compiledAttack, rangedAttack);
         if (AttackProjectileEmitter.Emit(
                 rangedAttack.bulletPrefab,
                 transform,
@@ -131,7 +131,9 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     /// param: compiledAttack 当前准备发射的编译攻击结果
     /// returns: 无
     /// </summary>
-    private void ApplyConfiguredCombatOverrides(CompiledAttack compiledAttack)
+    private void ApplyConfiguredCombatOverrides(
+        CompiledAttack compiledAttack,
+        EnemyDefinition.RangedBulletAttackDefinition rangedAttack)
     {
         if (compiledAttack == null || !TryResolveEnemyData())
         {
@@ -140,12 +142,18 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
 
         float configuredAttackRange = Mathf.Max(0f, enemyData.AttackRange);
         float configuredDamage = enemyData.AttackDamage;
-        if (configuredDamage <= 0f && configuredAttackRange <= 0f)
+        float configuredProjectileSpeedMultiplier = rangedAttack.projectileSpeedMultiplier;
+        if (configuredDamage <= 0f && configuredAttackRange <= 0f && configuredProjectileSpeedMultiplier <= 0f)
         {
             return;
         }
 
         AttackSpec shotSpec = compiledAttack.AttackSpec;
+        if (configuredProjectileSpeedMultiplier > 0f)
+        {
+            shotSpec.projectileSpeed = Mathf.Max(0f, shotSpec.projectileSpeed * configuredProjectileSpeedMultiplier);
+        }
+
         if (configuredDamage > 0f)
         {
             shotSpec.damage = configuredDamage;

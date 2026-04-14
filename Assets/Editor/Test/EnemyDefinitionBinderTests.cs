@@ -56,7 +56,10 @@ public sealed class EnemyDefinitionBinderTests
 
         Assert.That(binder.ApplyDefinition(definition), Is.True);
 
+    EnemyResultVisualFeedback resultVisualFeedback = binder.GetComponent<EnemyResultVisualFeedback>();
+
         Assert.That(enemy.Definition, Is.SameAs(definition));
+    Assert.That(resultVisualFeedback, Is.Not.Null);
         Assert.That(enemy.EnemyName, Is.EqualTo("Norm1"));
         Assert.That(movement.enabled, Is.True);
         Assert.That(meleeAttacker.enabled, Is.True);
@@ -156,6 +159,98 @@ public sealed class EnemyDefinitionBinderTests
     }
 
     [Test]
+    public void ApplyDefinition_DelayedGroundBombSkill_AutoAddsMissingSkillCaster()
+    {
+        EnemyDefinitionBinder binder = CreateBoundEnemyShell(
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _);
+        EnemyDefinition definition = CreateEnemyDefinition(
+            "BossBombEnemy",
+            binder,
+            EnemyMovementKind.BossSmartRoam,
+            EnemyAttackKind.RangedBulletToken,
+            new[] { CreateDelayedGroundBombSkillSlot(castRange: 36f, actionLockSeconds: 2.2f) },
+            new EnemyDefinition.EnemyVisualDefinition
+            {
+                glyphText = "爆",
+                glyphColor = Color.red,
+            });
+
+        Assert.That(binder.ApplyDefinition(definition), Is.True);
+
+        EnemyDelayedGroundBombCaster delayedBombCaster = binder.GetComponent<EnemyDelayedGroundBombCaster>();
+        Assert.That(delayedBombCaster, Is.Not.Null);
+        Assert.That(delayedBombCaster.enabled, Is.True);
+    }
+
+    [Test]
+    public void EnemySkillSlotDefinition_ResolveActionLockSeconds_UsesFallbackWhenUnset()
+    {
+        EnemyDefinition.EnemySkillSlotDefinition skillSlot = new()
+        {
+            skillKind = EnemySkillKind.SummonEnemy,
+            actionLockSeconds = 0f,
+        };
+
+        Assert.That(skillSlot.ResolveActionLockSeconds(0.25f), Is.EqualTo(0.25f));
+    }
+
+    [Test]
+    public void TryPerformSkills_AppliesActionLockToStatusEffects()
+    {
+        EnemyDefinitionBinder binder = CreateBoundEnemyShell(
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _);
+        TestDelayedBombSkillCaster skillCaster = binder.gameObject.AddComponent<TestDelayedBombSkillCaster>();
+        skillCaster.ShouldCast = true;
+
+        EnemyDefinition definition = CreateEnemyDefinition(
+            "ActionLockCaster",
+            binder,
+            EnemyMovementKind.ChaseTarget,
+            EnemyAttackKind.None,
+            new[]
+            {
+                new EnemyDefinition.EnemySkillSlotDefinition
+                {
+                    skillKind = EnemySkillKind.DelayedGroundBomb,
+                    cooldownSeconds = 0f,
+                    castRange = 10f,
+                    actionLockSeconds = 0.4f,
+                },
+            },
+            new EnemyDefinition.EnemyVisualDefinition
+            {
+                glyphText = "锁",
+                glyphColor = Color.white,
+            });
+
+        Assert.That(binder.ApplyDefinition(definition), Is.True);
+
+        bool didCast = (bool)InvokePrivateMethod(binder, "TryPerformSkills", 0f);
+        EnemyStatusEffectController statusEffects = binder.GetComponent<EnemyStatusEffectController>();
+
+        Assert.That(didCast, Is.True);
+        Assert.That(statusEffects, Is.Not.Null);
+        Assert.That(statusEffects.CanAct, Is.False);
+
+        InvokePrivateMethod(statusEffects, "TickSkillActionLock", 0.4f);
+        Assert.That(statusEffects.CanAct, Is.True);
+    }
+
+    [Test]
     public void Prefab_ProvidesEnemyDefinitionBinderContract()
     {
         GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/Enemy/CharEnemy.prefab");
@@ -222,6 +317,42 @@ public sealed class EnemyDefinitionBinderTests
     }
 
     [Test]
+    public void BossSmartRoamMovement_ClampsPreferredDistanceToReachableAbilityRange()
+    {
+        EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        createdObjects.Add(definition);
+        SetPrivateField(definition, "movementKind", EnemyMovementKind.BossSmartRoam);
+        SetPrivateField(definition, "attackKind", EnemyAttackKind.RangedBulletToken);
+        SetPrivateField(definition, "combat", new EnemyDefinition.EnemyCombatDefinition
+        {
+            maxHealth = 26f,
+            moveSpeed = 28f,
+            attackRange = 36f,
+            attackCooldown = 1.6f,
+            attackDamage = 1f,
+            visualScaleMultiplier = 1f,
+        });
+        SetPrivateField(definition, "bossSmartRoamMovement", new EnemyDefinition.BossSmartRoamMovementDefinition
+        {
+            preferredDistance = 320f,
+            distanceTolerance = 8f,
+            strafeSpeedMultiplier = 1.2f,
+            radialCorrectionStrength = 0.5f,
+            approachSpeedMultiplier = 1.3f,
+            retreatSpeedMultiplier = 1.4f,
+            sideSwitchIntervalSeconds = 1.2f,
+            startClockwise = true,
+        });
+        SetPrivateField(definition, "skillSlots", new List<EnemyDefinition.EnemySkillSlotDefinition>
+        {
+            CreateSummonSkillSlot(cooldownSeconds: 4.5f, castRange: 36f),
+        });
+
+        Assert.That(definition.BossSmartRoamMovement.preferredDistance, Is.EqualTo(36f));
+        Assert.That(definition.BossSmartRoamMovement.distanceTolerance, Is.EqualTo(8f));
+    }
+
+    [Test]
     public void SummonerEnemyAsset_UsesLongRangeKiteConfigurationAndConfiguredSummonWindow()
     {
         EnemyDefinition definition = AssetDatabase.LoadAssetAtPath<EnemyDefinition>("Assets/Data/Enemies/召.asset");
@@ -243,6 +374,39 @@ public sealed class EnemyDefinitionBinderTests
         Assert.That(definition.SkillSlots[0].summonSkill.maxAliveSummons, Is.EqualTo(6));
     }
 
+    [Test]
+    public void BossPhaseOneAsset_UsesDelayedGroundBombSkillAndExtendedAttackCooldown()
+    {
+        EnemyDefinition definition = AssetDatabase.LoadAssetAtPath<EnemyDefinition>("Assets/Data/Enemies/Boss_Phase1.asset");
+
+        Assert.That(definition, Is.Not.Null);
+        Assert.That(definition.Combat.attackCooldown, Is.EqualTo(0.4f).Within(0.0001f));
+        Assert.That(definition.Visual.glyphScaleMultiplier, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(definition.SkillSlots, Has.Count.EqualTo(1));
+        Assert.That(definition.SkillSlots[0].skillKind, Is.EqualTo(EnemySkillKind.DelayedGroundBomb));
+        Assert.That(definition.SkillSlots[0].actionLockSeconds, Is.EqualTo(2.2f).Within(0.0001f));
+        Assert.That(definition.SkillSlots[0].delayedGroundBombSkill.delaySeconds, Is.EqualTo(1.5f).Within(0.0001f));
+        Assert.That(definition.SkillSlots[0].delayedGroundBombSkill.explosionRadius, Is.EqualTo(100f).Within(0.0001f));
+        Assert.That(definition.SkillSlots[0].delayedGroundBombSkill.explosionDamage, Is.EqualTo(2f).Within(0.0001f));
+        Assert.That(definition.SkillSlots[0].delayedGroundBombSkill.bombsPerSequence, Is.EqualTo(3));
+        Assert.That(definition.SkillSlots[0].delayedGroundBombSkill.bombIntervalSeconds, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(definition.SkillSlots[0].delayedGroundBombSkill.randomCooldownMinSeconds, Is.EqualTo(8f).Within(0.0001f));
+        Assert.That(definition.SkillSlots[0].delayedGroundBombSkill.randomCooldownMaxSeconds, Is.EqualTo(20f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Description_ReturnsTrimmedValueAndEmptyFallback()
+    {
+        EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        createdObjects.Add(definition);
+
+        SetPrivateField(definition, "description", "  enemy description  ");
+        Assert.That(definition.Description, Is.EqualTo("enemy description"));
+
+        SetPrivateField<string>(definition, "description", null);
+        Assert.That(definition.Description, Is.EqualTo(string.Empty));
+    }
+
     private EnemyDefinitionBinder CreateBoundEnemyShell(
         out BaseCharEnemyNorm1 enemy,
         out CharEnemyMovement movement,
@@ -261,6 +425,7 @@ public sealed class EnemyDefinitionBinderTests
         summoner = root.AddComponent<EnemySummoner>();
         CharGlyphPresenter glyphPresenter = root.AddComponent<CharGlyphPresenter>();
         CharEnemyVisualPresenter visualPresenter = root.AddComponent<CharEnemyVisualPresenter>();
+        root.AddComponent<EnemyStatusEffectController>();
         enemy = root.AddComponent<BaseCharEnemyNorm1>();
         EnemyDefinitionBinder binder = root.AddComponent<EnemyDefinitionBinder>();
 
@@ -336,6 +501,29 @@ public sealed class EnemyDefinitionBinderTests
         };
     }
 
+    private static EnemyDefinition.EnemySkillSlotDefinition CreateDelayedGroundBombSkillSlot(float castRange, float actionLockSeconds)
+    {
+        return new EnemyDefinition.EnemySkillSlotDefinition
+        {
+            skillKind = EnemySkillKind.DelayedGroundBomb,
+            cooldownSeconds = 0f,
+            castRange = castRange,
+            actionLockSeconds = actionLockSeconds,
+            delayedGroundBombSkill = new EnemyDefinition.DelayedGroundBombSkillDefinition
+            {
+                delaySeconds = 1.5f,
+                explosionRadius = 100f,
+                explosionDamage = 2f,
+                bombsPerSequence = 3,
+                bombIntervalSeconds = 1f,
+                randomCooldownMinSeconds = 8f,
+                randomCooldownMaxSeconds = 20f,
+                indicatorWidth = 0.2f,
+                indicatorColor = new Color(1f, 0.1f, 0.1f, 0.92f),
+            },
+        };
+    }
+
     private Sprite CreateSprite(string name)
     {
         Texture2D texture = new(2, 2);
@@ -381,5 +569,40 @@ public sealed class EnemyDefinitionBinderTests
         }
 
         return null;
+    }
+
+    private static object InvokePrivateMethod(object target, string methodName, params object[] args)
+    {
+        MethodInfo method = FindInstanceMethod(target.GetType(), methodName);
+        Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
+        return method.Invoke(target, args);
+    }
+
+    private static MethodInfo FindInstanceMethod(System.Type type, string methodName)
+    {
+        while (type != null)
+        {
+            MethodInfo method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (method != null)
+            {
+                return method;
+            }
+
+            type = type.BaseType;
+        }
+
+        return null;
+    }
+
+    private sealed class TestDelayedBombSkillCaster : MonoBehaviour, IEnemySkillCaster
+    {
+        public bool ShouldCast { get; set; }
+
+        public EnemySkillKind SkillKind => EnemySkillKind.DelayedGroundBomb;
+
+        public bool TryCastSkill(EnemyDefinition.EnemySkillSlotDefinition skillSlot)
+        {
+            return ShouldCast;
+        }
     }
 }

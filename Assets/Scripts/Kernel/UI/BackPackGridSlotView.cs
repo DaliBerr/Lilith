@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Kernel.Bullet;
 using TMPro;
 using UnityEngine;
@@ -46,6 +47,13 @@ namespace Kernel.UI
         [SerializeField] private Color chainBodyTint = new(0.9f, 0.95f, 1f, 1f);
         [SerializeField] private Color chainTailTint = new(0.93f, 1f, 0.9f, 1f);
 
+        [Header("Token Type Tints")]
+        [SerializeField] private Color coreTypeTint = new(1f, 0.82f, 0.62f, 1f);
+        [SerializeField] private Color behaviorTypeTint = new(0.66f, 0.82f, 1f, 1f);
+        [SerializeField] private Color resultTypeTint = new(1f, 0.68f, 0.68f, 1f);
+        [SerializeField] private Color valueTypeTint = new(0.68f, 0.93f, 0.68f, 1f);
+        [SerializeField] private Color fallbackTypeTint = new(1f, 1f, 1f, 1f);
+
         private BackPackUIScreen owner;
         private TokenCellOccupancy occupancy;
         private bool isDragging;
@@ -53,6 +61,7 @@ namespace Kernel.UI
         private BackPackSlotArea area;
         private int slotIndex;
         private RectTransform rectTransform;
+        private readonly List<BaseTokenData> compileTokenBuffer = new();
 
         public BackPackSlotArea Area => area;
         public int SlotIndex => slotIndex;
@@ -332,12 +341,74 @@ namespace Kernel.UI
         private Color ResolveIdleColor()
         {
             Color baseColor = area == BackPackSlotArea.SpellBook ? spellBookIdleColor : inventoryIdleColor;
-            return ChainRole switch
+            Color chainColor = ChainRole switch
             {
                 BackPackChainCellRole.ChainHead => MultiplyColor(baseColor, chainHeadTint),
                 BackPackChainCellRole.ChainBody => MultiplyColor(baseColor, chainBodyTint),
                 BackPackChainCellRole.ChainTail => MultiplyColor(baseColor, chainTailTint),
                 _ => baseColor,
+            };
+
+            return MultiplyColor(chainColor, ResolveTypeTint(ResolveDisplayTokenType()));
+        }
+
+        /// <summary>
+        /// summary: 解析当前槽位显示 token 的类型，连锁件会按当前格视觉 token 或首个编译成员回退。
+        /// param: 无
+        /// returns: 当前槽位对应的 token 类型
+        /// </summary>
+        private TokenType ResolveDisplayTokenType()
+        {
+            BaseTokenData visualToken = occupancy.VisualToken;
+            if (visualToken != null)
+            {
+                return visualToken.TokenType;
+            }
+
+            if (occupancy.item == null)
+            {
+                return TokenType.None;
+            }
+
+            compileTokenBuffer.Clear();
+            occupancy.item.AppendCompileTokens(compileTokenBuffer);
+            TokenType fallbackType = TokenType.None;
+            for (int i = 0; i < compileTokenBuffer.Count; i++)
+            {
+                BaseTokenData compileToken = compileTokenBuffer[i];
+                if (compileToken == null)
+                {
+                    continue;
+                }
+
+                if (fallbackType == TokenType.None)
+                {
+                    fallbackType = compileToken.TokenType;
+                }
+
+                if (compileToken.TokenType != TokenType.None)
+                {
+                    return compileToken.TokenType;
+                }
+            }
+
+            return fallbackType;
+        }
+
+        /// <summary>
+        /// summary: 把 token 类型映射为背包槽位背景 tint。
+        /// param name="tokenType": 当前槽位显示 token 的类型
+        /// returns: 对应的 tint 颜色
+        /// </summary>
+        private Color ResolveTypeTint(TokenType tokenType)
+        {
+            return tokenType switch
+            {
+                TokenType.Core => coreTypeTint,
+                TokenType.Behavior => behaviorTypeTint,
+                TokenType.Result => resultTypeTint,
+                TokenType.Value => valueTypeTint,
+                _ => fallbackTypeTint,
             };
         }
 

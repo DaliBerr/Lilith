@@ -180,12 +180,12 @@ public sealed class MapRunFlowControllerTests
     }
 
     [Test]
-    public void TryReturnToStartRoomAndResetRun_GuideChainFinished_AddsTutorialReturnToken()
+    public void TryReturnToStartRoomAndResetRun_DoesNotAddTutorialReturnToken()
     {
         PrepareCleanSaveEnvironment();
         RuntimeSaveService saveService = CreateSaveService();
         Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
-        Assert.That(saveService.SetStoryFlag(TutorialQuestConstants.GuideChainFinishedFlagId, true), Is.True);
+        Assert.That(saveService.SetStoryFlag(TutorialQuestConstants.TeleporterTriggeredFlagId, true), Is.True);
 
         CoreTokenData startingToken = CreateToken<CoreTokenData>("start", "Start");
         CoreTokenData tutorialReturnToken = CreateToken<CoreTokenData>("init_return", "InitReturn");
@@ -208,11 +208,41 @@ public sealed class MapRunFlowControllerTests
 
         Assert.That(success, Is.True, error);
         Assert.That(ContainsItem(inventory, startingToken), Is.True);
+        Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.False);
+    }
+
+    [Test]
+    public void TryGrantTutorialEntryTokenAfterTeleporterTriggered_AddsTutorialReturnToken()
+    {
+        PrepareCleanSaveEnvironment();
+        RuntimeSaveService saveService = CreateSaveService();
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        Assert.That(saveService.SetStoryFlag(TutorialQuestConstants.TeleporterTriggeredFlagId, true), Is.True);
+
+        CoreTokenData startingToken = CreateToken<CoreTokenData>("start", "Start");
+        CoreTokenData tutorialReturnToken = CreateToken<CoreTokenData>("init_return", "InitReturn");
+        MapRunFlowController controller = CreateController(
+            out _,
+            out _,
+            out PlayerBulletTokenInventory inventory,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            startingToken);
+
+        SetPrivateField(controller, "tutorialReturnTokenOverride", tutorialReturnToken);
+
+        controller.TryGrantTutorialEntryTokenAfterTeleporterTriggered();
+
+        Assert.That(ContainsItem(inventory, startingToken), Is.True);
         Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.True);
     }
 
     [Test]
-    public void TryReturnToStartRoomAndResetRun_WithoutGuideChainFinished_DoesNotAddTutorialReturnToken()
+    public void TryGrantTutorialEntryTokenAfterTeleporterTriggered_WithoutTeleporterTriggeredFlag_DoesNotAddTutorialReturnToken()
     {
         PrepareCleanSaveEnvironment();
         RuntimeSaveService saveService = CreateSaveService();
@@ -233,11 +263,9 @@ public sealed class MapRunFlowControllerTests
             startingToken);
 
         SetPrivateField(controller, "tutorialReturnTokenOverride", tutorialReturnToken);
-        SetPrivateField(controller, "currentState", RunFlowState.ShowingSettlement);
 
-        bool success = controller.TryReturnToStartRoomAndResetRun(out string error);
+        controller.TryGrantTutorialEntryTokenAfterTeleporterTriggered();
 
-        Assert.That(success, Is.True, error);
         Assert.That(ContainsItem(inventory, startingToken), Is.True);
         Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.False);
     }

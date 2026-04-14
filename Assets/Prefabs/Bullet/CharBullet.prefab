@@ -808,6 +808,7 @@ MonoBehaviour:
   movementSpace: 0
   direction: {x: 0, y: 0, z: 1}
   speed: 0
+  homingTurnSpeedDegrees: 540
   scaleMultiplier: 1
   impactRadiusMultiplier: 1
 --- !u!114 &7238725876560961277

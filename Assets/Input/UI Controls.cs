@@ -120,6 +120,15 @@ namespace Kernel
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Hint"",
+                    ""type"": ""Button"",
+                    ""id"": ""f1fa4029-7e70-45a2-be42-e5a49e0c401b"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -155,6 +164,17 @@ namespace Kernel
                     ""action"": ""Interaction"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""f92a127a-6fef-4c42-a6c5-171bb6c5d40e"",
+                    ""path"": ""<Keyboard>/tab"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Hint"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -166,6 +186,7 @@ namespace Kernel
             m_MainSceneUI_Backpack = m_MainSceneUI.FindAction("Backpack", throwIfNotFound: true);
             m_MainSceneUI_Router = m_MainSceneUI.FindAction("Router", throwIfNotFound: true);
             m_MainSceneUI_Interaction = m_MainSceneUI.FindAction("Interaction", throwIfNotFound: true);
+            m_MainSceneUI_Hint = m_MainSceneUI.FindAction("Hint", throwIfNotFound: true);
         }
 
         ~@UIControls()
@@ -249,6 +270,7 @@ namespace Kernel
         private readonly InputAction m_MainSceneUI_Backpack;
         private readonly InputAction m_MainSceneUI_Router;
         private readonly InputAction m_MainSceneUI_Interaction;
+        private readonly InputAction m_MainSceneUI_Hint;
         /// <summary>
         /// Provides access to input actions defined in input action map "MainScene UI".
         /// </summary>
@@ -272,6 +294,10 @@ namespace Kernel
             /// Provides access to the underlying input action "MainSceneUI/Interaction".
             /// </summary>
             public InputAction @Interaction => m_Wrapper.m_MainSceneUI_Interaction;
+            /// <summary>
+            /// Provides access to the underlying input action "MainSceneUI/Hint".
+            /// </summary>
+            public InputAction @Hint => m_Wrapper.m_MainSceneUI_Hint;
             /// <summary>
             /// Provides access to the underlying input action map instance.
             /// </summary>
@@ -307,6 +333,9 @@ namespace Kernel
                 @Interaction.started += instance.OnInteraction;
                 @Interaction.performed += instance.OnInteraction;
                 @Interaction.canceled += instance.OnInteraction;
+                @Hint.started += instance.OnHint;
+                @Hint.performed += instance.OnHint;
+                @Hint.canceled += instance.OnHint;
             }
 
             /// <summary>
@@ -327,6 +356,9 @@ namespace Kernel
                 @Interaction.started -= instance.OnInteraction;
                 @Interaction.performed -= instance.OnInteraction;
                 @Interaction.canceled -= instance.OnInteraction;
+                @Hint.started -= instance.OnHint;
+                @Hint.performed -= instance.OnHint;
+                @Hint.canceled -= instance.OnHint;
             }
 
             /// <summary>
@@ -388,6 +420,13 @@ namespace Kernel
             /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
             /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
             void OnInteraction(InputAction.CallbackContext context);
+            /// <summary>
+            /// Method invoked when associated input action "Hint" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+            /// </summary>
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+            /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+            void OnHint(InputAction.CallbackContext context);
         }
     }
 }

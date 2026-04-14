@@ -18,7 +18,13 @@ namespace Kernel.Bullet
 public sealed class CharBullet : MonoBehaviour
 {
     private const float MinimumVectorSqrMagnitude = 0.0001f;
+    private const float DefaultHomingSearchRadius = 256f;
+    private const float DefaultHomingTurnSpeedDegrees = 540f;
+    private const float HomingTargetRefreshIntervalSeconds = 0.12f;
+    private const float DefaultDelayedExplosionIndicatorWidth = 0.2f;
+    private const float DefaultDelayedExplosionIndicatorHeightOffset = 0.08f;
     private const string EnemyTagName = "Enemy_Object";
+    private static readonly Color DefaultDelayedExplosionIndicatorColor = new(1f, 0.1f, 0.1f, 0.92f);
     // private const string AlternateEnemyTagName = "Enemy";
 
     private static readonly string[] PreferredMovementChildNames =
@@ -49,6 +55,7 @@ public sealed class CharBullet : MonoBehaviour
     [SerializeField] private Space movementSpace = Space.World;
     [SerializeField] private Vector3 direction = Vector3.forward;
     [SerializeField, Min(0f)] private float speed;
+    [SerializeField, Min(0f)] private float homingTurnSpeedDegrees = DefaultHomingTurnSpeedDegrees;
 
     [Header("Scale")]
     [SerializeField, Min(0f)] private float scaleMultiplier = 1f;
@@ -71,6 +78,8 @@ public sealed class CharBullet : MonoBehaviour
     private CharBullet spawnTemplate;
     private BulletTargetPolicy targetPolicy = BulletTargetPolicy.EnemiesOnly;
     private int remainingBounceCount;
+    private Transform homingTarget;
+    private float nextHomingTargetRefreshTime;
 
     public TMP_Text GlyphText
     {
@@ -192,6 +201,8 @@ public sealed class CharBullet : MonoBehaviour
         isActiveShot = true;
         autoMove = true;
         movementSpace = Space.World;
+        homingTarget = null;
+        nextHomingTargetRefreshTime = 0f;
         hasFontSizeDrivenImpactRadius = false;
         fontSizeDrivenImpactRadius = 0f;
 
@@ -899,6 +910,7 @@ public sealed class CharBullet : MonoBehaviour
 
     private void Update()
     {
+        TryUpdateHomingDirection(Time.deltaTime);
         if (MovementRigidbody != null)
         {
             CheckImpactContacts();
@@ -925,6 +937,8 @@ public sealed class CharBullet : MonoBehaviour
         {
             return;
         }
+
+        TryUpdateHomingDirection(Time.fixedDeltaTime);
 
         if (autoMove)
         {
@@ -959,6 +973,7 @@ public sealed class CharBullet : MonoBehaviour
         attackSpec = attackSpec.GetSanitized();
         scaleMultiplier = Mathf.Max(0f, scaleMultiplier);
         speed = Mathf.Max(0f, speed);
+        homingTurnSpeedDegrees = Mathf.Max(0f, homingTurnSpeedDegrees);
         if (direction.sqrMagnitude > MinimumVectorSqrMagnitude)
         {
             direction.Normalize();
@@ -998,6 +1013,228 @@ public sealed class CharBullet : MonoBehaviour
         {
             Expire();
         }
+    }
+
+    /// <summary>
+    /// summary: 当当前行为为 Homing 时，持续把飞行方向转向最近可命中的目标。
+    /// param: deltaTime 本次转向使用的时间步长
+    /// returns: 无
+    /// </summary>
+    private void TryUpdateHomingDirection(float deltaTime)
+    {
+        if (!isActiveShot || deltaTime <= 0f || !ShouldUseHomingBehavior())
+        {
+            return;
+        }
+
+        float currentTime = Time.time;
+        if ((homingTarget == null || !IsHomingTargetValid(homingTarget)) && currentTime < nextHomingTargetRefreshTime)
+        {
+            nextHomingTargetRefreshTime = currentTime;
+        }
+
+        if (currentTime >= nextHomingTargetRefreshTime)
+        {
+            homingTarget = ResolveHomingTarget();
+            nextHomingTargetRefreshTime = currentTime + HomingTargetRefreshIntervalSeconds;
+        }
+
+        if (homingTarget == null || !IsHomingTargetValid(homingTarget))
+        {
+            return;
+        }
+
+        Vector3 desiredDirection = homingTarget.position - MovementTarget.position;
+        desiredDirection.y = 0f;
+        if (desiredDirection.sqrMagnitude <= MinimumVectorSqrMagnitude)
+        {
+            return;
+        }
+
+        Vector3 currentDirection = GetVelocity(Space.World);
+        if (currentDirection.sqrMagnitude <= MinimumVectorSqrMagnitude)
+        {
+            currentDirection = direction;
+        }
+
+        if (currentDirection.sqrMagnitude <= MinimumVectorSqrMagnitude)
+        {
+            currentDirection = desiredDirection;
+        }
+
+        Vector3 nextDirection = Vector3.RotateTowards(
+            currentDirection.normalized,
+            desiredDirection.normalized,
+            homingTurnSpeedDegrees * Mathf.Deg2Rad * deltaTime,
+            0f);
+        if (nextDirection.sqrMagnitude <= MinimumVectorSqrMagnitude)
+        {
+            return;
+        }
+
+        TrySetDirection(nextDirection, Space.World);
+        ApplyFacingDirection(nextDirection);
+    }
+
+    /// <summary>
+    /// summary: 判断当前子弹行为是否声明为 Homing。
+    /// param: 无
+    /// returns: 当前行为词为 Homing 时返回 true
+    /// </summary>
+    private bool ShouldUseHomingBehavior()
+    {
+        return attackSpec.behaviorType == AttackBehaviorType.Homing || compiledAttack?.BehaviorType == AttackBehaviorType.Homing;
+    }
+
+    /// <summary>
+    /// summary: 解析当前 Homing 应追踪的最近合法目标。
+    /// param: 无
+    /// returns: 找到目标时返回目标 Transform，否则返回 null
+    /// </summary>
+    private Transform ResolveHomingTarget()
+    {
+        Transform nearestEnemy = null;
+        Transform nearestPlayer = null;
+        bool hasEnemy = ShouldDamageEnemies() && TryFindNearestEnemyTarget(out nearestEnemy);
+        bool hasPlayer = ShouldDamagePlayer() && TryFindNearestPlayerTarget(out nearestPlayer);
+        if (!hasEnemy)
+        {
+            return hasPlayer ? nearestPlayer : null;
+        }
+
+        if (!hasPlayer)
+        {
+            return nearestEnemy;
+        }
+
+        Vector3 currentPosition = MovementTarget.position;
+        float enemyDistanceSqr = GetPlanarDistanceSqr(currentPosition, nearestEnemy.position);
+        float playerDistanceSqr = GetPlanarDistanceSqr(currentPosition, nearestPlayer.position);
+        return playerDistanceSqr < enemyDistanceSqr ? nearestPlayer : nearestEnemy;
+    }
+
+    /// <summary>
+    /// summary: 按当前目标策略在半径内寻找最近的存活敌人目标。
+    /// param: target 输出的最近敌人 Transform
+    /// returns: 找到至少一个合法敌人目标时返回 true
+    /// </summary>
+    private bool TryFindNearestEnemyTarget(out Transform target)
+    {
+        target = null;
+        float searchRadius = ResolveHomingSearchRadius();
+        float bestDistanceSqr = float.MaxValue;
+        Vector3 currentPosition = MovementTarget.position;
+        Collider[] overlaps = Physics.OverlapSphere(currentPosition, searchRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        HashSet<int> visitedRoots = new();
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null || overlap.isTrigger || IsOwnedTransform(overlap.transform) || overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Enemy enemy = overlap.GetComponentInParent<Enemy>();
+            if (enemy == null || enemy.IsDead)
+            {
+                continue;
+            }
+
+            Transform targetRoot = enemy.transform;
+            if (targetRoot == null || IsOwnedTransform(targetRoot) || !visitedRoots.Add(targetRoot.GetInstanceID()) || !IsEnemyImpactTarget(overlap, targetRoot, enemy))
+            {
+                continue;
+            }
+
+            float distanceSqr = GetPlanarDistanceSqr(currentPosition, targetRoot.position);
+            if (distanceSqr >= bestDistanceSqr)
+            {
+                continue;
+            }
+
+            bestDistanceSqr = distanceSqr;
+            target = targetRoot;
+        }
+
+        return target != null;
+    }
+
+    /// <summary>
+    /// summary: 按当前目标策略在半径内寻找最近的存活玩家目标。
+    /// param: target 输出的最近玩家 Transform
+    /// returns: 找到至少一个合法玩家目标时返回 true
+    /// </summary>
+    private bool TryFindNearestPlayerTarget(out Transform target)
+    {
+        target = null;
+        float searchRadiusSqr = ResolveHomingSearchRadius() * ResolveHomingSearchRadius();
+        float bestDistanceSqr = float.MaxValue;
+        Vector3 currentPosition = MovementTarget.position;
+        PlayerHealth[] players = FindObjectsByType<PlayerHealth>(FindObjectsSortMode.None);
+        for (int i = 0; i < players.Length; i++)
+        {
+            PlayerHealth player = players[i];
+            if (player == null || player.IsDead || player.transform == null || IsOwnedTransform(player.transform))
+            {
+                continue;
+            }
+
+            float distanceSqr = GetPlanarDistanceSqr(currentPosition, player.transform.position);
+            if (distanceSqr > searchRadiusSqr || distanceSqr >= bestDistanceSqr)
+            {
+                continue;
+            }
+
+            bestDistanceSqr = distanceSqr;
+            target = player.transform;
+        }
+
+        return target != null;
+    }
+
+    /// <summary>
+    /// summary: 判断当前缓存的 Homing 目标在本帧是否仍可追踪。
+    /// param: target 当前缓存目标
+    /// returns: 目标有效且与当前策略一致时返回 true
+    /// </summary>
+    private bool IsHomingTargetValid(Transform target)
+    {
+        if (target == null || IsOwnedTransform(target))
+        {
+            return false;
+        }
+
+        Enemy enemy = target.GetComponent<Enemy>() ?? target.GetComponentInParent<Enemy>();
+        if (enemy != null)
+        {
+            return ShouldDamageEnemies() && !enemy.IsDead;
+        }
+
+        PlayerHealth player = target.GetComponent<PlayerHealth>() ?? target.GetComponentInParent<PlayerHealth>();
+        return player != null && ShouldDamagePlayer() && !player.IsDead;
+    }
+
+    /// <summary>
+    /// summary: 读取当前 Homing 搜敌半径；优先复用子弹最大射程。
+    /// param: 无
+    /// returns: 当前 Homing 搜索半径
+    /// </summary>
+    private float ResolveHomingSearchRadius()
+    {
+        return attackSpec.maxTravelDistance > 0f ? attackSpec.maxTravelDistance : DefaultHomingSearchRadius;
+    }
+
+    /// <summary>
+    /// summary: 计算两个世界点的平面距离平方。
+    /// param: from 起点
+    /// param: to 终点
+    /// returns: XZ 平面距离平方值
+    /// </summary>
+    private static float GetPlanarDistanceSqr(Vector3 from, Vector3 to)
+    {
+        float deltaX = to.x - from.x;
+        float deltaZ = to.z - from.z;
+        return (deltaX * deltaX) + (deltaZ * deltaZ);
     }
 
     /// <summary>
@@ -1310,8 +1547,9 @@ public sealed class CharBullet : MonoBehaviour
         Vector3 impactPoint = GetImpactPoint(other);
         Enemy primaryEnemy = other.GetComponentInParent<Enemy>();
         float directDamage = ResolveDirectDamage(primaryEnemy);
-        bool dealtDamage = TryApplyConfiguredDirectDamage(other, targetRoot, "Direct", directDamage, out Enemy damagedEnemy, out _);
-        if (dealtDamage)
+        bool shouldApplyHealing = ShouldApplyHealingOnImpact();
+        bool appliedDirectEffect = TryApplyConfiguredDirectDamage(other, targetRoot, "Direct", directDamage, out Enemy damagedEnemy, out _);
+        if (appliedDirectEffect && !shouldApplyHealing)
         {
             TryApplyPostHitEffects(targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy);
         }
@@ -1396,17 +1634,64 @@ public sealed class CharBullet : MonoBehaviour
         damagedEnemy = null;
         damagedPlayer = null;
         bool damagedAnyTarget = false;
+        bool shouldApplyHealing = ShouldApplyHealingOnImpact();
         if (ShouldDamageEnemies())
         {
-            damagedAnyTarget |= TryApplyDamageToEnemy(other, targetRoot, damageSource, damageAmount, out damagedEnemy);
+            damagedAnyTarget |= shouldApplyHealing
+                ? TryApplyHealingToEnemy(other, targetRoot, damageSource, damageAmount, out damagedEnemy)
+                : TryApplyDamageToEnemy(other, targetRoot, damageSource, damageAmount, out damagedEnemy);
         }
 
         if (ShouldDamagePlayer())
         {
-            damagedAnyTarget |= TryApplyDamageToPlayer(other, targetRoot, damageSource, damageAmount, out damagedPlayer);
+            damagedAnyTarget |= shouldApplyHealing
+                ? TryApplyHealingToPlayer(other, targetRoot, damageSource, damageAmount, out damagedPlayer)
+                : TryApplyDamageToPlayer(other, targetRoot, damageSource, damageAmount, out damagedPlayer);
         }
 
         return damagedAnyTarget;
+    }
+
+    /// <summary>
+    /// summary: 当命中的对象被标记为敌人且当前策略允许治疗敌人时，尝试把当前子弹治疗量应用到其 Enemy 组件上。
+    /// param: other 本次命中的碰撞体
+    /// param: targetRoot 当前命中的根节点
+    /// param: healSource 本次治疗来源，便于区分直击与其他效果日志
+    /// param: healingAmount 本次应结算的治疗值
+    /// param: healedEnemy 若成功造成治疗则输出被命中的敌人组件
+    /// returns: 成功对敌人结算治疗时返回 true
+    /// </summary>
+    private bool TryApplyHealingToEnemy(Collider other, Transform targetRoot, string healSource, float healingAmount, out Enemy healedEnemy)
+    {
+        healedEnemy = null;
+        Enemy enemy = other.GetComponentInParent<Enemy>();
+        if (healingAmount <= 0f || !ShouldDamageEnemies() || !IsEnemyImpactTarget(other, targetRoot, enemy))
+        {
+            return false;
+        }
+
+        if (enemy == null)
+        {
+            return false;
+        }
+
+        string targetName = targetRoot != null ? targetRoot.name : "<destroyed>";
+        float previousHealth = enemy.CurrentHealth;
+        if (!enemy.TryApplyHealing(healingAmount, out float resultingHealth, out _))
+        {
+            GameDebug.LogFormat(
+                "[CharBullet] Enemy target='{0}' ignored {1} healing={2} health={3}/{4}",
+                targetName,
+                healSource,
+                healingAmount,
+                previousHealth,
+                enemy.MaxHealth);
+            return false;
+        }
+
+        healedEnemy = enemy;
+        TryNotifyEnemyHealingHit(enemy);
+        return true;
     }
 
     /// <summary>
@@ -1509,6 +1794,42 @@ public sealed class CharBullet : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 当命中的对象拥有 PlayerHealth 且当前策略允许治疗玩家时，尝试把当前子弹治疗值应用到其生命组件上。
+    /// param: other 本次命中的碰撞体
+    /// param: targetRoot 当前命中的根节点
+    /// param: healSource 本次治疗来源，便于区分直击与其他效果日志
+    /// param: healingAmount 本次应结算的治疗值
+    /// param: healedPlayer 若成功造成治疗则输出被命中的玩家生命组件
+    /// returns: 成功对玩家结算治疗时返回 true
+    /// </summary>
+    private bool TryApplyHealingToPlayer(Collider other, Transform targetRoot, string healSource, float healingAmount, out PlayerHealth healedPlayer)
+    {
+        healedPlayer = null;
+        PlayerHealth playerHealth = other.GetComponentInParent<PlayerHealth>();
+        if (healingAmount <= 0f || !ShouldDamagePlayer() || playerHealth == null)
+        {
+            return false;
+        }
+
+        string targetName = targetRoot != null ? targetRoot.name : "<destroyed>";
+        float previousHealth = playerHealth.CurrentHealth;
+        if (!playerHealth.TryApplyHealing(healingAmount, out float resultingHealth, out _))
+        {
+            GameDebug.LogFormat(
+                "[CharBullet] Player target='{0}' ignored {1} healing={2} health={3}/{4}",
+                targetName,
+                healSource,
+                healingAmount,
+                previousHealth,
+                playerHealth.MaxHealth);
+            return false;
+        }
+
+        healedPlayer = playerHealth;
+        return true;
+    }
+
+    /// <summary>
     /// summary: 在一次有效 actor 命中后按结果词和核心词顺序结算爆炸、分裂、状态与链雷等二级效果。
     /// param: targetRoot 当前主命中的目标根节点
     /// param: impactPoint 当前命中的世界位置
@@ -1575,6 +1896,8 @@ public sealed class CharBullet : MonoBehaviour
         {
             return;
         }
+
+        TryNotifyEnemyControlHit(enemy);
 
         if (!enemy.TryGetComponent(out EnemyStatusEffectController statusController))
         {
@@ -1668,6 +1991,53 @@ public sealed class CharBullet : MonoBehaviour
             return;
         }
 
+        float explosionDelaySeconds = GetExplosionDelaySeconds();
+        if (explosionDelaySeconds > 0f)
+        {
+            if (TrySpawnDelayedExplosionAt(impactPoint, explosionRadius, explosionDamage, explosionDelaySeconds))
+            {
+                return;
+            }
+        }
+
+        TryApplyExplosionDamageImmediately(impactPoint, explosionRadius, explosionDamage);
+    }
+
+    private bool TrySpawnDelayedExplosionAt(Vector3 impactPoint, float explosionRadius, float explosionDamage, float explosionDelaySeconds)
+    {
+        GameObject delayedExplosionObject = new("CharBulletDelayedExplosion");
+        DelayedExplosionEffectRuntime delayedExplosionRuntime = delayedExplosionObject.AddComponent<DelayedExplosionEffectRuntime>();
+        bool didInitialize = delayedExplosionRuntime.Initialize(
+            impactPoint,
+            explosionDelaySeconds,
+            explosionRadius,
+            explosionDamage,
+            attackSpec.impactMask,
+            targetPolicy,
+            ownerRoot,
+            DefaultDelayedExplosionIndicatorWidth,
+            DefaultDelayedExplosionIndicatorColor,
+            DefaultDelayedExplosionIndicatorHeightOffset);
+        if (didInitialize)
+        {
+            return true;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(delayedExplosionObject);
+        }
+        else
+        {
+            DestroyImmediate(delayedExplosionObject);
+        }
+
+        return false;
+    }
+
+    private void TryApplyExplosionDamageImmediately(Vector3 impactPoint, float explosionRadius, float explosionDamage)
+    {
+
         Collider[] overlaps = Physics.OverlapSphere(impactPoint, explosionRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
         HashSet<int> damagedRoots = new();
         for (int i = 0; i < overlaps.Length; i++)
@@ -1688,6 +2058,32 @@ public sealed class CharBullet : MonoBehaviour
             }
 
             TryApplyConfiguredDirectDamage(overlap, overlapRoot, "Explosion", explosionDamage, out _, out _);
+        }
+    }
+
+    private void TryNotifyEnemyControlHit(Enemy enemy)
+    {
+        if (enemy == null || enemy.Equals(null))
+        {
+            return;
+        }
+
+        if (enemy.TryGetComponent(out EnemyResultVisualFeedback resultVisualFeedback))
+        {
+            resultVisualFeedback.NotifyControlHitPulse();
+        }
+    }
+
+    private void TryNotifyEnemyHealingHit(Enemy enemy)
+    {
+        if (enemy == null || enemy.Equals(null))
+        {
+            return;
+        }
+
+        if (enemy.TryGetComponent(out EnemyResultVisualFeedback resultVisualFeedback))
+        {
+            resultVisualFeedback.NotifyHealingHitPulse();
         }
     }
 
@@ -1857,6 +2253,18 @@ public sealed class CharBullet : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 判断当前命中结果是否应按治疗结算，而非伤害结算。
+    /// param: 无
+    /// returns: 当前结果词为 Healing 时返回 true
+    /// </summary>
+    private bool ShouldApplyHealingOnImpact()
+    {
+        return compiledAttack != null
+            ? compiledAttack.ResultType == AttackResultType.Healing
+            : attackSpec.resultType == AttackResultType.Healing;
+    }
+
+    /// <summary>
     /// summary: 判断本次命中的对象是否应被视为敌人目标；兼容历史误拼的 Enemey 标签。
     /// param: other 本次命中的碰撞体
     /// param: targetRoot 当前命中的根节点
@@ -1972,6 +2380,21 @@ public sealed class CharBullet : MonoBehaviour
         if (compiledAttack != null)
         {
             return Mathf.Max(0f, compiledAttack.ExplosionRadius);
+        }
+
+        return 0f;
+    }
+
+    /// <summary>
+    /// summary: 获取当前子弹命中后要使用的爆炸延时。
+    /// param: 无
+    /// returns: 已编译结果中的爆炸延时；未配置时返回 0
+    /// </summary>
+    private float GetExplosionDelaySeconds()
+    {
+        if (compiledAttack != null)
+        {
+            return Mathf.Max(0f, compiledAttack.ResultEffects.explosionDelaySeconds);
         }
 
         return 0f;

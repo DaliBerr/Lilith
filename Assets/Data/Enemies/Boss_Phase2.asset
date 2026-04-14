@@ -1,0 +1,99 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
+  m_Name: Boss_Phase2
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
+  enemyId: Boss_Phase2
+  displayName: "\u971c\u9510\u00b7\u8d30"
+  runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  movementKind: 7
+  attackKind: 2
+  dashMovement:
+    triggerDistance: 24
+    windupSeconds: 0.25
+    dashSpeedMultiplier: 3
+    dashDurationSeconds: 0.3
+    dashCooldownSeconds: 1
+  keepDistanceMovement:
+    preferredDistance: 240
+    distanceTolerance: 20
+  aggroOnHitMovement:
+    aggroSpeedMultiplier: 1.5
+  orbitTargetMovement:
+    orbitRadius: 240
+    orbitRadiusTolerance: 22
+    orbitSpeedMultiplier: 1.3
+    clockwise: 1
+  bossSmartRoamMovement:
+    preferredDistance: 240
+    distanceTolerance: 22
+    strafeSpeedMultiplier: 1.35
+    radialCorrectionStrength: 0.78
+    approachSpeedMultiplier: 1.45
+    retreatSpeedMultiplier: 1.6
+    sideSwitchIntervalSeconds: 1.05
+    startClockwise: 1
+  visual:
+    glyphText: "\u950b\u53ec"
+    glyphScaleMultiplier: 3
+    glyphColor: {r: 1, g: 0.58, b: 0.32, a: 1}
+    runeBaseSprite: {fileID: 0}
+    runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
+    groundShadowSprite: {fileID: 0}
+    groundShadowTint: {r: 0, g: 0, b: 0, a: 0.28}
+  combat:
+    maxHealth: 320
+    moveSpeed: 32
+    attackRange: 360
+    attackCooldown: 0.55
+    attackDamage: 0
+    damageReductionPercent: 0.18
+    visualScaleMultiplier: 1.9
+  rangedBulletAttack:
+    bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
+    formulaItems:
+    - {fileID: 11400000, guid: 60ae7cfbc364cfd42be3310cae27c72d, type: 2}
+    targetPolicy: 1
+    projectileSpeedMultiplier: 1.5
+  explosiveAttack:
+    explosionRadius: 0
+    windupSeconds: 0.8
+  skillCasting:
+    maxSkillCastsPerTick: 1
+  skillSlots:
+  - skillKind: 1
+    cooldownSeconds: 6
+    castRange: 360
+    summonSkill:
+      summonedEnemyDefinition: {fileID: 11400000, guid: 4f4dd96a8f1b4b1f94fe5097cc8f4a16, type: 2}
+      minSummonCountPerCast: 1
+      maxSummonCountPerCast: 1
+      summonRadius: 14
+      maxAliveSummons: 2
+  - skillKind: 1
+    cooldownSeconds: 4.2
+    castRange: 360
+    summonSkill:
+      summonedEnemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
+      minSummonCountPerCast: 1
+      maxSummonCountPerCast: 1
+      summonRadius: 14
+      maxAliveSummons: 4
+  - skillKind: 1
+    cooldownSeconds: 6.8
+    castRange: 360
+    summonSkill:
+      summonedEnemyDefinition: {fileID: 11400000, guid: e92152659a1ea184395551246961e6e2, type: 2}
+      minSummonCountPerCast: 1
+      maxSummonCountPerCast: 1
+      summonRadius: 14
+      maxAliveSummons: 3

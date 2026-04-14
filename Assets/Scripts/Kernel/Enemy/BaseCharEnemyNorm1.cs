@@ -143,6 +143,29 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     }
 
     /// <summary>
+    /// summary: 对当前敌人结算一次治疗，并返回更新后的生命状态。
+    /// param: healing 本次治疗值
+    /// param: resultingHealth 本次结算后的生命值
+    /// param: isDead 本次结算后敌人是否死亡
+    /// returns: 成功处理本次治疗时返回 true
+    /// </summary>
+    public override bool TryApplyHealing(float healing, out float resultingHealth, out bool isDead)
+    {
+        EnsureHealthInitialized();
+        resultingHealth = currentHealth;
+        isDead = IsDead;
+        if (healing <= 0f || IsDead || currentHealth >= health)
+        {
+            return false;
+        }
+
+        currentHealth = Mathf.Min(health, currentHealth + healing);
+        resultingHealth = currentHealth;
+        isDead = IsDead;
+        return true;
+    }
+
+    /// <summary>
     /// summary: 把当前敌人的默认配置写回序列化字段，供首次挂载组件时使用。
     /// param: 无
     /// returns: 无

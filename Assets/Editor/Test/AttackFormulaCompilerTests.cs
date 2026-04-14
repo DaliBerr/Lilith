@@ -271,6 +271,27 @@ public sealed class AttackFormulaCompilerTests
     }
 
     [Test]
+    public void Compile_WithHomingAndHealing_ProducesHomingHealingAttack()
+    {
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        BehaviorTokenData homingToken = CreateBehaviorToken("homing", "Homing", AttackBehaviorType.Homing, acceptsNumericValue: false, defaultProjectileCount: 1, spreadAngleStep: 0f);
+        ResultTokenData healingToken = CreateResultToken("healing", "Healing", AttackResultType.Healing, acceptsNumericValue: false, defaultExplosionRadius: 0f);
+
+        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            homingToken,
+            healingToken,
+        });
+
+        Assert.That(compiledAttack.CanFire, Is.True);
+        Assert.That(compiledAttack.BehaviorType, Is.EqualTo(AttackBehaviorType.Homing));
+        Assert.That(compiledAttack.ResultType, Is.EqualTo(AttackResultType.Healing));
+        Assert.That(compiledAttack.GetProjectileCount(), Is.EqualTo(1));
+        Assert.That(compiledAttack.HasExplosion, Is.False);
+    }
+
+    [Test]
     public void Compile_WithIgnoredDuplicateToken_DoesNotApplyItsModifiers()
     {
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
@@ -988,6 +1009,21 @@ public sealed class AttackFormulaCompilerTests
 
             currentHealth = Mathf.Max(0f, currentHealth - damage);
             remainingHealth = currentHealth;
+            isDead = currentHealth <= 0f;
+            return true;
+        }
+
+        public override bool TryApplyHealing(float healing, out float resultingHealth, out bool isDead)
+        {
+            resultingHealth = currentHealth;
+            isDead = currentHealth <= 0f;
+            if (healing <= 0f || isDead || currentHealth >= maxHealth)
+            {
+                return false;
+            }
+
+            currentHealth = Mathf.Min(maxHealth, currentHealth + healing);
+            resultingHealth = currentHealth;
             isDead = currentHealth <= 0f;
             return true;
         }

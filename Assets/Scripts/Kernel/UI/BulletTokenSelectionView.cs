@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Kernel.Bullet;
 using TMPro;
 using UnityEngine;
@@ -12,8 +13,11 @@ namespace Kernel.UI
     public sealed class BulletTokenSelectionView : MonoBehaviour
     {
         [Header("View")]
+        [SerializeField] private Image rootImage;
         [SerializeField] private RectTransform tokenRoot;
         [SerializeField] private TMP_Text tokenText;
+        [SerializeField] private RectTransform catalogRoot;
+        [SerializeField] private TMP_Text catalogText;
         [SerializeField] private RectTransform descriptionRoot;
         [SerializeField] private TMP_Text descriptionText;
         [SerializeField] private Button selectButton;
@@ -21,10 +25,19 @@ namespace Kernel.UI
 
         [Header("Defaults")]
         [SerializeField] private string defaultSelectButtonLabel = "Select";
+        [SerializeField] private Color emptyTokenColor = new(1f, 1f, 1f, 1f);
+
+        [Header("Type Colors")]
+        [SerializeField] private Color coreTypeColor = new(1f, 0.73f, 0.36f, 1f);
+        [SerializeField] private Color behaviorTypeColor = new(0.48f, 0.74f, 1f, 1f);
+        [SerializeField] private Color resultTypeColor = new(1f, 0.53f, 0.53f, 1f);
+        [SerializeField] private Color valueTypeColor = new(0.56f, 0.9f, 0.6f, 1f);
+        [SerializeField] private Color fallbackTypeColor = new(0.85f, 0.85f, 0.85f, 1f);
 
         private TokenSelectUIScreen ownerScreen;
         private PlaceableTokenData boundToken;
         private RectTransform rectTransform;
+        private readonly List<BaseTokenData> compileTokenBuffer = new();
 
         /// <summary>
         /// summary: 当前卡片绑定的 token。
@@ -46,6 +59,20 @@ namespace Kernel.UI
         /// returns: 描述文本组件
         /// </summary>
         public TMP_Text DescriptionText => descriptionText;
+
+        /// <summary>
+        /// summary: 当前卡片的类型目录文本引用。
+        /// param: 无
+        /// returns: 类型目录文本组件
+        /// </summary>
+        public TMP_Text CatalogText => catalogText;
+
+        /// <summary>
+        /// summary: 当前卡片根节点背景图片引用。
+        /// param: 无
+        /// returns: 根节点 Image 组件
+        /// </summary>
+        public Image RootImage => rootImage;
 
         /// <summary>
         /// summary: 当前卡片的按钮引用。
@@ -108,6 +135,8 @@ namespace Kernel.UI
                 descriptionText.text = boundToken != null ? boundToken.GetSelectionDescription() : string.Empty;
             }
 
+            RefreshCatalogAndTypeVisuals();
+
             if (selectButtonText != null && string.IsNullOrWhiteSpace(selectButtonText.text))
             {
                 selectButtonText.text = defaultSelectButtonLabel;
@@ -142,8 +171,17 @@ namespace Kernel.UI
         private void TryAutoBindReferences()
         {
             rectTransform ??= transform as RectTransform;
+            rootImage ??= GetComponent<Image>();
             tokenRoot ??= transform.Find("Token") as RectTransform;
             tokenText ??= transform.Find("Token/Text")?.GetComponent<TMP_Text>();
+            catalogRoot ??= transform.Find("Catalog") as RectTransform;
+            catalogText ??= transform.Find("Catalog/Text (TMP)")?.GetComponent<TMP_Text>();
+            catalogText ??= transform.Find("Catalog/Text")?.GetComponent<TMP_Text>();
+            if (catalogText == null && catalogRoot != null)
+            {
+                catalogText = catalogRoot.GetComponentInChildren<TMP_Text>(true);
+            }
+
             descriptionRoot ??= transform.Find("Description") as RectTransform;
             descriptionText ??= transform.Find("Description/Text")?.GetComponent<TMP_Text>();
             selectButton ??= transform.Find("Button")?.GetComponent<Button>();
@@ -151,6 +189,108 @@ namespace Kernel.UI
             {
                 selectButtonText ??= selectButton.GetComponentInChildren<TMP_Text>(true);
             }
+        }
+
+        /// <summary>
+        /// summary: 刷新当前卡片的类型目录文案和根图染色。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void RefreshCatalogAndTypeVisuals()
+        {
+            TokenType tokenType = ResolvePrimaryTokenType(boundToken);
+            string catalogLabel = ResolveCatalogLabel(tokenType);
+
+            if (catalogText != null)
+            {
+                catalogText.text = catalogLabel;
+            }
+
+            if (catalogRoot != null)
+            {
+                catalogRoot.gameObject.SetActive(boundToken != null && !string.IsNullOrWhiteSpace(catalogLabel));
+            }
+
+            if (rootImage != null)
+            {
+                rootImage.color = boundToken != null ? ResolveTypeColor(tokenType) : emptyTokenColor;
+            }
+        }
+
+        /// <summary>
+        /// summary: 解析当前可放置 token 的主类型，连锁 token 会取首个有效编译成员。
+        /// param name="token": 需要解析类型的 token
+        /// returns: 当前 token 的主类型
+        /// </summary>
+        private TokenType ResolvePrimaryTokenType(PlaceableTokenData token)
+        {
+            if (token == null)
+            {
+                return TokenType.None;
+            }
+
+            if (token is BaseTokenData baseToken)
+            {
+                return baseToken.TokenType;
+            }
+
+            compileTokenBuffer.Clear();
+            token.AppendCompileTokens(compileTokenBuffer);
+            TokenType fallbackType = TokenType.None;
+            for (int i = 0; i < compileTokenBuffer.Count; i++)
+            {
+                BaseTokenData compileToken = compileTokenBuffer[i];
+                if (compileToken == null)
+                {
+                    continue;
+                }
+
+                if (fallbackType == TokenType.None)
+                {
+                    fallbackType = compileToken.TokenType;
+                }
+
+                if (compileToken.TokenType != TokenType.None)
+                {
+                    return compileToken.TokenType;
+                }
+            }
+
+            return fallbackType;
+        }
+
+        /// <summary>
+        /// summary: 把 token 类型映射为 Selection 卡片上展示的中文目录文案。
+        /// param name="tokenType": 当前 token 类型
+        /// returns: 对应中文类型文案
+        /// </summary>
+        private static string ResolveCatalogLabel(TokenType tokenType)
+        {
+            return tokenType switch
+            {
+                TokenType.Core => "核心",
+                TokenType.Behavior => "行为",
+                TokenType.Result => "结果",
+                TokenType.Value => "数值",
+                _ => string.Empty,
+            };
+        }
+
+        /// <summary>
+        /// summary: 解析当前 token 类型在 Selection 卡片上的背景颜色。
+        /// param name="tokenType": 当前 token 类型
+        /// returns: 对应的背景色
+        /// </summary>
+        private Color ResolveTypeColor(TokenType tokenType)
+        {
+            return tokenType switch
+            {
+                TokenType.Core => coreTypeColor,
+                TokenType.Behavior => behaviorTypeColor,
+                TokenType.Result => resultTypeColor,
+                TokenType.Value => valueTypeColor,
+                _ => fallbackTypeColor,
+            };
         }
 
         /// <summary>

@@ -63,12 +63,27 @@ public sealed class BossInfoUIScreenTests
         AssertCellProgress(barRoot.GetChild(4).GetComponent<StrokeRevealUIWord>(), 0f);
     }
 
+    [Test]
+    public void BossPhaseChangedEvent_UpdatesDisplayedBossName()
+    {
+        GameObject cellPrefab = CreateHealthCellPrefab();
+        BossInfoUIScreen screen = CreateBossInfoScreen(cellPrefab, out _, out TMP_Text bossNameText);
+        BaseCharEnemyNorm1 boss = CreateBossEnemy(100f, 100f);
+
+        EventManager.eventBus.Publish(new BossEncounterStartedEvent(boss, "Test Boss", boss.CurrentHealth, boss.MaxHealth));
+        EventManager.eventBus.Publish(new BossPhaseChangedEvent(boss, 2, "\u971c\u950b\u00b7\u8d30"));
+
+        Assert.That(screen.getAlpha(), Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(bossNameText.text, Is.EqualTo("\u971c\u950b\u00b7\u8d30"));
+    }
+
     private BossInfoUIScreen CreateBossInfoScreen(GameObject healthCellPrefab, out RectTransform barRoot, out TMP_Text bossNameText)
     {
         GameObject root = CreateUiObject("Boss Info UI");
         root.AddComponent<Image>();
         BossInfoUIScreen screen = root.AddComponent<BossInfoUIScreen>();
         SetPrivateField(screen, "transitionDuration", 0f);
+        SetPrivateField(screen, "phaseTransitionPulseDuration", 0f);
 
         GameObject bar = CreateUiObject("Hp Bar", root.transform);
         bar.AddComponent<HorizontalLayoutGroup>();

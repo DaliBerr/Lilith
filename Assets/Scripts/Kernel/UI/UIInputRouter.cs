@@ -24,6 +24,7 @@ namespace Kernel.UI
         private bool callbacksBound;
         private bool isHandlingBack;
         private bool isHandlingBackpack;
+        private bool isHandlingHint;
         private bool isReturningToStartUpScene;
         private readonly HashSet<Transform> permanentUpgradeInteractorRoots = new();
 
@@ -139,6 +140,21 @@ namespace Kernel.UI
             }
 
             RequestOpenPermanentUpgradeScreen();
+        }
+
+        /// <summary>
+        /// summary: 对接 UIControls 的 Hint 动作，按当前 UI 栈开关 Hint 弹窗。
+        /// param: context 当前输入回调上下文
+        /// returns: 无
+        /// </summary>
+        public void OnHint(InputAction.CallbackContext context)
+        {
+            if (!context.performed || isHandlingHint || isHandlingBack || isReturningToStartUpScene)
+            {
+                return;
+            }
+
+            StartCoroutine(HandleHintToggle());
         }
 
         /// <summary>
@@ -270,6 +286,21 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 供背包按钮或其他入口复用的 Hint 开关请求。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void RequestToggleHint()
+        {
+            if (isHandlingHint || isHandlingBack || isReturningToStartUpScene)
+            {
+                return;
+            }
+
+            StartCoroutine(HandleHintToggle());
+        }
+
+        /// <summary>
         /// summary: 请求关闭当前结算界面，并在关闭后提交 run-end 永久档与回到 StartRoom。
         /// param: 无
         /// returns: 无
@@ -379,6 +410,52 @@ namespace Kernel.UI
             finally
             {
                 isHandlingBackpack = false;
+            }
+        }
+
+        /// <summary>
+        /// summary: 在 Main/BackPack 上开关 Hint 弹窗；Hint 已在栈顶时会优先关闭。
+        /// param: 无
+        /// returns: 用于协程等待的枚举器
+        /// </summary>
+        private IEnumerator HandleHintToggle()
+        {
+            isHandlingHint = true;
+
+            try
+            {
+                if (!CanToggleHint(out UIManager uiManager))
+                {
+                    yield break;
+                }
+
+                UIScreen topModal = uiManager.GetTopModal();
+                if (topModal is HintUIScreen)
+                {
+                    yield return uiManager.PopModalAndWait();
+                    yield break;
+                }
+
+                if (topModal is BackPackUIScreen)
+                {
+                    yield return uiManager.ShowModalAndWait<HintUIScreen>();
+                    yield break;
+                }
+
+                if (topModal != null)
+                {
+                    yield break;
+                }
+
+                UIScreen topScreen = uiManager.GetTopScreen();
+                if (topScreen is MainUIScreen || topScreen is BackPackUIScreen)
+                {
+                    yield return uiManager.ShowModalAndWait<HintUIScreen>();
+                }
+            }
+            finally
+            {
+                isHandlingHint = false;
             }
         }
 
@@ -654,6 +731,58 @@ namespace Kernel.UI
             if (FindFirstObjectByType<PlayerPlaneMovement>() == null)
             {
                 GameDebug.LogWarning("[UIInputRouter] Backpack toggle was requested, but no PlayerPlaneMovement exists in the active scene.");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 判断当前是否允许处理 Hint 开关，并返回可用的 UIManager。
+        /// param: uiManager 输出当前可用的 UI 管理器
+        /// returns: 满足 Hint 切换条件时返回 true
+        /// </summary>
+        private static bool CanToggleHint(out UIManager uiManager)
+        {
+            if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            UIScreen topModal = uiManager.GetTopModal();
+            if (topModal is HintUIScreen)
+            {
+                return true;
+            }
+
+            if (topModal is BackPackUIScreen)
+            {
+                return true;
+            }
+
+            if (topModal != null)
+            {
+                return false;
+            }
+
+            UIScreen topScreen = uiManager.GetTopScreen();
+            if (topScreen is BackPackUIScreen)
+            {
+                return true;
+            }
+
+            if (topScreen is not MainUIScreen)
+            {
+                return false;
+            }
+
+            if (!StatusController.HasStatus(StatusList.PlayingStatus))
+            {
+                return false;
+            }
+
+            if (StatusController.HasStatus(StatusList.InPauseMenuStatus) || StatusController.HasStatus(StatusList.InMainMenuStatus))
+            {
                 return false;
             }
 

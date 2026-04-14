@@ -19,11 +19,17 @@ namespace Kernel.UI
         [SerializeField] private StrokeHealthBarController healthBarController;
         [SerializeField] private TMP_Text bossNameText;
         [SerializeField, Min(0f)] private float transitionDuration = 0.12f;
+        [SerializeField] private Color phaseTransitionHighlightColor = new(1f, 0.42f, 0.32f, 1f);
+        [SerializeField, Min(0f)] private float phaseTransitionPulseDuration = 1f;
 
         private IDisposable bossStartedSubscription;
         private IDisposable bossEndedSubscription;
+        private IDisposable bossPhaseChangedSubscription;
         private Coroutine visibilityRoutine;
+        private Coroutine phaseTransitionPulseRoutine;
         private Enemy currentBoss;
+        private Color bossNameDefaultColor = Color.white;
+        private bool hasBossNameDefaultColor;
 
         protected override void Awake()
         {
@@ -73,6 +79,7 @@ namespace Kernel.UI
         {
             TryAutoBindReferences();
             transitionDuration = Mathf.Max(0f, transitionDuration);
+            phaseTransitionPulseDuration = Mathf.Max(0f, phaseTransitionPulseDuration);
         }
 
         /// <summary>
@@ -148,6 +155,11 @@ namespace Kernel.UI
             {
                 bossEndedSubscription = EventManager.eventBus.Subscribe<BossEncounterEndedEvent>(HandleBossEncounterEnded);
             }
+
+            if (bossPhaseChangedSubscription == null)
+            {
+                bossPhaseChangedSubscription = EventManager.eventBus.Subscribe<BossPhaseChangedEvent>(HandleBossPhaseChanged);
+            }
         }
 
         /// <summary>
@@ -159,8 +171,10 @@ namespace Kernel.UI
         {
             bossStartedSubscription?.Dispose();
             bossEndedSubscription?.Dispose();
+            bossPhaseChangedSubscription?.Dispose();
             bossStartedSubscription = null;
             bossEndedSubscription = null;
+            bossPhaseChangedSubscription = null;
         }
 
         /// <summary>
@@ -183,6 +197,8 @@ namespace Kernel.UI
             if (bossNameText != null)
             {
                 bossNameText.text = evt.displayName ?? string.Empty;
+                CacheBossNameDefaultColor();
+                bossNameText.color = bossNameDefaultColor;
             }
 
             healthBarController?.SetHealthImmediate(evt.currentHealth, evt.maxHealth);
@@ -204,6 +220,27 @@ namespace Kernel.UI
             UnbindCurrentBoss();
             ClearBossPresentation();
             ApplyVisibility(visible: false, immediate: transitionDuration <= 0f);
+        }
+
+        /// <summary>
+        /// 响应 Boss 阶段切换事件，并在当前 Boss 匹配时刷新名称与高亮脉冲提示。
+        /// </summary>
+        /// <param name="evt">本次 Boss 阶段切换事件。</param>
+        /// <returns>无。</returns>
+        private void HandleBossPhaseChanged(BossPhaseChangedEvent evt)
+        {
+            if (evt.boss == null || currentBoss == null || evt.boss != currentBoss)
+            {
+                return;
+            }
+
+            if (bossNameText != null && !string.IsNullOrWhiteSpace(evt.phaseDisplayName))
+            {
+                bossNameText.text = evt.phaseDisplayName;
+            }
+
+            PlayPhaseTransitionPulse();
+            healthBarController?.SetHealthAnimatedValue(currentBoss.CurrentHealth, currentBoss.MaxHealth);
         }
 
         /// <summary>
@@ -234,6 +271,7 @@ namespace Kernel.UI
             }
 
             currentBoss = null;
+            StopPhaseTransitionPulse();
         }
 
         /// <summary>
@@ -246,9 +284,97 @@ namespace Kernel.UI
             if (bossNameText != null)
             {
                 bossNameText.text = string.Empty;
+                CacheBossNameDefaultColor();
+                bossNameText.color = bossNameDefaultColor;
             }
 
             healthBarController?.ClearDisplay();
+        }
+
+        /// <summary>
+        /// 启动一次 Boss 阶段切换高亮脉冲，强化切阶段的视觉提示。
+        /// </summary>
+        /// <param name="无">无。</param>
+        /// <returns>无。</returns>
+        private void PlayPhaseTransitionPulse()
+        {
+            StopPhaseTransitionPulse();
+            if (phaseTransitionPulseDuration <= 0f)
+            {
+                return;
+            }
+
+            phaseTransitionPulseRoutine = StartCoroutine(PlayPhaseTransitionPulseRoutine());
+        }
+
+        /// <summary>
+        /// 停止当前阶段切换脉冲，并恢复 Boss 名称默认颜色。
+        /// </summary>
+        /// <param name="无">无。</param>
+        /// <returns>无。</returns>
+        private void StopPhaseTransitionPulse()
+        {
+            if (phaseTransitionPulseRoutine != null)
+            {
+                StopCoroutine(phaseTransitionPulseRoutine);
+                phaseTransitionPulseRoutine = null;
+            }
+
+            if (bossNameText != null)
+            {
+                CacheBossNameDefaultColor();
+                bossNameText.color = bossNameDefaultColor;
+            }
+        }
+
+        /// <summary>
+        /// 执行 Boss 名称的高亮脉冲动画，结束后恢复默认颜色。
+        /// </summary>
+        /// <param name="无">无。</param>
+        /// <returns>协程枚举器。</returns>
+        private IEnumerator PlayPhaseTransitionPulseRoutine()
+        {
+            if (bossNameText == null)
+            {
+                phaseTransitionPulseRoutine = null;
+                yield break;
+            }
+
+            CacheBossNameDefaultColor();
+            float elapsed = 0f;
+            while (elapsed < phaseTransitionPulseDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float pulse = 0.5f + (0.5f * Mathf.Sin(elapsed * Mathf.PI * 8f));
+                bossNameText.color = Color.Lerp(bossNameDefaultColor, phaseTransitionHighlightColor, pulse);
+                yield return null;
+            }
+
+            bossNameText.color = bossNameDefaultColor;
+            phaseTransitionPulseRoutine = null;
+        }
+
+        /// <summary>
+        /// 缓存 Boss 名称默认颜色，供阶段切换高亮动画恢复使用。
+        /// </summary>
+        /// <param name="无">无。</param>
+        /// <returns>无。</returns>
+        private void CacheBossNameDefaultColor()
+        {
+            if (bossNameText == null)
+            {
+                hasBossNameDefaultColor = false;
+                bossNameDefaultColor = Color.white;
+                return;
+            }
+
+            if (hasBossNameDefaultColor)
+            {
+                return;
+            }
+
+            bossNameDefaultColor = bossNameText.color;
+            hasBossNameDefaultColor = true;
         }
 
         /// <summary>

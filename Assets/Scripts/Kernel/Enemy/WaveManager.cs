@@ -447,6 +447,7 @@ public sealed class WaveManager : MonoBehaviour
         activeBossDisplayName = spawnEntry.ResolveBossDisplayName();
         activeBossEnemy.Died -= HandleActiveBossDied;
         activeBossEnemy.Died += HandleActiveBossDied;
+        TryConfigureBossPhaseController(spawnEntry, activeBossEnemy);
 
         EventManager.eventBus.Publish(new BossEncounterStartedEvent(
             activeBossEnemy,
@@ -492,5 +493,36 @@ public sealed class WaveManager : MonoBehaviour
         {
             EventManager.eventBus.Publish(new BossEncounterEndedEvent(bossToClear, displayName, endedByDeath));
         }
+    }
+
+    /// <summary>
+    /// summary: 当 Boss 条目声明了二阶段定义时，为当前 Boss 挂接并配置阶段切换控制器。
+    /// param: spawnEntry 当前 Boss 的波次条目配置
+    /// param: spawnedBoss 当前实际生成出的 Boss 实例
+    /// returns: 无
+    /// </summary>
+    private static void TryConfigureBossPhaseController(WaveEnemySpawnEntry spawnEntry, Enemy spawnedBoss)
+    {
+        if (spawnedBoss == null || !spawnEntry.HasBossPhaseTransition)
+        {
+            return;
+        }
+
+        if (!spawnedBoss.TryGetComponent(out EnemyDefinitionBinder binder) || binder == null)
+        {
+            return;
+        }
+
+        BossPhaseController phaseController = spawnedBoss.GetComponent<BossPhaseController>();
+        if (phaseController == null)
+        {
+            phaseController = spawnedBoss.gameObject.AddComponent<BossPhaseController>();
+        }
+
+        phaseController.TryConfigure(
+            spawnedBoss,
+            binder,
+            spawnEntry.bossPhaseTwoDefinition,
+            spawnEntry.ResolveBossPhaseTransitionHealthRatio());
     }
 }

@@ -19,6 +19,8 @@ public sealed class CharEnemyMovement : MonoBehaviour
     }
 
     private const float MinimumDirectionSqrMagnitude = 0.0001f;
+    private const float MinimumSmartRoamSideSwitchInterval = 0.1f;
+    private const float NearestEnemyTargetRefreshSeconds = 0.2f;
     private const float PathWaypointReachDistance = 0.05f;
     private const int GridPathfindingCostScale = 100;
 
@@ -53,6 +55,12 @@ public sealed class CharEnemyMovement : MonoBehaviour
     private float dashCooldownEndTime;
     private bool hasAggroOnHit;
     private bool isSubscribedToDamage;
+    private Transform nearestEnemyTarget;
+    private float nextNearestEnemyTargetRefreshTime;
+    private bool isBossSmartRoamClockwise = true;
+    private float nextBossSmartRoamSideSwitchTime;
+    private bool hasBossSmartRoamRuntimeState;
+    private EnemyDefinition lastBossSmartRoamDefinition;
     private List<Vector2Int> currentPathCells;
     private Vector2Int currentPathGoalCell;
     private int currentPathWaypointIndex;
@@ -227,12 +235,33 @@ public sealed class CharEnemyMovement : MonoBehaviour
             return;
         }
 
-        if (ResolveMovementKind() == EnemyMovementKind.OrbitTarget)
+        EnemyMovementKind movementKind = ResolveMovementKind();
+        if (movementKind != EnemyMovementKind.BossSmartRoam)
+        {
+            hasBossSmartRoamRuntimeState = false;
+            lastBossSmartRoamDefinition = null;
+        }
+
+        if (movementKind == EnemyMovementKind.OrbitTarget)
         {
             if (ResolveOrbitTargetTransform() == null)
             {
                 StopMovement();
                 return;
+            }
+        }
+        else if (movementKind == EnemyMovementKind.FollowNearestEnemyKeepDistance)
+        {
+            if (!TryResolveNearestEnemyTarget(currentTime, out Transform followTarget))
+            {
+                StopMovement();
+                return;
+            }
+
+            if (targetPlayer != followTarget)
+            {
+                ClearPathCache();
+                targetPlayer = followTarget;
             }
         }
         else if (!TryResolveTargetPlayer())
@@ -283,6 +312,7 @@ public sealed class CharEnemyMovement : MonoBehaviour
                 return ResolveChaseThenDashMovement(currentTime, deltaTime, out movementDirection, out speedMultiplier);
 
             case EnemyMovementKind.KeepDistance:
+            case EnemyMovementKind.FollowNearestEnemyKeepDistance:
                 return ResolveKeepDistanceMovement(deltaTime, out movementDirection, out speedMultiplier);
 
             case EnemyMovementKind.AggroOnHit:
@@ -290,6 +320,9 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
             case EnemyMovementKind.OrbitTarget:
                 return ResolveOrbitTargetMovement(deltaTime, out movementDirection, out speedMultiplier);
+
+            case EnemyMovementKind.BossSmartRoam:
+                return ResolveBossSmartRoamMovement(currentTime, deltaTime, out movementDirection, out speedMultiplier);
 
             case EnemyMovementKind.ChaseTarget:
             default:
@@ -434,6 +467,133 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
         movementDirection = tangentDirection.normalized;
         return true;
+    }
+
+    /// <summary>
+    /// summary: Boss 主动游走模式下，持续横移并按距离误差做径向修正，同时定时切换横移方向。
+    /// param: currentTime 当前逻辑时钟
+    /// param: deltaTime 本次移动使用的时间步长
+    /// param: movementDirection 输出的平面移动方向
+    /// param: speedMultiplier 输出的速度倍率
+    /// returns: 当前帧需要平移时返回 true
+    /// </summary>
+    private bool ResolveBossSmartRoamMovement(float currentTime, float deltaTime, out Vector3 movementDirection, out float speedMultiplier)
+    {
+        movementDirection = Vector3.zero;
+        speedMultiplier = 1f;
+        if (!TryGetPlanarTargetOffset(out Vector3 targetOffset, out float targetDistance))
+        {
+            return false;
+        }
+
+        EnemyDefinition.BossSmartRoamMovementDefinition smartRoamMovement = ResolveBossSmartRoamMovementDefinition();
+        UpdateBossSmartRoamRuntimeState(smartRoamMovement, currentTime);
+
+        Vector3 radialDirection = targetOffset.sqrMagnitude > MinimumDirectionSqrMagnitude
+            ? targetOffset.normalized
+            : (transform.forward.sqrMagnitude > MinimumDirectionSqrMagnitude ? transform.forward.normalized : Vector3.forward);
+        radialDirection.y = 0f;
+
+        Vector3 tangentDirection = isBossSmartRoamClockwise
+            ? Vector3.Cross(Vector3.up, radialDirection)
+            : Vector3.Cross(radialDirection, Vector3.up);
+        tangentDirection.y = 0f;
+        if (tangentDirection.sqrMagnitude <= MinimumDirectionSqrMagnitude)
+        {
+            tangentDirection = transform.forward.sqrMagnitude > MinimumDirectionSqrMagnitude
+                ? transform.forward.normalized
+                : Vector3.forward;
+            tangentDirection.y = 0f;
+        }
+
+        float minDistance = Mathf.Max(0f, smartRoamMovement.preferredDistance - smartRoamMovement.distanceTolerance);
+        float maxDistance = smartRoamMovement.preferredDistance + smartRoamMovement.distanceTolerance;
+        float radialWeight;
+        if (targetDistance > maxDistance)
+        {
+            speedMultiplier = smartRoamMovement.approachSpeedMultiplier;
+            radialWeight = smartRoamMovement.radialCorrectionStrength;
+        }
+        else if (targetDistance < minDistance)
+        {
+            speedMultiplier = smartRoamMovement.retreatSpeedMultiplier;
+            radialWeight = -smartRoamMovement.radialCorrectionStrength;
+        }
+        else
+        {
+            speedMultiplier = smartRoamMovement.strafeSpeedMultiplier;
+            float normalizedDistanceOffset = (targetDistance - smartRoamMovement.preferredDistance) / Mathf.Max(1f, smartRoamMovement.distanceTolerance);
+            radialWeight = Mathf.Clamp(normalizedDistanceOffset, -1f, 1f) * smartRoamMovement.radialCorrectionStrength;
+        }
+
+        Vector3 desiredDirection = tangentDirection + (radialDirection * radialWeight);
+        desiredDirection.y = 0f;
+        if (desiredDirection.sqrMagnitude <= MinimumDirectionSqrMagnitude)
+        {
+            desiredDirection = tangentDirection;
+        }
+
+        movementDirection = desiredDirection.normalized;
+
+        // 距离严重过远时融合一次寻路方向，避免在障碍地形中原地横移。
+        if (targetDistance > maxDistance &&
+            TryResolveCurrentCellPositions(out Vector2Int startCell, out Vector2Int goalCell) &&
+            startCell != goalCell)
+        {
+            float movementStepDistance = GetMovementStepDistance(speedMultiplier, deltaTime);
+            if (TryResolvePath(startCell, goalCell) &&
+                TryGetCurrentPathDirection(GetCurrentPosition(), maxDistance, movementStepDistance, targetOffset, targetDistance, out Vector3 pathDirection) &&
+                pathDirection.sqrMagnitude > MinimumDirectionSqrMagnitude)
+            {
+                Vector3 blendedDirection = pathDirection + (tangentDirection.normalized * 0.65f);
+                blendedDirection.y = 0f;
+                if (blendedDirection.sqrMagnitude > MinimumDirectionSqrMagnitude)
+                {
+                    movementDirection = blendedDirection.normalized;
+                }
+            }
+        }
+
+        return movementDirection.sqrMagnitude > MinimumDirectionSqrMagnitude;
+    }
+
+    /// <summary>
+    /// summary: 维护 Boss 主动游走的横移方向状态，按配置节奏切换左右游走。
+    /// param: smartRoamMovement 当前 Boss 游走配置
+    /// param: currentTime 当前逻辑时钟
+    /// returns: 无
+    /// </summary>
+    private void UpdateBossSmartRoamRuntimeState(EnemyDefinition.BossSmartRoamMovementDefinition smartRoamMovement, float currentTime)
+    {
+        EnemyDefinition currentDefinition = enemyData != null ? enemyData.Definition : null;
+        if (!hasBossSmartRoamRuntimeState || currentDefinition != lastBossSmartRoamDefinition)
+        {
+            isBossSmartRoamClockwise = smartRoamMovement.startClockwise;
+            hasBossSmartRoamRuntimeState = true;
+            lastBossSmartRoamDefinition = currentDefinition;
+            if (smartRoamMovement.sideSwitchIntervalSeconds > 0f)
+            {
+                nextBossSmartRoamSideSwitchTime = currentTime + Mathf.Max(MinimumSmartRoamSideSwitchInterval, smartRoamMovement.sideSwitchIntervalSeconds);
+            }
+            else
+            {
+                nextBossSmartRoamSideSwitchTime = float.PositiveInfinity;
+            }
+
+            return;
+        }
+
+        if (float.IsInfinity(nextBossSmartRoamSideSwitchTime))
+        {
+            return;
+        }
+
+        float sideSwitchInterval = Mathf.Max(MinimumSmartRoamSideSwitchInterval, smartRoamMovement.sideSwitchIntervalSeconds);
+        while (currentTime >= nextBossSmartRoamSideSwitchTime)
+        {
+            isBossSmartRoamClockwise = !isBossSmartRoamClockwise;
+            nextBossSmartRoamSideSwitchTime += sideSwitchInterval;
+        }
     }
 
     /// <summary>
@@ -1267,6 +1427,78 @@ public sealed class CharEnemyMovement : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 为“跟随最近敌人”模式解析一个当前可用的最近敌人目标，并按刷新间隔缓存结果。
+    /// param: currentTime 当前逻辑时钟
+    /// param: target 输出的最近敌人 Transform
+    /// returns: 成功拿到有效最近敌人目标时返回 true
+    /// </summary>
+    private bool TryResolveNearestEnemyTarget(float currentTime, out Transform target)
+    {
+        target = null;
+        if (!TryResolveEnemyData())
+        {
+            return false;
+        }
+
+        if (currentTime < nextNearestEnemyTargetRefreshTime && IsNearestEnemyTargetValid(nearestEnemyTarget))
+        {
+            target = nearestEnemyTarget;
+            return true;
+        }
+
+        Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+        float bestDistanceSqr = float.MaxValue;
+        Vector3 currentPosition = GetCurrentPosition();
+        Transform resolvedTarget = null;
+        for (int i = 0; i < enemies.Length; i++)
+        {
+            Enemy enemy = enemies[i];
+            if (enemy == null || enemy == enemyData || enemy.IsDead)
+            {
+                continue;
+            }
+
+            Transform candidate = enemy.transform;
+            if (candidate == null || IsOwnTransform(candidate))
+            {
+                continue;
+            }
+
+            Vector3 candidateOffset = candidate.position - currentPosition;
+            candidateOffset.y = 0f;
+            float distanceSqr = candidateOffset.sqrMagnitude;
+            if (distanceSqr >= bestDistanceSqr)
+            {
+                continue;
+            }
+
+            bestDistanceSqr = distanceSqr;
+            resolvedTarget = candidate;
+        }
+
+        nearestEnemyTarget = resolvedTarget;
+        nextNearestEnemyTargetRefreshTime = currentTime + NearestEnemyTargetRefreshSeconds;
+        target = nearestEnemyTarget;
+        return target != null;
+    }
+
+    /// <summary>
+    /// summary: 判断当前缓存的最近敌人目标是否仍然有效。
+    /// param: candidate 需要检查的目标 Transform
+    /// returns: 目标存在、非自身且仍挂有存活 Enemy 组件时返回 true
+    /// </summary>
+    private bool IsNearestEnemyTargetValid(Transform candidate)
+    {
+        if (candidate == null || IsOwnTransform(candidate))
+        {
+            return false;
+        }
+
+        Enemy candidateEnemy = candidate.GetComponent<Enemy>();
+        return candidateEnemy != null && !candidateEnemy.IsDead;
+    }
+
+    /// <summary>
     /// summary: 当 Inspector 未显式绑定目标时，尝试自动找到场景中的玩家平面移动组件。
     /// param: 无
     /// returns: 成功拿到追踪目标时返回 true
@@ -1550,6 +1782,12 @@ public sealed class CharEnemyMovement : MonoBehaviour
         dashEndTime = 0f;
         dashCooldownEndTime = 0f;
         hasAggroOnHit = false;
+        nearestEnemyTarget = null;
+        nextNearestEnemyTargetRefreshTime = 0f;
+        isBossSmartRoamClockwise = true;
+        nextBossSmartRoamSideSwitchTime = 0f;
+        hasBossSmartRoamRuntimeState = false;
+        lastBossSmartRoamDefinition = null;
         ClearPathCache();
     }
 
@@ -1594,6 +1832,28 @@ public sealed class CharEnemyMovement : MonoBehaviour
                 orbitRadius = ResolveDefaultChaseStoppingDistance(),
                 orbitRadiusTolerance = 0f,
                 orbitSpeedMultiplier = 1f,
+            };
+    }
+
+    /// <summary>
+    /// summary: 读取 Boss 主动游走行为配置；若敌人未绑定定义则返回一组可运行默认值。
+    /// param: 无
+    /// returns: 当前敌人的 Boss 主动游走配置
+    /// </summary>
+    private EnemyDefinition.BossSmartRoamMovementDefinition ResolveBossSmartRoamMovementDefinition()
+    {
+        return enemyData != null && enemyData.Definition != null
+            ? enemyData.Definition.BossSmartRoamMovement.GetSanitized()
+            : new EnemyDefinition.BossSmartRoamMovementDefinition
+            {
+                preferredDistance = ResolveDefaultChaseStoppingDistance(),
+                distanceTolerance = 0f,
+                strafeSpeedMultiplier = 1f,
+                radialCorrectionStrength = 0.5f,
+                approachSpeedMultiplier = 1.15f,
+                retreatSpeedMultiplier = 1.25f,
+                sideSwitchIntervalSeconds = 1.5f,
+                startClockwise = true,
             };
     }
 

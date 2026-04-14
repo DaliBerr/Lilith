@@ -7,6 +7,7 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
 {
     private SerializedProperty enemyIdProperty;
     private SerializedProperty displayNameProperty;
+    private SerializedProperty descriptionProperty;
     private SerializedProperty runtimePrefabProperty;
     private SerializedProperty movementKindProperty;
     private SerializedProperty attackKindProperty;
@@ -14,6 +15,7 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
     private SerializedProperty keepDistanceMovementProperty;
     private SerializedProperty aggroOnHitMovementProperty;
     private SerializedProperty orbitTargetMovementProperty;
+    private SerializedProperty bossSmartRoamMovementProperty;
     private SerializedProperty visualProperty;
     private SerializedProperty rangedBulletAttackProperty;
     private SerializedProperty skillCastingProperty;
@@ -25,6 +27,7 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
     {
         enemyIdProperty = serializedObject.FindProperty("enemyId");
         displayNameProperty = serializedObject.FindProperty("displayName");
+        descriptionProperty = serializedObject.FindProperty("description");
         runtimePrefabProperty = serializedObject.FindProperty("runtimePrefab");
         movementKindProperty = serializedObject.FindProperty("movementKind");
         attackKindProperty = serializedObject.FindProperty("attackKind");
@@ -32,6 +35,7 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
         keepDistanceMovementProperty = serializedObject.FindProperty("keepDistanceMovement");
         aggroOnHitMovementProperty = serializedObject.FindProperty("aggroOnHitMovement");
         orbitTargetMovementProperty = serializedObject.FindProperty("orbitTargetMovement");
+        bossSmartRoamMovementProperty = serializedObject.FindProperty("bossSmartRoamMovement");
         visualProperty = serializedObject.FindProperty("visual");
         rangedBulletAttackProperty = serializedObject.FindProperty("rangedBulletAttack");
         skillCastingProperty = serializedObject.FindProperty("skillCasting");
@@ -76,6 +80,7 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
         EditorGUILayout.LabelField("Identity", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(enemyIdProperty);
         EditorGUILayout.PropertyField(displayNameProperty);
+        EditorGUILayout.PropertyField(descriptionProperty);
         EditorGUILayout.PropertyField(runtimePrefabProperty);
     }
 
@@ -96,6 +101,7 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
                 break;
 
             case EnemyMovementKind.KeepDistance:
+            case EnemyMovementKind.FollowNearestEnemyKeepDistance:
                 EditorGUILayout.PropertyField(keepDistanceMovementProperty, includeChildren: true);
                 break;
 
@@ -105,6 +111,10 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
 
             case EnemyMovementKind.OrbitTarget:
                 EditorGUILayout.PropertyField(orbitTargetMovementProperty, includeChildren: true);
+                break;
+
+            case EnemyMovementKind.BossSmartRoam:
+                EditorGUILayout.PropertyField(bossSmartRoamMovementProperty, includeChildren: true);
                 break;
         }
     }
@@ -180,7 +190,9 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
         SerializedProperty skillKindProperty = element.FindPropertyRelative("skillKind");
         SerializedProperty cooldownSecondsProperty = element.FindPropertyRelative("cooldownSeconds");
         SerializedProperty castRangeProperty = element.FindPropertyRelative("castRange");
+        SerializedProperty actionLockSecondsProperty = element.FindPropertyRelative("actionLockSeconds");
         SerializedProperty summonSkillProperty = element.FindPropertyRelative("summonSkill");
+        SerializedProperty delayedGroundBombSkillProperty = element.FindPropertyRelative("delayedGroundBombSkill");
         float lineHeight = EditorGUIUtility.singleLineHeight;
         float spacing = EditorGUIUtility.standardVerticalSpacing;
         float currentY = rect.y + 2f;
@@ -205,6 +217,8 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
         currentY += lineHeight + spacing;
         EditorGUI.PropertyField(new Rect(rect.x, currentY, rect.width, lineHeight), castRangeProperty);
         currentY += lineHeight + spacing;
+        EditorGUI.PropertyField(new Rect(rect.x, currentY, rect.width, lineHeight), actionLockSecondsProperty);
+        currentY += lineHeight + spacing;
 
         if ((EnemySkillKind)skillKindProperty.enumValueIndex == EnemySkillKind.SummonEnemy)
         {
@@ -212,6 +226,16 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
             EditorGUI.PropertyField(
                 new Rect(rect.x, currentY, rect.width, summonHeight),
                 summonSkillProperty,
+                includeChildren: true);
+            currentY += summonHeight + spacing;
+        }
+
+        if ((EnemySkillKind)skillKindProperty.enumValueIndex == EnemySkillKind.DelayedGroundBomb)
+        {
+            float delayedBombHeight = EditorGUI.GetPropertyHeight(delayedGroundBombSkillProperty, includeChildren: true);
+            EditorGUI.PropertyField(
+                new Rect(rect.x, currentY, rect.width, delayedBombHeight),
+                delayedGroundBombSkillProperty,
                 includeChildren: true);
         }
 
@@ -242,12 +266,19 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
         height += lineHeight + spacing;
         height += lineHeight + spacing;
         height += lineHeight + spacing;
+        height += lineHeight + spacing;
 
         SerializedProperty skillKindProperty = element.FindPropertyRelative("skillKind");
         if ((EnemySkillKind)skillKindProperty.enumValueIndex == EnemySkillKind.SummonEnemy)
         {
             SerializedProperty summonSkillProperty = element.FindPropertyRelative("summonSkill");
             height += EditorGUI.GetPropertyHeight(summonSkillProperty, includeChildren: true) + spacing;
+        }
+
+        if ((EnemySkillKind)skillKindProperty.enumValueIndex == EnemySkillKind.DelayedGroundBomb)
+        {
+            SerializedProperty delayedGroundBombSkillProperty = element.FindPropertyRelative("delayedGroundBombSkill");
+            height += EditorGUI.GetPropertyHeight(delayedGroundBombSkillProperty, includeChildren: true) + spacing;
         }
 
         return height;
@@ -282,13 +313,21 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
         SerializedProperty skillKindProperty = element.FindPropertyRelative("skillKind");
         SerializedProperty cooldownSecondsProperty = element.FindPropertyRelative("cooldownSeconds");
         SerializedProperty castRangeProperty = element.FindPropertyRelative("castRange");
+        SerializedProperty actionLockSecondsProperty = element.FindPropertyRelative("actionLockSeconds");
         SerializedProperty summonSkillProperty = element.FindPropertyRelative("summonSkill");
+        SerializedProperty delayedGroundBombSkillProperty = element.FindPropertyRelative("delayedGroundBombSkill");
         skillKindProperty.enumValueIndex = (int)EnemySkillKind.SummonEnemy;
         cooldownSecondsProperty.floatValue = 1f;
         castRangeProperty.floatValue = 12f;
+        actionLockSecondsProperty.floatValue = 0.15f;
         if (summonSkillProperty != null)
         {
-            summonSkillProperty.FindPropertyRelative("summonedEnemyDefinition").objectReferenceValue = null;
+            SerializedProperty summonedEnemyDefinitionProperty = summonSkillProperty.FindPropertyRelative("summonedEnemyDefinition");
+            if (summonedEnemyDefinitionProperty != null)
+            {
+                summonedEnemyDefinitionProperty.objectReferenceValue = null;
+            }
+
             SerializedProperty summonedEnemyConfigProperty = summonSkillProperty.FindPropertyRelative("summonedEnemyConfig");
             if (summonedEnemyConfigProperty != null)
             {
@@ -300,9 +339,86 @@ public sealed class EnemyDefinitionEditor : UnityEditor.Editor
                 summonedEnemyConfigProperty.FindPropertyRelative("tokenDrops").ClearArray();
             }
 
-            summonSkillProperty.FindPropertyRelative("summonCountPerCast").intValue = 1;
-            summonSkillProperty.FindPropertyRelative("summonRadius").floatValue = 8f;
-            summonSkillProperty.FindPropertyRelative("maxAliveSummons").intValue = 1;
+            SerializedProperty minSummonCountProperty = summonSkillProperty.FindPropertyRelative("minSummonCountPerCast");
+            if (minSummonCountProperty != null)
+            {
+                minSummonCountProperty.intValue = 1;
+            }
+
+            SerializedProperty maxSummonCountProperty = summonSkillProperty.FindPropertyRelative("maxSummonCountPerCast");
+            if (maxSummonCountProperty != null)
+            {
+                maxSummonCountProperty.intValue = 1;
+            }
+
+            SerializedProperty summonRadiusProperty = summonSkillProperty.FindPropertyRelative("summonRadius");
+            if (summonRadiusProperty != null)
+            {
+                summonRadiusProperty.floatValue = 8f;
+            }
+
+            SerializedProperty maxAliveSummonsProperty = summonSkillProperty.FindPropertyRelative("maxAliveSummons");
+            if (maxAliveSummonsProperty != null)
+            {
+                maxAliveSummonsProperty.intValue = 1;
+            }
+        }
+
+        if (delayedGroundBombSkillProperty != null)
+        {
+            SerializedProperty delaySecondsProperty = delayedGroundBombSkillProperty.FindPropertyRelative("delaySeconds");
+            if (delaySecondsProperty != null)
+            {
+                delaySecondsProperty.floatValue = 1.5f;
+            }
+
+            SerializedProperty explosionRadiusProperty = delayedGroundBombSkillProperty.FindPropertyRelative("explosionRadius");
+            if (explosionRadiusProperty != null)
+            {
+                explosionRadiusProperty.floatValue = 100f;
+            }
+
+            SerializedProperty explosionDamageProperty = delayedGroundBombSkillProperty.FindPropertyRelative("explosionDamage");
+            if (explosionDamageProperty != null)
+            {
+                explosionDamageProperty.floatValue = 2f;
+            }
+
+            SerializedProperty bombsPerSequenceProperty = delayedGroundBombSkillProperty.FindPropertyRelative("bombsPerSequence");
+            if (bombsPerSequenceProperty != null)
+            {
+                bombsPerSequenceProperty.intValue = 3;
+            }
+
+            SerializedProperty bombIntervalSecondsProperty = delayedGroundBombSkillProperty.FindPropertyRelative("bombIntervalSeconds");
+            if (bombIntervalSecondsProperty != null)
+            {
+                bombIntervalSecondsProperty.floatValue = 1f;
+            }
+
+            SerializedProperty randomCooldownMinSecondsProperty = delayedGroundBombSkillProperty.FindPropertyRelative("randomCooldownMinSeconds");
+            if (randomCooldownMinSecondsProperty != null)
+            {
+                randomCooldownMinSecondsProperty.floatValue = 8f;
+            }
+
+            SerializedProperty randomCooldownMaxSecondsProperty = delayedGroundBombSkillProperty.FindPropertyRelative("randomCooldownMaxSeconds");
+            if (randomCooldownMaxSecondsProperty != null)
+            {
+                randomCooldownMaxSecondsProperty.floatValue = 20f;
+            }
+
+            SerializedProperty indicatorWidthProperty = delayedGroundBombSkillProperty.FindPropertyRelative("indicatorWidth");
+            if (indicatorWidthProperty != null)
+            {
+                indicatorWidthProperty.floatValue = 0.2f;
+            }
+
+            SerializedProperty indicatorColorProperty = delayedGroundBombSkillProperty.FindPropertyRelative("indicatorColor");
+            if (indicatorColorProperty != null)
+            {
+                indicatorColorProperty.colorValue = new Color(1f, 0.1f, 0.1f, 0.92f);
+            }
         }
     }
 

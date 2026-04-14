@@ -219,6 +219,30 @@ public sealed class BackPackInventoryTests
         Assert.That(GetSlotText(tail), Is.EqualTo("2"));
     }
 
+    [Test]
+    public void SlotView_UsesDistinctBackgroundTintForDifferentTokenTypes()
+    {
+        BackPackGridSlotView slot = CreateSlotView("TypeTint");
+        slot.InitializeDisplayOnly(BackPackSlotArea.Inventory);
+
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<CoreTokenData>("core", "Core"), 0, 0, true));
+        Color coreColor = GetSlotBackgroundColor(slot);
+
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<BehaviorTokenData>("behavior", "Behavior"), 0, 0, true));
+        Color behaviorColor = GetSlotBackgroundColor(slot);
+
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<ResultTokenData>("result", "Result"), 0, 0, true));
+        Color resultColor = GetSlotBackgroundColor(slot);
+
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<ValueTokenData>("value", "2"), 0, 0, true));
+        Color valueColor = GetSlotBackgroundColor(slot);
+
+        AssertColorApproximately(coreColor, new Color(1f, 0.82f, 0.62f, 0.35f));
+        AssertColorApproximately(behaviorColor, new Color(0.66f, 0.82f, 1f, 0.35f));
+        AssertColorApproximately(resultColor, new Color(1f, 0.68f, 0.68f, 0.35f));
+        AssertColorApproximately(valueColor, new Color(0.68f, 0.93f, 0.68f, 0.35f));
+    }
+
     private PlayerBulletTokenInventory CreateInventory()
     {
         GameObject gameObject = new("PlayerInventory");
@@ -281,6 +305,21 @@ public sealed class BackPackInventoryTests
     {
         TMP_Text text = slotView.transform.Find("Text")?.GetComponent<TMP_Text>();
         return text != null ? text.text : string.Empty;
+    }
+
+    private static Color GetSlotBackgroundColor(BackPackGridSlotView slotView)
+    {
+        Image background = slotView.transform.Find("Background")?.GetComponent<Image>();
+        Assert.That(background, Is.Not.Null);
+        return background.color;
+    }
+
+    private static void AssertColorApproximately(Color actual, Color expected, float tolerance = 0.0001f)
+    {
+        Assert.That(actual.r, Is.EqualTo(expected.r).Within(tolerance));
+        Assert.That(actual.g, Is.EqualTo(expected.g).Within(tolerance));
+        Assert.That(actual.b, Is.EqualTo(expected.b).Within(tolerance));
+        Assert.That(actual.a, Is.EqualTo(expected.a).Within(tolerance));
     }
 
     private static T GetPrivateField<T>(object target, string fieldName)

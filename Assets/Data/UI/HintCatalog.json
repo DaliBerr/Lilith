@@ -1,0 +1,31 @@
+{
+  "categories": [
+    {
+      "id": "guide",
+      "title": "指南",
+      "entries": [
+        {
+          "id": "controls",
+          "title": "操作说明",
+          "content": "Tab 打开或关闭 Hint。\nB 打开背包。\nEsc 返回上一级界面。"
+        },
+        {
+          "id": "combat",
+          "title": "战斗基础",
+          "content": "通过背包调整 Spell Book 词元顺序，实时影响攻击编译结果。\n每波结束后可根据提示继续强化。"
+        }
+      ]
+    },
+    {
+      "id": "help",
+      "title": "帮助",
+      "entries": [
+        {
+          "id": "hintscope",
+          "title": "内容范围",
+          "content": "图鉴分类会展示当前可解析到的敌人定义信息。\n其他分类内容来自 HintCatalog.json，可按需求手动维护。"
+        }
+      ]
+    }
+  ]
+}

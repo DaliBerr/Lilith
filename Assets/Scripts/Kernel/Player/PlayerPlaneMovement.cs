@@ -1179,6 +1179,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private static bool IsGameplayInputBlockedByUI()
     {
         return StatusController.HasStatus(StatusList.InBackPackStatus)
+            || StatusController.HasStatus(StatusList.InHintStatus)
             || StatusController.HasStatus(StatusList.InUpgradeScreenStatus)
             || StatusController.HasStatus(StatusList.InPauseMenuStatus)
             || StatusController.HasStatus(StatusList.InSettlementScreenStatus)

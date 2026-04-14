@@ -106,6 +106,13 @@ namespace Kernel.GameState
             allowSwitchWith = new List<string> { "Paused", "SaveLoading" },
             Persistent = false
         };
+        public static Status InHintStatus = new Status
+        {
+            StatusName = "InHint",
+            InActiveWith = null,
+            allowSwitchWith = new List<string> { "Paused", "SaveLoading" },
+            Persistent = false
+        };
         public static Status InUpgradeScreenStatus = new Status
         {
             StatusName = "InUpgradeScreen",
@@ -165,6 +172,7 @@ namespace Kernel.GameState
             Register(InMainMenuStatus);
             Register(InMenuStatus);
             Register(InBackPackStatus);
+            Register(InHintStatus);
             Register(InUpgradeScreenStatus);
             Register(InSettlementScreenStatus);
             Register(InDialogStatus);

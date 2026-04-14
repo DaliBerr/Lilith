@@ -15,8 +15,26 @@ MonoBehaviour:
   m_GroupName: Json
   m_GUID: 1f3143186566e2b4d8600158905c1f28
   m_SerializeEntries:
+  - m_GUID: 1ee021b0b632071439ad5501ca7a65c8
+    m_Address: Assets/Data/Quest/QuestCatalog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Json
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 28797e04c60a8604e964bb2c7cad09a5
+    m_Address: Assets/Data/UI/SettlementPresentationCatalog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Json
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 87186044a0d7ecd46a801deff5f68f8f
     m_Address: Assets/Data/Story/Introduction
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Json
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 922ecccf245b3454c86a3606cd62e5e5
+    m_Address: Assets/Data/UI/HintCatalog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Json
@@ -29,18 +47,6 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: eade859664fdd3b479ac7ba5ba1309d1
     m_Address: Assets/Data/Upgrades/PermanentUpgradeCatalog
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Json
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 28797e04c60a8604e964bb2c7cad09a5
-    m_Address: Assets/Data/UI/SettlementPresentationCatalog
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Json
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 1ee021b0b632071439ad5501ca7a65c8
-    m_Address: Assets/Data/Quest/QuestCatalog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Json

@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// 使用斜俯视透视参数跟随玩家焦点，可通过中键拖拽绕 Y 轴调整偏航，不继承玩家旋转。
+/// 使用斜俯视透视参数跟随玩家焦点，可通过右键拖拽绕 Y 轴调整偏航，不继承玩家旋转。
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Camera))]
@@ -68,13 +68,13 @@ public sealed class PlayerFollowCamera : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 按住鼠标中键拖拽时累加水平偏航，让主相机绕玩家焦点沿 Y 轴旋转。
+    /// summary: 按住鼠标右键拖拽时累加水平偏航，让主相机绕玩家焦点沿 Y 轴旋转。
     /// param: 无
     /// returns: 无
     /// </summary>
     private void HandleYawRotationInput()
     {
-        if (Mouse.current == null || !Mouse.current.middleButton.isPressed)
+        if (Mouse.current == null || !Mouse.current.rightButton.isPressed)
         {
             return;
         }

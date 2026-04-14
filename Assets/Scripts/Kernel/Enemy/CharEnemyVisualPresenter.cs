@@ -37,6 +37,7 @@ public sealed class CharEnemyVisualPresenter : MonoBehaviour, IEnemyWaveConfigRe
     [SerializeField] private int shadowSortingOrder = -20;
 
     private float runtimeVisualScaleMultiplier = 1f;
+    private float runtimeGlyphScaleMultiplier = 1f;
 
     public RectTransform TextContainer => textContainer;
     public TMP_Text GlyphText => glyphText;
@@ -151,6 +152,7 @@ public sealed class CharEnemyVisualPresenter : MonoBehaviour, IEnemyWaveConfigRe
             return false;
         }
 
+        runtimeGlyphScaleMultiplier = SanitizePositiveValue(visual.glyphScaleMultiplier, 1f);
         glyphText.color = visual.glyphColor;
         runeBaseRenderer.sprite = visual.runeBaseSprite;
         groundShadowRenderer.sprite = visual.groundShadowSprite;
@@ -178,7 +180,7 @@ public sealed class CharEnemyVisualPresenter : MonoBehaviour, IEnemyWaveConfigRe
         nextLocalPosition.z = 0f;
         textContainer.localPosition = nextLocalPosition;
         textContainer.localRotation = Quaternion.identity;
-        textContainer.localScale = Vector3.one * runtimeVisualScaleMultiplier;
+        textContainer.localScale = Vector3.one * (runtimeVisualScaleMultiplier * runtimeGlyphScaleMultiplier);
 
         RectTransform glyphRect = glyphText.rectTransform;
         glyphRect.localPosition = Vector3.zero;

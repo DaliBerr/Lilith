@@ -58,12 +58,11 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
   - 文件名是 `StartUp.cs`，类名是 `Startup`
   - 位于 `Main` 场景
-  - 负责在全局启动完成后压入 [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)，随后启动 [`Assets/Scripts/Kernel/Quest/QuestService.cs`](Assets/Scripts/Kernel/Quest/QuestService.cs)；新档首次进入 `Main` 时还会叠加显示 [`Assets/Scripts/Kernel/UI/DialogUIScreen.cs`](Assets/Scripts/Kernel/UI/DialogUIScreen.cs)（modal）作为开场引导对话
+  - 负责在全局启动完成后压入 [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs)，并在新档首次进入 `Main` 时叠加显示 [`Assets/Scripts/Kernel/UI/DialogUIScreen.cs`](Assets/Scripts/Kernel/UI/DialogUIScreen.cs)（modal）作为开场引导对话
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
   - 当前包含两张并存地图：`StartRoomMapRoot` 作为固定起始房间，`CombatMapRoot` 作为单局战斗地图
-- [`Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 负责玩家初始出生、进入战斗、战斗结束后弹出结算，再在关闭结算后返回起始房间的流转；起始房间传送装置触发后，会先按控制器上单独配置的初始 `CombatEntryTokenSelectionPlan` 打开一次 [`Assets/Scripts/Kernel/UI/TokenSelectUIScreen.cs`](Assets/Scripts/Kernel/UI/TokenSelectUIScreen.cs)，写入玩家选中的 token 后再启动第一波，而每个 [`WaveDefinition`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs) 还可额外指定“本波结束后的 token 抽取计划”，由 [`WaveManager`](Assets/Scripts/Kernel/Enemy/WaveManager.cs) 在波次清空后暂停推进，再打开同一套选择界面，完成后继续下一波或结束整场战斗
-  - 当新手引导链已经完成后，`MapRunFlowController` 会在每次从结算页回到 `StartRoomMapRoot` 时，额外往玩家背包补发一个 `InitCore`
-  - [`Assets/Scripts/Kernel/MapGrid/StartRoomBattleTeleporter.cs`](Assets/Scripts/Kernel/MapGrid/StartRoomBattleTeleporter.cs) 挂在起始房间传送装置上，通过 trigger 请求进入新一局战斗；当前默认受新手引导任务链控制，只有完成背包教学后才会永久解锁
+  - [`Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 负责玩家初始出生、进入战斗、战斗结束后弹出结算，再在关闭结算后返回起始房间的流转；起始房间传送装置触发后，会先按控制器上单独配置的初始 `CombatEntryTokenSelectionPlan` 打开一次 [`Assets/Scripts/Kernel/UI/TokenSelectUIScreen.cs`](Assets/Scripts/Kernel/UI/TokenSelectUIScreen.cs)，写入玩家选中的 token 后再启动第一波，而每个 [`WaveDefinition`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs) 还可额外指定“本波结束后的 token 抽取计划”，由 [`WaveManager`](Assets/Scripts/Kernel/Enemy/WaveManager.cs) 在波次清空后暂停推进，再打开同一套选择界面，完成后继续下一波或结束整场战斗
+  - [`Assets/Scripts/Kernel/MapGrid/StartRoomBattleTeleporter.cs`](Assets/Scripts/Kernel/MapGrid/StartRoomBattleTeleporter.cs) 挂在起始房间传送装置上，通过 trigger 请求进入新一局战斗；在 `tutorial_enter_teleporter` 完成后，每次成功进入 teleporter 都会在记录 `tutorial.teleporter_triggered_once` 后补发 `InitCore` 到背包
   - `StartRoomMapRoot/Book` 的 trigger 会打开永久升级界面 [`Assets/Scripts/Kernel/UI/UpdateUIScreen.cs`](Assets/Scripts/Kernel/UI/UpdateUIScreen.cs)
 
 ### 业务层 `Kernel`
@@ -71,8 +70,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - `Kernel.GameState`：位于 [`Assets/Scripts/Kernel/Status`](Assets/Scripts/Kernel/Status)
   - 入口：[`StatusController.cs`](Assets/Scripts/Kernel/Status/StatusController.cs)
 - UI：位于 [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI)
-  - 当前主入口包括 `StartUpMenuUI`、`StoryTellerUIScreen`、`DialogUIScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`（modal，与 `MainUIScreen` 同时显示）、`PopUpUIScreen`、`ProfileManagementUIScreen`、`TokenSelectUIScreen`、`UpdateUIScreen`、`SettlementUIScreen`
-  - [`Assets/Scripts/Kernel/UI/MainUIScreen.cs`](Assets/Scripts/Kernel/UI/MainUIScreen.cs) 当前除了顶部 Spell Panel，还负责把 `MainUI/Quest Panel/Quests` 渲染为任务 HUD；条目模板是 [`Assets/Prefabs/UI/Quest Entry.prefab`](Assets/Prefabs/UI/Quest%20Entry.prefab)
+  - 当前主入口包括 `StartUpMenuUI`、`StoryTellerUIScreen`、`DialogUIScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`HintUIScreen`、`PopUpUIScreen`、`ProfileManagementUIScreen`、`TokenSelectUIScreen`、`UpdateUIScreen`、`SettlementUIScreen`
 - 地图与寻路：位于 [`Assets/Scripts/Kernel/MapGrid`](Assets/Scripts/Kernel/MapGrid) 与 [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
   - 包含固定网格、双地图 Run flow、Seed 布局生成与格子寻路
   - [`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs) 暴露了边界厚度、障碍数量/尺寸、边缘留白、玩家安全区和刷怪环参数，可用来调节更密或更开的战斗地图
@@ -83,16 +81,14 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - Token 数据资产位于 [`Assets/Scripts/Kernel/Bullet/TokenData`](Assets/Scripts/Kernel/Bullet/TokenData)
 - 敌人与波次：位于 [`Assets/Scripts/Kernel/Enemy`](Assets/Scripts/Kernel/Enemy)
   - 入口：[`EnemyDefinition.cs`](Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs)、[`EnemyGenerator.cs`](Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs)、[`WaveDefinition.cs`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs)、[`WaveManager.cs`](Assets/Scripts/Kernel/Enemy/WaveManager.cs)
-  - `EnemyDefinition` 当前支持独立的移动槽、攻击槽、技能槽与基础战斗数值；移动类型包含追踪、冲刺、风筝、受击仇恨与环绕目标，攻击类型包含接触近战、远程 Token 子弹与近距自爆；当前普通敌人原型统一收敛为 `群 / 迅 / 甲 / 召 / 爆`
-  - `WaveDefinition` 当前只负责刷怪组合、每条目的 token 掉落表，以及可选的波后 `CombatEntryTokenSelectionPlan`；当某个敌人条目还没有同时配置 `RemnantToken` 和 `HealingToken` 掉落时，`OnValidate` 会在编辑器里自动补齐这两项默认掉落；敌人数值真源位于 [`EnemyDefinition`](Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs)
-  - `Main` 场景中的 [`WaveManager`](Assets/Scripts/Kernel/Enemy/WaveManager.cs) 不再依赖启用时自动开打，而是由 `MapRunFlowController` 在玩家进入起始房间传送装置后显式启动；每波清空后若当前 [`WaveDefinition`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs) 绑定了 `CombatEntryTokenSelectionPlan`，会先请求一轮 token 选择，再恢复波次推进；同一场战斗内每清完一波，`WaveManager` 会把 `completedWaveCount` 同步给 `EnemyGenerator`，并按 `1 + 0.04 * completedWaveCount` 对敌人的战力向数值做统一成长
+  - `EnemyDefinition` 当前支持独立的移动槽、攻击槽、技能槽与基础战斗数值；移动类型包含追踪、冲刺、风筝、受击仇恨、环绕目标、Boss 主动游走与“跟随最近敌人并保持距离”，攻击类型包含接触近战、远程 Token 子弹与近距自爆；技能类型除召唤外新增了 Boss 一阶段可用的 `DelayedGroundBomb`（玩家脚下延时爆炸与范围红圈预警），并引入通用技能行动锁使敌人释放技能期间不触发平A；远程子弹现支持 Homing 追踪与 Healing 命中结算，并支持敌人侧子弹速度倍率覆写；当前普通敌人原型统一收敛为 `群 / 迅 / 甲 / 召 / 爆 / 弦 / 锁 / 愈`，并新增双阶段 Boss 定义 `Boss_Phase1 / Boss_Phase2`
+  - `WaveDefinition` 当前负责刷怪组合、每条目的 token 掉落表、可选波后 `CombatEntryTokenSelectionPlan`，以及可选 Boss 元数据（Boss 显示名、二阶段定义、血量阈值）；当某个敌人条目还没有同时配置 `RemnantToken` 和 `HealingToken` 掉落时，`OnValidate` 会在编辑器里自动补齐这两项默认掉落；敌人数值真源位于 [`EnemyDefinition`](Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs)
+  - `Main` 场景中的 [`WaveManager`](Assets/Scripts/Kernel/Enemy/WaveManager.cs) 不再依赖启用时自动开打，而是由 `MapRunFlowController` 在玩家进入起始房间传送装置后显式启动；每波清空后若当前 [`WaveDefinition`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs) 绑定了 `CombatEntryTokenSelectionPlan`，会先请求一轮 token 选择，再恢复波次推进；同一场战斗内每清完一波，`WaveManager` 会把 `completedWaveCount` 同步给 `EnemyGenerator`，并按 `1 + 0.04 * completedWaveCount` 对敌人的战力向数值做统一成长；Boss 条目会触发 Boss 生命周期事件，并可在运行时按血量阈值切换到二阶段定义
 - 输入、玩家、存档：位于 [`Assets/Scripts/Kernel/Input`](Assets/Scripts/Kernel/Input)、[`Assets/Scripts/Kernel/Player`](Assets/Scripts/Kernel/Player)、[`Assets/Scripts/Kernel/Save`](Assets/Scripts/Kernel/Save)
   - 存档入口：[`RuntimeSaveService.cs`](Assets/Scripts/Kernel/Save/RuntimeSaveService.cs)
-  - 当前存档使用四个固定栏位：`profile-slot-1.json` 到 `profile-slot-4.json` 分别保存每个栏位的永久数据，`global-mode.json` 保存 `DevMode` / `NormalMode` 与四个栏位的摘要状态；永久档当前还持有已完成任务集合与激活任务事件计数进度
-- 任务：位于 [`Assets/Scripts/Kernel/Quest`](Assets/Scripts/Kernel/Quest)
-  - 入口：[`QuestService.cs`](Assets/Scripts/Kernel/Quest/QuestService.cs)
-  - 负责 Addressables 任务目录加载、前置条件扫描、激活任务持久化、事件驱动完成判定与奖励发放；V1 条件/奖励定义由外部 JSON 驱动，组合规则固定为 `allOf`
-  - 当前默认目录是一条新手引导链：读完 `Introduction` 后提示打开背包，奖励 `init_core`；把核心放进 Spell Book 并形成可编译结果后永久解锁 `StartRoomMapRoot` 里的战斗传送门；随后引导玩家走进传送门开始第一局
+  - `UIInputRouter` 当前支持 `Hint(Tab)`：在 `MainUIScreen` 与 `BackPackUIScreen` 上开关 [`Assets/Scripts/Kernel/UI/HintUIScreen.cs`](Assets/Scripts/Kernel/UI/HintUIScreen.cs)；背包顶部 Hint 按钮与 Tab 走同一条路由
+  - `HintUIScreen` 打开时会进入 `InHint` 状态，并与背包一致阻断玩家战斗输入和敌人行为
+  - 当前存档使用四个固定栏位：`profile-slot-1.json` 到 `profile-slot-4.json` 分别保存每个栏位的永久数据，`global-mode.json` 保存 `DevMode` / `NormalMode` 与四个栏位的摘要状态
 
 ### 基础设施层 `Vocalith`
 
@@ -109,18 +105,18 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 
 - Bullet Token 数据：[`Assets/Data/BulletTokens`](Assets/Data/BulletTokens)
   - 当前起始房间与波后抽取默认都通过 [`Assets/Data/BulletTokens/SelectionPlans/StartRoomCombatEntryTokenSelectionPlan.asset`](Assets/Data/BulletTokens/SelectionPlans/StartRoomCombatEntryTokenSelectionPlan.asset) 指向 [`Assets/Data/BulletTokens/TokenLib/Base_Token_Lib.asset`](Assets/Data/BulletTokens/TokenLib/Base_Token_Lib.asset) 作为可选 token 库
-  - BulletToken 现已支持四种 Core 的二级效果，以及 Bounce / Pierce / Spread / Explosion / Split / Control 等行为与结果词
-  - [`Assets/Data/BulletTokens/SelectionPlans`](Assets/Data/BulletTokens/SelectionPlans) 保存可复用的 token 抽取计划；`Main` 场景中的 [`MapRunFlowController`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 可单独引用一份“初始抽取”计划，而每个 [`WaveDefinition`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs) 也可以单独引用一份“波后抽取”计划；当前 `Main` 场景和 `Wave01` 到 `Wave03` 默认都指向 [`Assets/Data/BulletTokens/SelectionPlans/StartRoomCombatEntryTokenSelectionPlan.asset`](Assets/Data/BulletTokens/SelectionPlans/StartRoomCombatEntryTokenSelectionPlan.asset)
+  - BulletToken 现已支持四种 Core 的二级效果，以及 Bounce / Pierce / Spread / Homing / Explosion / Split / Control / Healing 等行为与结果词
+  - [`Assets/Data/BulletTokens/SelectionPlans`](Assets/Data/BulletTokens/SelectionPlans) 保存可复用的 token 抽取计划；`Main` 场景中的 [`MapRunFlowController`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 可单独引用一份“初始抽取”计划，而每个 [`WaveDefinition`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs) 也可以单独引用一份“波后抽取”计划；当前 `Main` 场景和 `Wave01` 到 `Wave04` 默认都可复用 [`Assets/Data/BulletTokens/SelectionPlans/StartRoomCombatEntryTokenSelectionPlan.asset`](Assets/Data/BulletTokens/SelectionPlans/StartRoomCombatEntryTokenSelectionPlan.asset)
 - 子弹视觉配置：[`Assets/Data/BulletVisuals`](Assets/Data/BulletVisuals)
 - 敌人定义：[`Assets/Data/Enemies`](Assets/Data/Enemies)
-  - `EnemyDefinition` 资产持有敌人的行为开关、基础战斗数值、远程/自爆配置与技能槽；当前 5 个普通敌人原型直接复用现有资产文件
+  - `EnemyDefinition` 资产持有敌人的行为开关、基础战斗数值、远程/自爆配置与技能槽；当前包含 8 个普通敌人原型与双阶段 Boss 定义 `Boss_Phase1`、`Boss_Phase2`
 - 波次定义：[`Assets/Data/Waves`](Assets/Data/Waves)
-  - `WaveDefinition` 资产只声明每波会刷哪些 `EnemyDefinition`、刷多少只、每条目的 token 掉落表，以及波后抽取计划；编辑器验证会自动给每个敌人条目补齐默认的 `RemnantToken` 和 `HealingToken`
+  - `WaveDefinition` 资产声明每波会刷哪些 `EnemyDefinition`、刷多少只、每条目的 token 掉落表、Boss 元数据，以及波后抽取计划；当前 `Main` 场景默认串联 `Wave01` 到 `Wave04`，其中 `Wave04` 为 Boss 波次；编辑器验证会自动给每个敌人条目补齐默认的 `RemnantToken` 和 `HealingToken`
 - 开场剧情文本与 Main 场景开场引导对话：[`Assets/Data/Story`](Assets/Data/Story)
-- 任务目录 JSON：[`Assets/Data/Quest`](Assets/Data/Quest)
-  - 当前任务目录通过 Addressables `Json` group 以 `Assets/Data/Quest/QuestCatalog` 作为加载地址
 - 永久升级目录：[`Assets/Data/Upgrades`](Assets/Data/Upgrades)
-- 结算文案目录：[`Assets/Data/UI`](Assets/Data/UI)
+- UI 文案目录：[`Assets/Data/UI`](Assets/Data/UI)
+  - [`Assets/Data/UI/SettlementPresentationCatalog.json`](Assets/Data/UI/SettlementPresentationCatalog.json) 负责结算文案
+  - [`Assets/Data/UI/HintCatalog.json`](Assets/Data/UI/HintCatalog.json) 负责 Hint 的手工帮助条目（敌人图鉴正文由 `EnemyDefinition.Description` 提供）
 - 业务 UI prefab：[`Assets/Prefabs/UI`](Assets/Prefabs/UI)
 - 敌人 prefab：[`Assets/Prefabs/Enemy`](Assets/Prefabs/Enemy)
 - 子弹 prefab：[`Assets/Prefabs/Bullet`](Assets/Prefabs/Bullet)

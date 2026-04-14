@@ -51,6 +51,7 @@ namespace Kernel.MapGrid
             }
 
             MarkTeleporterTriggered();
+            targetFlowController.TryGrantTutorialEntryTokenAfterTeleporterTriggered();
         }
 
         /// <summary>

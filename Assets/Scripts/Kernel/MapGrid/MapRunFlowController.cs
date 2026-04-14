@@ -49,7 +49,7 @@ namespace Kernel.MapGrid
         [Header("Token Selection")]
         [SerializeField] private CombatEntryTokenSelectionPlan initialCombatTokenSelectionPlan;
 
-        [Header("Tutorial Return Reward")]
+        [Header("Tutorial Teleporter Entry Reward")]
         [SerializeField] private PlaceableTokenData tutorialReturnTokenOverride;
         [SerializeField] private string tutorialReturnTokenAddress = TutorialQuestConstants.InitCoreTokenAddress;
 
@@ -151,7 +151,6 @@ namespace Kernel.MapGrid
             }
 
             RestorePlayerRuntimeState();
-            TryGrantTutorialReturnTokenOnStartRoomReturn();
             ResetRunTracking();
             currentState = RunFlowState.InStartRoom;
             return true;
@@ -166,6 +165,30 @@ namespace Kernel.MapGrid
         {
             snapshot = currentSettlementSnapshot;
             return snapshot != null;
+        }
+
+        /// <summary>
+        /// summary: 当玩家成功进入 teleporter 后，若教程链已经完成则往背包补发一个 InitCore。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void TryGrantTutorialEntryTokenAfterTeleporterTriggered()
+        {
+            if (!ShouldGrantTutorialEntryToken())
+            {
+                return;
+            }
+
+            if (!TryResolveTutorialEntryToken(out PlaceableTokenData tutorialEntryToken, out string resolveError))
+            {
+                GameDebug.LogWarning($"[MapRunFlowController] Failed to resolve tutorial entry token: {resolveError}");
+                return;
+            }
+
+            if (!TryAddSelectedTokenToInventory(tutorialEntryToken, out string grantError))
+            {
+                GameDebug.LogWarning($"[MapRunFlowController] Failed to grant tutorial entry token after entering teleporter: {grantError}");
+            }
         }
 
         /// <summary>
@@ -545,6 +568,8 @@ namespace Kernel.MapGrid
                 yield break;
             }
 
+            yield return HideBossInfoOverlayCo(uiManager);
+
             while (uiManager.IsNavigating())
             {
                 yield return null;
@@ -566,6 +591,21 @@ namespace Kernel.MapGrid
             }
 
             yield return uiManager.PushScreenAndWait<SettlementUIScreen>();
+        }
+
+        /// <summary>
+        /// summary: 结算展示前立即收起 BossInfo Overlay，避免它与结算窗同时可见。
+        /// param name="uiManager": 当前可用的 UI 管理器实例
+        /// returns: 用于等待 Overlay 收起的协程枚举器
+        /// </summary>
+        private static IEnumerator HideBossInfoOverlayCo(UIManager uiManager)
+        {
+            if (uiManager == null || !uiManager.TryGetOverlay<BossInfoUIScreen>(out BossInfoUIScreen bossInfo) || bossInfo == null)
+            {
+                yield break;
+            }
+
+            yield return bossInfo.Hide(0f);
         }
 
         private void RestorePlayerRuntimeState()
@@ -598,49 +638,25 @@ namespace Kernel.MapGrid
         }
 
         /// <summary>
-        /// summary: 当新手引导链已经完成时，在每次回到 StartRoom 后往背包补发一个 InitCore。
+        /// summary: 当玩家进入 teleporter 且已经记录过 teleporter 触发标记时，往背包补发一个 InitCore。
         /// param: 无
         /// returns: 无
         /// </summary>
-        private void TryGrantTutorialReturnTokenOnStartRoomReturn()
-        {
-            if (!ShouldGrantTutorialReturnToken())
-            {
-                return;
-            }
-
-            if (!TryResolveTutorialReturnToken(out PlaceableTokenData tutorialReturnToken, out string resolveError))
-            {
-                GameDebug.LogWarning($"[MapRunFlowController] Failed to resolve tutorial return token: {resolveError}");
-                return;
-            }
-
-            if (!TryAddSelectedTokenToInventory(tutorialReturnToken, out string grantError))
-            {
-                GameDebug.LogWarning($"[MapRunFlowController] Failed to grant tutorial return token after returning to StartRoom: {grantError}");
-            }
-        }
-
-        /// <summary>
-        /// summary: 判断当前档位是否已经完成整条新手引导链，满足则每次回到 StartRoom 都需要补发一个 InitCore。
-        /// param: 无
-        /// returns: 当前已完成整条引导链且存在有效档位时返回 true
-        /// </summary>
-        private static bool ShouldGrantTutorialReturnToken()
+        private static bool ShouldGrantTutorialEntryToken()
         {
             RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
             return saveService != null
                 && saveService.HasSelectedProfileSlot
-                && saveService.HasStoryFlag(TutorialQuestConstants.GuideChainFinishedFlagId);
+                && saveService.HasStoryFlag(TutorialQuestConstants.TeleporterTriggeredFlagId);
         }
 
         /// <summary>
-        /// summary: 解析回到 StartRoom 时要补发的固定教程 token；优先使用 Inspector override，其次回退到 Addressables 地址。
+        /// summary: 解析 teleporter 进入时要补发的固定教程 token；优先使用 Inspector override，其次回退到 Addressables 地址。
         /// param name="token": 输出解析到的 token 资产
         /// param name="error": 解析失败时输出的错误原因
         /// returns: 成功解析到有效 token 时返回 true
         /// </summary>
-        private bool TryResolveTutorialReturnToken(out PlaceableTokenData token, out string error)
+        private bool TryResolveTutorialEntryToken(out PlaceableTokenData token, out string error)
         {
             token = tutorialReturnTokenOverride;
             error = null;

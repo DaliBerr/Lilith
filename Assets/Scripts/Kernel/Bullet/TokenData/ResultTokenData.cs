@@ -69,6 +69,7 @@ namespace Kernel.Bullet
             {
                 explosionRadius = defaultExplosionRadius,
                 explosionDamageMultiplier = explosionDamageMultiplier,
+                explosionDelaySeconds = effectDuration,
                 splitProjectileCount = defaultTriggerCount,
                 splitDamageMultiplier = childDamageMultiplier,
                 controlTriggerCount = defaultTriggerCount,

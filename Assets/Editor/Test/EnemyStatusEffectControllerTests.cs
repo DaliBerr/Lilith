@@ -78,6 +78,25 @@ public sealed class EnemyStatusEffectControllerTests
         Assert.That(controller.CanAct, Is.True);
     }
 
+    [Test]
+    public void ApplySkillActionLock_BlocksActionsUntilDurationEnds()
+    {
+        CreateEnemy(out EnemyStatusEffectController controller);
+
+        bool applied = controller.ApplySkillActionLock(0.5f);
+        Assert.That(applied, Is.True);
+        Assert.That(controller.IsSkillActionLocked, Is.True);
+        Assert.That(controller.CanAct, Is.False);
+
+        InvokePrivateMethod(controller, "TickSkillActionLock", 0.2f);
+        Assert.That(controller.IsSkillActionLocked, Is.True);
+        Assert.That(controller.CanAct, Is.False);
+
+        InvokePrivateMethod(controller, "TickSkillActionLock", 0.3f);
+        Assert.That(controller.IsSkillActionLocked, Is.False);
+        Assert.That(controller.CanAct, Is.True);
+    }
+
     private BaseCharEnemyNorm1 CreateEnemy(out EnemyStatusEffectController controller)
     {
         GameObject enemyObject = new("Enemy");

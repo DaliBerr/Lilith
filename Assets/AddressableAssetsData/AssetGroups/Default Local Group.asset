@@ -15,13 +15,13 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: 378265894cc4fb84a9261618a5e23123
   m_SerializeEntries:
-  - m_GUID: 21dbee42a271c3a4ea112c91598ae0b1
-    m_Address: Assets/Images/New Piskel-1.png.png
+  - m_GUID: 2006e86e98a24e14799069970910b35a
+    m_Address: Assets/Data/BulletTokens/Core/InitCore
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2006e86e98a24e14799069970910b35a
-    m_Address: Assets/Data/BulletTokens/Core/InitCore
+  - m_GUID: 21dbee42a271c3a4ea112c91598ae0b1
+    m_Address: Assets/Images/New Piskel-1.png.png
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

@@ -130,6 +130,42 @@ public sealed class CharEnemyMovementTests
     }
 
     [Test]
+    public void TickMovement_FollowNearestEnemyKeepDistance_TracksNearestEnemyAndKeepsDistanceBand()
+    {
+        MapGridAuthoring mapGrid = CreateMapAuthoring(32, 32, Vector2.one);
+
+        BaseCharEnemyNorm1 followerEnemy = CreateEnemy(out CharEnemyMovement followerMovement, out GameObject followerObject);
+        BaseCharEnemyNorm1 nearestEnemy = CreateEnemy(out _, out GameObject nearestEnemyObject);
+        BaseCharEnemyNorm1 fartherEnemy = CreateEnemy(out _, out GameObject fartherEnemyObject);
+        SetEnemyHealth(followerEnemy, 10f);
+        SetEnemyHealth(nearestEnemy, 10f);
+        SetEnemyHealth(fartherEnemy, 10f);
+
+        followerObject.transform.position = mapGrid.GetCellWorldPosition(10, 10);
+        nearestEnemyObject.transform.position = mapGrid.GetCellWorldPosition(14, 10);
+        fartherEnemyObject.transform.position = mapGrid.GetCellWorldPosition(22, 10);
+
+        EnemyDefinition definition = CreateDefinition(EnemyMovementKind.FollowNearestEnemyKeepDistance, EnemyAttackKind.None);
+        SetPrivateField(definition, "keepDistanceMovement", new EnemyDefinition.KeepDistanceMovementDefinition
+        {
+            preferredDistance = 6f,
+            distanceTolerance = 1f,
+        });
+        followerEnemy.TryBindDefinition(definition);
+        followerEnemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 5f, 0f, 0f, 0f));
+        Assert.That(followerMovement.TrySetTargetMapGrid(mapGrid), Is.True);
+        InvokePrivateMethod(followerMovement, "Awake");
+
+        Vector3 firstStart = followerObject.transform.position;
+        InvokePrivateMethod(followerMovement, "TickMovement", 0.2f, 0f);
+        Assert.That(followerObject.transform.position.x, Is.LessThan(firstStart.x));
+
+        followerObject.transform.position = mapGrid.GetCellWorldPosition(4, 10);
+        InvokePrivateMethod(followerMovement, "TickMovement", 0.2f, 0.3f);
+        Assert.That(followerObject.transform.position.x, Is.GreaterThan(mapGrid.GetCellWorldPosition(4, 10).x));
+    }
+
+    [Test]
     public void TickMovement_OrbitTarget_UsesAnExplicitEnemyTargetTransform()
     {
         BaseCharEnemyNorm1 orbitTargetEnemy = CreateEnemy(out _, out GameObject orbitTargetObject);
@@ -156,6 +192,43 @@ public sealed class CharEnemyMovementTests
 
         Assert.That(enemyObject.transform.position.z, Is.GreaterThan(0f));
         Assert.That(Mathf.Abs(enemyObject.transform.position.x), Is.LessThan(0.01f));
+    }
+
+    [Test]
+    public void TickMovement_BossSmartRoam_SwitchesStrafeDirectionOnConfiguredInterval()
+    {
+        BaseCharEnemyNorm1 enemy = CreateEnemy(out CharEnemyMovement movement, out GameObject enemyObject);
+        GameObject playerObject = CreateGameObject("Player");
+        enemyObject.transform.position = Vector3.zero;
+        playerObject.transform.position = new Vector3(10f, 0f, 0f);
+
+        EnemyDefinition definition = CreateDefinition(EnemyMovementKind.BossSmartRoam, EnemyAttackKind.None);
+        SetPrivateField(definition, "bossSmartRoamMovement", new EnemyDefinition.BossSmartRoamMovementDefinition
+        {
+            preferredDistance = 10f,
+            distanceTolerance = 0.5f,
+            strafeSpeedMultiplier = 1f,
+            radialCorrectionStrength = 0f,
+            approachSpeedMultiplier = 1f,
+            retreatSpeedMultiplier = 1f,
+            sideSwitchIntervalSeconds = 0.2f,
+            startClockwise = true,
+        });
+        enemy.TryBindDefinition(definition);
+        enemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 12f, 0f, 0f, 0f));
+        Assert.That(movement.TrySetTarget(playerObject.transform), Is.True);
+        InvokePrivateMethod(movement, "Awake");
+
+        Vector3 firstStartPosition = enemyObject.transform.position;
+        InvokePrivateMethod(movement, "TickMovement", 0.2f, 0f);
+        Vector3 firstDelta = enemyObject.transform.position - firstStartPosition;
+
+        Vector3 secondStartPosition = enemyObject.transform.position;
+        InvokePrivateMethod(movement, "TickMovement", 0.2f, 0.25f);
+        Vector3 secondDelta = enemyObject.transform.position - secondStartPosition;
+
+        Assert.That(firstDelta.z, Is.LessThan(0f));
+        Assert.That(secondDelta.z, Is.GreaterThan(0f));
     }
 
     [Test]

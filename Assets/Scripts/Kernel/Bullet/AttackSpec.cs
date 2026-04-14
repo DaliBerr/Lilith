@@ -29,6 +29,7 @@ public enum AttackBehaviorType
     Chain = 4, //命中后链式弹射，优先弹射目标，弹射次数用 chainCount 表示
     Orbit = 5, //环绕目标飞行，持续时间用 projectileLife 表示，命中后不消失
     Pierce = 6, //命中敌人后继续飞行，穿透次数用 pierceCount 表示
+    Homing = 7, //持续追踪目标，命中后按结果词结算
 }
 
 /// <summary>
@@ -55,6 +56,7 @@ public enum AttackResultType
     StatusEffect = 3,
     SpawnChild = 4,
     Split = 5,
+    Healing = 6,
 }
 
 /// <summary>

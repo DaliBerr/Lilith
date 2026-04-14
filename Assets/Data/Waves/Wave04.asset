@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88a6c6cbd1b64a9d91d6e538f4f7740c, type: 3}
+  m_Name: Wave04
+  m_EditorClassIdentifier: Assembly-CSharp::WaveDefinition
+  spawnIntervalSeconds: 0.8
+  randomizeEnemySpawns: 0
+  postWaveTokenSelectionPlan: {fileID: 0}
+  enemySpawns:
+  - enemyDefinition: {fileID: 11400000, guid: b8f55b5b0a8d4a1ea7d7bb7fc7e3f1aa, type: 2}
+    spawnCount: 1
+    tokenDrops:
+    - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
+      dropChance: 0.001
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
+    isBossEncounter: 1
+    bossDisplayNameOverride: "\u971c\u950b\u4e3b\u5bb0"
+    bossPhaseTwoDefinition: {fileID: 11400000, guid: 0d4f2a9c31c64adfaa0b52e90f4f3ce1, type: 2}
+    bossPhaseTransitionHealthRatio: 0.5

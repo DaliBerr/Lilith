@@ -583,6 +583,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinitionBinder
   definition: {fileID: 0}
   enemyData: {fileID: 2777352532888450817}
+  statusEffects: {fileID: 3385508585071196898}
   movement: {fileID: -1434170183942207670}
   meleeAttacker: {fileID: 6645123987412301111}
   rangedTokenAttacker: {fileID: 6273754938378585078}
@@ -590,6 +591,7 @@ MonoBehaviour:
   summoner: {fileID: 6915695943104612265}
   glyphPresenter: {fileID: 6154108714737421061}
   visualPresenter: {fileID: 4250128577034327836}
+  resultVisualFeedback: {fileID: 0}
 --- !u!114 &6273754938378585078
 MonoBehaviour:
   m_ObjectHideFlags: 0

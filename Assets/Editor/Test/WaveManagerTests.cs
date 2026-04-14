@@ -88,6 +88,46 @@ public sealed class WaveManagerTests
     }
 
     [Test]
+    public void TryStartBossEncounter_AttachesBossPhaseControllerAndSwitchesDefinitionAtThreshold()
+    {
+        WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
+        GameObject bossObject = CreateGameObject("Boss");
+        BaseCharEnemyNorm1 boss = bossObject.AddComponent<BaseCharEnemyNorm1>();
+        EnemyDefinitionBinder binder = bossObject.AddComponent<EnemyDefinitionBinder>();
+        SetPrivateField(boss, "health", 120f);
+        SetPrivateField(boss, "currentHealth", 120f);
+        SetPrivateField(boss, "hasInitializedHealth", true);
+
+        EnemyDefinition phaseOneDefinition = CreateEnemyDefinition("BossPhaseOne", runtimePrefab: null, glyphText: "\u58f9");
+        SetPrivateField(phaseOneDefinition, "movementKind", EnemyMovementKind.None);
+        SetPrivateField(phaseOneDefinition, "attackKind", EnemyAttackKind.None);
+        EnemyDefinition phaseTwoDefinition = CreateEnemyDefinition("BossPhaseTwo", runtimePrefab: null, glyphText: "\u8d30");
+        SetPrivateField(phaseTwoDefinition, "movementKind", EnemyMovementKind.None);
+        SetPrivateField(phaseTwoDefinition, "attackKind", EnemyAttackKind.None);
+
+        Assert.That(binder.ApplyDefinition(phaseOneDefinition), Is.True);
+
+        WaveEnemySpawnEntry bossEntry = new(
+            enemyDefinition: phaseOneDefinition,
+            spawnCount: 1,
+            tokenDrops: null,
+            isBossEncounter: true,
+            bossDisplayNameOverride: "Final Boss",
+            bossPhaseTwoDefinition: phaseTwoDefinition,
+            bossPhaseTransitionHealthRatio: 0.5f);
+
+        InvokePrivateMethod<object>(waveManager, "TryStartBossEncounter", bossEntry, boss);
+
+        BossPhaseController phaseController = boss.GetComponent<BossPhaseController>();
+        Assert.That(phaseController, Is.Not.Null);
+
+        bool didDamage = boss.TryApplyDamage(60f, out _, out _);
+
+        Assert.That(didDamage, Is.True);
+        Assert.That(boss.Definition, Is.SameAs(phaseTwoDefinition));
+    }
+
+    [Test]
     public void CompleteSequence_PublishesCombatVictoryEventWithCompletedWaveCount()
     {
         WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();

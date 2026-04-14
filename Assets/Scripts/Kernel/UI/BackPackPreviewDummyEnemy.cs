@@ -136,6 +136,28 @@ namespace Kernel.UI
             return true;
         }
 
+        /// <summary>
+        /// summary: 对预览 Dummy 结算一次治疗；仅在存活且未满血时生效。
+        /// param: healing 本次需要恢复的生命值
+        /// param: resultingHealth 输出治疗结算后的生命值
+        /// param: isDead 输出治疗结算后的死亡状态
+        /// returns: 当治疗被实际接受时返回 true
+        /// </summary>
+        public override bool TryApplyHealing(float healing, out float resultingHealth, out bool isDead)
+        {
+            resultingHealth = currentHealth;
+            isDead = currentHealth <= 0f;
+            if (healing <= 0f || isDead || currentHealth >= maxHealth)
+            {
+                return false;
+            }
+
+            currentHealth = Mathf.Min(maxHealth, currentHealth + healing);
+            resultingHealth = currentHealth;
+            isDead = currentHealth <= 0f;
+            return true;
+        }
+
         private void EnsureBindings()
         {
             propertyBlock ??= new MaterialPropertyBlock();

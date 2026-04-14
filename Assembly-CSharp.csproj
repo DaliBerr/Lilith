@@ -76,6 +76,7 @@
     <Compile Include="Assets\Scripts\Vocalith\UI\UIWidget.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\LinkedTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackTokenLayoutUtility.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDelayedGroundBombCaster.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCrossRefs.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTokenPickup.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
@@ -84,6 +85,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\LinkedTokenOutlineView.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\UIInputRouter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualLibrary.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\BossPhaseController.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PopUpUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackProjectileEmitter.cs" />
@@ -116,6 +118,7 @@
     <Compile Include="Assets\Scripts\Kernel\MapGrid\StartRoomBattleTeleporter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ResultTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDiedEvent.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyResultVisualFeedback.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\Log.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PreTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Cell\CellData.cs" />
@@ -166,8 +169,10 @@
     <Compile Include="Assets\Scripts\Kernel\UI\BookPermanentUpgradeTrigger.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\CombatEntryTokenSelectionPlan.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\HintModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackGridSlotView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\HintUIScreen.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeBootstrap.cs" />
     <Compile Include="Assets\Scripts\GlobalStartup.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDefinition.cs" />
@@ -176,6 +181,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\PauseUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BehaviorTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterStartedEvent.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\BossPhaseChangedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyExplosiveAttacker.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\RemnantSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
@@ -200,11 +206,13 @@
     <Compile Include="Assets\Scripts\Kernel\Status\StatusSaveData.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScale.cs" />
     <Compile Include="Assets\Input\Player Controls.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\DelayedExplosionEffectRuntime.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile-2-Pass.shader" />
+    <None Include="Assets\AddressableAssetsData\link.xml" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro_Mobile.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF SSD.shader" />
