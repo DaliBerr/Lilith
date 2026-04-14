@@ -2,8 +2,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Kernel.Bullet;
+using Kernel.Quest;
 using Kernel.UI;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using Vocalith.EventSystem;
 using Vocalith.Logging;
 using Vocalith.UI;
@@ -46,6 +49,10 @@ namespace Kernel.MapGrid
         [Header("Token Selection")]
         [SerializeField] private CombatEntryTokenSelectionPlan initialCombatTokenSelectionPlan;
 
+        [Header("Tutorial Return Reward")]
+        [SerializeField] private PlaceableTokenData tutorialReturnTokenOverride;
+        [SerializeField] private string tutorialReturnTokenAddress = TutorialQuestConstants.InitCoreTokenAddress;
+
         private readonly Dictionary<string, int> runHarvestCounts = new(StringComparer.Ordinal);
         private readonly List<string> runHarvestOrder = new();
         private readonly Dictionary<string, int> defeatedEnemyCounts = new(StringComparer.Ordinal);
@@ -64,6 +71,9 @@ namespace Kernel.MapGrid
         private Vocalith.Random tokenSelectionRandom;
         private WaveManager subscribedWaveManager;
         private RunFlowState currentState = RunFlowState.InStartRoom;
+        private AsyncOperationHandle<PlaceableTokenData> tutorialReturnTokenHandle;
+        private bool hasTutorialReturnTokenHandle;
+        private PlaceableTokenData cachedTutorialReturnToken;
 
         public RunFlowState CurrentState => currentState;
 
@@ -92,6 +102,7 @@ namespace Kernel.MapGrid
             CancelPendingTokenSelection();
             RefreshWaveManagerSubscription(clearOnly: true);
             DisposeRunSubscriptions();
+            ReleaseTutorialReturnTokenHandle();
         }
 
         private void OnValidate()
@@ -140,6 +151,7 @@ namespace Kernel.MapGrid
             }
 
             RestorePlayerRuntimeState();
+            TryGrantTutorialReturnTokenOnStartRoomReturn();
             ResetRunTracking();
             currentState = RunFlowState.InStartRoom;
             return true;
@@ -586,6 +598,112 @@ namespace Kernel.MapGrid
         }
 
         /// <summary>
+        /// summary: 当新手引导链已经完成时，在每次回到 StartRoom 后往背包补发一个 InitCore。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void TryGrantTutorialReturnTokenOnStartRoomReturn()
+        {
+            if (!ShouldGrantTutorialReturnToken())
+            {
+                return;
+            }
+
+            if (!TryResolveTutorialReturnToken(out PlaceableTokenData tutorialReturnToken, out string resolveError))
+            {
+                GameDebug.LogWarning($"[MapRunFlowController] Failed to resolve tutorial return token: {resolveError}");
+                return;
+            }
+
+            if (!TryAddSelectedTokenToInventory(tutorialReturnToken, out string grantError))
+            {
+                GameDebug.LogWarning($"[MapRunFlowController] Failed to grant tutorial return token after returning to StartRoom: {grantError}");
+            }
+        }
+
+        /// <summary>
+        /// summary: 判断当前档位是否已经完成整条新手引导链，满足则每次回到 StartRoom 都需要补发一个 InitCore。
+        /// param: 无
+        /// returns: 当前已完成整条引导链且存在有效档位时返回 true
+        /// </summary>
+        private static bool ShouldGrantTutorialReturnToken()
+        {
+            RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
+            return saveService != null
+                && saveService.HasSelectedProfileSlot
+                && saveService.HasStoryFlag(TutorialQuestConstants.GuideChainFinishedFlagId);
+        }
+
+        /// <summary>
+        /// summary: 解析回到 StartRoom 时要补发的固定教程 token；优先使用 Inspector override，其次回退到 Addressables 地址。
+        /// param name="token": 输出解析到的 token 资产
+        /// param name="error": 解析失败时输出的错误原因
+        /// returns: 成功解析到有效 token 时返回 true
+        /// </summary>
+        private bool TryResolveTutorialReturnToken(out PlaceableTokenData token, out string error)
+        {
+            token = tutorialReturnTokenOverride;
+            error = null;
+            if (token != null)
+            {
+                return true;
+            }
+
+            if (cachedTutorialReturnToken != null)
+            {
+                token = cachedTutorialReturnToken;
+                return true;
+            }
+
+            string trimmedAddress = tutorialReturnTokenAddress != null ? tutorialReturnTokenAddress.Trim() : string.Empty;
+            if (string.IsNullOrEmpty(trimmedAddress))
+            {
+                error = "Tutorial return token address is empty.";
+                return false;
+            }
+
+            if (!hasTutorialReturnTokenHandle)
+            {
+                tutorialReturnTokenHandle = Addressables.LoadAssetAsync<PlaceableTokenData>(trimmedAddress);
+                hasTutorialReturnTokenHandle = true;
+            }
+
+            tutorialReturnTokenHandle.WaitForCompletion();
+            if (tutorialReturnTokenHandle.Status != AsyncOperationStatus.Succeeded || tutorialReturnTokenHandle.Result == null)
+            {
+                error = $"Addressables failed to load tutorial return token at '{trimmedAddress}'.";
+                ReleaseTutorialReturnTokenHandle();
+                return false;
+            }
+
+            cachedTutorialReturnToken = tutorialReturnTokenHandle.Result;
+            token = cachedTutorialReturnToken;
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 释放教程回房奖励 token 的 Addressables 句柄，避免场景卸载后泄漏。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ReleaseTutorialReturnTokenHandle()
+        {
+            cachedTutorialReturnToken = null;
+            if (!hasTutorialReturnTokenHandle)
+            {
+                return;
+            }
+
+            if (tutorialReturnTokenHandle.IsValid())
+            {
+                Addressables.Release(tutorialReturnTokenHandle);
+            }
+
+            tutorialReturnTokenHandle = default;
+            hasTutorialReturnTokenHandle = false;
+        }
+
+        /// <summary>
         /// summary: 根据当前波定义上的奖励计划，抽取本次波后奖励要展示的 token 库。
         /// param name="completedWave": 刚刚结算完成的波次定义
         /// param name="selectionLibrary": 输出本次波后奖励要使用的 token 库
@@ -917,6 +1035,9 @@ namespace Kernel.MapGrid
         private void SanitizeConfiguration()
         {
             postRunReturnDelay = Mathf.Max(0f, postRunReturnDelay);
+            tutorialReturnTokenAddress = string.IsNullOrWhiteSpace(tutorialReturnTokenAddress)
+                ? TutorialQuestConstants.InitCoreTokenAddress
+                : tutorialReturnTokenAddress.Trim();
         }
     }
 }

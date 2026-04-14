@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using Kernel.Bullet;
 using Kernel.MapGrid;
+using Kernel.Quest;
 using Kernel.UI;
 using NUnit.Framework;
 using UnityEngine;
@@ -14,6 +16,8 @@ public sealed class MapRunFlowControllerTests
     [TearDown]
     public void TearDown()
     {
+        DestroyExistingRuntimeSaveService();
+
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {
             Object createdObject = createdObjects[i];
@@ -31,6 +35,7 @@ public sealed class MapRunFlowControllerTests
         }
 
         createdObjects.Clear();
+        DeleteSaveDirectory();
     }
 
     [Test]
@@ -172,6 +177,69 @@ public sealed class MapRunFlowControllerTests
         Assert.That(error, Is.Null.Or.Empty);
         Assert.That(ContainsItem(inventory, startingToken), Is.True);
         Assert.That(ContainsItem(inventory, selectedToken), Is.True);
+    }
+
+    [Test]
+    public void TryReturnToStartRoomAndResetRun_GuideChainFinished_AddsTutorialReturnToken()
+    {
+        PrepareCleanSaveEnvironment();
+        RuntimeSaveService saveService = CreateSaveService();
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        Assert.That(saveService.SetStoryFlag(TutorialQuestConstants.GuideChainFinishedFlagId, true), Is.True);
+
+        CoreTokenData startingToken = CreateToken<CoreTokenData>("start", "Start");
+        CoreTokenData tutorialReturnToken = CreateToken<CoreTokenData>("init_return", "InitReturn");
+        MapRunFlowController controller = CreateController(
+            out _,
+            out _,
+            out PlayerBulletTokenInventory inventory,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            startingToken);
+
+        SetPrivateField(controller, "tutorialReturnTokenOverride", tutorialReturnToken);
+        SetPrivateField(controller, "currentState", RunFlowState.ShowingSettlement);
+
+        bool success = controller.TryReturnToStartRoomAndResetRun(out string error);
+
+        Assert.That(success, Is.True, error);
+        Assert.That(ContainsItem(inventory, startingToken), Is.True);
+        Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.True);
+    }
+
+    [Test]
+    public void TryReturnToStartRoomAndResetRun_WithoutGuideChainFinished_DoesNotAddTutorialReturnToken()
+    {
+        PrepareCleanSaveEnvironment();
+        RuntimeSaveService saveService = CreateSaveService();
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+
+        CoreTokenData startingToken = CreateToken<CoreTokenData>("start", "Start");
+        CoreTokenData tutorialReturnToken = CreateToken<CoreTokenData>("init_return", "InitReturn");
+        MapRunFlowController controller = CreateController(
+            out _,
+            out _,
+            out PlayerBulletTokenInventory inventory,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            startingToken);
+
+        SetPrivateField(controller, "tutorialReturnTokenOverride", tutorialReturnToken);
+        SetPrivateField(controller, "currentState", RunFlowState.ShowingSettlement);
+
+        bool success = controller.TryReturnToStartRoomAndResetRun(out string error);
+
+        Assert.That(success, Is.True, error);
+        Assert.That(ContainsItem(inventory, startingToken), Is.True);
+        Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.False);
     }
 
     private MapRunFlowController CreateController(
@@ -332,6 +400,13 @@ public sealed class MapRunFlowControllerTests
         return gameObject;
     }
 
+    private RuntimeSaveService CreateSaveService()
+    {
+        DestroyExistingRuntimeSaveService();
+        GameObject saveObject = CreateGameObject("RuntimeSaveService");
+        return saveObject.AddComponent<RuntimeSaveService>();
+    }
+
     private static void SetPrivateField<T>(object target, string fieldName, T value)
     {
         FieldInfo field = FindInstanceField(target.GetType(), fieldName);
@@ -409,5 +484,29 @@ public sealed class MapRunFlowControllerTests
         }
 
         return null;
+    }
+
+    private static void PrepareCleanSaveEnvironment()
+    {
+        DeleteSaveDirectory();
+        GlobalModeSettingsService.LoadMode(GameMode.Normal, forceReload: true);
+    }
+
+    private static void DeleteSaveDirectory()
+    {
+        string saveDirectoryPath = Path.Combine(Application.persistentDataPath, "Saves");
+        if (Directory.Exists(saveDirectoryPath))
+        {
+            Directory.Delete(saveDirectoryPath, recursive: true);
+        }
+    }
+
+    private static void DestroyExistingRuntimeSaveService()
+    {
+        RuntimeSaveService existingService = Object.FindFirstObjectByType<RuntimeSaveService>();
+        if (existingService != null)
+        {
+            Object.DestroyImmediate(existingService.gameObject);
+        }
     }
 }

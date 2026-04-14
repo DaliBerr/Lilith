@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Vocalith.Logging;
 using VocalithRandom = Vocalith.Random;
 
 /// <summary>
@@ -137,7 +138,7 @@ public sealed class EnemySummoner : MonoBehaviour, IEnemySkillCaster
         {
             return false;
         }
-
+        GameDebug.Log($"EnemySummoner on {gameObject.name} summoned {spawnedCount} {summonSkill.summonedEnemyDefinition.name}(s) around {transform.position}.");
         return true;
     }
 

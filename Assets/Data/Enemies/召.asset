@@ -43,7 +43,7 @@ MonoBehaviour:
   combat:
     maxHealth: 26
     moveSpeed: 28
-    attackRange: 24
+    attackRange: 288
     attackCooldown: 1.6
     attackDamage: 1
     damageReductionPercent: 0
@@ -60,11 +60,11 @@ MonoBehaviour:
     maxSkillCastsPerTick: 1
   skillSlots:
   - skillKind: 1
-    cooldownSeconds: 2
-    castRange: 24
+    cooldownSeconds: 4.5
+    castRange: 288
     summonSkill:
       summonedEnemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
       minSummonCountPerCast: 1
-      maxSummonCountPerCast: 3
-      summonRadius: 64
-      maxAliveSummons: 12
+      maxSummonCountPerCast: 2
+      summonRadius: 8
+      maxAliveSummons: 6

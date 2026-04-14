@@ -62,6 +62,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
   - 当前包含两张并存地图：`StartRoomMapRoot` 作为固定起始房间，`CombatMapRoot` 作为单局战斗地图
 - [`Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 负责玩家初始出生、进入战斗、战斗结束后弹出结算，再在关闭结算后返回起始房间的流转；起始房间传送装置触发后，会先按控制器上单独配置的初始 `CombatEntryTokenSelectionPlan` 打开一次 [`Assets/Scripts/Kernel/UI/TokenSelectUIScreen.cs`](Assets/Scripts/Kernel/UI/TokenSelectUIScreen.cs)，写入玩家选中的 token 后再启动第一波，而每个 [`WaveDefinition`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs) 还可额外指定“本波结束后的 token 抽取计划”，由 [`WaveManager`](Assets/Scripts/Kernel/Enemy/WaveManager.cs) 在波次清空后暂停推进，再打开同一套选择界面，完成后继续下一波或结束整场战斗
+  - 当新手引导链已经完成后，`MapRunFlowController` 会在每次从结算页回到 `StartRoomMapRoot` 时，额外往玩家背包补发一个 `InitCore`
   - [`Assets/Scripts/Kernel/MapGrid/StartRoomBattleTeleporter.cs`](Assets/Scripts/Kernel/MapGrid/StartRoomBattleTeleporter.cs) 挂在起始房间传送装置上，通过 trigger 请求进入新一局战斗；当前默认受新手引导任务链控制，只有完成背包教学后才会永久解锁
   - `StartRoomMapRoot/Book` 的 trigger 会打开永久升级界面 [`Assets/Scripts/Kernel/UI/UpdateUIScreen.cs`](Assets/Scripts/Kernel/UI/UpdateUIScreen.cs)
 

@@ -110,7 +110,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
             return false;
         }
 
-        ApplyConfiguredDamageOverride(compiledAttack);
+        ApplyConfiguredCombatOverrides(compiledAttack);
         if (AttackProjectileEmitter.Emit(
                 rangedAttack.bulletPrefab,
                 transform,
@@ -127,26 +127,55 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 当敌人本身声明了明确攻击伤害时，用该数值覆盖编译结果里的子弹伤害。
+    /// summary: 当敌人本身声明了明确战斗数值时，用运行时配置覆盖编译结果里的子弹伤害与可达距离。
     /// param: compiledAttack 当前准备发射的编译攻击结果
     /// returns: 无
     /// </summary>
-    private void ApplyConfiguredDamageOverride(CompiledAttack compiledAttack)
+    private void ApplyConfiguredCombatOverrides(CompiledAttack compiledAttack)
     {
         if (compiledAttack == null || !TryResolveEnemyData())
         {
             return;
         }
 
+        float configuredAttackRange = Mathf.Max(0f, enemyData.AttackRange);
         float configuredDamage = enemyData.AttackDamage;
-        if (configuredDamage <= 0f)
+        if (configuredDamage <= 0f && configuredAttackRange <= 0f)
         {
             return;
         }
 
         AttackSpec shotSpec = compiledAttack.AttackSpec;
-        shotSpec.damage = configuredDamage;
+        if (configuredDamage > 0f)
+        {
+            shotSpec.damage = configuredDamage;
+        }
+
+        if (configuredAttackRange > 0f)
+        {
+            float requiredTravelDistance = ResolveRequiredProjectileTravelDistance(configuredAttackRange);
+            shotSpec.maxTravelDistance = Mathf.Max(shotSpec.maxTravelDistance, requiredTravelDistance);
+            if (shotSpec.projectileSpeed > 0f)
+            {
+                float requiredLifetime = requiredTravelDistance / shotSpec.projectileSpeed;
+                shotSpec.maxLifetime = Mathf.Max(shotSpec.maxLifetime, requiredLifetime);
+            }
+        }
+
         compiledAttack.AttackSpec = shotSpec.GetSanitized();
+    }
+
+    /// <summary>
+    /// summary: 根据敌人的攻击距离和出生偏移，估算子弹至少需要支持的飞行距离。
+    /// param: attackRange 当前敌人声明的攻击距离
+    /// returns: 为了命中攻击距离边缘目标而推荐使用的最小飞行距离
+    /// </summary>
+    private float ResolveRequiredProjectileTravelDistance(float attackRange)
+    {
+        Transform spawnRoot = bulletSpawnOrigin != null ? bulletSpawnOrigin : transform;
+        Vector3 worldSpawnOffset = spawnRoot.TransformVector(bulletSpawnLocalOffset);
+        float planarSpawnOffset = new Vector2(worldSpawnOffset.x, worldSpawnOffset.z).magnitude;
+        return Mathf.Max(attackRange, attackRange + planarSpawnOffset);
     }
 
     /// <summary>

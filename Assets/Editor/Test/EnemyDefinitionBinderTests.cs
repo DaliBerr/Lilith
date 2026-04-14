@@ -182,13 +182,65 @@ public sealed class EnemyDefinitionBinderTests
     [Test]
     public void Norm1EnemyAsset_ReferencesBindableCharEnemyPrefab()
     {
-        EnemyDefinition definition = AssetDatabase.LoadAssetAtPath<EnemyDefinition>("Assets/Data/Enemies/Norm1Enemy.asset");
+        EnemyDefinition definition = AssetDatabase.LoadAssetAtPath<EnemyDefinition>("Assets/Data/Enemies/迅.asset");
 
         Assert.That(definition, Is.Not.Null);
         Assert.That(definition.RuntimePrefabBinder, Is.Not.Null);
         Assert.That(definition.RuntimePrefab, Is.Not.Null);
         Assert.That(definition.RuntimePrefab.GetComponent<EnemyDefinitionBinder>(), Is.SameAs(definition.RuntimePrefabBinder));
         Assert.That(definition.RuntimePrefab.GetComponent<Enemy>(), Is.Not.Null);
+    }
+
+    [Test]
+    public void KeepDistanceMovement_ClampsPreferredDistanceToReachableAbilityRange()
+    {
+        EnemyDefinition definition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        createdObjects.Add(definition);
+        SetPrivateField(definition, "movementKind", EnemyMovementKind.KeepDistance);
+        SetPrivateField(definition, "attackKind", EnemyAttackKind.RangedBulletToken);
+        SetPrivateField(definition, "combat", new EnemyDefinition.EnemyCombatDefinition
+        {
+            maxHealth = 26f,
+            moveSpeed = 28f,
+            attackRange = 24f,
+            attackCooldown = 1.6f,
+            attackDamage = 1f,
+            visualScaleMultiplier = 1f,
+        });
+        SetPrivateField(definition, "keepDistanceMovement", new EnemyDefinition.KeepDistanceMovementDefinition
+        {
+            preferredDistance = 256f,
+            distanceTolerance = 4f,
+        });
+        SetPrivateField(definition, "skillSlots", new List<EnemyDefinition.EnemySkillSlotDefinition>
+        {
+            CreateSummonSkillSlot(cooldownSeconds: 4.5f, castRange: 24f),
+        });
+
+        Assert.That(definition.KeepDistanceMovement.preferredDistance, Is.EqualTo(24f));
+        Assert.That(definition.KeepDistanceMovement.distanceTolerance, Is.EqualTo(4f));
+    }
+
+    [Test]
+    public void SummonerEnemyAsset_UsesLongRangeKiteConfigurationAndConfiguredSummonWindow()
+    {
+        EnemyDefinition definition = AssetDatabase.LoadAssetAtPath<EnemyDefinition>("Assets/Data/Enemies/召.asset");
+
+        Assert.That(definition, Is.Not.Null);
+        Assert.That(definition.MovementKind, Is.EqualTo(EnemyMovementKind.KeepDistance));
+        Assert.That(definition.AttackKind, Is.EqualTo(EnemyAttackKind.RangedBulletToken));
+        Assert.That(definition.RangedBulletAttack.bulletPrefab, Is.Not.Null);
+        Assert.That(definition.SkillSlots, Has.Count.EqualTo(1));
+        Assert.That(definition.KeepDistanceMovement.preferredDistance, Is.EqualTo(256f));
+        Assert.That(definition.Combat.attackRange, Is.EqualTo(288f));
+        Assert.That(definition.KeepDistanceMovement.preferredDistance, Is.LessThan(definition.Combat.attackRange));
+        Assert.That(definition.SkillSlots[0].cooldownSeconds, Is.EqualTo(4.5f));
+        Assert.That(definition.SkillSlots[0].castRange, Is.EqualTo(288f));
+        Assert.That(definition.KeepDistanceMovement.preferredDistance, Is.LessThan(definition.SkillSlots[0].castRange));
+        Assert.That(definition.SkillSlots[0].summonSkill.minSummonCountPerCast, Is.EqualTo(1));
+        Assert.That(definition.SkillSlots[0].summonSkill.maxSummonCountPerCast, Is.EqualTo(2));
+        Assert.That(definition.SkillSlots[0].summonSkill.summonRadius, Is.EqualTo(8f));
+        Assert.That(definition.SkillSlots[0].summonSkill.maxAliveSummons, Is.EqualTo(6));
     }
 
     private EnemyDefinitionBinder CreateBoundEnemyShell(

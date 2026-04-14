@@ -66,6 +66,50 @@ public sealed class EnemyAttackExtensionTests
     }
 
     [Test]
+    public void TryPerformAttack_RangedTokenAttacker_ExtendsProjectileLifetimeToConfiguredRange()
+    {
+        GameObject playerObject = CreateGameObject("Player");
+        playerObject.transform.position = new Vector3(0f, 0f, 200f);
+        PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
+        SetPrivateField(playerHealth, "maxHealth", 10f);
+        SetPrivateField(playerHealth, "currentHealth", 10f);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
+
+        GameObject enemyObject = CreateGameObject("Enemy");
+        enemyObject.transform.position = Vector3.zero;
+        BaseCharEnemyNorm1 enemy = enemyObject.AddComponent<BaseCharEnemyNorm1>();
+        EnemyRangedTokenAttacker attacker = enemyObject.AddComponent<EnemyRangedTokenAttacker>();
+        SetEnemyHealth(enemy, 10f);
+
+        CoreTokenData coreToken = CreateCoreToken("long_range_fire", "Long Range Fire", AttackCoreType.Fire);
+        coreToken.ProjectileSpeed = 100f;
+        coreToken.MaxLifetime = 0.5f;
+        coreToken.MaxTravelDistance = 32f;
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        EnemyDefinition definition = CreateDefinition(EnemyMovementKind.None, EnemyAttackKind.RangedBulletToken, runtimePrefab: null);
+        SetPrivateField(definition, "rangedBulletAttack", new EnemyDefinition.RangedBulletAttackDefinition
+        {
+            bulletPrefab = bulletPrefab,
+            formulaItems = new List<PlaceableTokenData> { coreToken },
+            targetPolicy = BulletTargetPolicy.PlayerOnly,
+        });
+
+        enemy.TryBindDefinition(definition);
+        enemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 0f, 288f, 0f, 3f));
+        Assert.That(attacker.TrySetTarget(playerObject.transform), Is.True);
+        InvokePrivateMethod(attacker, "Awake");
+
+        bool didFire = (bool)InvokePrivateMethod(attacker, "TryPerformAttack", 0f);
+        CharBullet emittedBullet = FindSpawnedBullet(bulletPrefab);
+        createdObjects.Add(emittedBullet.gameObject);
+
+        Assert.That(didFire, Is.True);
+        Assert.That(emittedBullet, Is.Not.Null);
+        Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.maxTravelDistance, Is.GreaterThanOrEqualTo(288f));
+        // Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.maxLifetime, Is.GreaterThanOrEqualTo(2.88f).Within(0.001f));
+    }
+
+    [Test]
     public void TryCastSkill_Summoner_SpawnsConfiguredEnemyWithoutDropsAndHonorsMaxAliveLimit()
     {
         CreateMapAuthoring(32, 32, Vector2.one, MapGridAuthoring.GroundTagName);

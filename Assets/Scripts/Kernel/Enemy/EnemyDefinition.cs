@@ -342,7 +342,7 @@ public sealed class EnemyDefinition : ScriptableObject
     public EnemyMovementKind MovementKind => movementKind;
     public EnemyAttackKind AttackKind => attackKind;
     public DashMovementDefinition DashMovement => dashMovement;
-    public KeepDistanceMovementDefinition KeepDistanceMovement => keepDistanceMovement;
+    public KeepDistanceMovementDefinition KeepDistanceMovement => ResolveKeepDistanceMovementDefinition();
     public AggroOnHitMovementDefinition AggroOnHitMovement => aggroOnHitMovement;
     public OrbitTargetMovementDefinition OrbitTargetMovement => orbitTargetMovement;
     public EnemyVisualDefinition Visual => visual;
@@ -370,6 +370,8 @@ public sealed class EnemyDefinition : ScriptableObject
         {
             skillSlots[i] = skillSlots[i].GetSanitized();
         }
+
+        keepDistanceMovement = ResolveKeepDistanceMovementDefinition();
     }
 
     /// <summary>
@@ -405,6 +407,48 @@ public sealed class EnemyDefinition : ScriptableObject
     private IReadOnlyList<EnemySkillSlotDefinition> ResolveSkillSlots()
     {
         return skillSlots != null ? skillSlots : Array.Empty<EnemySkillSlotDefinition>();
+    }
+
+    /// <summary>
+    /// summary: 当敌人使用风筝移动且依赖远程攻击或技能施法时，限制其首选距离不要超过有效施法范围。
+    /// param: 无
+    /// returns: 经过约束后的风筝距离配置
+    /// </summary>
+    private KeepDistanceMovementDefinition ResolveKeepDistanceMovementDefinition()
+    {
+        KeepDistanceMovementDefinition resolvedKeepDistance = keepDistanceMovement.GetSanitized();
+        if (movementKind != EnemyMovementKind.KeepDistance)
+        {
+            return resolvedKeepDistance;
+        }
+
+        EnemyCombatDefinition sanitizedCombat = combat.GetSanitized();
+        float reachableAbilityRange = 0f;
+        if (attackKind == EnemyAttackKind.RangedBulletToken)
+        {
+            reachableAbilityRange = Mathf.Max(reachableAbilityRange, sanitizedCombat.attackRange);
+        }
+
+        if (skillSlots != null)
+        {
+            for (int i = 0; i < skillSlots.Count; i++)
+            {
+                EnemySkillSlotDefinition skillSlot = skillSlots[i].GetSanitized();
+                if (skillSlot.skillKind == EnemySkillKind.None)
+                {
+                    continue;
+                }
+
+                reachableAbilityRange = Mathf.Max(reachableAbilityRange, skillSlot.ResolveCastRange(sanitizedCombat.attackRange));
+            }
+        }
+
+        if (reachableAbilityRange > 0f)
+        {
+            resolvedKeepDistance.preferredDistance = Mathf.Min(resolvedKeepDistance.preferredDistance, reachableAbilityRange);
+        }
+
+        return resolvedKeepDistance;
     }
 
     private static float SanitizeValue(float value, float fallbackValue)

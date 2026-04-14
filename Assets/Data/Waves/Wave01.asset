@@ -44,3 +44,17 @@ MonoBehaviour:
       dropCount: 1
     isBossEncounter: 0
     bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: 6ccecc6f6447003419bd70625f3cd85d, type: 2}
+    spawnCount: 1
+    tokenDrops:
+    - token: {fileID: 11400000, guid: 284d0dfbf5e92f54cb6ed8439e861f53, type: 2}
+      dropChance: 0.002
+      dropCount: 1
+    - token: {fileID: 11400000, guid: d003c8ca439ab0a43920510c3f8ed8b2, type: 2}
+      dropChance: 0.1
+      dropCount: 1
+    - token: {fileID: 11400000, guid: 5b2721eaf3c06c94f8616eebaa15836c, type: 2}
+      dropChance: 0.2
+      dropCount: 1
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
