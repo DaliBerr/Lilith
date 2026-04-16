@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: "\u53EC"
   displayName: "\u53EC"
+  description: "躲在远处施法，时常唤来杂兵拖住你，久战会越打越乱。"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 3
   attackKind: 2

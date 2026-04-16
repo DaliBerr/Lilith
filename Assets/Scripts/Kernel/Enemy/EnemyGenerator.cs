@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Kernel;
 using Kernel.MapGrid;
 using UnityEngine;
+using Vocalith.Logging;
 using VocalithRandom = Vocalith.Random;
 
 /// <summary>
@@ -297,9 +298,11 @@ public sealed class EnemyGenerator : MonoBehaviour
             return false;
         }
 
-        TrySnapSpawnedEnemyToGroundPlane(spawnedRoot.transform);
+        TrySnapSpawnedEnemyToGroundPlane(spawnedRoot.transform, definition, config);
         TryBindEnemyTargets(spawnedRoot);
         ApplyWaveConfigToReceivers(spawnedEnemy, config);
+        // Guard against late transform mutations during bind/config so spawned units always end grounded.
+        TrySnapSpawnedEnemyToGroundPlane(spawnedRoot.transform, definition, config);
         return true;
     }
 
@@ -376,11 +379,13 @@ public sealed class EnemyGenerator : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 在实例化后立刻把 grounded 敌人根节点抬到地图平面上，避免旧 prefab 高度约定继续沿用到运行时。
+    /// summary: 在实例化后立刻把 grounded 敌人根节点抬到地图平面上，并按视觉缩放倍率放大上抬量。
     /// param: enemyRoot 刚刚实例化完成的敌人根节点
+    /// param: definition 当前实例使用的敌人定义
+    /// param: config 当前实例应用的波次配置
     /// returns: 无
     /// </summary>
-    private void TrySnapSpawnedEnemyToGroundPlane(Transform enemyRoot)
+    private void TrySnapSpawnedEnemyToGroundPlane(Transform enemyRoot, EnemyDefinition definition, EnemyWaveConfig config)
     {
         if (enemyRoot == null || !TryResolveMapGrid())
         {
@@ -397,10 +402,43 @@ public sealed class EnemyGenerator : MonoBehaviour
             return;
         }
 
-        if (WorldHeightUtility.TrySnapGroundedRoot(enemyRoot, referenceCollider, targetMapGrid.WorldPlaneY))
+        if (!WorldHeightUtility.TryGetGroundedRootPosition(enemyRoot, referenceCollider, targetMapGrid.WorldPlaneY, out Vector3 groundedPosition))
         {
-            SyncSpawnedEnemyRigidbody(enemyRoot);
+            return;
         }
+
+        float groundedLift = groundedPosition.y - targetMapGrid.WorldPlaneY;
+        float effectiveVisualScaleMultiplier = ResolveEffectiveVisualScaleMultiplier(definition, config.visualScaleMultiplier);
+        float scaledLift = groundedLift * ResolveScaleAwareGroundLiftMultiplier(effectiveVisualScaleMultiplier);
+        groundedPosition.y = targetMapGrid.WorldPlaneY + scaledLift;
+        GameDebug.Log($"Snapped spawned enemy {enemyRoot.name} to ground plane at Y={targetMapGrid.WorldPlaneY} with original lift {groundedLift:F2} scaled to {scaledLift:F2} using effective visual scale multiplier {effectiveVisualScaleMultiplier:F2}.");
+        enemyRoot.position = groundedPosition;
+        SyncSpawnedEnemyRigidbody(enemyRoot);
+    }
+
+    private static float ResolveScaleAwareGroundLiftMultiplier(float effectiveVisualScaleMultiplier)
+    {
+        return Mathf.Max(1f, effectiveVisualScaleMultiplier * 0.5f);
+    }
+
+    private static float ResolveEffectiveVisualScaleMultiplier(EnemyDefinition definition, float runtimeVisualScaleMultiplier)
+    {
+        float sanitizedRuntimeScale = SanitizePositiveScale(runtimeVisualScaleMultiplier);
+        float sanitizedGlyphScale = definition != null
+            ? SanitizePositiveScale(definition.Visual.glyphScaleMultiplier)
+            : 1f;
+
+        return Mathf.Max(1f, sanitizedRuntimeScale, sanitizedGlyphScale);
+    }
+
+    private static float SanitizePositiveScale(float value)
+    {
+        if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
+        {
+            return 1f;
+        }
+
+        return value;
     }
 
     private static void SyncSpawnedEnemyRigidbody(Transform enemyRoot)

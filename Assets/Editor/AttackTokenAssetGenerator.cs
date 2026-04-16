@@ -285,7 +285,10 @@ public static class AttackTokenAssetGenerator
         });
 
         CoreTokenData fireCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(CoreFolder + "/FireCore.asset");
+        CoreTokenData iceCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(CoreFolder + "/IceCore.asset");
         BehaviorTokenData spreadBehavior = AssetDatabase.LoadAssetAtPath<BehaviorTokenData>(BehaviorFolder + "/Spread.asset");
+        BehaviorTokenData pierceBehavior = AssetDatabase.LoadAssetAtPath<BehaviorTokenData>(BehaviorFolder + "/Pierce.asset");
+        ResultTokenData explosionResult = AssetDatabase.LoadAssetAtPath<ResultTokenData>(ResultFolder + "/Explosion.asset");
         CreateOrUpdateAsset<LinkedTokenData>(LinkedFolder + "/Fire-Spread.asset", item =>
         {
             item.ItemId = "Fire_Spread";
@@ -296,6 +299,32 @@ public static class AttackTokenAssetGenerator
             {
                 fireCore,
                 spreadBehavior,
+            });
+        });
+
+        CreateOrUpdateAsset<LinkedTokenData>(LinkedFolder + "/Fire-Explosion.asset", item =>
+        {
+            item.ItemId = "Fire_Explosion";
+            item.Description = "默认火核 + 爆炸组合。";
+            item.ConfiguredDamageMultiplier = 1f;
+            item.PickupDisplayTextOverride = "火爆";
+            item.SetLinkedTokens(new BaseTokenData[]
+            {
+                fireCore,
+                explosionResult,
+            });
+        });
+
+        CreateOrUpdateAsset<LinkedTokenData>(LinkedFolder + "/Ice-Pierce.asset", item =>
+        {
+            item.ItemId = "Ice_Pierce";
+            item.Description = "默认冰核 + 穿透组合。";
+            item.ConfiguredDamageMultiplier = 1f;
+            item.PickupDisplayTextOverride = "冰透";
+            item.SetLinkedTokens(new BaseTokenData[]
+            {
+                iceCore,
+                pierceBehavior,
             });
         });
 

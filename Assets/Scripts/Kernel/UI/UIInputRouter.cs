@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Kernel.Bullet;
 using Kernel.GameState;
 using Kernel.MapGrid;
 using Vocalith.Logging;
@@ -7,6 +8,9 @@ using Vocalith.UI;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Kernel.UI
 {
@@ -25,6 +29,7 @@ namespace Kernel.UI
         private bool isHandlingBack;
         private bool isHandlingBackpack;
         private bool isHandlingHint;
+        private bool isHandlingDebugCollect;
         private bool isReturningToStartUpScene;
         private readonly HashSet<Transform> permanentUpgradeInteractorRoots = new();
 
@@ -79,6 +84,16 @@ namespace Kernel.UI
             {
                 yield return null;
             }
+        }
+
+        /// <summary>
+        /// summary: 处理不走 InputAction 的调试快捷键（当前用于 O 键一键收取场景中全部 BulletToken pickup）。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void Update()
+        {
+            TryHandleDebugCollectAllBulletTokensShortcut();
         }
 
         /// <summary>
@@ -313,6 +328,46 @@ namespace Kernel.UI
             }
 
             StartCoroutine(HandleSettlementScreenClose());
+        }
+
+        /// <summary>
+        /// summary: 监听 O 键调试快捷键；仅在 DevMode 且非文本输入互锁时执行一键收取。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void TryHandleDebugCollectAllBulletTokensShortcut()
+        {
+            if (isHandlingDebugCollect || !StatusController.HasStatus(StatusList.DevModeStatus))
+            {
+                return;
+            }
+
+            InputActionManager inputManager = InputActionManager.Instance;
+            if (inputManager != null && inputManager.IsTextEntryInterlockActive)
+            {
+                return;
+            }
+
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null || !keyboard.oKey.wasPressedThisFrame)
+            {
+                return;
+            }
+
+            isHandlingDebugCollect = true;
+            try
+            {
+                if (!TryGrantAllRegisteredBulletTokensToInventory(out int movedCount, out int skippedCount, out int registeredCount))
+                {
+                    return;
+                }
+
+                GameDebug.Log($"[UIInputRouter] Debug O granted {movedCount}/{registeredCount} registered BulletToken(s) into inventory. Skipped {skippedCount} token(s) due to capacity.");
+            }
+            finally
+            {
+                isHandlingDebugCollect = false;
+            }
         }
 
         /// <summary>
@@ -975,6 +1030,144 @@ namespace Kernel.UI
             if (!flowController.TryReturnToStartRoomAndResetRun(out string error))
             {
                 GameDebug.LogError($"[UIInputRouter] {error}");
+            }
+        }
+
+        /// <summary>
+        /// summary: 扫描已注册在 TokenLibrary/SelectionPlan 中的 BulletToken，并尽可能直接写入玩家库存。
+        /// param: movedCount 输出成功放入库存的 token 数量
+        /// param: skippedCount 输出因背包容量不足而未放入的 token 数量
+        /// param: registeredCount 输出本次可发放的已注册 token 总数
+        /// returns: 成功解析到玩家库存时返回 true
+        /// </summary>
+        private static bool TryGrantAllRegisteredBulletTokensToInventory(out int movedCount, out int skippedCount, out int registeredCount)
+        {
+            movedCount = 0;
+            skippedCount = 0;
+            registeredCount = 0;
+
+            PlayerBulletTokenInventory inventory = FindFirstObjectByType<PlayerBulletTokenInventory>();
+            if (inventory == null)
+            {
+                GameDebug.LogWarning("[UIInputRouter] Debug O grant failed because PlayerBulletTokenInventory is missing.");
+                return false;
+            }
+
+            List<PlaceableTokenData> registeredTokens = CollectRegisteredBulletTokens();
+            registeredCount = registeredTokens.Count;
+            if (registeredCount <= 0)
+            {
+                GameDebug.LogWarning("[UIInputRouter] Debug O found no registered BulletToken in TokenLibrary.");
+                return true;
+            }
+
+            for (int i = 0; i < registeredTokens.Count; i++)
+            {
+                PlaceableTokenData token = registeredTokens[i];
+                if (token == null || token is PickupTokenData)
+                {
+                    continue;
+                }
+
+                if (!inventory.TryAddItem(token, out _))
+                {
+                    skippedCount++;
+                    continue;
+                }
+
+                movedCount++;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 聚合当前工程中已注册的 BulletTokenLibrary 条目并去重。
+        /// param: 无
+        /// returns: 去重后的可发放 token 列表
+        /// </summary>
+        private static List<PlaceableTokenData> CollectRegisteredBulletTokens()
+        {
+            HashSet<int> seenTokenIds = new();
+            List<PlaceableTokenData> tokens = new();
+
+#if UNITY_EDITOR
+            string[] libraryGuids = AssetDatabase.FindAssets("t:BulletTokenLibrary");
+            for (int i = 0; i < libraryGuids.Length; i++)
+            {
+                string assetPath = AssetDatabase.GUIDToAssetPath(libraryGuids[i]);
+                BulletTokenLibrary library = AssetDatabase.LoadAssetAtPath<BulletTokenLibrary>(assetPath);
+                AppendLibraryTokens(library, tokens, seenTokenIds);
+            }
+#endif
+
+            BulletTokenLibrary[] loadedLibraries = Resources.FindObjectsOfTypeAll<BulletTokenLibrary>();
+            for (int i = 0; i < loadedLibraries.Length; i++)
+            {
+                AppendLibraryTokens(loadedLibraries[i], tokens, seenTokenIds);
+            }
+
+            CombatEntryTokenSelectionPlan[] loadedPlans = Resources.FindObjectsOfTypeAll<CombatEntryTokenSelectionPlan>();
+            for (int i = 0; i < loadedPlans.Length; i++)
+            {
+                AppendPlanLibraryTokens(loadedPlans[i], tokens, seenTokenIds);
+            }
+
+            return tokens;
+        }
+
+        /// <summary>
+        /// summary: 把一个 BulletTokenLibrary 中的 token 追加到结果列表，并按实例去重。
+        /// param: library 目标 token 库
+        /// param: target 输出列表
+        /// param: seenTokenIds 去重集合
+        /// returns: 无
+        /// </summary>
+        private static void AppendLibraryTokens(BulletTokenLibrary library, List<PlaceableTokenData> target, ISet<int> seenTokenIds)
+        {
+            if (library == null || target == null || seenTokenIds == null)
+            {
+                return;
+            }
+
+            IReadOnlyList<PlaceableTokenData> entries = library.GetTokens();
+            for (int i = 0; i < entries.Count; i++)
+            {
+                PlaceableTokenData token = entries[i];
+                if (token == null || token is PickupTokenData)
+                {
+                    continue;
+                }
+
+                int instanceId = token.GetInstanceID();
+                if (!seenTokenIds.Add(instanceId))
+                {
+                    continue;
+                }
+
+                target.Add(token);
+            }
+        }
+
+        /// <summary>
+        /// summary: 把一个 SelectionPlan 引用到的所有库中的 token 追加到结果列表，并按实例去重。
+        /// param: plan 目标抽取计划
+        /// param: target 输出列表
+        /// param: seenTokenIds 去重集合
+        /// returns: 无
+        /// </summary>
+        private static void AppendPlanLibraryTokens(CombatEntryTokenSelectionPlan plan, List<PlaceableTokenData> target, ISet<int> seenTokenIds)
+        {
+            if (plan == null || target == null || seenTokenIds == null)
+            {
+                return;
+            }
+
+            IReadOnlyList<CombatEntryTokenSelectionPlan.LibraryWeightEntry> entries = plan.LibraryEntries;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                BulletTokenLibrary library = entries[i] != null ? entries[i].Library : null;
+                AppendLibraryTokens(library, target, seenTokenIds);
             }
         }
     }

@@ -23,6 +23,9 @@ public sealed class WaveDefinition : ScriptableObject
     [SerializeField, Min(0f)] private float spawnIntervalSeconds = 1f;
     [SerializeField] private bool randomizeEnemySpawns;
     [SerializeField] private CombatEntryTokenSelectionPlan postWaveTokenSelectionPlan;
+    [SerializeField] private bool isBossWave;
+    [SerializeField] private List<EnemyBulletTokenDropEntry> waveTokenDrops = new();
+    [SerializeField] private bool applyEntrySpecificTokenDrops;
     [SerializeField] private List<WaveEnemySpawnEntry> enemySpawns = new()
     {
         new WaveEnemySpawnEntry(null, 1)
@@ -31,6 +34,9 @@ public sealed class WaveDefinition : ScriptableObject
     public float SpawnIntervalSeconds => spawnIntervalSeconds;
     public bool RandomizeEnemySpawns => randomizeEnemySpawns;
     public CombatEntryTokenSelectionPlan PostWaveTokenSelectionPlan => postWaveTokenSelectionPlan;
+    public bool IsBossWave => isBossWave;
+    public IReadOnlyList<EnemyBulletTokenDropEntry> WaveTokenDrops => waveTokenDrops;
+    public bool ApplyEntrySpecificTokenDrops => applyEntrySpecificTokenDrops;
     public int SpawnEntryCount => enemySpawns != null ? enemySpawns.Count : 0;
     public int TotalSpawnCount
     {
@@ -60,37 +66,139 @@ public sealed class WaveDefinition : ScriptableObject
     private void OnValidate()
     {
         spawnIntervalSeconds = Mathf.Max(MinimumSpawnIntervalSeconds, spawnIntervalSeconds);
+        waveTokenDrops ??= new List<EnemyBulletTokenDropEntry>();
         if (enemySpawns == null)
         {
             enemySpawns = new List<WaveEnemySpawnEntry>();
         }
 
-        List<EnemyBulletTokenDropEntry> defaultTokenDrops = null;
+        waveTokenDrops = EnemyWaveConfig.SanitizeTokenDrops(waveTokenDrops);
         for (int i = 0; i < enemySpawns.Count; i++)
         {
-            WaveEnemySpawnEntry sanitizedEntry = enemySpawns[i].GetSanitized();
-            if (sanitizedEntry.enemyDefinition != null)
+            enemySpawns[i] = enemySpawns[i].GetSanitized();
+        }
+
+        List<EnemyBulletTokenDropEntry> resolvedWaveDrops = ResolveWaveLevelTokenDrops();
+        waveTokenDrops = EnemyWaveConfig.SanitizeTokenDrops(resolvedWaveDrops);
+    }
+
+    /// <summary>
+    /// summary: 解析当前波次应应用到敌人的最终掉落表；可选叠加条目级额外掉落。
+    /// param: entryTokenDrops 当前敌人条目配置的额外掉落
+    /// returns: 当前敌人应使用的运行时掉落表
+    /// </summary>
+    public IReadOnlyList<EnemyBulletTokenDropEntry> ResolveRuntimeTokenDrops(IReadOnlyList<EnemyBulletTokenDropEntry> entryTokenDrops = null)
+    {
+        List<EnemyBulletTokenDropEntry> resolvedWaveDrops = ResolveWaveLevelTokenDrops();
+        if (!applyEntrySpecificTokenDrops || entryTokenDrops == null || entryTokenDrops.Count <= 0)
+        {
+            return resolvedWaveDrops;
+        }
+
+        return MergeTokenDrops(resolvedWaveDrops, entryTokenDrops);
+    }
+
+    /// <summary>
+    /// summary: 解析当前波次的基础掉落表；优先使用波次字段，其次兼容旧条目字段，最后兜底默认掉落。
+    /// param: 无
+    /// returns: 当前波次基础掉落表
+    /// </summary>
+    private List<EnemyBulletTokenDropEntry> ResolveWaveLevelTokenDrops()
+    {
+        List<EnemyBulletTokenDropEntry> resolvedWaveDrops = EnemyWaveConfig.SanitizeTokenDrops(waveTokenDrops);
+        if (!HasAssignedTokenDrop(resolvedWaveDrops))
+        {
+            resolvedWaveDrops = BuildWaveTokenDropsFromEnemyEntries();
+        }
+
+        List<EnemyBulletTokenDropEntry> defaultTokenDrops = BuildDefaultTokenDrops();
+        if (defaultTokenDrops.Count > 0)
+        {
+            if (!HasAssignedTokenDrop(resolvedWaveDrops))
             {
-                if (defaultTokenDrops == null)
+                resolvedWaveDrops = new List<EnemyBulletTokenDropEntry>(defaultTokenDrops);
+            }
+            else
+            {
+                AppendMissingDefaultTokenDrops(resolvedWaveDrops, defaultTokenDrops);
+            }
+        }
+
+        return resolvedWaveDrops;
+    }
+
+    /// <summary>
+    /// summary: 当波次字段尚未配置时，按旧版每敌人条目掉落推导一份波次级掉落，保证升级兼容。
+    /// param: 无
+    /// returns: 从敌人条目归并后的波次级掉落表
+    /// </summary>
+    private List<EnemyBulletTokenDropEntry> BuildWaveTokenDropsFromEnemyEntries()
+    {
+        List<EnemyBulletTokenDropEntry> inferredDrops = new();
+        if (enemySpawns == null)
+        {
+            return inferredDrops;
+        }
+
+        for (int i = 0; i < enemySpawns.Count; i++)
+        {
+            IReadOnlyList<EnemyBulletTokenDropEntry> sanitizedEntryDrops = EnemyWaveConfig.SanitizeTokenDrops(enemySpawns[i].tokenDrops);
+            for (int dropIndex = 0; dropIndex < sanitizedEntryDrops.Count; dropIndex++)
+            {
+                EnemyBulletTokenDropEntry entryDrop = sanitizedEntryDrops[dropIndex];
+                if (entryDrop.token == null)
                 {
-                    defaultTokenDrops = BuildDefaultTokenDrops();
+                    continue;
                 }
 
-                if (defaultTokenDrops.Count > 0)
+                int existingIndex = FindTokenDropIndex(inferredDrops, entryDrop.token);
+                if (existingIndex < 0)
                 {
-                    if (!HasAssignedTokenDrop(sanitizedEntry.tokenDrops))
-                    {
-                        sanitizedEntry.tokenDrops = new List<EnemyBulletTokenDropEntry>(defaultTokenDrops);
-                    }
-                    else
-                    {
-                        AppendMissingDefaultTokenDrops(sanitizedEntry.tokenDrops, defaultTokenDrops);
-                    }
+                    inferredDrops.Add(entryDrop);
+                    continue;
                 }
+
+                EnemyBulletTokenDropEntry existingDrop = inferredDrops[existingIndex];
+                existingDrop.dropChance = Mathf.Max(existingDrop.dropChance, entryDrop.dropChance);
+                existingDrop.dropCount = Mathf.Max(existingDrop.dropCount, entryDrop.dropCount);
+                inferredDrops[existingIndex] = existingDrop;
+            }
+        }
+
+        return inferredDrops;
+    }
+
+    /// <summary>
+    /// summary: 把波次基础掉落与敌人条目额外掉落合并；同 token 时优先采用条目级配置。
+    /// param: waveLevelDrops 波次基础掉落
+    /// param: entryLevelDrops 敌人条目额外掉落
+    /// returns: 最终运行时掉落表
+    /// </summary>
+    private static List<EnemyBulletTokenDropEntry> MergeTokenDrops(
+        IReadOnlyList<EnemyBulletTokenDropEntry> waveLevelDrops,
+        IReadOnlyList<EnemyBulletTokenDropEntry> entryLevelDrops)
+    {
+        List<EnemyBulletTokenDropEntry> mergedDrops = EnemyWaveConfig.SanitizeTokenDrops(waveLevelDrops);
+        IReadOnlyList<EnemyBulletTokenDropEntry> sanitizedEntryDrops = EnemyWaveConfig.SanitizeTokenDrops(entryLevelDrops);
+        for (int i = 0; i < sanitizedEntryDrops.Count; i++)
+        {
+            EnemyBulletTokenDropEntry entryDrop = sanitizedEntryDrops[i];
+            if (entryDrop.token == null)
+            {
+                continue;
             }
 
-            enemySpawns[i] = sanitizedEntry;
+            int existingIndex = FindTokenDropIndex(mergedDrops, entryDrop.token);
+            if (existingIndex < 0)
+            {
+                mergedDrops.Add(entryDrop);
+                continue;
+            }
+
+            mergedDrops[existingIndex] = entryDrop;
         }
+
+        return mergedDrops;
     }
 
     /// <summary>
@@ -192,6 +300,30 @@ public sealed class WaveDefinition : ScriptableObject
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// summary: 在掉落列表里查找指定 token 对应的条目索引。
+    /// param: tokenDrops 需要查找的掉落列表
+    /// param: token 目标 token 引用
+    /// returns: 找到时返回索引，找不到返回 -1
+    /// </summary>
+    private static int FindTokenDropIndex(IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops, PlaceableTokenData token)
+    {
+        if (tokenDrops == null || token == null)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < tokenDrops.Count; i++)
+        {
+            if (tokenDrops[i].token == token)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>

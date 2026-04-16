@@ -23,7 +23,7 @@ MonoBehaviour:
     expression: =Color.black
   coreType: 0
   defaultValueType: 1
-  damage: 3
+  damage: 2
   projectileLife: 1
   impactLifeCost: 1
   projectileSpeed: 133

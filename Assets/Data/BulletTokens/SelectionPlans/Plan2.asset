@@ -13,9 +13,7 @@ MonoBehaviour:
   m_Name: Plan2
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.Bullet.CombatEntryTokenSelectionPlan
   libraryEntries:
-  - library: {fileID: 11400000, guid: a8fcb56ab6b8b37458a0deb54388d697, type: 2}
-    selectionWeight: 0.4
-  - library: {fileID: 11400000, guid: a36c68952bb14cd43a365d8a0399fe44, type: 2}
+  - library: {fileID: 11400000, guid: 0f9f3aa2ac4c4a82b5eb4a95e4e6c7fd, type: 2}
+    selectionWeight: 1.2
+  - library: {fileID: 11400000, guid: 9ab5e5cb3f934440a2f3f17f4f90bc62, type: 2}
     selectionWeight: 1
-  - library: {fileID: 11400000, guid: a930f34149d762d408d43a534a79af93, type: 2}
-    selectionWeight: 0.8

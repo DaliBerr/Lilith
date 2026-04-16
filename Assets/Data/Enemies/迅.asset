@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: "\u8FC5"
   displayName: "\u8FC5"
+  description: "以冲刺切入战场的刺客，移动极快，稍不留神就会近身。"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 2
   attackKind: 1

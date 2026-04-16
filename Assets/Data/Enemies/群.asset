@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: 群
   displayName: 群
+  description: "成群扑来的前锋，速度不慢，血薄但会不断贴身骚扰。"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 1
   attackKind: 1

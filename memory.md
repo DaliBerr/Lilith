@@ -52,3 +52,39 @@
 - Fix: 在编辑器环境下优先使用 `AssetDatabase.FindAssets("t:EnemyDefinition")` + `LoadAssetAtPath` 全量读取资产；运行时再用已加载对象兜底。当前实现见 [`Assets/Scripts/Kernel/UI/HintUIScreen.cs`](Assets/Scripts/Kernel/UI/HintUIScreen.cs) 的 `CollectEnemyDefinitions()`。
 - Verify: 新建 EnemyDefinition 资产（即使未放入场景），打开 Hint 后应能在图鉴分类看到该敌人条目；若 ID 重复，按 `EnemyId` 去重并优先保留有 Description 的定义。
 - Scope: 适用于所有“编辑器内从资产库收集定义并渲染目录 UI”的场景，尤其是图鉴、手册、配置浏览器这类不依赖运行时实例化链路的功能。
+
+
+## Enemy Spawn Should Re-Snap After Bind And Wave Config
+
+- Problem: 某些敌人（尤其是召唤链路中的单位）在实例化后会出现高度异常，视觉上像“半埋地”。
+- Cause: 生成流程先做了一次 grounded snap，但后续绑定目标或应用波次配置时，仍可能通过组件回调改写 Transform Y，导致最终位置偏离地面。
+- Fix: 在 [`Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs`](Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs) 的 `TryInitializeSpawnedEnemy()` 中，保留原有首次贴地后，再在“绑定目标 + ApplyWaveConfigToReceivers”之后补一次最终 grounded snap。
+- Verify: [`Assets/Editor/Test/EnemyGeneratorTests.cs`](Assets/Editor/Test/EnemyGeneratorTests.cs) 的 `TrySpawnEnemy_ReSnapsAfterWaveConfigReceiverMutatesTransformHeight`，通过注入会主动下拉 Y 的测试接收器，验证生成器最后一次贴地能纠正高度。
+- Scope: 适用于所有通过 `EnemyGenerator` 生成的敌人，包括波次刷怪与召唤技能产物，尤其是存在后置回调可能改写 Transform 的链路。
+
+
+## Pause Guard Must Zero Dynamic Bullet Rigidbody Velocity
+
+- Problem: 战斗进入暂停菜单后，已发射且使用非运动学刚体的子弹仍会继续飞行。
+- Cause: 仅在 `Update/FixedUpdate` 里跳过移动逻辑并不会自动清掉 `Rigidbody.linearVelocity`，物理系统会继续沿上一帧速度推进。
+- Fix: 在 [`Assets/Scripts/Kernel/Bullet/CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs) 的 `Update/FixedUpdate` 增加暂停门控（`InBackPackStatus` / `InPauseMenuStatus` / `PausedStatus`），暂停中对动态刚体子弹显式把 `linearVelocity` 置零；不要直接复用 `TryStopMovement()`，因为它会把 `speed` 清零导致恢复后不再前进。同时新增 `SetIgnoreGameplayPauseStatus(bool)` 给背包预览子弹使用，并在 [`Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs) 发射后显式设置为 `true`，避免预览动画被战斗暂停门控冻结。
+- Verify: [`Assets/Editor/Test/CharBulletImpactTests.cs`](Assets/Editor/Test/CharBulletImpactTests.cs) 的 `FixedUpdate_InPauseMenuStatus_StopsAndResumesDynamicBulletVelocity`、`FixedUpdate_InBackPackStatus_StopsAndResumesDynamicBulletVelocity`、`FixedUpdate_InBackPackStatus_IgnoresPauseWhenConfigured`。
+- Scope: 适用于所有依赖非运动学刚体推进的运行时投射物暂停逻辑；目标是“背包/暂停时冻结战斗子弹，UI 预览子弹可按需继续播放”。
+
+
+## Unity MCP ManageComponents Needs Script Reimport After Field Additions
+
+- Problem: 新增了组件序列化字段后，`manage_components(action=set_property)` 仍提示 `SerializedProperty '<fieldName>' not found`，但老字段（如 `waves`、`interWaveDelay`）可正常写入。
+- Cause: Unity 编辑器域里该脚本的元数据有时未及时刷新，MCP 读到的是旧字段集合。
+- Fix: 先对脚本执行一次 reimport（例如 `manage_asset(action=import, path='Assets/Scripts/Kernel/Enemy/WaveManager.cs')`），再重试 `set_property`。
+- Verify: reimport 后同一字段可被 `set_property` 成功写入，并在场景 YAML 中看到新序列化节点（如 `defaultNonBossWaveTokenDrops`、`nonBossWaveTokenDropsByWave`）。
+- Scope: 适用于所有通过 MCP 直接改组件属性、且近期刚改过脚本字段结构的场景。
+
+
+## Large Unity Scene YAML On Windows Should Use Targeted Replacement When apply_patch Overflows
+
+- Problem: 对超大 `.unity` 文件执行 `apply_patch`（即使是很小的片段）可能直接报 `Maximum call stack size exceeded`，导致无法落地单行字段调整。
+- Cause: 大文件补丁在当前链路下存在稳定性上限，patch 引擎在巨大 YAML 文本上容易触发栈溢出。
+- Fix: 先在同文件内通过唯一锚点确认目标行，再用 PowerShell 做“最小范围字符串替换”完成写入，并立即回读目标片段校验格式；若替换中误写入字面 `` `r`n ``，再做一次精确修复。
+- Verify: 回读场景目标块，确认字段已插入、缩进和换行合法，且仅目标片段变化（例如 `WaveManager` 下新增 `nonBossWaveSequenceProgression` 引用）。
+- Scope: 适用于 Windows 下修改超大 Unity YAML（`*.unity` / `*.prefab`）时 `apply_patch` 不稳定的场景。

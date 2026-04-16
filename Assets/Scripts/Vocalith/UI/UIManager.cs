@@ -8,6 +8,8 @@ using UnityEngine.EventSystems;
 using UnityEngine.AddressableAssets;
 using UnityEngine.SceneManagement;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.Rendering;
+using UnityEngine.UI;
 using Vocalith.Logging;
 using UnityEventSystem = UnityEngine.EventSystems.EventSystem;
 #if ENABLE_INPUT_SYSTEM
@@ -35,6 +37,26 @@ namespace Vocalith.UI
         public float defaultShow = 0.15f;
         public float defaultHide = 0.12f;
 
+        private const float TargetAspectRatio = 16f / 9f;
+        private const string AspectLetterboxRootName = "AspectLetterboxRoot";
+        private const string AspectLetterboxTopBarName = "AspectLetterboxTopBar";
+        private const string AspectLetterboxBottomBarName = "AspectLetterboxBottomBar";
+        private const string AspectLetterboxLeftBarName = "AspectLetterboxLeftBar";
+        private const string AspectLetterboxRightBarName = "AspectLetterboxRightBar";
+        private const string AspectLetterboxContentName = "AspectLetterboxContent";
+
+        private RectTransform aspectLetterboxRoot;
+        private RectTransform aspectLetterboxTopBar;
+        private RectTransform aspectLetterboxBottomBar;
+        private RectTransform aspectLetterboxLeftBar;
+        private RectTransform aspectLetterboxRightBar;
+        private RectTransform aspectLetterboxContent;
+        private CanvasScaler rootCanvasScaler;
+        private Vector2 rootCanvasBaseReferenceResolution = new Vector2(1920f, 1080f);
+        private bool hasRootCanvasBaseReferenceResolution;
+        private Vector2Int lastAspectScreenSize = new Vector2Int(-1, -1);
+        private bool hasAppliedAspectLockLayout;
+
         readonly Stack<UIScreen> screenStack = new();
         readonly Stack<UIScreen> modalStack = new();
         readonly Dictionary<GameObject, AsyncOperationHandle<GameObject>> addrInstances = new();
@@ -46,11 +68,15 @@ namespace Vocalith.UI
             Instance = this;
             DontDestroyOnLoad(gameObject);
             EnsureEventSystem();
+            RenderPipelineManager.beginCameraRendering += HandleBeginCameraRendering;
+            EnsureAspectLockRoots();
+            ApplyAspectLockLayout();
             SceneManager.sceneLoaded += HandleSceneLoaded;
         }
 
         private void OnDestroy()
         {
+            RenderPipelineManager.beginCameraRendering -= HandleBeginCameraRendering;
             if (Instance == this)
             {
                 SceneManager.sceneLoaded -= HandleSceneLoaded;
@@ -66,6 +92,26 @@ namespace Vocalith.UI
         private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             EnsureEventSystem();
+            EnsureAspectLockRoots();
+            ApplyAspectLockLayout();
+        }
+
+        /// <summary>
+        /// summary: 在每个游戏相机渲染前应用 16:9 视口，确保黑边在屏幕边缘而不是拉伸内容。
+        /// param name="context": 当前渲染上下文
+        /// param name="camera": 即将渲染的相机
+        /// returns: 无
+        /// </summary>
+        private void HandleBeginCameraRendering(ScriptableRenderContext context, Camera camera)
+        {
+            if (camera == null || camera.cameraType != CameraType.Game)
+            {
+                return;
+            }
+
+            EnsureAspectLockRoots();
+            ApplyAspectLockLayout();
+            ApplyCameraViewport(camera);
         }
 
         /// <summary>
@@ -145,6 +191,354 @@ namespace Vocalith.UI
 #endif
         }
         private bool _isNavigating;
+
+        /// <summary>
+        /// summary: 缓存 rootCanvas 对应的 CanvasScaler 以及其基准 referenceResolution。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void CacheRootCanvasScaler()
+        {
+            if (rootCanvas == null)
+            {
+                rootCanvasScaler = null;
+                hasRootCanvasBaseReferenceResolution = false;
+                return;
+            }
+
+            if (rootCanvasScaler == null || rootCanvasScaler.gameObject != rootCanvas.gameObject)
+            {
+                rootCanvasScaler = rootCanvas.GetComponent<CanvasScaler>();
+                hasRootCanvasBaseReferenceResolution = false;
+            }
+
+            if (rootCanvasScaler == null || hasRootCanvasBaseReferenceResolution)
+            {
+                return;
+            }
+
+            Vector2 capturedResolution = rootCanvasScaler.referenceResolution;
+            if (capturedResolution.x <= 0f || capturedResolution.y <= 0f)
+            {
+                capturedResolution = new Vector2(1920f, 1080f);
+            }
+
+            rootCanvasBaseReferenceResolution = capturedResolution;
+            hasRootCanvasBaseReferenceResolution = true;
+        }
+
+        /// <summary>
+        /// summary: 确保 16:9 安全区根节点与四条黑边存在；若首次创建，会把层容器迁移到内容容器下。
+        /// param: 无
+        /// returns: 若本次创建了新的容器则返回 true，否则返回 false
+        /// </summary>
+        private bool EnsureAspectLockRoots()
+        {
+            if (rootCanvas == null)
+            {
+                return false;
+            }
+
+            CacheRootCanvasScaler();
+
+            bool createdRoot = false;
+
+            if (aspectLetterboxRoot == null)
+            {
+                aspectLetterboxRoot = CreateAspectLetterboxRoot();
+                createdRoot = true;
+            }
+
+            if (aspectLetterboxTopBar == null)
+            {
+                aspectLetterboxTopBar = CreateAspectLetterboxBar(AspectLetterboxTopBarName, aspectLetterboxRoot);
+                createdRoot = true;
+            }
+
+            if (aspectLetterboxBottomBar == null)
+            {
+                aspectLetterboxBottomBar = CreateAspectLetterboxBar(AspectLetterboxBottomBarName, aspectLetterboxRoot);
+                createdRoot = true;
+            }
+
+            if (aspectLetterboxLeftBar == null)
+            {
+                aspectLetterboxLeftBar = CreateAspectLetterboxBar(AspectLetterboxLeftBarName, aspectLetterboxRoot);
+                createdRoot = true;
+            }
+
+            if (aspectLetterboxRightBar == null)
+            {
+                aspectLetterboxRightBar = CreateAspectLetterboxBar(AspectLetterboxRightBarName, aspectLetterboxRoot);
+                createdRoot = true;
+            }
+
+            if (aspectLetterboxContent == null)
+            {
+                aspectLetterboxContent = CreateAspectLetterboxContent();
+                createdRoot = true;
+            }
+
+            if (createdRoot)
+            {
+                hasAppliedAspectLockLayout = false;
+            }
+
+            return createdRoot;
+        }
+
+        /// <summary>
+        /// summary: 根据当前屏幕尺寸更新 16:9 安全区域，并把 UI 层容器与相机视口收敛到该区域。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ApplyAspectLockLayout()
+        {
+            if (rootCanvas == null || aspectLetterboxRoot == null || aspectLetterboxContent == null)
+            {
+                return;
+            }
+
+            Vector2Int currentScreenSize = GetCurrentScreenSize();
+            bool screenSizeChanged = currentScreenSize != lastAspectScreenSize;
+
+            if (!hasAppliedAspectLockLayout || screenSizeChanged)
+            {
+                Rect viewport = CalculateLetterboxViewport(currentScreenSize.x, currentScreenSize.y);
+                ApplyLetterboxViewport(viewport);
+                lastAspectScreenSize = currentScreenSize;
+                hasAppliedAspectLockLayout = true;
+            }
+
+            EnsureLayerRootParent(layerScreen);
+            EnsureLayerRootParent(layerModal);
+            EnsureLayerRootParent(layerOverlay);
+            EnsureLayerRootParent(layerToast);
+        }
+
+        /// <summary>
+        /// summary: 将当前游戏相机的视口设置为 16:9 安全区域。
+        /// param name="camera": 需要应用视口的相机
+        /// returns: 无
+        /// </summary>
+        private static void ApplyCameraViewport(Camera camera)
+        {
+            if (camera == null)
+            {
+                return;
+            }
+
+            Rect viewport = CalculateLetterboxViewport(Mathf.Max(1, Screen.width), Mathf.Max(1, Screen.height));
+            camera.rect = viewport;
+        }
+
+        /// <summary>
+        /// summary: 将四条黑边与内容容器收敛到当前屏幕的 16:9 安全区域。
+        /// param name="viewport": 归一化后的安全视口
+        /// returns: 无
+        /// </summary>
+        private void ApplyLetterboxViewport(Rect viewport)
+        {
+            if (aspectLetterboxRoot != null)
+            {
+                NormalizeRect(aspectLetterboxRoot);
+                aspectLetterboxRoot.SetAsFirstSibling();
+            }
+
+            SetBarRect(aspectLetterboxTopBar, new Rect(0f, viewport.yMax, 1f, 1f - viewport.yMax));
+            SetBarRect(aspectLetterboxBottomBar, new Rect(0f, 0f, 1f, viewport.yMin));
+            SetBarRect(aspectLetterboxLeftBar, new Rect(0f, 0f, viewport.xMin, 1f));
+            SetBarRect(aspectLetterboxRightBar, new Rect(viewport.xMax, 0f, 1f - viewport.xMax, 1f));
+
+            if (aspectLetterboxContent != null)
+            {
+                aspectLetterboxContent.anchorMin = new Vector2(viewport.xMin, viewport.yMin);
+                aspectLetterboxContent.anchorMax = new Vector2(viewport.xMax, viewport.yMax);
+                aspectLetterboxContent.offsetMin = Vector2.zero;
+                aspectLetterboxContent.offsetMax = Vector2.zero;
+                aspectLetterboxContent.localScale = Vector3.one;
+                aspectLetterboxContent.pivot = new Vector2(0.5f, 0.5f);
+                aspectLetterboxContent.SetAsLastSibling();
+            }
+
+            ApplyCanvasScalerForLetterbox(viewport);
+        }
+
+        /// <summary>
+        /// summary: 创建 16:9 安全区的黑边根节点。
+        /// param: 无
+        /// returns: 黑边根节点 RectTransform
+        /// </summary>
+        private RectTransform CreateAspectLetterboxRoot()
+        {
+            var rootObject = new GameObject(AspectLetterboxRootName, typeof(RectTransform));
+            rootObject.layer = rootCanvas.gameObject.layer;
+            rootObject.transform.SetParent(rootCanvas.transform, false);
+
+            var rootRect = rootObject.GetComponent<RectTransform>();
+            NormalizeRect(rootRect);
+            rootObject.transform.SetAsFirstSibling();
+
+            return rootRect;
+        }
+
+        /// <summary>
+        /// summary: 创建单条黑边条带。
+        /// param name="barName": 条带名称
+        /// param name="parent": 条带父节点
+        /// returns: 条带 RectTransform
+        /// </summary>
+        private RectTransform CreateAspectLetterboxBar(string barName, RectTransform parent)
+        {
+            if (parent == null)
+            {
+                return null;
+            }
+
+            var barObject = new GameObject(barName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            barObject.layer = rootCanvas.gameObject.layer;
+            barObject.transform.SetParent(parent, false);
+
+            var barRect = barObject.GetComponent<RectTransform>();
+            NormalizeRect(barRect);
+
+            var image = barObject.GetComponent<Image>();
+            image.color = Color.black;
+            image.raycastTarget = false;
+
+            return barRect;
+        }
+
+        /// <summary>
+        /// summary: 创建居中的 16:9 内容容器，所有 UI 层会迁移到该容器下。
+        /// param: 无
+        /// returns: 内容容器 RectTransform
+        /// </summary>
+        private RectTransform CreateAspectLetterboxContent()
+        {
+            var contentObject = new GameObject(AspectLetterboxContentName, typeof(RectTransform));
+            contentObject.layer = rootCanvas.gameObject.layer;
+            contentObject.transform.SetParent(rootCanvas.transform, false);
+
+            var contentRect = contentObject.GetComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0.5f, 0.5f);
+            contentRect.anchorMax = new Vector2(0.5f, 0.5f);
+            contentRect.pivot = new Vector2(0.5f, 0.5f);
+            contentRect.offsetMin = Vector2.zero;
+            contentRect.offsetMax = Vector2.zero;
+            contentRect.localScale = Vector3.one;
+            contentObject.transform.SetAsLastSibling();
+
+            return contentRect;
+        }
+
+        /// <summary>
+        /// summary: 依据 16:9 安全视口补偿 CanvasScaler 的 referenceResolution，保证锚点布局等价于 1080p 设计区。
+        /// param name="viewport": 当前归一化安全视口
+        /// returns: 无
+        /// </summary>
+        private void ApplyCanvasScalerForLetterbox(Rect viewport)
+        {
+            if (rootCanvasScaler == null || !hasRootCanvasBaseReferenceResolution)
+            {
+                return;
+            }
+
+            if (rootCanvasScaler.uiScaleMode != CanvasScaler.ScaleMode.ScaleWithScreenSize)
+            {
+                return;
+            }
+
+            float widthFactor = Mathf.Max(0.0001f, viewport.width);
+            float heightFactor = Mathf.Max(0.0001f, viewport.height);
+            rootCanvasScaler.referenceResolution = new Vector2(
+                rootCanvasBaseReferenceResolution.x / widthFactor,
+                rootCanvasBaseReferenceResolution.y / heightFactor);
+        }
+
+        /// <summary>
+        /// summary: 设置单条黑边的矩形与显示状态。
+        /// param name="bar": 目标黑边条带
+        /// param name="rect": 归一化矩形
+        /// returns: 无
+        /// </summary>
+        private static void SetBarRect(RectTransform bar, Rect rect)
+        {
+            if (bar == null)
+            {
+                return;
+            }
+
+            bool isVisible = rect.width > 0f && rect.height > 0f;
+            bar.gameObject.SetActive(isVisible);
+
+            if (!isVisible)
+            {
+                return;
+            }
+
+            bar.anchorMin = new Vector2(rect.xMin, rect.yMin);
+            bar.anchorMax = new Vector2(rect.xMax, rect.yMax);
+            bar.offsetMin = Vector2.zero;
+            bar.offsetMax = Vector2.zero;
+            bar.localScale = Vector3.one;
+            bar.pivot = new Vector2(0.5f, 0.5f);
+        }
+
+        /// <summary>
+        /// summary: 如果层容器还不在 16:9 内容容器下，则迁移并恢复为全屏拉伸布局。
+        /// param name="layerRoot": 需要迁移的层容器
+        /// returns: 无
+        /// </summary>
+        private void EnsureLayerRootParent(RectTransform layerRoot)
+        {
+            if (layerRoot == null || aspectLetterboxContent == null)
+            {
+                return;
+            }
+
+            if (layerRoot.parent != aspectLetterboxContent)
+            {
+                layerRoot.SetParent(aspectLetterboxContent, false);
+            }
+
+            NormalizeRect(layerRoot);
+            layerRoot.SetAsLastSibling();
+        }
+
+        /// <summary>
+        /// summary: 计算当前屏幕对应的 16:9 安全区域（归一化到 [0,1]）。
+        /// param name="screenWidth": 屏幕宽度
+        /// param name="screenHeight": 屏幕高度
+        /// returns: 居中安全视口矩形
+        /// </summary>
+        private static Rect CalculateLetterboxViewport(int screenWidth, int screenHeight)
+        {
+            int safeWidth = Mathf.Max(1, screenWidth);
+            int safeHeight = Mathf.Max(1, screenHeight);
+            float screenAspect = (float)safeWidth / safeHeight;
+
+            if (screenAspect > TargetAspectRatio)
+            {
+                float normalizedWidth = Mathf.Clamp01(TargetAspectRatio / screenAspect);
+                float xOffset = (1f - normalizedWidth) * 0.5f;
+                return new Rect(xOffset, 0f, normalizedWidth, 1f);
+            }
+
+            float normalizedHeight = Mathf.Clamp01(screenAspect / TargetAspectRatio);
+            float yOffset = (1f - normalizedHeight) * 0.5f;
+            return new Rect(0f, yOffset, 1f, normalizedHeight);
+        }
+
+        /// <summary>
+        /// summary: 获取当前屏幕尺寸，统一处理 0 尺寸和编辑器首帧初始化场景。
+        /// param: 无
+        /// returns: 当前屏幕尺寸
+        /// </summary>
+        private static Vector2Int GetCurrentScreenSize()
+        {
+            return new Vector2Int(Mathf.Max(1, Screen.width), Mathf.Max(1, Screen.height));
+        }
 
         /// <summary>
         /// 当前 UI 是否正在执行过渡（Push/Pop/Show/Hide 等）。

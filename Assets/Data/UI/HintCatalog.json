@@ -7,12 +7,7 @@
         {
           "id": "controls",
           "title": "操作说明",
-          "content": "Tab 打开或关闭 Hint。\nB 打开背包。\nEsc 返回上一级界面。"
-        },
-        {
-          "id": "combat",
-          "title": "战斗基础",
-          "content": "通过背包调整 Spell Book 词元顺序，实时影响攻击编译结果。\n每波结束后可根据提示继续强化。"
+          "content": "WASD 移动。\nE 与物品交互。\n鼠标左键攻击。\n鼠标右键转动视角。\nShift 冲刺。\nB 打开背包。\nTab 打开指南。"
         }
       ]
     },
@@ -21,9 +16,34 @@
       "title": "帮助",
       "entries": [
         {
-          "id": "hintscope",
-          "title": "内容范围",
-          "content": "图鉴分类会展示当前可解析到的敌人定义信息。\n其他分类内容来自 HintCatalog.json，可按需求手动维护。"
+          "id": "gamegoal",
+          "title": "游戏目标",
+          "content": "在敌人波次中生存下来，击败 Boss，完成一局挑战。\n通过收集文字来强化并改变自己的攻击方式。"
+        },
+        {
+          "id": "pickup",
+          "title": "文字拾取",
+          "content": "击败敌人后会掉落文字。\n靠近即可拾取，拾取后可用于构筑当前武器。"
+        },
+        {
+          "id": "bullettoken",
+          "title": "BulletToken 构筑",
+          "content": "当前攻击由多个文字槽位组成。\n不同文字会决定攻击的属性、形式和数量。\n组合改变后，战斗方式会立刻变化。"
+        },
+        {
+          "id": "tokenclass",
+          "title": "词元类别说明",
+          "content": "行为：决定攻击形式，如直、散。\n核心：决定攻击属性，如 Fire、Ice、Thunder、Edge。\n结果：决定命中结果，如 Direct、Explosion。\n数值：决定数量或强度，如 2、3、5。"
+        },
+        {
+          "id": "buildtips",
+          "title": "构筑建议",
+          "content": "先拾取文字，再进入构筑。\n多尝试不同组合，找到适合当前局势的打法。\n没有绝对唯一的最优组合，关键是适应敌人与波次。"
+        },
+        {
+          "id": "versionnote",
+          "title": "当前版本说明",
+          "content": "本版本为原型 / MVP 版本。\n部分数值、美术与系统仍在调整中。"
         }
       ]
     }

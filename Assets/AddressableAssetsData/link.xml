@@ -10,6 +10,7 @@
     <type fullname="Kernel.UI.BackPackUIScreen" preserve="all" />
     <type fullname="Kernel.UI.BossInfoUIScreen" preserve="all" />
     <type fullname="Kernel.UI.BulletTokenSelectionView" preserve="all" />
+    <type fullname="Kernel.UI.HintUIScreen" preserve="all" />
     <type fullname="Kernel.UI.MainUIScreen" preserve="all" />
     <type fullname="Kernel.UI.PauseUIScreen" preserve="all" />
     <type fullname="Kernel.UI.PlayerHealthBarController" preserve="all" />

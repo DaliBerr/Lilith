@@ -17,7 +17,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &6103276671002988848
 RectTransform:
   m_ObjectHideFlags: 0
@@ -60,7 +60,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0}
-  m_RaycastTarget: 1
+  m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
@@ -189,13 +189,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b255f55ceae14e2479d96e01aab7b9dc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.UI.BulletTokenSelectionView
+  rootImage: {fileID: 8222284852008809411}
   tokenRoot: {fileID: 8528828706443016752}
   tokenText: {fileID: 8784790147231057226}
+  catalogRoot: {fileID: 6103276671002988848}
+  catalogText: {fileID: 3357464941053701891}
   descriptionRoot: {fileID: 4557349520106291910}
   descriptionText: {fileID: 7005350626903859769}
   selectButton: {fileID: 7999291583600125886}
   selectButtonText: {fileID: 1449014665348186229}
   defaultSelectButtonLabel: 
+  emptyTokenColor: {r: 1, g: 1, b: 1, a: 1}
+  coreTypeColor: {r: 1, g: 0.73, b: 0.36, a: 1}
+  behaviorTypeColor: {r: 0.48, g: 0.74, b: 1, a: 1}
+  resultTypeColor: {r: 1, g: 0.53, b: 0.53, a: 1}
+  valueTypeColor: {r: 0.56, g: 0.9, b: 0.6, a: 1}
+  fallbackTypeColor: {r: 0.85, g: 0.85, b: 0.85, a: 1}
 --- !u!1 &3234389588393734917
 GameObject:
   m_ObjectHideFlags: 0
@@ -550,7 +559,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u6838\u5FC3"
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 5ca45be263bea9041b31c02db9612a2e, type: 2}
   m_sharedMaterial: {fileID: -5074881000231014226, guid: 5ca45be263bea9041b31c02db9612a2e, type: 2}

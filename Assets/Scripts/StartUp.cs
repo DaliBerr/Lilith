@@ -25,7 +25,7 @@ namespace Kernel
         [SerializeField] [Min(1)] private int openingGuideMaxCharactersPerEntry = 260;
 
         private bool isSceneBootCompleted;
-
+ 
         public bool IsSceneBootCompleted => isSceneBootCompleted;
 
         private void Awake()

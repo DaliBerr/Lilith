@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
+using Kernel.GameState;
 using Kernel.MapGrid;
 using NUnit.Framework;
 using UnityEngine;
@@ -12,6 +13,8 @@ public sealed class CharBulletImpactTests
     [TearDown]
     public void TearDown()
     {
+        StatusController.ClearStatus();
+
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {
             if (createdObjects[i] != null)
@@ -212,6 +215,82 @@ public sealed class CharBulletImpactTests
         Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(4f));
     }
 
+    [Test]
+    public void FixedUpdate_InPauseMenuStatus_StopsAndResumesDynamicBulletVelocity()
+    {
+        StatusController.Initialize();
+
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(Vector3.zero, 0.5f, isKinematic: false);
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 3);
+        attackSpec.projectileSpeed = 12f;
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, null);
+
+        InvokePrivateMethod(bullet, "FixedUpdate");
+
+        Rigidbody movementRigidbody = bullet.GetComponent<Rigidbody>();
+        Assert.That(movementRigidbody, Is.Not.Null);
+        Assert.That(movementRigidbody.linearVelocity.sqrMagnitude, Is.GreaterThan(0.0001f));
+
+        StatusController.AddStatus(StatusList.InPauseMenuStatus);
+        InvokePrivateMethod(bullet, "FixedUpdate");
+
+        Assert.That(movementRigidbody.linearVelocity.sqrMagnitude, Is.EqualTo(0f).Within(0.0001f));
+
+        StatusController.RemoveStatus(StatusList.InPauseMenuStatus);
+        InvokePrivateMethod(bullet, "FixedUpdate");
+
+        Assert.That(movementRigidbody.linearVelocity.sqrMagnitude, Is.GreaterThan(0.0001f));
+    }
+
+    [Test]
+    public void FixedUpdate_InBackPackStatus_StopsAndResumesDynamicBulletVelocity()
+    {
+        StatusController.Initialize();
+
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(Vector3.zero, 0.5f, isKinematic: false);
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 3);
+        attackSpec.projectileSpeed = 12f;
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, null);
+
+        InvokePrivateMethod(bullet, "FixedUpdate");
+
+        Rigidbody movementRigidbody = bullet.GetComponent<Rigidbody>();
+        Assert.That(movementRigidbody, Is.Not.Null);
+        Assert.That(movementRigidbody.linearVelocity.sqrMagnitude, Is.GreaterThan(0.0001f));
+
+        StatusController.AddStatus(StatusList.InBackPackStatus);
+        InvokePrivateMethod(bullet, "FixedUpdate");
+
+        Assert.That(movementRigidbody.linearVelocity.sqrMagnitude, Is.EqualTo(0f).Within(0.0001f));
+
+        StatusController.RemoveStatus(StatusList.InBackPackStatus);
+        InvokePrivateMethod(bullet, "FixedUpdate");
+
+        Assert.That(movementRigidbody.linearVelocity.sqrMagnitude, Is.GreaterThan(0.0001f));
+    }
+
+    [Test]
+    public void FixedUpdate_InBackPackStatus_IgnoresPauseWhenConfigured()
+    {
+        StatusController.Initialize();
+
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBullet(Vector3.zero, 0.5f, isKinematic: false);
+        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 3);
+        attackSpec.projectileSpeed = 12f;
+        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, null);
+        bullet.SetIgnoreGameplayPauseStatus(true);
+
+        StatusController.AddStatus(StatusList.InBackPackStatus);
+        InvokePrivateMethod(bullet, "FixedUpdate");
+
+        Rigidbody movementRigidbody = bullet.GetComponent<Rigidbody>();
+        Assert.That(movementRigidbody, Is.Not.Null);
+        Assert.That(movementRigidbody.linearVelocity.sqrMagnitude, Is.GreaterThan(0.0001f));
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);
@@ -219,13 +298,13 @@ public sealed class CharBulletImpactTests
         return gameObject;
     }
 
-    private CharBullet CreateBullet(Vector3 position, float radius)
+    private CharBullet CreateBullet(Vector3 position, float radius, bool isKinematic = true)
     {
         GameObject bulletObject = CreateGameObject("Bullet");
         bulletObject.transform.position = position;
         Rigidbody rigidbody = bulletObject.AddComponent<Rigidbody>();
         rigidbody.useGravity = false;
-        rigidbody.isKinematic = true;
+        rigidbody.isKinematic = isKinematic;
 
         SphereCollider sphereCollider = bulletObject.AddComponent<SphereCollider>();
         sphereCollider.isTrigger = true;

@@ -720,15 +720,14 @@ namespace Kernel.MapGrid
         }
 
         /// <summary>
-        /// summary: 根据当前波定义上的奖励计划，抽取本次波后奖励要展示的 token 库。
-        /// param name="completedWave": 刚刚结算完成的波次定义
+        /// summary: 根据本次波后奖励计划，抽取要展示的 token 库。
+        /// param name="selectionPlan": 本次波后奖励使用的抽取计划
         /// param name="selectionLibrary": 输出本次波后奖励要使用的 token 库
         /// returns: 成功解析到有效 token 库时返回 true
         /// </summary>
-        private bool TryResolveWaveRewardSelectionLibrary(WaveDefinition completedWave, out BulletTokenLibrary selectionLibrary)
+        private bool TryResolveWaveRewardSelectionLibrary(CombatEntryTokenSelectionPlan selectionPlan, out BulletTokenLibrary selectionLibrary)
         {
             selectionLibrary = null;
-            CombatEntryTokenSelectionPlan selectionPlan = completedWave != null ? completedWave.PostWaveTokenSelectionPlan : null;
             if (selectionPlan == null)
             {
                 return false;
@@ -829,7 +828,7 @@ namespace Kernel.MapGrid
             return true;
         }
 
-        private void HandleWaveRewardSelectionRequested(int waveIndex, WaveDefinition completedWave)
+        private void HandleWaveRewardSelectionRequested(int waveIndex, WaveDefinition completedWave, CombatEntryTokenSelectionPlan selectionPlan)
         {
             if (!isActiveAndEnabled || currentState != RunFlowState.InCombat)
             {
@@ -843,7 +842,7 @@ namespace Kernel.MapGrid
                 return;
             }
 
-            if (!TryResolveWaveRewardSelectionLibrary(completedWave, out BulletTokenLibrary selectionLibrary))
+            if (!TryResolveWaveRewardSelectionLibrary(selectionPlan, out BulletTokenLibrary selectionLibrary))
             {
                 waveManager?.TryContinueAfterWaveRewardSelection();
                 return;

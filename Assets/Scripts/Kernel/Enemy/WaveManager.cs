@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Kernel.Bullet;
 using UnityEngine;
 using Vocalith.EventSystem;
 using VocalithRandom = Vocalith.Random;
@@ -13,10 +14,11 @@ public sealed class WaveManager : MonoBehaviour
     private const float NoScheduledTime = -1f;
 
     public event Action SequenceCompleted;
-    public event Action<int, WaveDefinition> WaveRewardSelectionRequested;
+    public event Action<int, WaveDefinition, CombatEntryTokenSelectionPlan> WaveRewardSelectionRequested;
 
     [SerializeField] private EnemyGenerator enemyGenerator;
     [SerializeField] private List<WaveDefinition> waves = new();
+    [SerializeField] private WaveSequenceProgressionConfig nonBossWaveSequenceProgression;
     [SerializeField] private bool autoStartOnEnable = true;
     [SerializeField, Min(0f)] private float interWaveDelay = 2f;
 
@@ -166,7 +168,8 @@ public sealed class WaveManager : MonoBehaviour
             return;
         }
 
-        EnemyWaveConfig runtimeConfig = enemyGenerator.ResolveRuntimeConfig(spawnEntry.enemyDefinition, spawnEntry.tokenDrops);
+        IReadOnlyList<EnemyBulletTokenDropEntry> runtimeTokenDrops = ResolveRuntimeTokenDropsForSpawn(currentWave, spawnEntry);
+        EnemyWaveConfig runtimeConfig = enemyGenerator.ResolveRuntimeConfig(spawnEntry.enemyDefinition, runtimeTokenDrops);
         if (!enemyGenerator.TrySpawnEnemy(spawnEntry.enemyDefinition, runtimeConfig, out Enemy spawnedEnemy))
         {
             return;
@@ -354,6 +357,158 @@ public sealed class WaveManager : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 解析当前要刷出的敌人应使用的掉落表；普通波次按第 x 波配置，Boss 波次只用自身内部掉落。
+    /// param: currentWave 当前正在执行的波次资产
+    /// param: spawnEntry 当前将要刷出的敌人条目
+    /// returns: 当前敌人运行时应使用的掉落表
+    /// </summary>
+    private IReadOnlyList<EnemyBulletTokenDropEntry> ResolveRuntimeTokenDropsForSpawn(WaveDefinition currentWave, WaveEnemySpawnEntry spawnEntry)
+    {
+        if (currentWave != null && currentWave.IsBossWave)
+        {
+            return currentWave.ResolveRuntimeTokenDrops(spawnEntry.tokenDrops);
+        }
+
+        int waveNumber = Mathf.Max(1, completedWaveCount + 1);
+        IReadOnlyList<EnemyBulletTokenDropEntry> baseDrops = ResolveNonBossWaveTokenDrops(waveNumber);
+        if (!HasAssignedTokenDrop(baseDrops) && currentWave != null)
+        {
+            baseDrops = currentWave.ResolveRuntimeTokenDrops();
+        }
+
+        return ResolveTokenDropsWithEntryOverlay(currentWave, baseDrops, spawnEntry.tokenDrops);
+    }
+
+    /// <summary>
+    /// summary: 按第 x 波读取普通波次掉落；若该波未单独配置则回退到默认普通波次掉落。
+    /// param: waveNumber 当前要刷新的序列波次编号（从 1 开始）
+    /// returns: 当前普通波次应使用的基础掉落表
+    /// </summary>
+    private IReadOnlyList<EnemyBulletTokenDropEntry> ResolveNonBossWaveTokenDrops(int waveNumber)
+    {
+        int resolvedWaveNumber = Mathf.Max(1, waveNumber);
+        if (nonBossWaveSequenceProgression == null)
+        {
+            return Array.Empty<EnemyBulletTokenDropEntry>();
+        }
+
+        return nonBossWaveSequenceProgression.ResolveNonBossTokenDrops(resolvedWaveNumber);
+    }
+
+    /// <summary>
+    /// summary: 按第 x 波解析普通波次结束后的奖励抽取计划；Boss 波次仍使用自身波次定义的计划。
+    /// param: completedWave 刚刚完成的波次定义
+    /// returns: 本次波后应使用的奖励计划，若无需奖励选择则返回 null
+    /// </summary>
+    private CombatEntryTokenSelectionPlan ResolvePostWaveSelectionPlan(WaveDefinition completedWave)
+    {
+        if (completedWave == null)
+        {
+            return null;
+        }
+
+        if (completedWave.IsBossWave)
+        {
+            return completedWave.PostWaveTokenSelectionPlan;
+        }
+
+        int waveNumber = Mathf.Max(1, completedWaveCount);
+        CombatEntryTokenSelectionPlan sequencePlan = nonBossWaveSequenceProgression != null
+            ? nonBossWaveSequenceProgression.ResolveNonBossPostWaveSelectionPlan(waveNumber)
+            : null;
+
+        return sequencePlan != null ? sequencePlan : completedWave.PostWaveTokenSelectionPlan;
+    }
+
+    /// <summary>
+    /// summary: 在启用条目级额外掉落时，把条目掉落叠加到基础掉落；同 token 时优先使用条目配置。
+    /// param: currentWave 当前正在执行的波次资产
+    /// param: baseDrops 当前波次基础掉落表
+    /// param: entryDrops 当前敌人条目的额外掉落
+    /// returns: 最终运行时掉落表
+    /// </summary>
+    private static IReadOnlyList<EnemyBulletTokenDropEntry> ResolveTokenDropsWithEntryOverlay(
+        WaveDefinition currentWave,
+        IReadOnlyList<EnemyBulletTokenDropEntry> baseDrops,
+        IReadOnlyList<EnemyBulletTokenDropEntry> entryDrops)
+    {
+        List<EnemyBulletTokenDropEntry> resolvedBaseDrops = EnemyWaveConfig.SanitizeTokenDrops(baseDrops);
+        if (currentWave == null || !currentWave.ApplyEntrySpecificTokenDrops || entryDrops == null || entryDrops.Count <= 0)
+        {
+            return resolvedBaseDrops;
+        }
+
+        List<EnemyBulletTokenDropEntry> mergedDrops = new(resolvedBaseDrops);
+        IReadOnlyList<EnemyBulletTokenDropEntry> sanitizedEntryDrops = EnemyWaveConfig.SanitizeTokenDrops(entryDrops);
+        for (int i = 0; i < sanitizedEntryDrops.Count; i++)
+        {
+            EnemyBulletTokenDropEntry entryDrop = sanitizedEntryDrops[i];
+            if (entryDrop.token == null)
+            {
+                continue;
+            }
+
+            int existingIndex = FindTokenDropIndex(mergedDrops, entryDrop.token);
+            if (existingIndex < 0)
+            {
+                mergedDrops.Add(entryDrop);
+                continue;
+            }
+
+            mergedDrops[existingIndex] = entryDrop;
+        }
+
+        return mergedDrops;
+    }
+
+    /// <summary>
+    /// summary: 判断掉落列表里是否至少存在一个有效 token。
+    /// param: tokenDrops 待检查的掉落列表
+    /// returns: 存在有效 token 时返回 true
+    /// </summary>
+    private static bool HasAssignedTokenDrop(IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops)
+    {
+        if (tokenDrops == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < tokenDrops.Count; i++)
+        {
+            if (tokenDrops[i].token != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// summary: 在掉落列表里查找目标 token 的索引。
+    /// param: tokenDrops 目标掉落列表
+    /// param: token 需要查找的 token
+    /// returns: 找到返回索引，找不到返回 -1
+    /// </summary>
+    private static int FindTokenDropIndex(IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops, PlaceableTokenData token)
+    {
+        if (tokenDrops == null || token == null)
+        {
+            return -1;
+        }
+
+        for (int i = 0; i < tokenDrops.Count; i++)
+        {
+            if (tokenDrops[i].token == token)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
     /// summary: 根据当前波的配置模式，解析下一只要生成的敌人条目。
     /// param: currentWave 当前正在执行的波次资产
     /// param: spawnEntry 输出的敌人刷新条目
@@ -413,7 +568,8 @@ public sealed class WaveManager : MonoBehaviour
     /// </summary>
     private bool TryPauseForWaveRewardSelection(WaveDefinition currentWave)
     {
-        if (currentWave == null || currentWave.PostWaveTokenSelectionPlan == null)
+        CombatEntryTokenSelectionPlan selectionPlan = ResolvePostWaveSelectionPlan(currentWave);
+        if (currentWave == null || selectionPlan == null)
         {
             return false;
         }
@@ -421,7 +577,7 @@ public sealed class WaveManager : MonoBehaviour
         pendingNextWaveIndex = currentWaveIndex + 1;
         isAwaitingWaveRewardSelection = true;
         nextWaveStartTime = NoScheduledTime;
-        WaveRewardSelectionRequested?.Invoke(currentWaveIndex, currentWave);
+        WaveRewardSelectionRequested?.Invoke(currentWaveIndex, currentWave, selectionPlan);
         return true;
     }
 

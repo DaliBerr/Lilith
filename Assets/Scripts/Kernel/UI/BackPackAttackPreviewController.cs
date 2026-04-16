@@ -212,6 +212,12 @@ namespace Kernel.UI
                 currentCompiledAttack,
                 previewRig.ProjectileRoot,
                 activePreviewBullets);
+
+            for (int i = 0; i < activePreviewBullets.Count; i++)
+            {
+                activePreviewBullets[i]?.SetIgnoreGameplayPauseStatus(true);
+            }
+
             RenderPreviewIfNeeded();
         }
 

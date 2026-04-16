@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88a6c6cbd1b64a9d91d6e538f4f7740c, type: 3}
+  m_Name: Wave05
+  m_EditorClassIdentifier: Assembly-CSharp::WaveDefinition
+  spawnIntervalSeconds: 0.7
+  randomizeEnemySpawns: 1
+  postWaveTokenSelectionPlan: {fileID: 0}
+  isBossWave: 0
+  waveTokenDrops: []
+  applyEntrySpecificTokenDrops: 0
+  enemySpawns:
+  - enemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
+    spawnCount: 14
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
+    spawnCount: 10
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: e92152659a1ea184395551246961e6e2, type: 2}
+    spawnCount: 6
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: 6ccecc6f6447003419bd70625f3cd85d, type: 2}
+    spawnCount: 4
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: 95411fedd0fd215438b2bc3d6bab4907, type: 2}
+    spawnCount: 4
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: b1282d79f2d24a8887ef0ef5ecf0e03d, type: 2}
+    spawnCount: 2
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 
+  - enemyDefinition: {fileID: 11400000, guid: 0b20cce670f6494faeac3bcb28ceec04, type: 2}
+    spawnCount: 2
+    tokenDrops: []
+    isBossEncounter: 0
+    bossDisplayNameOverride: 

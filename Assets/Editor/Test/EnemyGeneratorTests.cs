@@ -209,6 +209,93 @@ public sealed class EnemyGeneratorTests
     }
 
     [Test]
+    public void TrySpawnEnemy_ScalesGroundLiftWithVisualScaleMultiplier()
+    {
+        const float planeY = 10f;
+        CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName, planeY);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        Transform player = CreateGameObject("Player").transform;
+        player.position = new Vector3(32f, 40f, 32f);
+
+        GameObject enemyPrefab = CreateEnemyPrefab(100f);
+        EnemyDefinition definition = CreateEnemyDefinition("ScaledGroundedEnemy", enemyPrefab.GetComponent<EnemyDefinitionBinder>());
+        Assert.That(generator.TrySetTarget(player), Is.True);
+
+        bool baseScaleSuccess = generator.TrySpawnEnemyAt(
+            definition,
+            new EnemyWaveConfig(100f, 120f, 3f, 0.5f, 1f),
+            new Vector3(28f, 0f, 28f),
+            out Enemy baseScaleEnemy);
+
+        bool tripleScaleSuccess = generator.TrySpawnEnemyAt(
+            definition,
+            new EnemyWaveConfig(100f, 120f, 3f, 0.5f, 1f, 0f, 3f, 0f, null),
+            new Vector3(30f, 0f, 30f),
+            out Enemy tripleScaleEnemy);
+
+        Assert.That(baseScaleSuccess, Is.True);
+        Assert.That(tripleScaleSuccess, Is.True);
+        createdObjects.Add(baseScaleEnemy.gameObject);
+        createdObjects.Add(tripleScaleEnemy.gameObject);
+
+        float baseLift = baseScaleEnemy.transform.position.y - planeY;
+        float tripleScaleLift = tripleScaleEnemy.transform.position.y - planeY;
+
+        Assert.That(baseLift, Is.GreaterThan(0f));
+        Assert.That(tripleScaleLift, Is.EqualTo(baseLift * 1.5f).Within(0.001f));
+    }
+
+    [Test]
+    public void TrySpawnEnemy_ScalesGroundLiftUsingDefinitionGlyphScaleMultiplier()
+    {
+        const float planeY = 10f;
+        CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName, planeY);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        Transform player = CreateGameObject("Player").transform;
+        player.position = new Vector3(32f, 40f, 32f);
+
+        GameObject enemyPrefab = CreateEnemyPrefab(100f);
+        EnemyDefinition definition = CreateEnemyDefinition("GlyphScaledEnemy", enemyPrefab.GetComponent<EnemyDefinitionBinder>());
+        EnemyDefinition.EnemyVisualDefinition visual = GetPrivateField<EnemyDefinition.EnemyVisualDefinition>(definition, "visual");
+        visual.glyphScaleMultiplier = 3f;
+        SetPrivateField(definition, "visual", visual);
+        Assert.That(generator.TrySetTarget(player), Is.True);
+
+        bool success = generator.TrySpawnEnemyAt(
+            definition,
+            new EnemyWaveConfig(100f, 120f, 3f, 0.5f, 1f, 0f, 1.8f, 0f, null),
+            new Vector3(28f, 0f, 28f),
+            out Enemy spawnedEnemy);
+
+        Assert.That(success, Is.True);
+        createdObjects.Add(spawnedEnemy.gameObject);
+        Assert.That(spawnedEnemy.transform.position.y, Is.EqualTo(19f).Within(0.001f));
+    }
+
+    [Test]
+    public void TrySpawnEnemy_ReSnapsAfterWaveConfigReceiverMutatesTransformHeight()
+    {
+        CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName, 10f);
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+        Transform player = CreateGameObject("Player").transform;
+        player.position = new Vector3(32f, 40f, 32f);
+
+        GameObject enemyPrefab = CreateEnemyPrefab(100f);
+        HeightOffsetWaveConfigReceiver heightOffsetReceiver = enemyPrefab.AddComponent<HeightOffsetWaveConfigReceiver>();
+        heightOffsetReceiver.HeightOffset = -6f;
+        EnemyDefinition definition = CreateEnemyDefinition("GroundedEnemy", enemyPrefab.GetComponent<EnemyDefinitionBinder>());
+        Assert.That(generator.TrySetTarget(player), Is.True);
+        SetPrivateField(generator, "spawnDistance", 4f);
+        SetPrivateField(generator, "maxGroundSpawnRolls", 8);
+
+        bool success = generator.TrySpawnEnemy(definition, new EnemyWaveConfig(100f, 120f, 3f, 0.5f, 1f), out Enemy spawnedEnemy);
+
+        Assert.That(success, Is.True);
+        createdObjects.Add(spawnedEnemy.gameObject);
+        Assert.That(spawnedEnemy.transform.position.y, Is.EqualTo(16f).Within(0.001f));
+    }
+
+    [Test]
     public void TrySpawnEnemyAt_BindsTargetsForMovementAndExtendedAttackers()
     {
         CreateMapAuthoring(64, 64, Vector2.one, MapGridAuthoring.GroundTagName);
@@ -455,6 +542,18 @@ public sealed class EnemyGeneratorTests
         {
             LastConfig = config;
             ApplyCount++;
+        }
+    }
+
+    private sealed class HeightOffsetWaveConfigReceiver : MonoBehaviour, IEnemyWaveConfigReceiver
+    {
+        public float HeightOffset { get; set; }
+
+        public void ApplyWaveConfig(EnemyWaveConfig config)
+        {
+            Vector3 nextPosition = transform.position;
+            nextPosition.y += HeightOffset;
+            transform.position = nextPosition;
         }
     }
 }

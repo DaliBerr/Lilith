@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Boss_Phase1
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: Boss_Phase1
-  displayName: "\u971c\u4e3b\u00b7\u58f9"
+  displayName: "\u971C\u4E3B\xB7\u58F9"
+  description: "霜主初相，以寒潮与延时爆域试探猎物，走位失误会被连续追击。"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 7
   attackKind: 2
@@ -43,7 +44,7 @@ MonoBehaviour:
     sideSwitchIntervalSeconds: 1.35
     startClockwise: 0
   visual:
-    glyphText: "\u51b0\u6563\u4e09"
+    glyphText: "\u971C\u4E3B"
     glyphScaleMultiplier: 3
     glyphColor: {r: 0.45, g: 0.83, b: 1, a: 1}
     runeBaseSprite: {fileID: 0}

@@ -22,7 +22,7 @@ MonoBehaviour:
   modifiers: []
   coreType: 4
   defaultValueType: 1
-  damage: 10
+  damage: 5
   projectileLife: 1
   impactLifeCost: 1
   projectileSpeed: 148

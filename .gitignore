@@ -10,4 +10,6 @@ UserSettings/
 .dotnet-home/
 .plastic
 Extract.7z
+*.zip
+集字书/
 

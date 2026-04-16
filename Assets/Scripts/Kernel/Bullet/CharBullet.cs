@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Kernel.GameState;
 using TMPro;
 using UnityEngine;
 using Vocalith.Logging;
@@ -74,6 +75,7 @@ public sealed class CharBullet : MonoBehaviour
     private int remainingLife;
     private bool hasPreviousImpactCheckCenter;
     private bool isActiveShot;
+    private bool ignoreGameplayPauseStatus;
     private CompiledAttack compiledAttack;
     private CharBullet spawnTemplate;
     private BulletTargetPolicy targetPolicy = BulletTargetPolicy.EnemiesOnly;
@@ -205,6 +207,7 @@ public sealed class CharBullet : MonoBehaviour
         nextHomingTargetRefreshTime = 0f;
         hasFontSizeDrivenImpactRadius = false;
         fontSizeDrivenImpactRadius = 0f;
+        ignoreGameplayPauseStatus = false;
 
         EnableImpactCollider(true);
         TryStopMovement();
@@ -227,6 +230,16 @@ public sealed class CharBullet : MonoBehaviour
     public void SetSpawnTemplate(CharBullet template)
     {
         spawnTemplate = template != null ? template : this;
+    }
+
+    /// <summary>
+    /// summary: 设置当前子弹是否忽略战斗暂停门控，供背包内预览子弹保持演示动画。
+    /// param: ignoreGameplayPause true 表示忽略暂停门控，false 表示按战斗暂停状态冻结
+    /// returns: 无
+    /// </summary>
+    public void SetIgnoreGameplayPauseStatus(bool ignoreGameplayPause)
+    {
+        ignoreGameplayPauseStatus = ignoreGameplayPause;
     }
 
     /// <summary>
@@ -908,8 +921,46 @@ public sealed class CharBullet : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// summary: 判断当前是否处于会冻结战斗子弹的暂停状态。
+    /// param: 无
+    /// returns: 当存在背包或暂停状态，且当前子弹未声明忽略暂停门控时返回 true
+    /// </summary>
+    private bool ShouldSuspendForGameplayPause()
+    {
+        if (ignoreGameplayPauseStatus)
+        {
+            return false;
+        }
+
+        return StatusController.HasStatus(StatusList.InBackPackStatus)
+            || StatusController.HasStatus(StatusList.InPauseMenuStatus)
+            || StatusController.HasStatus(StatusList.PausedStatus);
+    }
+
+    /// <summary>
+    /// summary: 在暂停期间把动态刚体速度清零，避免物理世界继续推进已发射子弹。
+    /// param: 无
+    /// returns: 无
+    /// </summary>
+    private void FreezeDynamicRigidbodyVelocity()
+    {
+        if (MovementRigidbody == null || movementRigidbody.isKinematic)
+        {
+            return;
+        }
+
+        movementRigidbody.linearVelocity = Vector3.zero;
+    }
+
     private void Update()
     {
+        if (ShouldSuspendForGameplayPause())
+        {
+            FreezeDynamicRigidbodyVelocity();
+            return;
+        }
+
         TryUpdateHomingDirection(Time.deltaTime);
         if (MovementRigidbody != null)
         {
@@ -933,6 +984,12 @@ public sealed class CharBullet : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (ShouldSuspendForGameplayPause())
+        {
+            FreezeDynamicRigidbodyVelocity();
+            return;
+        }
+
         if (MovementRigidbody == null)
         {
             return;
@@ -2130,7 +2187,14 @@ public sealed class CharBullet : MonoBehaviour
 
             for (int bulletIndex = 0; bulletIndex < spawnedBullets.Count; bulletIndex++)
             {
-                spawnedBullets[bulletIndex]?.RegisterIgnoredTargetRoot(targetRoot);
+                CharBullet spawnedBullet = spawnedBullets[bulletIndex];
+                if (spawnedBullet == null)
+                {
+                    continue;
+                }
+
+                spawnedBullet.RegisterIgnoredTargetRoot(targetRoot);
+                spawnedBullet.SetIgnoreGameplayPauseStatus(ignoreGameplayPauseStatus);
             }
         }
     }

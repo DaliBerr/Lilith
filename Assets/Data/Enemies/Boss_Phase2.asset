@@ -13,7 +13,8 @@ MonoBehaviour:
   m_Name: Boss_Phase2
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: Boss_Phase2
-  displayName: "\u971c\u9510\u00b7\u8d30"
+  displayName: "\u971C\u9510\xB7\u8D30"
+  description: "霜锐现身后攻势骤烈，边召援边压场，容错极低，必须速战。"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 7
   attackKind: 2
@@ -43,7 +44,7 @@ MonoBehaviour:
     sideSwitchIntervalSeconds: 1.05
     startClockwise: 1
   visual:
-    glyphText: "\u950b\u53ec"
+    glyphText: "\u971C\u9510"
     glyphScaleMultiplier: 3
     glyphColor: {r: 1, g: 0.58, b: 0.32, a: 1}
     runeBaseSprite: {fileID: 0}
@@ -63,7 +64,7 @@ MonoBehaviour:
     formulaItems:
     - {fileID: 11400000, guid: 60ae7cfbc364cfd42be3310cae27c72d, type: 2}
     targetPolicy: 1
-    projectileSpeedMultiplier: 1.5
+    projectileSpeedMultiplier: 1
   explosiveAttack:
     explosionRadius: 0
     windupSeconds: 0.8
@@ -73,27 +74,60 @@ MonoBehaviour:
   - skillKind: 1
     cooldownSeconds: 6
     castRange: 360
+    actionLockSeconds: 0
     summonSkill:
       summonedEnemyDefinition: {fileID: 11400000, guid: 4f4dd96a8f1b4b1f94fe5097cc8f4a16, type: 2}
       minSummonCountPerCast: 1
       maxSummonCountPerCast: 1
       summonRadius: 14
       maxAliveSummons: 2
+    delayedGroundBombSkill:
+      delaySeconds: 1.5
+      explosionRadius: 100
+      explosionDamage: 1
+      bombsPerSequence: 1
+      bombIntervalSeconds: 0
+      randomCooldownMinSeconds: 0
+      randomCooldownMaxSeconds: 0
+      indicatorWidth: 0.2
+      indicatorColor: {r: 0, g: 0, b: 0, a: 0}
   - skillKind: 1
     cooldownSeconds: 4.2
     castRange: 360
+    actionLockSeconds: 0
     summonSkill:
       summonedEnemyDefinition: {fileID: 11400000, guid: cd78ac39b9a726540af3cd2ef9b17c67, type: 2}
       minSummonCountPerCast: 1
       maxSummonCountPerCast: 1
       summonRadius: 14
       maxAliveSummons: 4
+    delayedGroundBombSkill:
+      delaySeconds: 1.5
+      explosionRadius: 100
+      explosionDamage: 1
+      bombsPerSequence: 1
+      bombIntervalSeconds: 0
+      randomCooldownMinSeconds: 0
+      randomCooldownMaxSeconds: 0
+      indicatorWidth: 0.2
+      indicatorColor: {r: 0, g: 0, b: 0, a: 0}
   - skillKind: 1
     cooldownSeconds: 6.8
     castRange: 360
+    actionLockSeconds: 0
     summonSkill:
       summonedEnemyDefinition: {fileID: 11400000, guid: e92152659a1ea184395551246961e6e2, type: 2}
       minSummonCountPerCast: 1
       maxSummonCountPerCast: 1
       summonRadius: 14
       maxAliveSummons: 3
+    delayedGroundBombSkill:
+      delaySeconds: 1.5
+      explosionRadius: 100
+      explosionDamage: 1
+      bombsPerSequence: 1
+      bombIntervalSeconds: 0
+      randomCooldownMinSeconds: 0
+      randomCooldownMaxSeconds: 0
+      indicatorWidth: 0.2
+      indicatorColor: {r: 0, g: 0, b: 0, a: 0}

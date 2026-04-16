@@ -24,7 +24,7 @@ public sealed class WaveDefinitionTests
     }
 
     [Test]
-    public void OnValidate_SanitizesTokenDropsAndPreservesEmptyInspectorSlots()
+    public void OnValidate_SanitizesEntryTokenDropsAndPreservesEmptyInspectorSlots()
     {
         WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
         createdObjects.Add(waveDefinition);
@@ -62,7 +62,7 @@ public sealed class WaveDefinitionTests
     }
 
     [Test]
-    public void OnValidate_AutoFillsHealingAndRemnantDropsWhenEntryHasNoTokens()
+    public void OnValidate_AutoFillsWaveTokenDropsWhenEntryHasNoTokens()
     {
         const string remnantTokenPath = "Assets/Data/BulletTokens/RemnantToken.asset";
         const string healingTokenPath = "Assets/Data/BulletTokens/HealingToken.asset";
@@ -84,17 +84,18 @@ public sealed class WaveDefinitionTests
         Assert.That(remnantToken, Is.Not.Null);
         Assert.That(healingToken, Is.Not.Null);
         Assert.That(waveDefinition.TryGetSpawnEntryAt(0, out WaveEnemySpawnEntry sanitizedEntry), Is.True);
-        Assert.That(sanitizedEntry.tokenDrops, Has.Count.EqualTo(2));
-        Assert.That(sanitizedEntry.tokenDrops[0].token, Is.SameAs(remnantToken));
-        Assert.That(sanitizedEntry.tokenDrops[0].dropChance, Is.EqualTo(0.001f));
-        Assert.That(sanitizedEntry.tokenDrops[0].dropCount, Is.EqualTo(1));
-        Assert.That(sanitizedEntry.tokenDrops[1].token, Is.SameAs(healingToken));
-        Assert.That(sanitizedEntry.tokenDrops[1].dropChance, Is.EqualTo(0.2f));
-        Assert.That(sanitizedEntry.tokenDrops[1].dropCount, Is.EqualTo(1));
+        Assert.That(sanitizedEntry.tokenDrops, Is.Empty);
+        Assert.That(waveDefinition.WaveTokenDrops, Has.Count.EqualTo(2));
+        Assert.That(waveDefinition.WaveTokenDrops[0].token, Is.SameAs(remnantToken));
+        Assert.That(waveDefinition.WaveTokenDrops[0].dropChance, Is.EqualTo(0.001f));
+        Assert.That(waveDefinition.WaveTokenDrops[0].dropCount, Is.EqualTo(1));
+        Assert.That(waveDefinition.WaveTokenDrops[1].token, Is.SameAs(healingToken));
+        Assert.That(waveDefinition.WaveTokenDrops[1].dropChance, Is.EqualTo(0.2f));
+        Assert.That(waveDefinition.WaveTokenDrops[1].dropCount, Is.EqualTo(1));
     }
 
     [Test]
-    public void OnValidate_AppendsMissingDefaultDropsToEntriesWithCustomTokens()
+    public void OnValidate_InfersWaveDropsFromEntryDropsAndKeepsEntrySpecificData()
     {
         const string remnantTokenPath = "Assets/Data/BulletTokens/RemnantToken.asset";
         const string healingTokenPath = "Assets/Data/BulletTokens/HealingToken.asset";
@@ -120,12 +121,57 @@ public sealed class WaveDefinitionTests
         Assert.That(remnantToken, Is.Not.Null);
         Assert.That(healingToken, Is.Not.Null);
         Assert.That(waveDefinition.TryGetSpawnEntryAt(0, out WaveEnemySpawnEntry sanitizedEntry), Is.True);
-        Assert.That(sanitizedEntry.tokenDrops, Has.Count.EqualTo(3));
+        Assert.That(sanitizedEntry.tokenDrops, Has.Count.EqualTo(1));
         Assert.That(sanitizedEntry.tokenDrops[0].token, Is.SameAs(customToken));
-        Assert.That(sanitizedEntry.tokenDrops[1].token, Is.SameAs(remnantToken));
-        Assert.That(sanitizedEntry.tokenDrops[1].dropChance, Is.EqualTo(0.001f));
-        Assert.That(sanitizedEntry.tokenDrops[2].token, Is.SameAs(healingToken));
-        Assert.That(sanitizedEntry.tokenDrops[2].dropChance, Is.EqualTo(0.2f));
+        Assert.That(waveDefinition.WaveTokenDrops, Has.Count.EqualTo(3));
+        Assert.That(ContainsToken(waveDefinition.WaveTokenDrops, customToken), Is.True);
+        Assert.That(ContainsToken(waveDefinition.WaveTokenDrops, remnantToken), Is.True);
+        Assert.That(ContainsToken(waveDefinition.WaveTokenDrops, healingToken), Is.True);
+    }
+
+    [Test]
+    public void ResolveRuntimeTokenDrops_IgnoresEntrySpecificDropsByDefault()
+    {
+        WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
+        createdObjects.Add(waveDefinition);
+
+        CoreTokenData waveToken = CreateToken<CoreTokenData>("wave_token", "Wave Token");
+        CoreTokenData entryToken = CreateToken<CoreTokenData>("entry_token", "Entry Token");
+        SetPrivateField(waveDefinition, "waveTokenDrops", new List<EnemyBulletTokenDropEntry>
+        {
+            new(waveToken, 0.5f),
+        });
+
+        IReadOnlyList<EnemyBulletTokenDropEntry> resolvedDrops = waveDefinition.ResolveRuntimeTokenDrops(new List<EnemyBulletTokenDropEntry>
+        {
+            new(entryToken, 1f),
+        });
+
+        Assert.That(ContainsToken(resolvedDrops, waveToken), Is.True);
+        Assert.That(ContainsToken(resolvedDrops, entryToken), Is.False);
+    }
+
+    [Test]
+    public void ResolveRuntimeTokenDrops_IncludesEntrySpecificDropsWhenEnabled()
+    {
+        WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
+        createdObjects.Add(waveDefinition);
+
+        CoreTokenData waveToken = CreateToken<CoreTokenData>("wave_token", "Wave Token");
+        CoreTokenData entryToken = CreateToken<CoreTokenData>("entry_token", "Entry Token");
+        SetPrivateField(waveDefinition, "waveTokenDrops", new List<EnemyBulletTokenDropEntry>
+        {
+            new(waveToken, 0.5f),
+        });
+        SetPrivateField(waveDefinition, "applyEntrySpecificTokenDrops", true);
+
+        IReadOnlyList<EnemyBulletTokenDropEntry> resolvedDrops = waveDefinition.ResolveRuntimeTokenDrops(new List<EnemyBulletTokenDropEntry>
+        {
+            new(entryToken, 1f),
+        });
+
+        Assert.That(ContainsToken(resolvedDrops, waveToken), Is.True);
+        Assert.That(ContainsToken(resolvedDrops, entryToken), Is.True);
     }
 
     [Test]
@@ -210,5 +256,23 @@ public sealed class WaveDefinitionTests
         }
 
         return null;
+    }
+
+    private static bool ContainsToken(IReadOnlyList<EnemyBulletTokenDropEntry> tokenDrops, PlaceableTokenData token)
+    {
+        if (tokenDrops == null || token == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < tokenDrops.Count; i++)
+        {
+            if (tokenDrops[i].token == token)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

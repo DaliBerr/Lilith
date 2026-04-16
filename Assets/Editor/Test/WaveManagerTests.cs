@@ -204,16 +204,19 @@ public sealed class WaveManagerTests
 
         int requestedWaveIndex = -1;
         WaveDefinition requestedWave = null;
-        waveManager.WaveRewardSelectionRequested += (waveIndex, wave) =>
+        CombatEntryTokenSelectionPlan requestedSelectionPlan = null;
+        waveManager.WaveRewardSelectionRequested += (waveIndex, wave, selection) =>
         {
             requestedWaveIndex = waveIndex;
             requestedWave = wave;
+            requestedSelectionPlan = selection;
         };
 
         InvokePrivateMethod<object>(waveManager, "TryAdvanceWave", firstWave, 1f);
 
         Assert.That(requestedWaveIndex, Is.EqualTo(0));
         Assert.That(requestedWave, Is.SameAs(firstWave));
+        Assert.That(requestedSelectionPlan, Is.SameAs(selectionPlan));
         Assert.That(waveManager.CompletedWaveCount, Is.EqualTo(1));
         Assert.That(generator.CompletedWaveCount, Is.EqualTo(1));
         Assert.That(waveManager.IsAwaitingWaveRewardSelection, Is.True);
@@ -224,6 +227,117 @@ public sealed class WaveManagerTests
         Assert.That(waveManager.IsAwaitingWaveRewardSelection, Is.False);
         Assert.That(GetPrivateField<int>(waveManager, "currentWaveIndex"), Is.EqualTo(1));
         Assert.That(waveManager.HasCompletedSequence, Is.False);
+    }
+
+    [Test]
+    public void TryAdvanceWave_NonBossRewardSelectionPlanUsesSequenceProgression()
+    {
+        WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+
+        CombatEntryTokenSelectionPlan legacyWavePlan = ScriptableObject.CreateInstance<CombatEntryTokenSelectionPlan>();
+        CombatEntryTokenSelectionPlan sequenceWavePlan = ScriptableObject.CreateInstance<CombatEntryTokenSelectionPlan>();
+        createdObjects.Add(legacyWavePlan);
+        createdObjects.Add(sequenceWavePlan);
+
+        EnemyDefinition enemyDefinition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        createdObjects.Add(enemyDefinition);
+
+        WaveDefinition firstWave = CreateWaveDefinition(
+            0.5f,
+            legacyWavePlan,
+            new WaveEnemySpawnEntry(enemyDefinition, 1));
+
+        WaveSequenceProgressionConfig progressionConfig = ScriptableObject.CreateInstance<WaveSequenceProgressionConfig>();
+        createdObjects.Add(progressionConfig);
+        SetPrivateField(
+            progressionConfig,
+            "rewardsByWave",
+            new List<WaveSequenceProgressionConfig.WaveRewardEntry>
+            {
+                new()
+                {
+                    waveNumber = 1,
+                    tokenDrops = new List<EnemyBulletTokenDropEntry>(),
+                    postWaveTokenSelectionPlan = sequenceWavePlan,
+                },
+            });
+
+        SetPrivateField(waveManager, "enemyGenerator", generator);
+        SetPrivateField(waveManager, "waves", new List<WaveDefinition> { firstWave });
+        SetPrivateField(waveManager, "nonBossWaveSequenceProgression", progressionConfig);
+        SetPrivateField(waveManager, "currentWaveIndex", 0);
+        SetPrivateField(waveManager, "spawnedCountInCurrentWave", firstWave.TotalSpawnCount);
+        SetPrivateField(waveManager, "nextWaveStartTime", 0f);
+        SetPrivateField(waveManager, "isSequenceRunning", true);
+        SetPrivateField(waveManager, "hasCompletedSequence", false);
+
+        CombatEntryTokenSelectionPlan requestedSelectionPlan = null;
+        waveManager.WaveRewardSelectionRequested += (_, _, selectionPlan) =>
+        {
+            requestedSelectionPlan = selectionPlan;
+        };
+
+        InvokePrivateMethod<object>(waveManager, "TryAdvanceWave", firstWave, 1f);
+
+        Assert.That(requestedSelectionPlan, Is.SameAs(sequenceWavePlan));
+        Assert.That(requestedSelectionPlan, Is.Not.SameAs(legacyWavePlan));
+    }
+
+    [Test]
+    public void TryAdvanceWave_BossRewardSelectionPlanKeepsWaveDefinitionPlan()
+    {
+        WaveManager waveManager = CreateGameObject("WaveManager").AddComponent<WaveManager>();
+        EnemyGenerator generator = CreateGameObject("EnemyGenerator").AddComponent<EnemyGenerator>();
+
+        CombatEntryTokenSelectionPlan bossWavePlan = ScriptableObject.CreateInstance<CombatEntryTokenSelectionPlan>();
+        CombatEntryTokenSelectionPlan sequenceWavePlan = ScriptableObject.CreateInstance<CombatEntryTokenSelectionPlan>();
+        createdObjects.Add(bossWavePlan);
+        createdObjects.Add(sequenceWavePlan);
+
+        EnemyDefinition enemyDefinition = ScriptableObject.CreateInstance<EnemyDefinition>();
+        createdObjects.Add(enemyDefinition);
+
+        WaveDefinition bossWave = CreateWaveDefinition(
+            0.5f,
+            bossWavePlan,
+            new WaveEnemySpawnEntry(enemyDefinition, 1));
+        SetPrivateField(bossWave, "isBossWave", true);
+
+        WaveSequenceProgressionConfig progressionConfig = ScriptableObject.CreateInstance<WaveSequenceProgressionConfig>();
+        createdObjects.Add(progressionConfig);
+        SetPrivateField(
+            progressionConfig,
+            "rewardsByWave",
+            new List<WaveSequenceProgressionConfig.WaveRewardEntry>
+            {
+                new()
+                {
+                    waveNumber = 1,
+                    tokenDrops = new List<EnemyBulletTokenDropEntry>(),
+                    postWaveTokenSelectionPlan = sequenceWavePlan,
+                },
+            });
+
+        SetPrivateField(waveManager, "enemyGenerator", generator);
+        SetPrivateField(waveManager, "waves", new List<WaveDefinition> { bossWave });
+        SetPrivateField(waveManager, "nonBossWaveSequenceProgression", progressionConfig);
+        SetPrivateField(waveManager, "currentWaveIndex", 0);
+        SetPrivateField(waveManager, "spawnedCountInCurrentWave", bossWave.TotalSpawnCount);
+        SetPrivateField(waveManager, "nextWaveStartTime", 0f);
+        SetPrivateField(waveManager, "isSequenceRunning", true);
+        SetPrivateField(waveManager, "hasCompletedSequence", false);
+
+        CombatEntryTokenSelectionPlan requestedSelectionPlan = null;
+        waveManager.WaveRewardSelectionRequested += (_, _, selectionPlan) =>
+        {
+            requestedSelectionPlan = selectionPlan;
+        };
+
+        InvokePrivateMethod<object>(waveManager, "TryAdvanceWave", bossWave, 1f);
+
+        Assert.That(requestedSelectionPlan, Is.SameAs(bossWavePlan));
+        Assert.That(requestedSelectionPlan, Is.Not.SameAs(sequenceWavePlan));
     }
 
     // [Test]

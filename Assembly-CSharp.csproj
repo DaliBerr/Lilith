@@ -193,6 +193,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\Scribe.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackPreviewDummyEnemy.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BulletTokenSelectionSampler.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\WaveSequenceProgressionConfig.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemySummoner.cs" />
     <Compile Include="Assets\Scripts\Kernel\ArenaSeedLayoutBuilder.cs" />

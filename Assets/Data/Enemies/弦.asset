@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: "\u5F26"
   displayName: "\u5F26"
+  description: "拉弦点射的远程手，出手频繁，会在中远距离持续压制。"
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
   movementKind: 3
   attackKind: 2
