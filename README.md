@@ -2,7 +2,7 @@
 
 Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`StartUp` 启动场景到 `Main` gameplay 场景的双阶段启动链路、`Kernel` 业务层、`Vocalith` 基础设施层、固定网格地图工作流、`Main` 场景中的起始房间与战斗地图双地图 Run 骨架、基于 Token 的攻击编译与发射、敌人波次系统，以及运行时存档与本地化基础能力。
 
-本 README 只保留当前实现、稳定路径、核心架构、关键入口和已知限制。协作约定、agent 工作流和 Unity MCP 使用规则见 [AGENTS.md](AGENTS.md)。
+本 README 只保留当前实现、稳定路径、核心架构、关键入口和已知限制。仓库硬规则见 [AGENTS.md](AGENTS.md)；更细的 agent 操作流程、委派策略与文档分工由本地 `lilith-repo-operator` skill 承载。
 
 ## 工程事实
 
@@ -121,6 +121,13 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - 业务 UI prefab：[`Assets/Prefabs/UI`](Assets/Prefabs/UI)
 - 敌人 prefab：[`Assets/Prefabs/Enemy`](Assets/Prefabs/Enemy)
 - 子弹 prefab：[`Assets/Prefabs/Bullet`](Assets/Prefabs/Bullet)
+
+## 协作文档
+
+| 文档 | 面向对象 | 用途 |
+| --- | --- | --- |
+| [`Docs/ArtistGuide.md`](Docs/ArtistGuide.md) | 美术 | 替换临时美术资源、确认场景 / prefab / UI 视觉入口与注意事项 |
+| [`Docs/DesignGuide.md`](Docs/DesignGuide.md) | 策划 | 编写游戏内文本、任务、敌人、波次、Token、掉落和数值配置 |
 
 ## 命名说明
 

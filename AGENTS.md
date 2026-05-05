@@ -1,295 +1,214 @@
-# AGENTS.md — Unity Repo Guidance for Coding Agents
+# AGENTS.md — Lilith Repo Rules
 
-## Mission / 目标
-你是这个 Unity 项目的代码协作代理。你的首要任务是：
-1) 聚焦 **可执行逻辑与可维护结构**（C# 脚本、程序集划分、运行时逻辑、Editor 工具、配置与依赖）。
+## Mission
 
-## What to focus on / 优先关注（高价值）
-### 核心运行时代码
-- `Assets/**/Scripts/**/*.cs`
-- `Assets/**/Addressables/**`（若项目使用 Addressables，关注其配置与加载代码）
+聚焦 `Lilith` 仓库中的可执行逻辑与可维护结构，优先处理 C# 运行时代码、必要的 Editor 工具、依赖配置，以及与逻辑绑定明确相关的场景和 prefab。
 
-### 编辑器与工具链（仅当需求相关）
-- `Assets/**/Editor/**/*.cs`
+若本机存在 `lilith-repo-operator` skill，优先使用它承接详细操作流程、文档分工、Unity MCP 使用节奏与 troubleshooting 索引；本文件只保留每次任务都必须立刻看到的仓库硬规则。
 
-### 依赖与构建配置（用于定位包/版本/编译问题）
-- `Packages/manifest.json`
-- `Packages/packages-lock.json`
-- `ProjectSettings/*.asset`（仅在与输入/渲染/打包/脚本执行顺序等相关时阅读）
-- `Assets/**/asmdef`（程序集定义，影响编译引用与分层）
-- `Assets/**/asmref`
+## Behavioral Guidelines
 
-### 场景与Prefab（仅当与逻辑绑定或引用缺失相关时）
-- `Assets/**/*.unity`
-- `Assets/**/*.prefab`
-- `Assets/**/*.asset`（ScriptableObject 配置类等）
-- 若 `Unity MCP` 可用，优先通过 `Unity MCP` 查询 Scene / Prefab / GameObject / Component 状态，而不是直接打开这些 YAML 文本
+这些准则用于减少常见 LLM 编码错误，并与本仓库规则合并执行。它们会更偏向谨慎而不是速度；非常简单的任务可以按实际风险裁量。
 
----
+### Think Before Coding
 
-## What to ignore / 尽量忽略（低价值、极易干扰）
-除非我明确要求，否则不要读取/分析以下内容：
+不要假设，不要隐藏不确定性，主动暴露权衡。
 
-### Unity 自动生成与缓存
-- `Library/`
-- `Temp/`
-- `Obj/`
-- `Logs/`
-- `UserSettings/`
+- 实现前明确当前假设；如果关键信息不确定，先问。
+- 如果需求存在多种解释，先说出解释差异，不要静默选择。
+- 如果有更简单的方案或当前方向不值得做，直接说明并给出理由。
+- 如果上下文不清楚，停下来指出困惑点，再请求必要信息。
 
-### 构建产物与导出
-- `Build/`, `Builds/`, `bin/`, `dist/`, `out/`
-- `*.apk`, `*.aab`, `*.ipa`, `*.xcodeproj`, `*.xcworkspace`
-- `*.exe`, `*.app`, `*.dll`（第三方库除外且仅在必要时看）
+### Simplicity First
 
-### 版本控制与IDE杂项（除非是 CI/脚本需求）
-- `.git/`, `.svn/`
-- `.plastic/`（Plastic/Unity 自动维护文件夹，默认不管理其变更）
-- `.vs/`, `.idea/`, `.vscode/`
-- `*.sln`, `*.csproj`（除非编译/引用问题必须）
-- `*.user`, `*.suo`
-- 规则补充：若 `.plastic/**` 与 `*.csproj` 出现 Unity 自动改动，默认视为噪音，不作为异常中断任务，也不主动回滚，除非我明确要求处理
+用能解决问题的最小代码，不写推测性扩展。
 
-### 素材与大文件（通常与“核心代码逻辑”无关）
-- `Assets/**/Textures/`, `Assets/**/Models/`, `Assets/**/Audio/`, `Assets/**/Animations/`
-- `*.png`, `*.jpg`, `*.tga`, `*.psd`, `*.fbx`, `*.wav`, `*.mp3`, `*.mp4`
-- `*.shader`, `*.mat`（除非我在问渲染/材质/Shader 相关问题）
+- 不添加用户没有要求的功能。
+- 不为单次使用的逻辑抽象新层。
+- 不加入未被要求的灵活性、配置项或通用化设计。
+- 不为实际上不可能出现的情况堆叠错误处理。
+- 如果 200 行能被清晰地压到 50 行，应优先简化。
 
-### Unity 的 .meta 文件（重点）
-- `Assets/**/*.meta`
-原则：**默认完全忽略** `.meta`。
-只有在以下情况才允许查看 `.meta`：
-1) 资源 GUID 丢失/引用断裂（Missing Script / Missing Reference）
-2) merge 冲突导致 GUID 改变，Prefab/Scene 引用被破坏
-3) 我明确要求你定位 GUID/引用问题
+自检标准：资深工程师看到这段实现，会不会认为它过度复杂？如果会，先收敛。
 
----
+### Surgical Changes
 
-## Unity MCP / Unity MCP 使用约定
-若当前 agent 可以访问 `Unity MCP`，默认把它视为 Unity Editor 的一等入口，而不是可选附加能力。
+只触碰必须触碰的地方，只清理自己造成的问题。
 
-- 先读 `mcpforunity://editor/state`，确认 `ready_for_tools`、编译状态、活动场景
-- 涉及 Scene / Prefab / GameObject / Component / Console / Test / Screenshot / Build / Package / Editor 状态时，优先调用 `Unity MCP`
-- 优先使用编辑器真实状态回答“对象是否存在、组件是否挂载、场景是否激活、控制台是否报错、测试是否通过”这类问题，不要先靠手读 `.unity` / `.prefab` 文本猜
-- 修改 C# 脚本仍以源码文件为主；但修改后应优先通过 `Unity MCP` 检查编译状态、Console 和场景接线结果
-- 只有在以下情况才优先直接读 `.unity` / `.prefab` / `.meta` 文本：
-  1. `Unity MCP` 当前不可用
-  2. 需要处理 YAML merge / GUID / Missing Script / Missing Reference
-  3. 需要做文本级 diff 或审查序列化变更
+- 不顺手改进相邻代码、注释或格式。
+- 不重构未损坏、未被请求处理的代码。
+- 匹配现有风格，即使你个人会用另一种写法。
+- 发现无关 dead code 时可以提及，不要擅自删除。
+- 清理由本次改动制造出的未使用 import、变量、函数或孤儿代码。
+- 不删除任务开始前已经存在的 dead code，除非用户明确要求。
 
-默认建议优先调用的 `Unity MCP` 能力：
+每一行 diff 都应该能直接追溯到用户请求。
 
-- 查编辑器是否就绪：`mcpforunity://editor/state`
-- 查当前场景与根对象：`manage_scene(action="get_active")`、`find_gameobjects`
-- 查/改对象与组件：`manage_gameobject`、`manage_components`
-- 查/改 Prefab：`manage_prefabs`
-- 查 Console / 编译问题：`read_console`
-- 运行测试：`run_tests`、`get_test_job`
-- 做场景截图或 UI 自检：`manage_camera`
+### Goal-Driven Execution
 
+把任务转换成可验证目标，并循环到验证完成。
 
+- “加验证”意味着先明确无效输入覆盖点，再让测试或检查通过。
+- “修 bug”意味着优先复现问题，再让复现用例通过。
+- “重构 X”意味着确认重构前后的行为或测试保持一致。
+- 多步骤任务应给出简短计划，并为每步标注验证方式。
 
-## Subagent workflow / Subagent 使用约定
-若当前运行环境支持 subagent，默认允许主模型把**只读、低风险、可并行、上下文压缩型**子任务委派给更轻量的子代理，当前存在：log_triager/test_triager/impact_auditor/doc_auditor/prefab_locator/diff_reviewer/test_runner各subagnet。
+示例：
 
-### 何时优先使用 subagent
-以下任务默认适合优先交给 mini 子代理：
-- **代码地图与入口定位**：快速找入口类、状态流、调用链、事件源、注册点、配置加载点
-- **只读资料核对**：阅读 README、memory、设计说明、第三方文档、包版本与依赖差异
-- **日志/报错归类**：整理 Console、测试失败、堆栈、构建输出，先做去重与归因候选
-- **测试结果初筛**：汇总失败用例、按模块分组、定位最可能相关文件
-- **Prefab / 场景线索收集**：只做对象名、组件名、挂载关系、引用线索的只读整理
-- **大范围搜索压缩**：先扫 10~30 个候选文件，再把真正值得主模型深读的 1~5 个文件筛出来
-- **改动后影响面清单**：列出可能受影响的脚本、场景、Prefab、asmdef、测试点
-- **文档差异核对**：检查 README / memory / AGENTS 是否需要更新，并给出候选修改点
+```text
+1. 定位入口 -> verify: 找到调用链和触发条件
+2. 修改实现 -> verify: 相关测试或编译通过
+3. 回归检查 -> verify: Console / diff / 影响面符合预期
+```
 
-## Subagent for Unity test tail / Unity 测试收尾子代理约定
-- 当任务进入“修改后验证”阶段，且需要等待 Unity MCP 测试结果、轮询测试任务、整理失败摘要时，优先委托 `test_runner` 子代理执行
-- **默认分工是：主模型先启动测试，`test_runner` 再接管收尾**
-- 推荐默认顺序：
-  1. 主模型先读取 `mcpforunity://editor/state`，确认 `ready_for_tools`
-  2. 主模型决定测试范围，并优先自己调用一次 `run_tests`
-  3. 主模型拿到 `job_id` 后，再把 `job_id` 交给 `test_runner`
-  4. `test_runner` 负责持续调用 `get_test_job`
-  5. `test_runner` 在必要时补读 `read_console`
-  6. 主模型根据汇总结果判断是否继续修复、扩大验证范围或结束任务
-- `test_runner` 默认负责：
-  - 读取 `mcpforunity://editor/state`
-  - 轮询 `get_test_job`
-  - 必要时调用 `read_console`
-  - 汇总测试通过/失败情况与关键错误线索
-- 主模型默认负责：
-  - 判断应该跑哪些测试
-  - 启动 `run_tests` 并保留 `job_id`
-  - 判断失败是否与本次改动直接相关
-  - 决定是否继续修复、扩大验证范围或结束任务
-- 只有当主模型**不需要立刻使用 `job_id`**、且后续不会频繁改派/中断该任务时，才可以把“启动测试 + 轮询测试”整段一起委托给 `test_runner`
-- **不要在 `test_runner` 还没返回 `job_id` 前用 `interrupt=true` 打断它**，除非你明确决定放弃当前这次测试委托并改为主模型自己启动测试；否则很容易出现“测试并未真正启动，但主模型误以为它在后台运行”的空转
-- 如果主模型已经自己启动测试，就不要再让 `test_runner` 重新调用 `run_tests`；直接把现成 `job_id` 发给它，避免重复启动同一轮验证
-- 默认不要让 `test_runner` 在未获明确授权时执行全量长耗时测试；优先跑与改动影响面最相关的测试
-- 若测试任务耗时较长，主模型可在等待测试期间并行委托其他只读子代理执行 diff 审查、README/memory 评估或影响面复查
+这些准则生效时，diff 应更小，重写次数应更少，澄清问题应出现在实现前而不是出错后。
 
-### 不应交给 mini 子代理的任务
-以下任务默认仍由主模型自己负责，不要下放给 mini 作为最终决策者：
-- 跨多个系统的架构改造与最终方案拍板
-- 高风险运行时行为修改（自动改位置、显隐、状态机切换、对象生成/销毁等）
-- 真实代码修改的最终版本编写与收口
-- 需要强一致性判断的分层边界决策
-- 需要综合多个子任务结果做最终取舍、权衡和验收的步骤
+## Focus First
 
-### subagent 的默认使用原则
-- 主模型负责：任务拆分、优先级、最终判断、最终修改、最终总结
-- mini 子代理负责：只读调查、并行检索、压缩上下文、产出候选事实
-- 子代理默认使用**只读 sandbox**；除非我明确要求，否则不要给子代理写权限
-- 子代理返回内容应尽量结构化，优先返回：`结论 / 证据 / 候选文件 / 风险 / 建议下一步`
-- 若任务已能在主模型当前上下文中低成本完成，不要为了“形式上并行”而强行创建子代理
-- 若同一事实已经通过 `Unity MCP` 直接确认，不要再让子代理重复猜测或重复搜索
+- 运行时代码：`Assets/**/Scripts/**/*.cs`
+- 编辑器代码：`Assets/**/Editor/**/*.cs`
+- Addressables 配置与加载代码：仅在任务涉及资源加载、打包、运行时引用解析时读取
+- 依赖与编译配置：`Packages/manifest.json`、`Packages/packages-lock.json`、相关 `ProjectSettings/*.asset`
+- 程序集定义：`Assets/**/*.asmdef`、`Assets/**/*.asmref`（当前仓库若不存在，则以目录和命名空间约定判断分层）
+- 场景 / Prefab / ScriptableObject：仅在与当前任务直接相关时读取
 
-### 与 Unity MCP 的配合方式
-- 涉及 Unity Editor 真实状态时，优先由主模型先调用 `Unity MCP` 建立事实
-- 子代理更适合处理 `Unity MCP` 返回结果的整理、归类、摘要与候选定位
-- 若某个子任务本质上是在问“场景里现在到底是什么状态”，优先 `Unity MCP`，不要优先 subagent
-- 若需要并行做“脚本侧搜索 + 文档侧核对”，可把脚本搜索交给 mapper 类子代理，把文档核对交给 researcher / doc-auditor 类子代理
+## Ignore By Default
 
+除非任务明确要求，否则不要读取或分析：
 
-## Windows patch / file write safety / Windows 补丁与写入安全
-若当前运行环境是 Windows（含原生 PowerShell / cmd / Git Bash on Windows），默认把“大补丁一次性写入失败”视为高概率风险，而不是偶发异常。
+- Unity 缓存与生成目录：`Library/`、`Temp/`、`Obj/`、`Logs/`、`UserSettings/`
+- 构建产物与导出目录：`Build/`、`Builds/`、`bin/`、`dist/`、`out/`
+- 平台导出产物：`*.apk`、`*.aab`、`*.ipa`、`*.xcodeproj`、`*.xcworkspace`、`*.exe`、`*.app`
+- IDE / VCS 噪音：`.git/`、`.svn/`、`.plastic/`、`.vs/`、`.idea/`、`.vscode/`
+- IDE 生成文件：`*.sln`、`*.csproj`、`*.user`、`*.suo`
+- 大体量素材：纹理、模型、音频、视频、动画、普通材质与 shader
+- `.meta` 文件
 
-- 默认不要提交超大的多文件 patch；优先小步、顺序、可验证的写入
-- **单次 patch 最多修改 3 个文件；**
-- **单次 patch 目标规模默认不超过约 600 行有效改动**；超过则必须继续拆分
-- 新文件默认**逐个创建**，不要一次性生成一批新文件
-- 大文件默认采用“两阶段写入”：先写最小可编译/可解析骨架，再按 section 逐步补充内容
-- 若是新增一组彼此关联的文件，优先顺序为：公共接口 / 数据结构 → 核心实现 → 调用方 / 注册点 → 测试 / 文档；不要整组一起落盘
-- 不要优先使用巨型 heredoc、超长 inline diff、一次性多文件 unified diff 作为默认写入方式
+只有在以下场景才允许主动读 `.meta`：
+
+1. GUID 丢失、Missing Script、Missing Reference
+2. merge 冲突导致引用损坏
+3. 用户明确要求排查 GUID / 引用问题
+
+`.plastic/**`、`*.csproj`、换行符和 Unity 自动改动默认视为噪音，不要把它们当成任务阻塞项，也不要主动回滚。
+
+## Unity MCP First
+
+若 Unity MCP 可用，把它视为 Unity Editor 真实状态的一等入口。
+
+- 先读 `mcpforunity://editor/state`
+- 需要确认 Scene / Prefab / GameObject / Component / Console / Test / Screenshot 状态时，优先走 Unity MCP
+- 不要先靠手读 `.unity` / `.prefab` 猜编辑器真实状态
+- 修改脚本后，优先用 Unity MCP 检查编译状态和 Console
+- 只有在 Unity MCP 不可用、需要处理 YAML merge / GUID / Missing Script / Missing Reference，或需要文本级 diff 时，才优先直接读取 `.unity` / `.prefab` / `.meta`
+
+## Unity Write Coordination
+
+Unity Editor 是共享状态；当测试、PlayMode 或其他 agent 正在占用 Editor 时，不要抢占写入面。
+
+- 修改 C# 源码、文档或普通队列请求文件通常可继续进行
+- 在调用会改变 Editor 或项目状态的 MCP 操作前，先确认没有正在运行的测试或队列请求
+- 高风险写入包括：`manage_gameobject`、`manage_components`、`manage_prefabs`、`manage_asset`、`manage_scene(save/create/load/move_to_scene/validate auto_repair)`、`manage_editor(play/stop/undo/redo)`、`refresh_unity(compile=request)`
+- 若发现测试或队列正在运行，先做不争用 Unity 写入面的工作，例如 diff 自审、静态搜索、文档核对、影响面整理
+- 不要为了自己的非测试写入而停止 PlayMode、清空 running 请求、移动队列文件，或要求其他 agent 中断测试
+- 若仓库提供 `AgentTestQueue/`，按其 `README.md` 提交和等待 Unity Test Framework 请求；不要覆盖 `running/` 或 `results/` 中的文件
+
+## Repo Invariants
+
+- 禁止在 `Assets/Scripts/Vocalith/**` 新增任何 `Kernel.*` 引用
+- 若基础设施需要游戏语义，改为在 `Kernel` 增加 adapter / extension / bridge，或将抽象下沉到 `Vocalith`
+- 所有文字类组件默认使用 TMP；非兼容性修复场景下，不新增 `UnityEngine.UI.Text`
+- 运行时自动状态修改属于高敏感改动；若引入，必须在总结中明确披露对象、字段、触发时机和影响
+
+运行时自动状态修改包括但不限于：
+
+- `Transform.position/rotation/localScale`
+- `GameObject.SetActive`
+- 组件 `enabled`
+- 父子层级切换
+- 刚体速度 / 约束
+- 相机跟随参数
+- UI 显隐 / 交互状态
+- 状态机切换
+- 自动 snap / teleport
+- 运行时生成或销毁对象
+
+这类改动默认先追求最小影响面：限制到明确对象、明确生命周期阶段和明确触发条件；避免在 `Update` 中持续重写状态，避免无条件遍历全场景对象并改写 Transform 或状态。
+
+## Delegation Rules
+
+- 只把只读、低风险、上下文压缩型子任务交给 mini 子代理
+- 架构拍板、高风险运行时行为修改、最终代码收口由主模型负责
+- Unity 测试收尾默认由主模型先启动测试，再把 `job_id` 交给 `test_runner`
+- 严禁并行启动 `dsv4` / DeepSeek V4 Pro 子代理；必须串行执行。并行会污染状态并让后续调用失真或报错
+
+## Write Safely On Windows
+
+- 默认小步、顺序、可验证地写
+- 单次 patch 最多 3 个文件
+- 单次 patch 默认不超过约 600 行有效改动
+- 大文件先骨架后分段补充
+- 大型 Unity YAML 若 patch 不稳定，改用更小范围的精确替换
+- 新文件默认逐个创建，不要一次性生成一批新文件
+- 若一次 patch 失败，立刻降级为更小粒度：多文件改单文件、整段改分段、大段替换改精确替换
 - 每完成一小批写入后，先验证文件是否已成功创建、内容是否完整、编码与换行是否正常，再继续下一批
-- 若某次 patch / 写入**失败一次**，必须立刻降级为更小粒度：
-  1. 多文件 → 单文件
-  2. 单文件整段 → 分 section
-  3. 大段替换 → 小范围精确替换
-- 若任务在 Windows 下涉及批量创建目录、批量新建文件、或大规模文本生成，必须在动手前主动选择保守策略，而不是等第一次失败后再收缩
-- 除非我明确要求，否则不要为了“更快一次做完”而牺牲写入稳定性
-- 若只是 `.plastic/**`、`*.csproj`、换行符或自动格式化引起的附带噪音，不要把它们误判为本次核心修改的一部分
 
-### 推荐调用模式
-- **先建事实，再并行调查，再主模型收口**
-- 典型顺序：
-  1. 主模型先读取 `README.md` / `memory.md`，并在需要时调用 `Unity MCP`
-  2. 主模型判断哪些子任务适合并行、且适合 mini
-  3. 主模型把只读调查任务委派给 1~3 个 mini 子代理
-  4. 子代理返回候选事实与文件列表
-  5. 主模型只深读真正相关的少量文件，并完成最终修改/判断
+## Windows Search Tools
 
-### 推荐提示词模式（给主模型）
-当任务适合拆分时，主模型应显式使用类似指令调用子代理：
-- “使用 `code_mapper` 子代理快速扫描相关入口、调用链和候选文件，只读，不修改任何文件。”
-- “使用 `log_triager` 子代理整理 Console / 测试失败并按根因分组，只给我候选原因和相关脚本。”
-- “使用 `impact_auditor` 子代理评估这次修改可能影响哪些 Prefab、场景、测试和 README 条目。”
-- “使用 `doc_auditor` 子代理检查本次任务是否需要更新 README / memory / AGENTS，只返回建议，不直接改文档。”
+- 搜索文本或文件时先缩小目录、扩展名、文件名模式，再递归搜索
+- 本机已验证可用的 ripgrep 路径是 `C:\Users\15933\AppData\Local\Microsoft\WinGet\Links\rg.exe`
+- 若使用 `rg`，优先显式调用上述路径；不要依赖可能解析到 WindowsApps 的裸 `rg`
+- 若显式 `rg` 失败一次，立即回退到 PowerShell：文件名用 `Get-ChildItem -Recurse -File`，文本用 `Select-String`
+- 不要把搜索失败当成业务结论；先换工具或缩小范围复核
 
-### 结果使用规则
-- 子代理输出默认视为**候选线索**，不是最终事实
-- 涉及代码修改、运行时行为、分层边界、MCP 事实确认时，必须由主模型亲自复核
-- 若多个子代理结论冲突，主模型必须显式说明冲突点，并基于源码 / MCP / 测试结果做最终裁决
+## Document Responsibilities
 
-## How to work / 工作方式与策略（重要）
-1) **先问目标，再读文件**  
-   在动手修改前，先明确要解决的问题是什么（报错、功能、重构、性能、架构）。
-2) **最小化读取范围**  
-   默认只读取与问题相关的 1~5 个脚本文件；不要“全仓库扫描”。
-3) **优先通过入口追踪依赖**  
-   通常从以下入口开始定位：
-   - `Assets/**/Scripts` 中的 `GameManager`/`Bootstrap`/`Entry`/`Main`/`App` 类
-   - `MonoBehaviour` 的 `Awake/Start/Update` 链路
-   - `ScriptableObject` 配置加载点
-4) **若 `Unity MCP` 可用，相关操作要主动调用它**  
-   - 先用 `mcpforunity://editor/state` 判断编辑器是否可操作
-   - 先用 `find_gameobjects` / `manage_scene` / `manage_prefabs` / `read_console` 建立事实，再决定读哪些文件
-   - 涉及场景挂载、Prefab 层级、组件启停、Console 报错、测试结果时，不要跳过 `Unity MCP`
-5) **修改要可编译、可回滚**  
-   - 保持 API 变更最小化
-   - 给出明确的修改点与原因
-   - 若涉及多人协作，优先不改变资源 GUID
-6) **当上下文可能超限时，主动摘要**  
-   - 用项目结构摘要（模块、关键类、依赖）替代全文粘贴
-   - 明确你已忽略哪些目录以节省上下文
-7) **为必要的方法/函数添加注释**
-   - 注释保持简短
-   - 注释至少包含"<summary>,<param>,<returns>"
-8) **README 优先与维护**  
-   - 执行任务前，先阅读根目录 `README.md`以及，优先理解现有架构说明与约定
-   - 任务完成后，评估本次改动是否影响架构、流程、入口、依赖或关键脚本说明
-   - 若有影响，需同步更新 `README.md`，确保文档与当前实现一致
-   - `README.md` 的职责是作为仓库入口文档，帮助快速理解当前项目的稳定结构、核心模块、关键入口、主要场景、重要依赖与已知限制
-   - 不要把 `README.md` 写成开发日志、变更记录、排查笔记、任务流水账、系统百科、逐功能详细规格书，或 agent 工作手册
-   - 对高变动、实现细节很多、容易过期的内容，只保留简短概述与入口路径；不要在 `README.md` 中展开过细的运行时流程、按钮细节、状态跳转细节、逐步交互规则或临时排查结论
-   - agent 工作方式、工具调用规则、阅读顺序、排查策略、MCP 使用约定，应优先写在 `AGENTS.md`；特殊坑点、非直观结论和高成本排查经验，应优先写在 `memory.md`
-   - 更新 `README.md` 时，优先做“收敛和纠偏”，而不是“追加更多细节”；若某段内容已经超过 README 入口文档应有的粒度，应删除、压缩，或迁移到其他文档
-   - 若本次任务不会改变仓库的稳定结构、关键入口、模块边界、公共约定或已知限制，则不要为了“显得完整”而扩写 `README.md`
-9) **UI 文本组件规范**
-   - 所有文字类条目默认使用 `TMPro`（如 `TMP_Text` / `TextMeshProUGUI`）
-   - 非兼容性修复场景下，不再新增 `UnityEngine.UI.Text`
-10) **Memory 优先复用特殊经验**
-   - `README.md` 用于理解项目当前结构与约定，`memory.md` 用于复用过去高成本获得的特殊经验；两者职责不同，禁止重复维护相同内容
-   - 执行任务前，先读 `README.md`，再检查并按需阅读 `memory.md`
-   - 若 `memory.md` 中已有与当前问题高度相关的经验，优先复用其结论，再决定是否需要继续搜索、排查或试错
-   - 只有当某条结论未来复用价值高、容易遗忘、排查成本高、或能显著减少重复试错时，才允许写入 `memory.md`
-   - `memory.md` 不是 changelog，不记录普通改动或一次性任务结果
-   - 任务结束后必须评估是否需要更新 `memory.md`；若无需更新，必须在总结中明确说明
-11) **分层边界是硬规则**
-   - 禁止在 `Assets/Scripts/Vocalith/**` 新增任何 `Kernel.*` 引用
-   - 若基础设施需要游戏语义，必须改为在 `Kernel` 增加 adapter / extension / bridge，或将抽象下沉到 `Vocalith`
-   - 当前其他 `Vocalith` 子模块若仍存在历史反向依赖，属于技术债，不代表规则例外
-12) **运行时自动状态修改必须谨慎且显式披露**
-   - 只要改动会让对象在运行时被代码自动调整，就视为高敏感改动；典型例子包括但不限于：`Transform.position/rotation/localScale`、`SetActive`、组件 `enabled`、父子层级切换、刚体速度/约束、相机跟随参数、UI 显隐/交互状态、状态机切换、自动 snap/teleport、运行时生成或销毁对象
-   - 这类改动默认先追求**最小影响面**：优先限制到明确的对象、明确的生命周期阶段（如 `Awake/Start/OnEnable`、进入某个 UI、切场景后）和明确的触发条件，不要把“自动纠正”写成全局、持续、无条件执行
-   - 若存在非直观副作用，必须优先选择更可预测的实现：例如增加显式开关、缩小搜索范围、避免在 `Update` 中重复重写状态、避免无条件遍历全场景对象并改写其 Transform/状态
-   - 若任务确实需要引入这类自动调整，完成任务后的总结里必须单独明确说明“哪些对象/组件会在运行时被自动调整、调整哪些字段、何时触发、触发后表现是什么、是否会影响已有场景摆放或 prefab authoring 预期”
-   - 若本次改动不会引入新的运行时自动调整，也应在总结中直接说明“本次未新增运行时自动状态调整”
-13) **按通知阈值发送完成通知**
-   - 默认不要在每个任务结束后都发送 `ntfy_me`
-   - 只有在任务满足“通知阈值”时，才发送当前任务的完成情况
-   - 通知阈值可按以下任一条件判断：
-     1. 任务持续时间明显较长，适合异步提醒我回来查看结果
-     2. 涉及多文件修改、关键逻辑改动、较高回归风险或需要我重点验收
-     3. 运行了耗时命令、构建、测试、批处理或较长链路排查
-     4. 任务失败、被阻塞，或需要我提供额外信息才能继续
-     5. 我明确要求“完成后通知我”或表达了等待异步提醒的意图
-   - 若任务只是简单问答、少量文本修改、轻量单文件改动或即时就能看完的结果，则不要发送通知
-   - 标题放置“任务名称 + 成功/失败”，并且标题必须使用英文
-   - 正文放置本次实现的简短概要
----
+- `README.md`：稳定结构、入口、依赖、已知限制
+- `memory.md`：高复用、难复得的排障经验
+- `AGENTS.md`：仓库硬规则
+- `lilith-repo-operator` skill：操作流程、委派节奏、文档分工、symptom index
 
-## README workflow 
-- **Before task /**：优先查看 `README.md`，将其作为项目理解与路径追踪的起点。  
-- **After task /**：必须进行一次“README 是否需要更新”的检查。  
-- **Update when needed /**：当涉及核心逻辑、模块边界、启动流程、数据流、关键脚本路径变化时，更新 `README.md` 对应条目。  
-- **Write current state only /**：若与旧版本存在差异，不保留“从 AAA 变为 BBB”这类变化状态描述，只描述当前实现（例如直接写“当前支持 BBB”）。  
-- **If no update needed /**：在任务总结中明确说明“已评估，本次无需更新 README”。
+任务结束后必须评估 `README.md` 与 `memory.md` 是否需要更新；若无需更新，在总结中明确说明。
 
-## Memory workflow
-- **Before task /**：执行任务前，先读 `README.md`，再读 `memory.md`（若存在）。`README.md` 用于理解项目当前结构与约定，`memory.md` 用于避免对历史上已经解决过的特殊问题重复思考。
-- **Strict separation /**：`README.md` 负责“当前项目是什么、如何组织、如何工作”；`memory.md` 负责“哪些特殊问题曾经很难、为什么难、以后遇到该怎么更快解决”。禁止把两者写成重复内容。
-- **After task /**：每次任务结束后，都必须判断本次是否产生了值得保留的长期记忆。
-- **Only save reusable knowledge /**：只有当某条结论未来复用价值高、容易遗忘、排查成本高、或能明显减少重复试错时，才写入 `memory.md`。
-- **Not a changelog /**：`memory.md` 不是任务日志，不记录普通改动、临时状态、一次性需求、无复用价值的小修小补。
-- **Update existing entries first /**：已有相同或相近问题时，优先更新原条目，而不是新增重复条目。
-- **Required entry shape /**：建议每条使用固定结构：`Problem` / `Cause` / `Fix` / `Verify` / `Scope`。
-- **If absent, create when justified /**：若 `memory.md` 不存在，但本次任务确实形成了高价值可复用经验，则创建它。
-- **If no memory needed /**：若评估后无须沉淀，则在总结中明确写出“已评估，本次无需更新 memory.md”。
+## README Workflow
 
-## Quick questions to ask me 
-当信息不足时，优先问我这些（不要全量扫描）：
-- 报错日志（Unity Console 堆栈）或具体异常类型
-- 目标行为/预期行为
-- 涉及的场景/Prefab 名称与路径
-- 相关脚本路径（例如 `Assets/Scripts/...`）
-- Unity 版本、使用的渲染管线（Built-in/URP/HDRP）、是否用 Addressables/Netcode 等
+- 任务前优先阅读 `README.md`，将其作为项目理解与路径追踪起点
+- 若任务影响稳定架构、核心入口、模块边界、主要流程、关键依赖或已知限制，必须同步更新 `README.md`
+- `README.md` 只描述当前状态，不写“从 AAA 改为 BBB”的历史变化描述
+- 不要把 `README.md` 写成开发日志、排查笔记、任务流水账、系统百科或 agent 工作手册
+- 对高变动、实现细节多、容易过期的内容，只保留简短概述与入口路径
+- 更新 `README.md` 时优先做收敛和纠偏，而不是追加更多细节
 
----
+## Memory Workflow
 
-## Default assumption 
-- `.meta` 文件与 `Library/Temp` 等不参与业务逻辑讨论。
-- 功能实现以 `Assets/**/Scripts` 的 C# 代码为准。
-- 若 `Unity MCP` 可用，Editor / Scene / Prefab / Console / Test 的真实状态以 `Unity MCP` 返回结果为准。
-- 如果你发现自己在读大量资源文件，请立刻停下并改用“按需读取”的方式。
+- `memory.md` 用于复用高成本、非直观、未来可能再次遇到的排障经验
+- `memory.md` 不是 changelog，不记录普通改动、临时状态、一次性需求或无复用价值的小修小补
+- 已有相同或相近问题时，优先更新原条目，不新增重复条目
+- 推荐条目结构：`Problem` / `Cause` / `Fix` / `Verify` / `Scope`
+- 若 `memory.md` 不存在，但本次任务确实形成了高价值可复用经验，可以创建它
+- 若本次没有产生可复用经验，在总结中明确说明无需更新 `memory.md`
+
+## Work Strategy
+
+- 先明确目标，再读文件：报错、功能、重构、性能或架构问题要先分清
+- 默认只读取与问题直接相关的少量脚本；不要无目的全仓库扫描
+- 优先通过入口追踪依赖：`GameManager` / `Bootstrap` / `Entry` / `Main` / `App`，`Awake` / `Start` / `Update`，以及 `ScriptableObject` 配置加载点
+- 上下文可能超限时，主动摘要项目结构、候选文件和已忽略目录
+- 修改保持 API 变更最小化，给出明确修改点与验证方式
+- 为必要方法添加简短 XML 注释；不要为显而易见的实现堆注释
+
+## Quick Questions
+
+信息不足时，优先向用户索要：
+
+- Unity Console 堆栈或异常类型
+- 目标行为与预期行为
+- 涉及的场景或 Prefab 名称 / 路径
+- 相关脚本路径
+- Unity 版本、渲染管线、是否使用 Addressables / Netcode
+
+## Default Assumptions
+
+- 业务逻辑以 `Assets/**/Scripts` 的 C# 代码为准
+- Unity MCP 返回结果优先于手读场景 / prefab 文本
+- 若发现自己开始大量读取资源文件，应立即收缩读取范围
