@@ -233,7 +233,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 供 PauseUI 的设置按钮调用；当前弹出统一的未实现提示窗口。
+        /// summary: 供 PauseUI 的设置按钮调用，请求在暂停菜单上方打开设置弹窗。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -244,15 +244,7 @@ namespace Kernel.UI
                 return;
             }
 
-            if (!TryGetAvailableUIManager(out UIManager uiManager))
-            {
-                return;
-            }
-
-            StartCoroutine(PopUpUIUtility.ShowInfoPopup(
-                uiManager,
-                nameof(UIInputRouter),
-                "设置功能暂未实现，后续会在这里接入暂停菜单选项配置。"));
+            StartCoroutine(HandlePauseOptionsOpen());
         }
 
         /// <summary>
@@ -611,6 +603,30 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 只在 PauseUIScreen 位于栈顶且没有其他 modal 时打开设置弹窗。
+        /// param: 无
+        /// returns: 用于协程等待的枚举器
+        /// </summary>
+        private IEnumerator HandlePauseOptionsOpen()
+        {
+            isHandlingBack = true;
+
+            try
+            {
+                if (!CanOpenPauseOptions(out UIManager uiManager))
+                {
+                    yield break;
+                }
+
+                yield return uiManager.ShowModalAndWait<OptionsUIScreen>();
+            }
+            finally
+            {
+                isHandlingBack = false;
+            }
+        }
+
+        /// <summary>
         /// summary: 只在 MainUIScreen 位于栈顶时打开永久升级菜单，供 Book trigger 复用。
         /// param: 无
         /// returns: 用于协程等待的枚举器
@@ -877,6 +893,21 @@ namespace Kernel.UI
             }
 
             return uiManager.GetTopScreen() is PauseUIScreen;
+        }
+
+        /// <summary>
+        /// summary: 判断当前是否允许从暂停菜单打开设置弹窗。
+        /// param: uiManager 输出当前可用的 UI 管理器
+        /// returns: 只有当 PauseUIScreen 位于栈顶且没有 modal 遮挡时返回 true
+        /// </summary>
+        private static bool CanOpenPauseOptions(out UIManager uiManager)
+        {
+            if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            return uiManager.GetTopModal() == null && uiManager.GetTopScreen() is PauseUIScreen;
         }
 
         /// <summary>

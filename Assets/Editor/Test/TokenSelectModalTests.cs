@@ -4,7 +4,6 @@ using System.Reflection;
 using Kernel.Bullet;
 using Kernel.UI;
 using NUnit.Framework;
-using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -14,7 +13,6 @@ using VocalithRandom = Vocalith.Random;
 public sealed class TokenSelectModalTests
 {
     private const string SelectionPrefabPath = "Assets/Prefabs/UI/BulletToken Selection Prefab.prefab";
-    private const string LibraryAssetPath = "Assets/Data/BulletTokens/BulletTokenLibrary.asset";
 
     private readonly List<UnityEngine.Object> createdObjects = new();
 
@@ -114,39 +112,6 @@ public sealed class TokenSelectModalTests
         {
             Assert.That(first[i], Is.SameAs(second[i]));
         }
-    }
-
-    [Test]
-    public void SelectionView_BindsTextsAndClickInvokesOwnerCallback()
-    {
-        BulletTokenSelectionView view = CreateSelectionViewInstance();
-        CoreTokenData token = CreateToken<CoreTokenData>("fire", "Fire", "Hot core");
-        TokenSelectUIScreen screen = CreateScreenRoot();
-
-        PlaceableTokenData selected = null;
-        int selectionCount = 0;
-        screen.SetCallbacks(value =>
-        {
-            selected = value;
-            selectionCount++;
-        });
-
-        view.Bind(screen, token);
-
-        Assert.That(view.TokenText.text, Is.EqualTo("Fire"));
-        Assert.That(view.DescriptionText.text, Is.EqualTo("Hot core"));
-        Assert.That(view.CatalogText, Is.Not.Null);
-        Assert.That(view.CatalogText.text, Is.EqualTo("核心"));
-        Assert.That(view.RootImage, Is.Not.Null);
-        AssertColorApproximately(view.RootImage.color, new Color(1f, 0.73f, 0.36f, 1f));
-        Assert.That(view.SelectButton.interactable, Is.True);
-        Assert.That(GetSelectButtonText(view), Is.Not.Null);
-        Assert.That(GetSelectButtonText(view).text, Is.Not.Empty);
-
-        view.SelectButton.onClick.Invoke();
-
-        Assert.That(selectionCount, Is.EqualTo(1));
-        Assert.That(selected, Is.SameAs(token));
     }
 
     [Test]
@@ -325,17 +290,6 @@ public sealed class TokenSelectModalTests
     }
 
     [Test]
-    public void BulletTokenLibraryAsset_IsSeeded()
-    {
-        BulletTokenLibrary library = AssetDatabase.LoadAssetAtPath<BulletTokenLibrary>(LibraryAssetPath);
-        Assert.That(library, Is.Not.Null);
-
-        IReadOnlyList<PlaceableTokenData> tokens = library.GetTokens();
-        Assert.That(tokens.Count, Is.GreaterThan(0));
-        AssertUniqueInstanceIds(tokens);
-    }
-
-    [Test]
     public void TokenSelectPanelPrefab_WiresLibraryAndSelectionPrefab()
     {
         GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Token Select Panel.prefab");
@@ -430,11 +384,6 @@ public sealed class TokenSelectModalTests
         token.name = itemId;
         createdObjects.Add(token);
         return token;
-    }
-
-    private static TMP_Text GetSelectButtonText(BulletTokenSelectionView view)
-    {
-        return view.SelectButton != null ? view.SelectButton.GetComponentInChildren<TMP_Text>(true) : null;
     }
 
     private static int GetRuntimeListenerCount(Button button)

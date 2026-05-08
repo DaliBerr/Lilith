@@ -344,6 +344,7 @@ public sealed class BackPackUIScreenTests
     private BackPackUIScreen CreateBackPackUIScreen()
     {
         GameObject root = CreateUiObject("BackPackUI");
+        (root.transform as RectTransform).sizeDelta = new Vector2(800f, 600f);
         root.AddComponent<Image>();
         root.AddComponent<CanvasGroup>();
         BackPackUIScreen screen = root.AddComponent<BackPackUIScreen>();

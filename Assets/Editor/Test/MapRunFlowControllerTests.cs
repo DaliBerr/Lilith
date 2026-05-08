@@ -125,15 +125,14 @@ public sealed class MapRunFlowControllerTests
     }
 
     [Test]
-    public void TryResolveWaveRewardSelectionLibrary_UsesWavePlan()
+    public void TryResolveWaveRewardSelectionLibrary_UsesSelectionPlan()
     {
         CoreTokenData rewardToken = CreateToken<CoreTokenData>("reward", "Reward");
         BulletTokenLibrary rewardLibrary = CreateLibrary("RewardLibrary", rewardToken);
         CombatEntryTokenSelectionPlan selectionPlan = CreateSelectionPlan(rewardLibrary);
-        WaveDefinition waveDefinition = CreateWaveDefinition(selectionPlan);
         MapRunFlowController controller = CreateController(out _, out _, out _, out _, out _, out _, out _, out _, out _);
 
-        bool success = InvokeMethodWithOutArgument(controller, "TryResolveWaveRewardSelectionLibrary", waveDefinition, out BulletTokenLibrary resolvedLibrary);
+        bool success = InvokeMethodWithOutArgument(controller, "TryResolveWaveRewardSelectionLibrary", selectionPlan, out BulletTokenLibrary resolvedLibrary);
 
         Assert.That(success, Is.True);
         Assert.That(resolvedLibrary, Is.SameAs(rewardLibrary));
@@ -406,14 +405,6 @@ public sealed class MapRunFlowControllerTests
         }
 
         return plan;
-    }
-
-    private WaveDefinition CreateWaveDefinition(CombatEntryTokenSelectionPlan selectionPlan)
-    {
-        WaveDefinition waveDefinition = ScriptableObject.CreateInstance<WaveDefinition>();
-        createdObjects.Add(waveDefinition);
-        SetPrivateField(waveDefinition, "postWaveTokenSelectionPlan", selectionPlan);
-        return waveDefinition;
     }
 
     private GameObject CreateGameObject(string name, Transform parent = null)

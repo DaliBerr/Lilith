@@ -98,6 +98,7 @@
     <Compile Include="Assets\Scripts\Kernel\Upgrade\PermanentUpgradeService.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyRangedTokenAttacker.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarControllerBase.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\OptionsUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\GameUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveManager.cs" />

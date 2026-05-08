@@ -15,6 +15,12 @@ MonoBehaviour:
   m_GroupName: UI
   m_GUID: 3d8500dabd131694dbbd021695a725c1
   m_SerializeEntries:
+  - m_GUID: 02a3cce047f551d41a1676d177a4f24a
+    m_Address: Assets/Prefabs/UI/Option Entry Entry
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 046329396556c1b4ca576eebb27f219e
     m_Address: Assets/Prefabs/UI/Hint Catalog Entry
     m_ReadOnly: 0
@@ -29,6 +35,12 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2cba28b6b97f029408105e5b273a45c3
     m_Address: Assets/Prefabs/UI/Upgrage Section Prefab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3756010f178de84468dba33ae5d3f49a
+    m_Address: Assets/Prefabs/UI/Options
     m_ReadOnly: 0
     m_SerializedLabels:
     - UI

@@ -239,14 +239,13 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 响应顶部关闭按钮；它始终关闭当前弹窗，并复用底部关闭按钮的外部回调。
+        /// summary: 响应顶部关闭按钮；它只关闭当前弹窗，不触发底部按钮的外部回调。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void HandleTopCloseButtonClicked()
         {
             RequestClose();
-            closeAction?.Invoke();
         }
 
         /// <summary>

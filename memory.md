@@ -81,6 +81,15 @@
 - Scope: 适用于所有通过 MCP 直接改组件属性、且近期刚改过脚本字段结构的场景。
 
 
+## Unity Fake Null Must Not Use Null Coalescing
+
+- Problem: 多个 EditMode 测试在全量或连续运行后出现顺序相关失败，表现为 `RuntimeSaveService` 写入/加载的 Remnant 数量没有同步到当前测试创建的 `PlayerRemnantWallet`。
+- Cause: `UnityEngine.Object` 被销毁后可能处于 fake-null 状态；`wallet != null` 会按 Unity 重载判空，但 C# 的 `??` 只看托管引用是否为 null。若静态 `PlayerRemnantWallet.Instance` 指向已销毁对象，`PlayerRemnantWallet.Instance ?? FindFirstObjectByType<PlayerRemnantWallet>()` 不会 fallback，随后 `wallet != null` 又判 false，导致当前场景里的钱包实例被跳过。
+- Fix: 不要对 `UnityEngine.Object` 静态实例使用 `??` 做 fallback。先取局部变量，再用 Unity 判空决定是否 `FindFirstObjectByType`；当前修复见 [`Assets/Scripts/Kernel/Save/RuntimeSaveService.cs`](Assets/Scripts/Kernel/Save/RuntimeSaveService.cs) 的 `ResolveRuntimeWallet()`。
+- Verify: 连续运行 `QuestServiceTests` 与 `RuntimeSaveServiceTests` 中涉及 Remnant/profile 的用例应稳定通过；EditMode 全量中这类顺序相关 Remnant 失败不应复现。
+- Scope: 适用于所有 Unity singleton / cached component fallback，尤其是 EditMode 测试、Domain Reload、`DestroyImmediate` 之后仍可能留下托管引用的路径。
+
+
 ## Large Unity Scene YAML On Windows Should Use Targeted Replacement When apply_patch Overflows
 
 - Problem: 对超大 `.unity` 文件执行 `apply_patch`（即使是很小的片段）可能直接报 `Maximum call stack size exceeded`，导致无法落地单行字段调整。

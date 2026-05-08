@@ -67,9 +67,7 @@
 
 - 运行时代码：`Assets/**/Scripts/**/*.cs`
 - 编辑器代码：`Assets/**/Editor/**/*.cs`
-- Addressables 配置与加载代码：仅在任务涉及资源加载、打包、运行时引用解析时读取
 - 依赖与编译配置：`Packages/manifest.json`、`Packages/packages-lock.json`、相关 `ProjectSettings/*.asset`
-- 程序集定义：`Assets/**/*.asmdef`、`Assets/**/*.asmref`（当前仓库若不存在，则以目录和命名空间约定判断分层）
 - 场景 / Prefab / ScriptableObject：仅在与当前任务直接相关时读取
 
 ## Ignore By Default
@@ -78,9 +76,7 @@
 
 - Unity 缓存与生成目录：`Library/`、`Temp/`、`Obj/`、`Logs/`、`UserSettings/`
 - 构建产物与导出目录：`Build/`、`Builds/`、`bin/`、`dist/`、`out/`
-- 平台导出产物：`*.apk`、`*.aab`、`*.ipa`、`*.xcodeproj`、`*.xcworkspace`、`*.exe`、`*.app`
 - IDE / VCS 噪音：`.git/`、`.svn/`、`.plastic/`、`.vs/`、`.idea/`、`.vscode/`
-- IDE 生成文件：`*.sln`、`*.csproj`、`*.user`、`*.suo`
 - 大体量素材：纹理、模型、音频、视频、动画、普通材质与 shader
 - `.meta` 文件
 
@@ -100,18 +96,6 @@
 - 需要确认 Scene / Prefab / GameObject / Component / Console / Test / Screenshot 状态时，优先走 Unity MCP
 - 不要先靠手读 `.unity` / `.prefab` 猜编辑器真实状态
 - 修改脚本后，优先用 Unity MCP 检查编译状态和 Console
-- 只有在 Unity MCP 不可用、需要处理 YAML merge / GUID / Missing Script / Missing Reference，或需要文本级 diff 时，才优先直接读取 `.unity` / `.prefab` / `.meta`
-
-## Unity Write Coordination
-
-Unity Editor 是共享状态；当测试、PlayMode 或其他 agent 正在占用 Editor 时，不要抢占写入面。
-
-- 修改 C# 源码、文档或普通队列请求文件通常可继续进行
-- 在调用会改变 Editor 或项目状态的 MCP 操作前，先确认没有正在运行的测试或队列请求
-- 高风险写入包括：`manage_gameobject`、`manage_components`、`manage_prefabs`、`manage_asset`、`manage_scene(save/create/load/move_to_scene/validate auto_repair)`、`manage_editor(play/stop/undo/redo)`、`refresh_unity(compile=request)`
-- 若发现测试或队列正在运行，先做不争用 Unity 写入面的工作，例如 diff 自审、静态搜索、文档核对、影响面整理
-- 不要为了自己的非测试写入而停止 PlayMode、清空 running 请求、移动队列文件，或要求其他 agent 中断测试
-- 若仓库提供 `AgentTestQueue/`，按其 `README.md` 提交和等待 Unity Test Framework 请求；不要覆盖 `running/` 或 `results/` 中的文件
 
 ## Repo Invariants
 
@@ -119,21 +103,6 @@ Unity Editor 是共享状态；当测试、PlayMode 或其他 agent 正在占用
 - 若基础设施需要游戏语义，改为在 `Kernel` 增加 adapter / extension / bridge，或将抽象下沉到 `Vocalith`
 - 所有文字类组件默认使用 TMP；非兼容性修复场景下，不新增 `UnityEngine.UI.Text`
 - 运行时自动状态修改属于高敏感改动；若引入，必须在总结中明确披露对象、字段、触发时机和影响
-
-运行时自动状态修改包括但不限于：
-
-- `Transform.position/rotation/localScale`
-- `GameObject.SetActive`
-- 组件 `enabled`
-- 父子层级切换
-- 刚体速度 / 约束
-- 相机跟随参数
-- UI 显隐 / 交互状态
-- 状态机切换
-- 自动 snap / teleport
-- 运行时生成或销毁对象
-
-这类改动默认先追求最小影响面：限制到明确对象、明确生命周期阶段和明确触发条件；避免在 `Update` 中持续重写状态，避免无条件遍历全场景对象并改写 Transform 或状态。
 
 ## Delegation Rules
 
@@ -149,17 +118,6 @@ Unity Editor 是共享状态；当测试、PlayMode 或其他 agent 正在占用
 - 单次 patch 默认不超过约 600 行有效改动
 - 大文件先骨架后分段补充
 - 大型 Unity YAML 若 patch 不稳定，改用更小范围的精确替换
-- 新文件默认逐个创建，不要一次性生成一批新文件
-- 若一次 patch 失败，立刻降级为更小粒度：多文件改单文件、整段改分段、大段替换改精确替换
-- 每完成一小批写入后，先验证文件是否已成功创建、内容是否完整、编码与换行是否正常，再继续下一批
-
-## Windows Search Tools
-
-- 搜索文本或文件时先缩小目录、扩展名、文件名模式，再递归搜索
-- 本机已验证可用的 ripgrep 路径是 `C:\Users\15933\AppData\Local\Microsoft\WinGet\Links\rg.exe`
-- 若使用 `rg`，优先显式调用上述路径；不要依赖可能解析到 WindowsApps 的裸 `rg`
-- 若显式 `rg` 失败一次，立即回退到 PowerShell：文件名用 `Get-ChildItem -Recurse -File`，文本用 `Select-String`
-- 不要把搜索失败当成业务结论；先换工具或缩小范围复核
 
 ## Document Responsibilities
 
@@ -169,33 +127,6 @@ Unity Editor 是共享状态；当测试、PlayMode 或其他 agent 正在占用
 - `lilith-repo-operator` skill：操作流程、委派节奏、文档分工、symptom index
 
 任务结束后必须评估 `README.md` 与 `memory.md` 是否需要更新；若无需更新，在总结中明确说明。
-
-## README Workflow
-
-- 任务前优先阅读 `README.md`，将其作为项目理解与路径追踪起点
-- 若任务影响稳定架构、核心入口、模块边界、主要流程、关键依赖或已知限制，必须同步更新 `README.md`
-- `README.md` 只描述当前状态，不写“从 AAA 改为 BBB”的历史变化描述
-- 不要把 `README.md` 写成开发日志、排查笔记、任务流水账、系统百科或 agent 工作手册
-- 对高变动、实现细节多、容易过期的内容，只保留简短概述与入口路径
-- 更新 `README.md` 时优先做收敛和纠偏，而不是追加更多细节
-
-## Memory Workflow
-
-- `memory.md` 用于复用高成本、非直观、未来可能再次遇到的排障经验
-- `memory.md` 不是 changelog，不记录普通改动、临时状态、一次性需求或无复用价值的小修小补
-- 已有相同或相近问题时，优先更新原条目，不新增重复条目
-- 推荐条目结构：`Problem` / `Cause` / `Fix` / `Verify` / `Scope`
-- 若 `memory.md` 不存在，但本次任务确实形成了高价值可复用经验，可以创建它
-- 若本次没有产生可复用经验，在总结中明确说明无需更新 `memory.md`
-
-## Work Strategy
-
-- 先明确目标，再读文件：报错、功能、重构、性能或架构问题要先分清
-- 默认只读取与问题直接相关的少量脚本；不要无目的全仓库扫描
-- 优先通过入口追踪依赖：`GameManager` / `Bootstrap` / `Entry` / `Main` / `App`，`Awake` / `Start` / `Update`，以及 `ScriptableObject` 配置加载点
-- 上下文可能超限时，主动摘要项目结构、候选文件和已忽略目录
-- 修改保持 API 变更最小化，给出明确修改点与验证方式
-- 为必要方法添加简短 XML 注释；不要为显而易见的实现堆注释
 
 ## Quick Questions
 

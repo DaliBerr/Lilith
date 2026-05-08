@@ -15,6 +15,12 @@ MonoBehaviour:
   m_GroupName: Json
   m_GUID: 1f3143186566e2b4d8600158905c1f28
   m_SerializeEntries:
+  - m_GUID: 02b8175658b55b441850631beac04c50
+    m_Address: Assets/Data/UI/OptionsCatalog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Json
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1ee021b0b632071439ad5501ca7a65c8
     m_Address: Assets/Data/Quest/QuestCatalog
     m_ReadOnly: 0

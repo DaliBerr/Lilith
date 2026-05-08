@@ -21,6 +21,7 @@ namespace Kernel.UI
         [SerializeField] private Button quitButton;
 
         private bool isOpeningProfileModal;
+        private bool isOpeningOptionsModal;
 
         public override Status currentStatus { get; } = StatusList.InMainMenuStatus;
 
@@ -29,6 +30,7 @@ namespace Kernel.UI
             TryAutoBindReferences();
             HideLegacyLoadButton();
             isOpeningProfileModal = false;
+            isOpeningOptionsModal = false;
             SetButtonsInteractable(true);
             BindButtonCallbacks();
         }
@@ -160,13 +162,39 @@ namespace Kernel.UI
         }
 
         /// <summary>
+        /// summary: 通过标准 modal 流程打开设置界面，并在打开期间临时锁定启动菜单按钮。
+        /// param: 无
+        /// returns: 可供协程等待的枚举器
+        /// </summary>
+        private IEnumerator ShowOptionsModal()
+        {
+            if (ui == null)
+            {
+                GameDebug.LogWarning("[StartUpMenuUI] UIManager is missing. Unable to open Options modal.");
+                yield break;
+            }
+
+            isOpeningOptionsModal = true;
+            SetButtonsInteractable(false);
+            try
+            {
+                yield return ui.ShowModalAndWait<OptionsUIScreen>();
+            }
+            finally
+            {
+                isOpeningOptionsModal = false;
+                SetButtonsInteractable(true);
+            }
+        }
+
+        /// <summary>
         /// summary: 响应开始按钮，默认弹出四个固定存档栏位供玩家直接选择。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void HandleStartButtonClicked()
         {
-            if (isOpeningProfileModal)
+            if (isOpeningProfileModal || isOpeningOptionsModal)
             {
                 return;
             }
@@ -187,16 +215,18 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 响应设置按钮，弹出统一的“功能未实现”提示窗口。
+        /// summary: 响应设置按钮，打开 JSON 驱动的设置弹窗。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void HandleSettingsButtonClicked()
         {
-            StartCoroutine(PopUpUIUtility.ShowInfoPopup(
-                ui,
-                nameof(StartUpMenuUI),
-                "设置功能暂未实现，后续会在这里接入选项配置。"));
+            if (isOpeningProfileModal || isOpeningOptionsModal)
+            {
+                return;
+            }
+
+            StartCoroutine(ShowOptionsModal());
         }
 
         /// <summary>

@@ -2,7 +2,7 @@
 
 Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`StartUp` 启动场景到 `Main` gameplay 场景的双阶段启动链路、`Kernel` 业务层、`Vocalith` 基础设施层、固定网格地图工作流、`Main` 场景中的起始房间与战斗地图双地图 Run 骨架、基于 Token 的攻击编译与发射、敌人波次系统，以及运行时存档与本地化基础能力。
 
-本 README 只保留当前实现、稳定路径、核心架构、关键入口和已知限制。仓库硬规则见 [AGENTS.md](AGENTS.md)；更细的 agent 操作流程、委派策略与文档分工由本地 `lilith-repo-operator` skill 承载。
+本 README 只保留当前实现、稳定路径、核心架构、关键入口和已知限制。仓库硬规则见 [AGENTS.md](AGENTS.md)；更细的 agent 操作流程、委派策略与文档分工由 repo-local [`lilith-repo-operator`](.codex/skills/lilith-repo-operator/SKILL.md) skill 承载。
 
 ## 工程事实
 
@@ -71,7 +71,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - `Kernel.GameState`：位于 [`Assets/Scripts/Kernel/Status`](Assets/Scripts/Kernel/Status)
   - 入口：[`StatusController.cs`](Assets/Scripts/Kernel/Status/StatusController.cs)
 - UI：位于 [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI)
-  - 当前主入口包括 `StartUpMenuUI`、`StoryTellerUIScreen`、`DialogUIScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`HintUIScreen`、`PopUpUIScreen`、`ProfileManagementUIScreen`、`TokenSelectUIScreen`、`UpdateUIScreen`、`SettlementUIScreen`
+  - 当前主入口包括 `StartUpMenuUI`、`OptionsUIScreen`、`StoryTellerUIScreen`、`DialogUIScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`HintUIScreen`、`PopUpUIScreen`、`ProfileManagementUIScreen`、`TokenSelectUIScreen`、`UpdateUIScreen`、`SettlementUIScreen`
 - 地图与寻路：位于 [`Assets/Scripts/Kernel/MapGrid`](Assets/Scripts/Kernel/MapGrid) 与 [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
   - 包含固定网格、双地图 Run flow、Seed 布局生成与格子寻路
   - [`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs) 暴露了边界厚度、障碍数量/尺寸、边缘留白、玩家安全区和刷怪环参数，可用来调节更密或更开的战斗地图
@@ -116,6 +116,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - 开场剧情文本与 Main 场景开场引导对话：[`Assets/Data/Story`](Assets/Data/Story)
 - 永久升级目录：[`Assets/Data/Upgrades`](Assets/Data/Upgrades)
 - UI 文案目录：[`Assets/Data/UI`](Assets/Data/UI)
+  - [`Assets/Data/UI/OptionsCatalog.json`](Assets/Data/UI/OptionsCatalog.json) 负责设置界面分类和条目配置
   - [`Assets/Data/UI/SettlementPresentationCatalog.json`](Assets/Data/UI/SettlementPresentationCatalog.json) 负责结算文案
   - [`Assets/Data/UI/HintCatalog.json`](Assets/Data/UI/HintCatalog.json) 负责 Hint 的手工帮助条目（敌人图鉴正文由 `EnemyDefinition.Description` 提供）
 - 业务 UI prefab：[`Assets/Prefabs/UI`](Assets/Prefabs/UI)
@@ -141,6 +142,6 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 ## 已知限制
 
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity) 不能作为独立入口直接运行；当前必须先经过 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) 中的 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 交接
-- [`Assets/Scripts/Kernel/UI/StartUpMenuUI.cs`](Assets/Scripts/Kernel/UI/StartUpMenuUI.cs) 中的 `Option` 仍是占位入口
+- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；实际音频/显示应用逻辑与按键重绑定仍待接入
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 仍是预留加载入口
 - 当前没有 `asmdef` / `asmref`，模块边界依赖目录与命名空间约定维护

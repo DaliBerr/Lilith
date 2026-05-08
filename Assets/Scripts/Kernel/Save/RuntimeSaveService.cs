@@ -767,7 +767,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
 
     private void ApplyProfileToRuntime()
     {
-        PlayerRemnantWallet wallet = PlayerRemnantWallet.Instance ?? FindFirstObjectByType<PlayerRemnantWallet>();
+        PlayerRemnantWallet wallet = ResolveRuntimeWallet();
         if (wallet != null)
         {
             wallet.ApplyLoadedRemnants(currentProfile.RemnantCount);
@@ -776,7 +776,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
 
     private void SynchronizeWalletRemnantsIfNeeded()
     {
-        PlayerRemnantWallet wallet = PlayerRemnantWallet.Instance ?? FindFirstObjectByType<PlayerRemnantWallet>();
+        PlayerRemnantWallet wallet = ResolveRuntimeWallet();
         if (wallet != null && wallet.CurrentRemnants != currentProfile.RemnantCount)
         {
             wallet.ApplyLoadedRemnants(currentProfile.RemnantCount);
@@ -798,13 +798,19 @@ public sealed class RuntimeSaveService : MonoBehaviour
     /// </summary>
     private void CaptureRuntimeStateIntoProfile()
     {
-        PlayerRemnantWallet wallet = PlayerRemnantWallet.Instance ?? FindFirstObjectByType<PlayerRemnantWallet>();
+        PlayerRemnantWallet wallet = ResolveRuntimeWallet();
         if (wallet != null)
         {
             currentProfile.RemnantCount = wallet.CurrentRemnants;
         }
 
         currentProfile.Sanitize();
+    }
+
+    private static PlayerRemnantWallet ResolveRuntimeWallet()
+    {
+        PlayerRemnantWallet wallet = PlayerRemnantWallet.Instance;
+        return wallet != null ? wallet : FindFirstObjectByType<PlayerRemnantWallet>();
     }
 
     /// <summary>
