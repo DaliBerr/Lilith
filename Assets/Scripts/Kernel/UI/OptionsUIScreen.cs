@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using Kernel.Audio;
+using Kernel.Display;
 using Kernel.GameState;
 using Newtonsoft.Json;
 using TMPro;
@@ -37,8 +38,8 @@ namespace Kernel.UI
         private const string DisplayResolutionEntryId = "resolution";
         private const string DisplayFullscreenEntryId = "fullscreen";
         private const string DisplayUIScaleEntryId = "ui_scale";
-        private const string DisplayResolutionPrefsKey = "Options.Display.Resolution";
-        private const string DisplayFullscreenPrefsKey = "Options.Display.Fullscreen";
+        private const string DisplayResolutionPrefsKey = LilithDisplaySettings.ResolutionPrefsKey;
+        private const string DisplayFullscreenPrefsKey = LilithDisplaySettings.FullscreenPrefsKey;
 
         [Header("Layout")]
         [SerializeField] private RectTransform catalogRoot;
@@ -846,24 +847,12 @@ namespace Kernel.UI
 
         private static string FormatResolutionValue(int width, int height)
         {
-            return $"{width}x{height}";
+            return LilithDisplaySettings.FormatResolutionValue(width, height);
         }
 
         private static bool TryParseResolutionValue(string value, out int width, out int height)
         {
-            width = 0;
-            height = 0;
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            string[] parts = value.Trim().Split('x', 'X');
-            return parts.Length == 2
-                && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out width)
-                && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out height)
-                && width > 0
-                && height > 0;
+            return LilithDisplaySettings.TryParseResolutionValue(value, out width, out height);
         }
 
         private static int FindChoiceIndex(IReadOnlyList<OptionsChoiceData> choices, string value)
@@ -1383,8 +1372,7 @@ namespace Kernel.UI
                 fullscreen = string.Equals(fullscreenState.CurrentValue, bool.TrueString, StringComparison.Ordinal);
             }
 
-            FullScreenMode mode = fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
-            Screen.SetResolution(width, height, mode);
+            LilithDisplaySettings.ApplyResolutionAndFullscreen(width, height, fullscreen);
         }
 
         private void ApplyUIScaleSetting()

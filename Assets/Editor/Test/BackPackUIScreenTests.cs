@@ -9,10 +9,35 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using Vocalith.UI;
 
 public sealed class BackPackUIScreenTests
 {
     private readonly List<Object> createdObjects = new();
+
+    [Test]
+    public void ResponsiveLayoutGroupFitter_ShrinksInventorySlotsToFitGridRect()
+    {
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        RectTransform grid = screen.transform.Find("MainContent/BackPack Grid Panel/Grid") as RectTransform;
+        Assert.That(grid, Is.Not.Null);
+        grid.anchorMin = new Vector2(0.5f, 0.5f);
+        grid.anchorMax = new Vector2(0.5f, 0.5f);
+        grid.sizeDelta = new Vector2(480f, 360f);
+
+        InvokeNonPublic(screen, "OnInit");
+        ResponsiveLayoutGroupFitter fitter = screen.gameObject.AddComponent<ResponsiveLayoutGroupFitter>();
+        fitter.SetRoot(screen.transform as RectTransform);
+        fitter.FitNow();
+
+        GridLayoutGroup layout = grid.GetComponent<GridLayoutGroup>();
+        Assert.That(layout, Is.Not.Null);
+        Assert.That(layout.constraint, Is.EqualTo(GridLayoutGroup.Constraint.FixedColumnCount));
+        Assert.That(layout.constraintCount, Is.EqualTo(PlayerBulletTokenInventory.Columns));
+        Assert.That(layout.cellSize.x, Is.LessThan(100f));
+        Assert.That(ResolveGridRequiredWidth(layout), Is.LessThanOrEqualTo(grid.rect.width + 0.01f));
+        Assert.That(ResolveGridRequiredHeight(layout), Is.LessThanOrEqualTo(grid.rect.height + 0.01f));
+    }
 
     [TearDown]
     public void TearDown()
@@ -530,6 +555,21 @@ public sealed class BackPackUIScreenTests
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null, $"{target.GetType().Name}.{methodName} should exist.");
         method.Invoke(target, null);
+    }
+
+    private static float ResolveGridRequiredWidth(GridLayoutGroup layout)
+    {
+        return layout.padding.horizontal
+            + (layout.cellSize.x * PlayerBulletTokenInventory.Columns)
+            + (layout.spacing.x * Mathf.Max(0, PlayerBulletTokenInventory.Columns - 1));
+    }
+
+    private static float ResolveGridRequiredHeight(GridLayoutGroup layout)
+    {
+        int rowCount = Mathf.CeilToInt(PlayerBulletTokenInventory.Capacity / (float)PlayerBulletTokenInventory.Columns);
+        return layout.padding.vertical
+            + (layout.cellSize.y * rowCount)
+            + (layout.spacing.y * Mathf.Max(0, rowCount - 1));
     }
 
     private static void AssertInventoryItem(PlayerBulletTokenInventory inventory, int anchorIndex, PlaceableTokenData expectedItem, int expectedSpan)

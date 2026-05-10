@@ -58,6 +58,7 @@
     <Compile Include="Assets\Editor\Test\EnemyDefinitionBinderTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyGeneratorTests.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Editor\ReadmeEditor.cs" />
+    <Compile Include="Assets\Editor\Test\ResponsiveLayoutGroupFitterTests.cs" />
     <Compile Include="Assets\Editor\Test\MapRunFlowControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\Test\PlayerFollowCameraTests.cs" />
@@ -65,6 +66,7 @@
     <Compile Include="Assets\Editor\Test\GlobalStartupTests.cs" />
     <Compile Include="Assets\Editor\EnemyDefinitionEditor.cs" />
     <Compile Include="Assets\Editor\Test\CameraOcclusionFaderTests.cs" />
+    <Compile Include="Assets\Editor\Test\LilithDisplaySettingsTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyBulletTokenDropperTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyAttackExtensionTests.cs" />
     <Compile Include="Assets\Editor\Test\ScriptableObjectOnValidateTests.cs" />

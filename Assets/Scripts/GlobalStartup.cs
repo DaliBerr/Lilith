@@ -1,5 +1,6 @@
 using System.Collections;
 using Kernel.Audio;
+using Kernel.Display;
 using Kernel.GameState;
 using Kernel.Quest;
 using Kernel.UI;
@@ -88,6 +89,7 @@ namespace Kernel
 
             StatusController.AddStatus(StatusList.GameLoadingStatus);
             yield return StartCoroutine(InitGlobal());
+            LilithDisplaySettings.ApplyStoredResolutionAndFullscreen();
             LilithAudioSettings.ApplyStoredSettings();
             ApplyStoredUIScale();
 

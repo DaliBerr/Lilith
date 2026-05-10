@@ -96,6 +96,8 @@
 - 需要确认 Scene / Prefab / GameObject / Component / Console / Test / Screenshot 状态时，优先走 Unity MCP
 - 不要先靠手读 `.unity` / `.prefab` 猜编辑器真实状态
 - 修改脚本后，优先用 Unity MCP 检查编译状态和 Console
+- 若 `mcpforunity://instances` 显示多个 Unity 实例，必须先明确目标实例。`set_active_instance` 当前按 MCP server 全局状态生效，不假设它在两个 Codex 会话之间隔离；并行会话可能互相覆盖 active instance
+- 多实例并行工作时，每次读取 MCP resource 前先 `set_active_instance` 到本仓库实例；支持 `unity_instance` 参数的 tool call 优先显式传入目标实例，避免误操作另一个 Unity 项目
 
 ## Repo Invariants
 

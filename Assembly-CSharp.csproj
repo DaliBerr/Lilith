@@ -70,6 +70,7 @@
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScreen.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Audio\AudioManager.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\UI\ResponsiveLayoutGroupFitter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\PermanentProfileData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTargetPolicy.cs" />
     <Compile Include="Assets\Scripts\Kernel\Quest\QuestService.cs" />
@@ -132,6 +133,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarController.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewRig.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaCompiler.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Display\LilithDisplaySettings.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StorySequenceParser.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
@@ -217,7 +219,6 @@
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile-2-Pass.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap.shader" />
-    <None Include="Assets\AddressableAssetsData\link.xml" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro_Mobile.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF SSD.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Surface-Mobile.shader" />
@@ -230,6 +231,7 @@
     <None Include="Assets\TextMesh Pro\Resources\LineBreaking Leading Characters.txt" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro_Properties.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro_Surface.cginc" />
+    <None Include="Assets\AddressableAssetsData\link.xml" />
     <None Include="Assets\TextMesh Pro\Resources\LineBreaking Following Characters.txt" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Masking.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF Overlay.shader" />

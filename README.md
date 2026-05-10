@@ -9,7 +9,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - Unity 版本：`6000.3.9f1`
 - 渲染管线：URP
 - 关键包：`Addressables`、`Input System`、`AI Navigation`、`Newtonsoft Json`、`Unity Test Framework`
-- 运行时默认按 16:9 安全画面布局；非 16:9 分辨率会保留黑边而不拉伸主画面
+- 运行时不再强制固定宽高比；分辨率 / 全屏设置通过 Options 保存，并在启动时应用
 - 启动场景：[`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity)
 - 主 gameplay 场景：[`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
 - 当前仓库没有 `asmdef` / `asmref`
@@ -94,7 +94,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 ### 基础设施层 `Vocalith`
 
 - UI 基础设施：[`Assets/Scripts/Vocalith/UI`](Assets/Scripts/Vocalith/UI)
-  - 入口：[`UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
+  - 入口：[`UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)，负责持久化 UI 栈、EventSystem 收敛、根 CanvasScaler UI 缩放与固定尺寸 LayoutGroup 自适应，不再强制 16:9 视口
 - 音频基础设施：[`Assets/Scripts/Vocalith/Audio`](Assets/Scripts/Vocalith/Audio)
   - 入口：[`AudioManager.cs`](Assets/Scripts/Vocalith/Audio/AudioManager.cs)，负责持久化单例、BGM crossfade、SFX 播放池与 Master/Music/SFX 三路音量
 - 本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
@@ -145,6 +145,6 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 ## 已知限制
 
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity) 不能作为独立入口直接运行；当前必须先经过 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) 中的 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 交接
-- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏会调用 `Screen.SetResolution` 应用，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用；首版尚未配置实际音乐资源和玩法音效触发点
+- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏会通过 `Kernel.Display.LilithDisplaySettings` 调用 `Screen.SetResolution` 应用并在下次启动恢复，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用；首版尚未配置实际音乐资源和玩法音效触发点
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 仍是预留加载入口
 - 当前没有 `asmdef` / `asmref`，模块边界依赖目录与命名空间约定维护

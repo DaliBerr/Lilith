@@ -60,6 +60,7 @@ namespace Vocalith.UI
         {
             OnBeforeShow();
             gameObject.SetActive(true);
+            ui?.ApplyResponsiveLayouts();
             canvasGroup.blocksRaycasts = true;
             canvasGroup.interactable = true;
             isVisible = true;
@@ -76,6 +77,7 @@ namespace Vocalith.UI
             }
             canvasGroup.alpha = 1f;
             OnAfterShow();
+            ui?.ApplyResponsiveLayouts();
         }
 
         public virtual IEnumerator Hide(float fade = 0.12f)
