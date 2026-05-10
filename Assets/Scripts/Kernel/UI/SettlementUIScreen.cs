@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.UI;
+using Vocalith.Localization;
 using Vocalith.Logging;
 using Vocalith.UI;
 
@@ -240,7 +241,9 @@ namespace Kernel.UI
                     builder.Append('\t');
                 }
 
-                builder.Append(string.IsNullOrWhiteSpace(emptyText) ? "无" : emptyText.Trim());
+                builder.Append(string.IsNullOrWhiteSpace(emptyText)
+                    ? LocalizationManager.TranslateOrDefault("ui.common.none", "无")
+                    : emptyText.Trim());
                 return builder.ToString();
             }
 

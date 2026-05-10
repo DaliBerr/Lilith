@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using Vocalith.Localization;
 
 namespace Kernel.UI
 {
@@ -136,7 +137,12 @@ namespace Kernel.UI
 
             try
             {
-                SettlementPresentationCatalogData rawCatalog = JsonConvert.DeserializeObject<SettlementPresentationCatalogData>(jsonText);
+                SettlementPresentationCatalogData rawCatalog =
+                    LocalizedJsonUtility.DeserializeLocalized<SettlementPresentationCatalogData>(
+                        jsonText,
+                        "SettlementPresentationCatalog",
+                        settings: null,
+                        rootPatchId: "default");
                 catalog = Sanitize(rawCatalog);
                 return true;
             }
@@ -156,14 +162,14 @@ namespace Kernel.UI
         {
             return new SettlementPresentationCatalogData
             {
-                VictoryTitles = new List<string>(DefaultVictoryTitles),
-                DefeatTitles = new List<string>(DefaultDefeatTitles),
-                VictoryResultTemplate = "你击败了{waves}波敌人，{bosses}个boss。",
-                DefeatResultTemplate = "你击败了{waves}波敌人，{bosses}个boss。",
-                HarvestHeader = "你获得了：",
-                HarvestEmptyText = "本轮没有获得长期收益",
-                SummaryHeader = "你击败了：",
-                SummaryEmptyText = "本轮尚未击败任何敌人",
+                VictoryTitles = CreateDefaultVictoryTitles(),
+                DefeatTitles = CreateDefaultDefeatTitles(),
+                VictoryResultTemplate = Localize("settlement.victory_result", "你击败了{waves}波敌人，{bosses}个boss。"),
+                DefeatResultTemplate = Localize("settlement.defeat_result", "你击败了{waves}波敌人，{bosses}个boss。"),
+                HarvestHeader = Localize("settlement.harvest_header", "你获得了："),
+                HarvestEmptyText = Localize("settlement.harvest_empty", "本轮没有获得长期收益"),
+                SummaryHeader = Localize("settlement.summary_header", "你击败了："),
+                SummaryEmptyText = Localize("settlement.summary_empty", "本轮尚未击败任何敌人"),
             };
         }
 
@@ -175,19 +181,39 @@ namespace Kernel.UI
         public static SettlementPresentationCatalogData Sanitize(SettlementPresentationCatalogData catalog)
         {
             SettlementPresentationCatalogData sanitized = catalog ?? CreateDefault();
-            List<string> victoryTitles = SanitizeTitlePool(sanitized.VictoryTitles, DefaultVictoryTitles);
-            List<string> defeatTitles = SanitizeTitlePool(sanitized.DefeatTitles, DefaultDefeatTitles);
+            List<string> victoryTitles = SanitizeTitlePool(sanitized.VictoryTitles, CreateDefaultVictoryTitles());
+            List<string> defeatTitles = SanitizeTitlePool(sanitized.DefeatTitles, CreateDefaultDefeatTitles());
 
             return new SettlementPresentationCatalogData
             {
                 VictoryTitles = victoryTitles,
                 DefeatTitles = defeatTitles,
-                VictoryResultTemplate = SanitizeText(sanitized.VictoryResultTemplate, "你击败了{waves}波敌人，{bosses}个boss。"),
-                DefeatResultTemplate = SanitizeText(sanitized.DefeatResultTemplate, "你击败了{waves}波敌人，{bosses}个boss。"),
-                HarvestHeader = SanitizeText(sanitized.HarvestHeader, "你获得了："),
-                HarvestEmptyText = SanitizeText(sanitized.HarvestEmptyText, "本轮没有获得长期收益"),
-                SummaryHeader = SanitizeText(sanitized.SummaryHeader, "你击败了："),
-                SummaryEmptyText = SanitizeText(sanitized.SummaryEmptyText, "本轮尚未击败任何敌人"),
+                VictoryResultTemplate = SanitizeText(sanitized.VictoryResultTemplate, Localize("settlement.victory_result", "你击败了{waves}波敌人，{bosses}个boss。")),
+                DefeatResultTemplate = SanitizeText(sanitized.DefeatResultTemplate, Localize("settlement.defeat_result", "你击败了{waves}波敌人，{bosses}个boss。")),
+                HarvestHeader = SanitizeText(sanitized.HarvestHeader, Localize("settlement.harvest_header", "你获得了：")),
+                HarvestEmptyText = SanitizeText(sanitized.HarvestEmptyText, Localize("settlement.harvest_empty", "本轮没有获得长期收益")),
+                SummaryHeader = SanitizeText(sanitized.SummaryHeader, Localize("settlement.summary_header", "你击败了：")),
+                SummaryEmptyText = SanitizeText(sanitized.SummaryEmptyText, Localize("settlement.summary_empty", "本轮尚未击败任何敌人")),
+            };
+        }
+
+        private static List<string> CreateDefaultVictoryTitles()
+        {
+            return new List<string>
+            {
+                Localize("settlement.victory_title_1", DefaultVictoryTitles[0]),
+                Localize("settlement.victory_title_2", DefaultVictoryTitles[1]),
+                Localize("settlement.victory_title_3", DefaultVictoryTitles[2]),
+            };
+        }
+
+        private static List<string> CreateDefaultDefeatTitles()
+        {
+            return new List<string>
+            {
+                Localize("settlement.defeat_title_1", DefaultDefeatTitles[0]),
+                Localize("settlement.defeat_title_2", DefaultDefeatTitles[1]),
+                Localize("settlement.defeat_title_3", DefaultDefeatTitles[2]),
             };
         }
 
@@ -217,6 +243,11 @@ namespace Kernel.UI
         private static string SanitizeText(string value, string fallback)
         {
             return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        }
+
+        private static string Localize(string key, string fallback)
+        {
+            return LocalizationManager.TranslateOrDefault(key, fallback);
         }
     }
 }

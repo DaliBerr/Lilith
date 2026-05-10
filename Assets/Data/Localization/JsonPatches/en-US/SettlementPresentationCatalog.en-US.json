@@ -1,0 +1,24 @@
+{
+  "language": "en-US",
+  "domain": "SettlementPresentationCatalog",
+  "patches": {
+    "default": {
+      "victoryTitles": [
+        "Triumphant Return",
+        "Victory",
+        "Still Standing"
+      ],
+      "defeatTitles": [
+        "So Close",
+        "Defeat",
+        "Embers Remain"
+      ],
+      "victoryResultTemplate": "You defeated {waves} enemy waves and {bosses} bosses.",
+      "defeatResultTemplate": "You defeated {waves} enemy waves and {bosses} bosses.",
+      "harvestHeader": "You gained:",
+      "harvestEmptyText": "No long-term rewards this run",
+      "summaryHeader": "You defeated:",
+      "summaryEmptyText": "No enemies defeated this run"
+    }
+  }
+}

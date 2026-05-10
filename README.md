@@ -99,6 +99,8 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - 入口：[`AudioManager.cs`](Assets/Scripts/Vocalith/Audio/AudioManager.cs)，负责持久化单例、BGM crossfade、SFX 播放池与 Master/Music/SFX 三路音量
 - 本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
   - 入口：[`LocalizationManager.cs`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
+  - 字符串表资源位于 [`Assets/Data/Localization/StringTables`](Assets/Data/Localization/StringTables)，通过 Addressables label `Localization` 加载
+  - JSON 外置补丁位于 [`Assets/Data/Localization/JsonPatches`](Assets/Data/Localization/JsonPatches)，通过 Addressables label `LocalizationJson` 加载；运行时 JSON 目录可通过 `LocalizedJsonUtility` 按 `domain + id` 应用本地化覆盖
 - 日志：目录是 [`Assets/Scripts/Vocalith/Log`](Assets/Scripts/Vocalith/Log)，命名空间是 `Vocalith.Logging`
 - 事件总线：[`Assets/Scripts/Vocalith/Event`](Assets/Scripts/Vocalith/Event)
 - 存档底层：[`Assets/Scripts/Vocalith/Scribe`](Assets/Scripts/Vocalith/Scribe)
@@ -121,6 +123,9 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - [`Assets/Data/UI/OptionsCatalog.json`](Assets/Data/UI/OptionsCatalog.json) 负责设置界面分类和条目配置
   - [`Assets/Data/UI/SettlementPresentationCatalog.json`](Assets/Data/UI/SettlementPresentationCatalog.json) 负责结算文案
   - [`Assets/Data/UI/HintCatalog.json`](Assets/Data/UI/HintCatalog.json) 负责 Hint 的手工帮助条目（敌人图鉴正文由 `EnemyDefinition.Description` 提供）
+- 本地化资源：[`Assets/Data/Localization`](Assets/Data/Localization)
+  - `StringTables` 保存 key/value 字符串包，当前首批语言为 `zh-Hans-CN` 与 `en-US`
+  - `JsonPatches` 保存按语言拆分的外置 JSON patch，当前用于 Options、Hint、Settlement、Quest、Story 与永久升级目录
 - 业务 UI prefab：[`Assets/Prefabs/UI`](Assets/Prefabs/UI)
 - 敌人 prefab：[`Assets/Prefabs/Enemy`](Assets/Prefabs/Enemy)
 - 子弹 prefab：[`Assets/Prefabs/Bullet`](Assets/Prefabs/Bullet)
@@ -131,6 +136,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 | --- | --- | --- |
 | [`Docs/ArtistGuide.md`](Docs/ArtistGuide.md) | 美术 | 替换临时美术资源、确认场景 / prefab / UI 视觉入口与注意事项 |
 | [`Docs/DesignGuide.md`](Docs/DesignGuide.md) | 策划 | 编写游戏内文本、任务、敌人、波次、Token、掉落和数值配置 |
+| [`Docs/LocalizationGuide.md`](Docs/LocalizationGuide.md) | 策划 / 翻译 / 测试 | 添加和验收多语言文案、维护字符串表与 JSON patch |
 | [`Docs/AudioGuide.md`](Docs/AudioGuide.md) | 音频 / 美术 / 策划 | 导入音乐与音效、设置 Addressable 地址、向程序交付播放需求 |
 
 ## 命名说明

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Vocalith.Localization;
 
 namespace Kernel.Quest
 {
@@ -135,7 +136,10 @@ namespace Kernel.Quest
             QuestCatalogData rawCatalog;
             try
             {
-                rawCatalog = JsonConvert.DeserializeObject<QuestCatalogData>(jsonText);
+                rawCatalog = LocalizedJsonUtility.DeserializeLocalized<QuestCatalogData>(
+                    jsonText,
+                    "QuestCatalog",
+                    settings: null);
             }
             catch (JsonException exception)
             {

@@ -1,0 +1,36 @@
+{
+  "language": "en-US",
+  "domain": "HintCatalog",
+  "patches": {
+    "guide": { "title": "Guide" },
+    "controls": {
+      "title": "Controls",
+      "content": "Move with WASD.\nPress E to interact with objects.\nLeft click to attack.\nRight click to rotate the camera.\nPress Shift to dash.\nPress B to open the backpack.\nPress Tab to open the guide."
+    },
+    "help": { "title": "Help" },
+    "gamegoal": {
+      "title": "Goal",
+      "content": "Survive the enemy waves, defeat the boss, and finish a run.\nCollect words to strengthen and reshape your attacks."
+    },
+    "pickup": {
+      "title": "Word Pickups",
+      "content": "Defeated enemies drop words.\nMove close to pick them up, then use them to build your current weapon."
+    },
+    "bullettoken": {
+      "title": "BulletToken Build",
+      "content": "Your current attack is made from multiple word slots.\nDifferent words decide the attack's element, pattern, and count.\nWhen the combination changes, your combat style changes immediately."
+    },
+    "tokenclass": {
+      "title": "Token Types",
+      "content": "Behavior: decides the attack pattern, such as Straight or Spread.\nCore: decides the element, such as Fire, Ice, Thunder, or Edge.\nResult: decides the impact effect, such as Direct or Explosion.\nValue: decides count or strength, such as 2, 3, or 5."
+    },
+    "buildtips": {
+      "title": "Build Tips",
+      "content": "Pick up words first, then enter the build screen.\nTry different combinations and find a style that fits the current fight.\nThere is no single perfect build; adaptation matters."
+    },
+    "versionnote": {
+      "title": "Current Version",
+      "content": "This is a prototype / MVP version.\nSome tuning, art, and systems are still being adjusted."
+    }
+  }
+}

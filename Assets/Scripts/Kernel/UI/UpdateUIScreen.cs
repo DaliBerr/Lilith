@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.UI;
+using Vocalith.Localization;
 using Vocalith.UI;
 
 namespace Kernel.UI
@@ -326,7 +327,7 @@ namespace Kernel.UI
         {
             if (titleText == null)
             {
-                resolvedBaseTitle = DefaultTitle;
+                resolvedBaseTitle = LocalizationManager.TranslateOrDefault("ui.upgrade.title", DefaultTitle);
                 return;
             }
 
@@ -337,7 +338,9 @@ namespace Kernel.UI
                 trimmedTitle = trimmedTitle.Substring(0, suffixIndex).TrimEnd();
             }
 
-            resolvedBaseTitle = string.IsNullOrEmpty(trimmedTitle) ? DefaultTitle : trimmedTitle;
+            resolvedBaseTitle = string.IsNullOrEmpty(trimmedTitle)
+                ? LocalizationManager.TranslateOrDefault("ui.upgrade.title", DefaultTitle)
+                : trimmedTitle;
         }
 
         private void UpdateTitleWithRemnants()
@@ -347,7 +350,11 @@ namespace Kernel.UI
                 return;
             }
 
-            titleText.text = $"{resolvedBaseTitle} (残卷: {PlayerRemnantWallet.GetCurrentRemnants()})";
+            titleText.text = LocalizationManager.TranslateFormatOrDefault(
+                "ui.upgrade.title_with_remnants",
+                "{0} (残卷: {1})",
+                resolvedBaseTitle,
+                PlayerRemnantWallet.GetCurrentRemnants());
         }
 
         private void HideSectionTemplate()
@@ -426,12 +433,16 @@ namespace Kernel.UI
             bool canAfford,
             bool isMaxLevel)
         {
-            string levelLine = $"等级 {currentLevel}/{entry.MaxLevel}";
+            string levelLine = LocalizationManager.TranslateFormatOrDefault(
+                "ui.upgrade.level",
+                "等级 {0}/{1}",
+                currentLevel,
+                entry.MaxLevel);
             string costLine = isMaxLevel
-                ? "已满级"
+                ? LocalizationManager.TranslateOrDefault("ui.upgrade.max_level", "已满级")
                 : canAfford
-                    ? $"消耗 {entry.CostRemnants} 残卷"
-                    : $"残卷不足 ({entry.CostRemnants})";
+                    ? LocalizationManager.TranslateFormatOrDefault("ui.upgrade.cost", "消耗 {0} 残卷", entry.CostRemnants)
+                    : LocalizationManager.TranslateFormatOrDefault("ui.upgrade.insufficient_remnants", "残卷不足 ({0})", entry.CostRemnants);
             return $"{entry.Title}\n{levelLine}\n{costLine}";
         }
 

@@ -8,6 +8,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.UI;
+using Vocalith.Localization;
 using Vocalith.Logging;
 using Vocalith.UI;
 #if UNITY_EDITOR
@@ -221,14 +222,14 @@ namespace Kernel.UI
 
             if (catalogRoot == null || leftPanelRoot == null || mainContentRoot == null || mainContentText == null)
             {
-                SetMainContentText(EmptyContentText);
+                SetMainContentText(ResolveEmptyContentText());
                 return;
             }
 
             BuildRuntimeCategories(runtimeCategories);
             if (runtimeCategories.Count <= 0)
             {
-                SetMainContentText(EmptyContentText);
+                SetMainContentText(ResolveEmptyContentText());
                 return;
             }
 
@@ -337,7 +338,7 @@ namespace Kernel.UI
                 string enemyId = definition.EnemyId;
                 string displayName = ResolveEnemyDisplayName(definition);
                 string description = string.IsNullOrWhiteSpace(definition.Description)
-                    ? EmptyEnemyDescriptionText
+                    ? LocalizationManager.TranslateOrDefault("ui.hint.empty_enemy_description", EmptyEnemyDescriptionText)
                     : definition.Description;
 
                 enemyEntries.Add(new HintEntryData
@@ -482,7 +483,7 @@ namespace Kernel.UI
             if (runtimeEntries.Count <= 0)
             {
                 activeEntryIndex = -1;
-                SetMainContentText(EmptyCategoryText);
+                SetMainContentText(LocalizationManager.TranslateOrDefault("ui.hint.empty_category", EmptyCategoryText));
                 return;
             }
 
@@ -501,8 +502,10 @@ namespace Kernel.UI
             UpdateEntrySelectionVisual();
 
             HintEntryData entry = runtimeEntries[entryIndex];
-            string entryTitle = string.IsNullOrWhiteSpace(entry?.Title) ? "未命名条目" : entry.Title.Trim();
-            string entryContent = string.IsNullOrWhiteSpace(entry?.Content) ? EmptyContentText : entry.Content.Trim();
+            string entryTitle = string.IsNullOrWhiteSpace(entry?.Title)
+                ? LocalizationManager.TranslateOrDefault("ui.hint.unnamed_entry", "未命名条目")
+                : entry.Title.Trim();
+            string entryContent = string.IsNullOrWhiteSpace(entry?.Content) ? ResolveEmptyContentText() : entry.Content.Trim();
             SetMainContentText($"{entryTitle}\n\n{entryContent}");
         }
 
@@ -560,8 +563,13 @@ namespace Kernel.UI
         private string ResolveEnemyCategoryTitle()
         {
             return string.IsNullOrWhiteSpace(enemyCategoryTitle)
-                ? DefaultEnemyCategoryTitle
+                ? LocalizationManager.TranslateOrDefault("ui.hint.enemy_category", DefaultEnemyCategoryTitle)
                 : enemyCategoryTitle.Trim();
+        }
+
+        private static string ResolveEmptyContentText()
+        {
+            return LocalizationManager.TranslateOrDefault("ui.hint.empty_content", EmptyContentText);
         }
 
         private static string ResolveEnemyDisplayName(EnemyDefinition definition)

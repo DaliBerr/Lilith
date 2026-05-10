@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using Vocalith.Localization;
 
 namespace Kernel.UI
 {
@@ -81,7 +82,10 @@ namespace Kernel.UI
 
             try
             {
-                HintCatalogData rawCatalog = JsonConvert.DeserializeObject<HintCatalogData>(jsonText);
+                HintCatalogData rawCatalog = LocalizedJsonUtility.DeserializeLocalized<HintCatalogData>(
+                    jsonText,
+                    "HintCatalog",
+                    settings: null);
                 catalog = Sanitize(rawCatalog);
                 return true;
             }

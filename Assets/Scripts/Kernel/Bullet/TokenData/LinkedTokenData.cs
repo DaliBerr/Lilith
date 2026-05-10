@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Vocalith.Localization;
 
 namespace Kernel.Bullet
 {
@@ -11,9 +12,11 @@ namespace Kernel.Bullet
     {
         [SerializeField] private string itemId = string.Empty;
         [SerializeField, TextArea] private string description = string.Empty;
+        [SerializeField] private string descriptionKey = string.Empty;
         [SerializeField] private List<BaseTokenData> linkedTokens = new();
         [SerializeField, Min(1f)] private float damageMultiplier = 1f;
         [SerializeField] private string pickupDisplayTextOverride = string.Empty;
+        [SerializeField] private string pickupDisplayTextKey = string.Empty;
 
         public string ItemId
         {
@@ -25,6 +28,12 @@ namespace Kernel.Bullet
         {
             get => description;
             set => description = value ?? string.Empty;
+        }
+
+        public string DescriptionKey
+        {
+            get => descriptionKey;
+            set => descriptionKey = value != null ? value.Trim() : string.Empty;
         }
 
         public IReadOnlyList<BaseTokenData> LinkedTokens => linkedTokens;
@@ -41,6 +50,12 @@ namespace Kernel.Bullet
         {
             get => pickupDisplayTextOverride;
             set => pickupDisplayTextOverride = value ?? string.Empty;
+        }
+
+        public string PickupDisplayTextKey
+        {
+            get => pickupDisplayTextKey;
+            set => pickupDisplayTextKey = value != null ? value.Trim() : string.Empty;
         }
 
         /// <summary>
@@ -94,12 +109,10 @@ namespace Kernel.Bullet
 
         public override string GetPickupDisplayText()
         {
-            if (!string.IsNullOrWhiteSpace(pickupDisplayTextOverride))
-            {
-                return pickupDisplayTextOverride;
-            }
-
-            return base.GetPickupDisplayText();
+            string fallback = !string.IsNullOrWhiteSpace(pickupDisplayTextOverride)
+                ? pickupDisplayTextOverride
+                : base.GetPickupDisplayText();
+            return ResolveLocalizedText(pickupDisplayTextKey, fallback);
         }
 
         /// <summary>
@@ -109,16 +122,25 @@ namespace Kernel.Bullet
         /// </summary>
         public override string GetSelectionDescription()
         {
-            return Description;
+            return ResolveLocalizedText(descriptionKey, Description);
         }
 
         private void OnValidate()
         {
             itemId = itemId != null ? itemId.Trim() : string.Empty;
             description ??= string.Empty;
+            descriptionKey = descriptionKey != null ? descriptionKey.Trim() : string.Empty;
             pickupDisplayTextOverride ??= string.Empty;
+            pickupDisplayTextKey = pickupDisplayTextKey != null ? pickupDisplayTextKey.Trim() : string.Empty;
             damageMultiplier = Mathf.Max(1f, damageMultiplier);
             linkedTokens ??= new List<BaseTokenData>();
+        }
+
+        private static string ResolveLocalizedText(string key, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(key)
+                ? fallback ?? string.Empty
+                : LocalizationManager.TranslateOrDefault(key, fallback);
         }
     }
 }

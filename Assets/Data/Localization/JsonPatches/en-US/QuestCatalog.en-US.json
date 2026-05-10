@@ -1,0 +1,15 @@
+{
+  "language": "en-US",
+  "domain": "QuestCatalog",
+  "patches": {
+    "tutorial_open_backpack": {
+      "text": "Open the backpack and check your situation"
+    },
+    "tutorial_compile_spellbook": {
+      "text": "Drag the core into a slot above the backpack"
+    },
+    "tutorial_enter_teleporter": {
+      "text": "Step into the book portal"
+    }
+  }
+}

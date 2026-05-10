@@ -1,4 +1,5 @@
 using System.Collections;
+using Vocalith.Localization;
 using Vocalith.Logging;
 using Vocalith.UI;
 
@@ -25,6 +26,9 @@ namespace Kernel.UI
             string confirmLabel = "知道了",
             string closeLabel = "关闭")
         {
+            confirmLabel = ResolveLabel(confirmLabel, "ui.common.got_it", "知道了");
+            closeLabel = ResolveLabel(closeLabel, "ui.common.close", "关闭");
+
             if (uiManager == null)
             {
                 GameDebug.LogWarning($"[{callerName}] Unable to show popup: UIManager is missing.");
@@ -51,6 +55,16 @@ namespace Kernel.UI
                 message,
                 confirmLabel: confirmLabel,
                 closeLabel: closeLabel);
+        }
+
+        private static string ResolveLabel(string label, string key, string fallback)
+        {
+            if (string.IsNullOrWhiteSpace(label) || string.Equals(label, fallback, System.StringComparison.Ordinal))
+            {
+                return LocalizationManager.TranslateOrDefault(key, fallback);
+            }
+
+            return label;
         }
     }
 }

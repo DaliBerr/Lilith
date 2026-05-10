@@ -1,0 +1,12 @@
+{
+  "language": "en-US",
+  "domain": "PermanentUpgradeCatalog",
+  "patches": {
+    "combat": {
+      "title": "Combat Upgrades"
+    },
+    "damage_test": {
+      "title": "Attack Power +100%"
+    }
+  }
+}

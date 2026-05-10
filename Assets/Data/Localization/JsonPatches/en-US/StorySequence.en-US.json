@@ -1,0 +1,104 @@
+{
+  "language": "en-US",
+  "domain": "StorySequence",
+  "patches": {
+    "Assets/Data/Story/Introduction": {
+      "entries": [
+        {
+          "text": "Hundreds of years ago, the Demon King plunged the world into darkness.",
+          "displayMode": "append"
+        },
+        {
+          "text": "A hero, carrying a greatsword, bent hope into every corner of the land.",
+          "displayMode": "append"
+        },
+        {
+          "text": "The heavy blade swept forward with cutting wind and savage flame.",
+          "displayMode": "append"
+        },
+        {
+          "text": "Thunder rolled through the sky, passing judgment on the Demon King's sins.",
+          "displayMode": "append"
+        },
+        {
+          "text": "At last, the Demon King fell beneath the hero's sword, and the power left behind was seized in the hero's hand.",
+          "displayMode": "append"
+        },
+        {
+          "text": "A breeze crossed the lake and stirred faint ripples as the hero returned to the place where the journey began.",
+          "displayMode": "append"
+        },
+        {
+          "text": "He wrote his travels into a book and sealed that power within its pages.",
+          "displayMode": "append"
+        },
+        {
+          "text": "With his own strength, he bound the words with wards and shackles so they would not scatter.",
+          "displayMode": "append"
+        },
+        {
+          "text": "The world would not allow only darkness, and so the hero brought hope.",
+          "displayMode": "append"
+        },
+        {
+          "text": "But when has it ever allowed only hope? The old hero's power faded with the years.",
+          "displayMode": "append"
+        },
+        {
+          "text": "A new Demon King will be born, using this book as a cradle and its words as nourishment.",
+          "displayMode": "append"
+        },
+        {
+          "text": "When will a new hero appear?",
+          "displayMode": "append"
+        }
+      ]
+    },
+    "Assets/Data/Story/DialogTest": {
+      "entries": [
+        {
+          "speakerId": "narrator",
+          "displayName": "Narrator",
+          "displayMode": "replace",
+          "text": "As the last word of the old legend falls away, you finally step into a journey woven from ruins and flame."
+        },
+        {
+          "speakerId": "player",
+          "displayName": "You",
+          "displayMode": "replace",
+          "text": "So this is why I turned into a word? You want me to recover words and power for you?"
+        },
+        {
+          "speakerId": "narrator",
+          "displayName": "Narrator",
+          "displayMode": "replace",
+          "text": "The book in your hand glows faintly. An ancient mark is carved into its cover, as if waiting for your touch."
+        },
+        {
+          "speakerId": "book",
+          "displayName": "Book",
+          "displayMode": "replace",
+          "text": "Watch the guide on the ground. Walk toward the door ahead, and begin your journey from there."
+        },
+        {
+          "speakerId": "book",
+          "displayName": "Book",
+          "displayMode": "replace",
+          "text": "Use me well. The power of characters is the key to surviving these ruins. Each character has its own ability; learn them, and you can overcome what lies ahead."
+        },
+        {
+          "speakerId": "book",
+          "displayName": "Book",
+          "displayMode": "replace",
+          "text": "Remember, you are not fighting alone."
+        },
+        {
+          "speakerId": "player",
+          "displayName": "You",
+          "displayMode": "replace",
+          "text": "Fine. I'll call it an immersive story and move forward."
+        }
+      ]
+    }
+  }
+}

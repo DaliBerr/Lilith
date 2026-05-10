@@ -96,14 +96,38 @@ namespace Vocalith.Localization
         /// <returns>翻译后的字符串或原key。</returns>
         public static string Translate(string key)
         {
-            if (string.IsNullOrEmpty(key))
+            var normalizedKey = NormalizeLookupKey(key);
+            if (string.IsNullOrEmpty(normalizedKey))
                 return string.Empty;
 
-            // 允许 "$KEY" 的写法
-            if (key.Length > 1 && key[0] == '$')
-                key = key.Substring(1);
+            return _stringTable.TryGetValue(normalizedKey, out var v) ? v : normalizedKey;
+        }
 
-            return _stringTable.TryGetValue(key, out var v) ? v : key;
+        /// <summary>
+        /// 尝试翻译一个 key；缺失时返回 false，不把 key 当作显示文本。
+        /// </summary>
+        /// <param name="key">翻译键。</param>
+        /// <param name="value">翻译成功后的文本。</param>
+        /// <returns>命中翻译表时返回 true。</returns>
+        public static bool TryTranslate(string key, out string value)
+        {
+            value = string.Empty;
+            var normalizedKey = NormalizeLookupKey(key);
+            if (string.IsNullOrEmpty(normalizedKey))
+                return false;
+
+            return _stringTable.TryGetValue(normalizedKey, out value);
+        }
+
+        /// <summary>
+        /// 翻译一个 key；缺失时返回 fallback，适合资产字段保留原文作为回退。
+        /// </summary>
+        /// <param name="key">翻译键。</param>
+        /// <param name="fallback">缺失时使用的回退文本。</param>
+        /// <returns>翻译文本或回退文本。</returns>
+        public static string TranslateOrDefault(string key, string fallback)
+        {
+            return TryTranslate(key, out var value) ? value : fallback ?? string.Empty;
         }
 
         /// <summary>
@@ -115,6 +139,20 @@ namespace Vocalith.Localization
         public static string TranslateFormat(string key, params object[] args)
         {
             var fmt = Translate(key);
+            try { return string.Format(fmt, args); }
+            catch { return fmt; }
+        }
+
+        /// <summary>
+        /// 翻译并格式化；缺失时使用 fallback 作为格式源。
+        /// </summary>
+        /// <param name="key">翻译键。</param>
+        /// <param name="fallback">缺失时使用的格式文本。</param>
+        /// <param name="args">格式化参数。</param>
+        /// <returns>翻译并格式化后的字符串。</returns>
+        public static string TranslateFormatOrDefault(string key, string fallback, params object[] args)
+        {
+            var fmt = TranslateOrDefault(key, fallback);
             try { return string.Format(fmt, args); }
             catch { return fmt; }
         }
@@ -384,6 +422,18 @@ namespace Vocalith.Localization
         {
             if (string.IsNullOrWhiteSpace(tag)) return string.Empty;
             return tag.Trim().Replace('_', '-');
+        }
+
+        static string NormalizeLookupKey(string key)
+        {
+            if (string.IsNullOrEmpty(key))
+                return string.Empty;
+
+            key = key.Trim();
+            if (key.Length > 1 && key[0] == '$')
+                key = key.Substring(1);
+
+            return key;
         }
 
         /// <summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Kernel.Bullet;
 using UnityEngine;
+using Vocalith.Localization;
 
 /// <summary>
 /// 定义一种敌人的 prefab、行为开关和视觉表现。
@@ -366,7 +367,9 @@ public sealed class EnemyDefinition : ScriptableObject
 
     [SerializeField] private string enemyId = string.Empty;
     [SerializeField] private string displayName = string.Empty;
+    [SerializeField] private string displayNameKey = string.Empty;
     [TextArea(3, 8)] [SerializeField] private string description = string.Empty;
+    [SerializeField] private string descriptionKey = string.Empty;
     [SerializeField] private EnemyDefinitionBinder runtimePrefab;
     [SerializeField] private EnemyMovementKind movementKind = EnemyMovementKind.ChaseTarget;
     [SerializeField] private EnemyAttackKind attackKind = EnemyAttackKind.MeleeContact;
@@ -439,8 +442,12 @@ public sealed class EnemyDefinition : ScriptableObject
     [SerializeField] private List<EnemySkillSlotDefinition> skillSlots = new();
 
     public string EnemyId => string.IsNullOrWhiteSpace(enemyId) ? name : enemyId.Trim();
-    public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? EnemyId : displayName.Trim();
-    public string Description => string.IsNullOrWhiteSpace(description) ? string.Empty : description.Trim();
+    public string DisplayName => ResolveLocalizedText(
+        displayNameKey,
+        string.IsNullOrWhiteSpace(displayName) ? EnemyId : displayName.Trim());
+    public string Description => ResolveLocalizedText(
+        descriptionKey,
+        string.IsNullOrWhiteSpace(description) ? string.Empty : description.Trim());
     public EnemyDefinitionBinder RuntimePrefabBinder => runtimePrefab;
     public GameObject RuntimePrefab => runtimePrefab != null ? runtimePrefab.gameObject : null;
     public EnemyMovementKind MovementKind => movementKind;
@@ -461,7 +468,9 @@ public sealed class EnemyDefinition : ScriptableObject
     {
         enemyId = enemyId != null ? enemyId.Trim() : string.Empty;
         displayName = displayName != null ? displayName.Trim() : string.Empty;
+        displayNameKey = displayNameKey != null ? displayNameKey.Trim() : string.Empty;
         description = description != null ? description.Trim() : string.Empty;
+        descriptionKey = descriptionKey != null ? descriptionKey.Trim() : string.Empty;
         dashMovement = dashMovement.GetSanitized();
         keepDistanceMovement = keepDistanceMovement.GetSanitized();
         aggroOnHitMovement = aggroOnHitMovement.GetSanitized();
@@ -480,6 +489,13 @@ public sealed class EnemyDefinition : ScriptableObject
 
         keepDistanceMovement = ResolveKeepDistanceMovementDefinition();
         bossSmartRoamMovement = ResolveBossSmartRoamMovementDefinition();
+    }
+
+    private static string ResolveLocalizedText(string key, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(key)
+            ? fallback ?? string.Empty
+            : LocalizationManager.TranslateOrDefault(key, fallback);
     }
 
     /// <summary>

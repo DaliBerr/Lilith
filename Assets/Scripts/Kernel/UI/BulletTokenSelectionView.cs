@@ -3,6 +3,7 @@ using Kernel.Bullet;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Vocalith.Localization;
 
 namespace Kernel.UI
 {
@@ -139,7 +140,9 @@ namespace Kernel.UI
 
             if (selectButtonText != null && string.IsNullOrWhiteSpace(selectButtonText.text))
             {
-                selectButtonText.text = defaultSelectButtonLabel;
+                selectButtonText.text = LocalizationManager.TranslateOrDefault(
+                    "ui.token_select.select",
+                    defaultSelectButtonLabel);
             }
 
             if (selectButton != null)
@@ -268,10 +271,10 @@ namespace Kernel.UI
         {
             return tokenType switch
             {
-                TokenType.Core => "核心",
-                TokenType.Behavior => "行为",
-                TokenType.Result => "结果",
-                TokenType.Value => "数值",
+                TokenType.Core => LocalizationManager.TranslateOrDefault("ui.token_type.core", "核心"),
+                TokenType.Behavior => LocalizationManager.TranslateOrDefault("ui.token_type.behavior", "行为"),
+                TokenType.Result => LocalizationManager.TranslateOrDefault("ui.token_type.result", "结果"),
+                TokenType.Value => LocalizationManager.TranslateOrDefault("ui.token_type.value", "数值"),
                 _ => string.Empty,
             };
         }

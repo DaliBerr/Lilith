@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Vocalith.Localization;
 
 namespace Kernel.Bullet
 {
@@ -10,7 +11,9 @@ namespace Kernel.Bullet
     {
         [SerializeField] private string tokenId = string.Empty;
         [SerializeField] private string displayText = string.Empty;
+        [SerializeField] private string displayTextKey = string.Empty;
         [SerializeField, TextArea] private string description = string.Empty;
+        [SerializeField] private string descriptionKey = string.Empty;
 
         public override int SlotSpan => 1;
 
@@ -26,10 +29,22 @@ namespace Kernel.Bullet
             set => displayText = value ?? string.Empty;
         }
 
+        public string DisplayTextKey
+        {
+            get => displayTextKey;
+            set => displayTextKey = value != null ? value.Trim() : string.Empty;
+        }
+
         public string Description
         {
             get => description;
             set => description = value ?? string.Empty;
+        }
+
+        public string DescriptionKey
+        {
+            get => descriptionKey;
+            set => descriptionKey = value != null ? value.Trim() : string.Empty;
         }
 
         /// <summary>
@@ -58,7 +73,8 @@ namespace Kernel.Bullet
         /// </summary>
         public override string GetPickupDisplayText()
         {
-            return string.IsNullOrWhiteSpace(displayText) ? tokenId : displayText;
+            string fallback = string.IsNullOrWhiteSpace(displayText) ? tokenId : displayText;
+            return ResolveLocalizedText(displayTextKey, fallback);
         }
 
         /// <summary>
@@ -68,7 +84,7 @@ namespace Kernel.Bullet
         /// </summary>
         public override string GetSelectionDescription()
         {
-            return Description;
+            return ResolveLocalizedText(descriptionKey, Description);
         }
 
         /// <summary>
@@ -80,7 +96,16 @@ namespace Kernel.Bullet
         {
             tokenId = tokenId != null ? tokenId.Trim() : string.Empty;
             displayText ??= string.Empty;
+            displayTextKey = displayTextKey != null ? displayTextKey.Trim() : string.Empty;
             description ??= string.Empty;
+            descriptionKey = descriptionKey != null ? descriptionKey.Trim() : string.Empty;
+        }
+
+        private static string ResolveLocalizedText(string key, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(key)
+                ? fallback ?? string.Empty
+                : LocalizationManager.TranslateOrDefault(key, fallback);
         }
     }
 }

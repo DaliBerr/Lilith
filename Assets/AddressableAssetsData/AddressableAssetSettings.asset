@@ -104,6 +104,8 @@ MonoBehaviour:
     - default
     - UI
     - Json
+    - Localization
+    - LocalizationJson
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 223984bc66789134081de5b0469d3e7e, type: 2}

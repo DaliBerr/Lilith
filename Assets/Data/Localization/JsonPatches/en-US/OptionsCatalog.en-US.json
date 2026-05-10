@@ -1,0 +1,24 @@
+{
+  "language": "en-US",
+  "domain": "OptionsCatalog",
+  "patches": {
+    "audio": { "title": "Audio" },
+    "master_volume": { "title": "Master Volume" },
+    "music_volume": { "title": "Music Volume" },
+    "sfx_volume": { "title": "SFX Volume" },
+    "display": { "title": "Display" },
+    "resolution": { "title": "Resolution" },
+    "fullscreen": { "title": "Fullscreen" },
+    "ui_scale": { "title": "UI Scale" },
+    "controls": { "title": "Controls" },
+    "move_up_binding": { "title": "Move Up" },
+    "move_down_binding": { "title": "Move Down" },
+    "move_left_binding": { "title": "Move Left" },
+    "move_right_binding": { "title": "Move Right" },
+    "attack_binding": { "title": "Attack" },
+    "accelerate_binding": { "title": "Dash" },
+    "backpack_binding": { "title": "Backpack" },
+    "interaction_binding": { "title": "Interact" },
+    "hint_binding": { "title": "Guide" }
+  }
+}

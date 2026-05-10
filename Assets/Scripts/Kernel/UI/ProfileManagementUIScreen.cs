@@ -5,6 +5,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using Vocalith.Localization;
 using Vocalith.Logging;
 using Vocalith.UI;
 
@@ -249,7 +250,7 @@ namespace Kernel.UI
         {
             if (titleText != null && string.IsNullOrWhiteSpace(titleText.text))
             {
-                titleText.text = "Profile";
+                titleText.text = LocalizationManager.TranslateOrDefault("ui.profile.title", "Profile");
             }
 
             RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
@@ -286,14 +287,20 @@ namespace Kernel.UI
             RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
             if (saveService == null)
             {
-                StartCoroutine(PopUpUIUtility.ShowInfoPopup(ui, nameof(ProfileManagementUIScreen), "存档服务不可用。"));
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(ProfileManagementUIScreen),
+                    LocalizationManager.TranslateOrDefault("ui.profile.save_unavailable", "存档服务不可用。")));
                 return;
             }
 
             GlobalStartup startup = GlobalStartup.Instance;
             if (startup == null || !startup.IsBootCompleted)
             {
-                StartCoroutine(PopUpUIUtility.ShowInfoPopup(ui, nameof(ProfileManagementUIScreen), "启动流程尚未完成，请稍后再试。"));
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(ProfileManagementUIScreen),
+                    LocalizationManager.TranslateOrDefault("ui.profile.boot_not_ready", "启动流程尚未完成，请稍后再试。")));
                 return;
             }
 
@@ -312,7 +319,10 @@ namespace Kernel.UI
             if (!saveService.SelectProfileSlot(slotIndex, out bool isNewSlot))
             {
                 isHandlingSlotAction = false;
-                StartCoroutine(PopUpUIUtility.ShowInfoPopup(ui, nameof(ProfileManagementUIScreen), "当前栏位初始化失败。"));
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(ProfileManagementUIScreen),
+                    LocalizationManager.TranslateOrDefault("ui.profile.slot_init_failed", "当前栏位初始化失败。")));
                 return;
             }
 
@@ -325,7 +335,10 @@ namespace Kernel.UI
             if (!requestAccepted)
             {
                 isHandlingSlotAction = false;
-                StartCoroutine(PopUpUIUtility.ShowInfoPopup(ui, nameof(ProfileManagementUIScreen), "当前无法进入游戏，请稍后再试。"));
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(ProfileManagementUIScreen),
+                    LocalizationManager.TranslateOrDefault("ui.profile.enter_game_failed", "当前无法进入游戏，请稍后再试。")));
                 return;
             }
 
@@ -347,7 +360,10 @@ namespace Kernel.UI
             RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
             if (saveService == null)
             {
-                StartCoroutine(PopUpUIUtility.ShowInfoPopup(ui, nameof(ProfileManagementUIScreen), "存档服务不可用。"));
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(ProfileManagementUIScreen),
+                    LocalizationManager.TranslateOrDefault("ui.profile.save_unavailable", "存档服务不可用。")));
                 return;
             }
 
@@ -372,7 +388,10 @@ namespace Kernel.UI
 
             if (!deleteSuccess)
             {
-                StartCoroutine(PopUpUIUtility.ShowInfoPopup(ui, nameof(ProfileManagementUIScreen), "删除存档失败。"));
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(ProfileManagementUIScreen),
+                    LocalizationManager.TranslateOrDefault("ui.profile.delete_failed", "删除存档失败。")));
             }
         }
 
@@ -410,7 +429,7 @@ namespace Kernel.UI
         {
             if (utcTicks <= 0L)
             {
-                return "Unknown Time";
+                return LocalizationManager.TranslateOrDefault("ui.profile.unknown_time", "Unknown Time");
             }
 
             DateTime utcTime = new DateTime(utcTicks, DateTimeKind.Utc);
@@ -433,20 +452,32 @@ namespace Kernel.UI
         {
             if (elapsed.TotalDays >= 1d)
             {
-                return $"{Math.Max(1, (int)Math.Floor(elapsed.TotalDays))}天前";
+                return LocalizationManager.TranslateFormatOrDefault(
+                    "ui.profile.elapsed_days",
+                    "{0}天前",
+                    Math.Max(1, (int)Math.Floor(elapsed.TotalDays)));
             }
 
             if (elapsed.TotalHours >= 1d)
             {
-                return $"{Math.Max(1, (int)Math.Floor(elapsed.TotalHours))}小时前";
+                return LocalizationManager.TranslateFormatOrDefault(
+                    "ui.profile.elapsed_hours",
+                    "{0}小时前",
+                    Math.Max(1, (int)Math.Floor(elapsed.TotalHours)));
             }
 
             if (elapsed.TotalMinutes >= 1d)
             {
-                return $"{Math.Max(1, (int)Math.Floor(elapsed.TotalMinutes))}分钟前";
+                return LocalizationManager.TranslateFormatOrDefault(
+                    "ui.profile.elapsed_minutes",
+                    "{0}分钟前",
+                    Math.Max(1, (int)Math.Floor(elapsed.TotalMinutes)));
             }
 
-            return $"{Math.Max(1, (int)Math.Floor(elapsed.TotalSeconds))}秒前";
+            return LocalizationManager.TranslateFormatOrDefault(
+                "ui.profile.elapsed_seconds",
+                "{0}秒前",
+                Math.Max(1, (int)Math.Floor(elapsed.TotalSeconds)));
         }
 
         /// <summary>

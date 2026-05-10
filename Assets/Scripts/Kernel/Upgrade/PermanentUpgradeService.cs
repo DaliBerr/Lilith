@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using Vocalith.Localization;
 using Vocalith.Logging;
 
 namespace Kernel.Upgrade
@@ -126,7 +127,10 @@ namespace Kernel.Upgrade
             PermanentUpgradeCatalogData rawCatalog;
             try
             {
-                rawCatalog = JsonConvert.DeserializeObject<PermanentUpgradeCatalogData>(jsonText);
+                rawCatalog = LocalizedJsonUtility.DeserializeLocalized<PermanentUpgradeCatalogData>(
+                    jsonText,
+                    "PermanentUpgradeCatalog",
+                    settings: null);
             }
             catch (JsonException exception)
             {
@@ -298,7 +302,9 @@ namespace Kernel.Upgrade
                 entryId: entryId,
                 newLevel: 0,
                 remainingRemnants: PlayerRemnantWallet.GetCurrentRemnants(),
-                message: "升级目录尚未加载完成。");
+                message: LocalizationManager.TranslateOrDefault(
+                    "ui.upgrade.purchase.catalog_not_ready",
+                    "升级目录尚未加载完成。"));
 
             if (!EnsureCatalogLoaded())
             {
@@ -313,7 +319,9 @@ namespace Kernel.Upgrade
                     entryId: entryId,
                     newLevel: 0,
                     remainingRemnants: PlayerRemnantWallet.GetCurrentRemnants(),
-                    message: "未找到对应的永久升级条目。");
+                    message: LocalizationManager.TranslateOrDefault(
+                        "ui.upgrade.purchase.invalid_entry",
+                        "未找到对应的永久升级条目。"));
                 return false;
             }
 
@@ -326,7 +334,9 @@ namespace Kernel.Upgrade
                     entryId: entry.Id,
                     newLevel: currentLevel,
                     remainingRemnants: PlayerRemnantWallet.GetCurrentRemnants(),
-                    message: "该升级已经达到上限。");
+                    message: LocalizationManager.TranslateOrDefault(
+                        "ui.upgrade.purchase.max_level",
+                        "该升级已经达到上限。"));
                 return false;
             }
 
@@ -339,7 +349,9 @@ namespace Kernel.Upgrade
                     entryId: entry.Id,
                     newLevel: currentLevel,
                     remainingRemnants: currentRemnants,
-                    message: "残卷不足，无法购买该升级。");
+                    message: LocalizationManager.TranslateOrDefault(
+                        "ui.upgrade.purchase.insufficient_remnants",
+                        "残卷不足，无法购买该升级。"));
                 return false;
             }
 
@@ -355,7 +367,9 @@ namespace Kernel.Upgrade
                         entryId: entry.Id,
                         newLevel: currentLevel,
                         remainingRemnants: currentRemnants,
-                        message: "残卷不足，无法购买该升级。");
+                        message: LocalizationManager.TranslateOrDefault(
+                            "ui.upgrade.purchase.insufficient_remnants",
+                            "残卷不足，无法购买该升级。"));
                     return false;
                 }
 
@@ -376,7 +390,9 @@ namespace Kernel.Upgrade
                     entryId: entry.Id,
                     newLevel: currentLevel,
                     remainingRemnants: PlayerRemnantWallet.GetCurrentRemnants(),
-                    message: "存档服务不可用，升级购买失败。");
+                    message: LocalizationManager.TranslateOrDefault(
+                        "ui.upgrade.purchase.save_unavailable",
+                        "存档服务不可用，升级购买失败。"));
                 return false;
             }
 
@@ -387,7 +403,9 @@ namespace Kernel.Upgrade
                 entryId: entry.Id,
                 newLevel: newLevel,
                 remainingRemnants: remainingRemnants,
-                message: "购买成功。");
+                message: LocalizationManager.TranslateOrDefault(
+                    "ui.upgrade.purchase.success",
+                    "购买成功。"));
             return true;
         }
 

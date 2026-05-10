@@ -57,6 +57,54 @@ MonoBehaviour:
     m_SerializedLabels:
     - Json
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 945d3ea98c0721a4d8e0e8ca91f655fd
+    m_Address: Assets/Data/Localization/StringTables/ui.zh-Hans-CN
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Localization
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8c0cfc655a911b441929719a1992b4ee
+    m_Address: Assets/Data/Localization/StringTables/ui.en-US
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Localization
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e3e62fcb10c397141a6f5bbb5c02d8be
+    m_Address: Assets/Data/Localization/JsonPatches/en-US/OptionsCatalog.en-US
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LocalizationJson
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 295053feb9284a1419f4f7e3b1b90e9c
+    m_Address: Assets/Data/Localization/JsonPatches/en-US/HintCatalog.en-US
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LocalizationJson
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 131bfd381dc8bd046ba4b8db58518baf
+    m_Address: Assets/Data/Localization/JsonPatches/en-US/SettlementPresentationCatalog.en-US
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LocalizationJson
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 820249ff3002ca741810cc9376f86078
+    m_Address: Assets/Data/Localization/JsonPatches/en-US/QuestCatalog.en-US
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LocalizationJson
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 056fb59ca2957df4ea6c4830a768ad7a
+    m_Address: Assets/Data/Localization/JsonPatches/en-US/PermanentUpgradeCatalog.en-US
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LocalizationJson
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6f5f5a78ee21d7b46899a863004c0094
+    m_Address: Assets/Data/Localization/JsonPatches/en-US/StorySequence.en-US
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - LocalizationJson
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: a97f81f4f974e444f9502500f16d9321, type: 2}
   m_SchemaSet:

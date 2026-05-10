@@ -10,6 +10,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.InputSystem;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Runtime.Serialization;
+using Vocalith.Localization;
 
 namespace Kernel.UI
 {
@@ -341,7 +342,11 @@ namespace Kernel.UI
         /// param name="errorMessage": 解析或校验失败时的错误原因
         /// returns: 成功解析到至少一条有效条目时返回 true，否则返回 false
         /// </summary>
-        public static bool TryParseJson(string jsonText, out StorySequenceData data, out string errorMessage)
+        public static bool TryParseJson(
+            string jsonText,
+            out StorySequenceData data,
+            out string errorMessage,
+            string localizationPatchId = null)
         {
             data = null;
             errorMessage = null;
@@ -355,7 +360,11 @@ namespace Kernel.UI
             StorySequenceData rawData;
             try
             {
-                rawData = JsonConvert.DeserializeObject<StorySequenceData>(jsonText);
+                rawData = LocalizedJsonUtility.DeserializeLocalized<StorySequenceData>(
+                    jsonText,
+                    "StorySequence",
+                    settings: null,
+                    rootPatchId: localizationPatchId);
             }
             catch (JsonException exception)
             {
@@ -510,7 +519,7 @@ namespace Kernel.UI
                 yield break;
             }
 
-            if (!TryParseJson(activeTextAssetHandle.Result.text, out StorySequenceData data, out string errorMessage))
+            if (!TryParseJson(activeTextAssetHandle.Result.text, out StorySequenceData data, out string errorMessage, address))
             {
                 onError?.Invoke(errorMessage);
                 ReleaseActiveTextHandle();

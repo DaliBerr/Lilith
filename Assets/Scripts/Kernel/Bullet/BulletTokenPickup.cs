@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using Vocalith.EventSystem;
+using Vocalith.Localization;
 
 namespace Kernel.Bullet
 {
@@ -129,7 +130,9 @@ namespace Kernel.Bullet
                 return false;
             }
 
-            EventManager.eventBus.Publish(new RunRewardCollectedEvent("残卷", remnantToken.RemnantAmount));
+            EventManager.eventBus.Publish(new RunRewardCollectedEvent(
+                LocalizationManager.TranslateOrDefault("reward.remnant", "残卷"),
+                remnantToken.RemnantAmount));
             ConsumePickup();
             return true;
         }

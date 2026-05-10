@@ -82,13 +82,13 @@ namespace Kernel
         {
             isBootCompleted = false;
 
-            yield return InitLanguage();
             StatusController.Initialize();
             ApplyConfiguredModeStatus(GlobalModeSettingsService.LoadMode(ResolveDefaultGameMode()));
             RuntimeSaveService.GetOrCreateInstance();
 
             StatusController.AddStatus(StatusList.GameLoadingStatus);
             yield return StartCoroutine(InitGlobal());
+            yield return InitLanguage();
             LilithDisplaySettings.ApplyStoredResolutionAndFullscreen();
             LilithAudioSettings.ApplyStoredSettings();
             ApplyStoredUIScale();

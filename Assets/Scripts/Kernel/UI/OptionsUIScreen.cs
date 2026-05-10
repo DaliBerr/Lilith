@@ -12,6 +12,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.EventSystems;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.UI;
+using Vocalith.Localization;
 using Vocalith.Logging;
 using Vocalith.UI;
 
@@ -40,6 +41,7 @@ namespace Kernel.UI
         private const string DisplayUIScaleEntryId = "ui_scale";
         private const string DisplayResolutionPrefsKey = LilithDisplaySettings.ResolutionPrefsKey;
         private const string DisplayFullscreenPrefsKey = LilithDisplaySettings.FullscreenPrefsKey;
+        private const string BindingCancelledMessage = "按键绑定已取消。";
 
         [Header("Layout")]
         [SerializeField] private RectTransform catalogRoot;
@@ -216,11 +218,13 @@ namespace Kernel.UI
             }
 
             popup.Configure(
-                "当前设置尚未应用。要保存这些改动吗？",
+                LocalizationManager.TranslateOrDefault(
+                    "ui.options.unsaved_changes",
+                    "当前设置尚未应用。要保存这些改动吗？"),
                 onConfirm: HandleUnsavedPromptSave,
                 onClose: HandleUnsavedPromptDiscard,
-                confirmLabel: "保存",
-                closeLabel: "丢弃",
+                confirmLabel: LocalizationManager.TranslateOrDefault("ui.common.save", "保存"),
+                closeLabel: LocalizationManager.TranslateOrDefault("ui.common.discard", "丢弃"),
                 shouldCloseAfterConfirm: false,
                 shouldCloseAfterClose: false);
         }
@@ -1020,7 +1024,9 @@ namespace Kernel.UI
                 return FormatBindingDisplayText(state.CurrentValue);
             }
 
-            return string.IsNullOrWhiteSpace(entry?.ButtonText) ? "暂未开放" : entry.ButtonText;
+            return string.IsNullOrWhiteSpace(entry?.ButtonText)
+                ? LocalizationManager.TranslateOrDefault("ui.options.not_available", "暂未开放")
+                : entry.ButtonText;
         }
 
         private static string FormatBindingDisplayText(string bindingPath)
@@ -1109,12 +1115,16 @@ namespace Kernel.UI
                 activeBindingPrompt = popup;
                 string currentBinding = FormatBindingDisplayText(state.CurrentValue);
                 popup.Configure(
-                    $"{state.Entry.Title}\n当前绑定：{currentBinding}\n请按下新的按键。\nEsc 或取消会放弃本次绑定。",
+                    LocalizationManager.TranslateFormatOrDefault(
+                        "ui.options.binding_prompt",
+                        "{0}\n当前绑定：{1}\n请按下新的按键。\nEsc 或取消会放弃本次绑定。",
+                        state.Entry.Title,
+                        currentBinding),
                     onConfirm: CancelActiveBindingRebind,
                     onClose: CancelActiveBindingRebind,
                     onTopClose: CancelActiveBindingRebind,
-                    confirmLabel: "取消",
-                    closeLabel: "取消",
+                    confirmLabel: LocalizationManager.TranslateOrDefault("ui.common.cancel", "取消"),
+                    closeLabel: LocalizationManager.TranslateOrDefault("ui.common.cancel", "取消"),
                     shouldCloseAfterConfirm: true,
                     shouldCloseAfterClose: true);
 
@@ -1131,9 +1141,11 @@ namespace Kernel.UI
                 {
                     activeBindingPrompt = null;
                     popup.Configure(
-                        string.IsNullOrWhiteSpace(startError) ? "无法开始按键绑定。" : startError,
-                        confirmLabel: "确定",
-                        closeLabel: "关闭");
+                        string.IsNullOrWhiteSpace(startError)
+                            ? LocalizationManager.TranslateOrDefault("ui.options.binding_start_failed", "无法开始按键绑定。")
+                            : startError,
+                        confirmLabel: LocalizationManager.TranslateOrDefault("ui.common.confirm", "确定"),
+                        closeLabel: LocalizationManager.TranslateOrDefault("ui.common.close", "关闭"));
                 }
             }
             finally
@@ -1151,7 +1163,7 @@ namespace Kernel.UI
                 RefreshCurrentEntryControls();
                 RefreshActionButtons();
             }
-            else if (!string.IsNullOrWhiteSpace(error) && !string.Equals(error, "按键绑定已取消。", StringComparison.Ordinal))
+            else if (!string.IsNullOrWhiteSpace(error) && !string.Equals(error, BindingCancelledMessage, StringComparison.Ordinal))
             {
                 GameDebug.LogWarning($"[OptionsUIScreen] {error}");
             }
@@ -1941,7 +1953,10 @@ namespace Kernel.UI
 
             try
             {
-                OptionsCatalogData rawCatalog = JsonConvert.DeserializeObject<OptionsCatalogData>(jsonText);
+                OptionsCatalogData rawCatalog = LocalizedJsonUtility.DeserializeLocalized<OptionsCatalogData>(
+                    jsonText,
+                    "OptionsCatalog",
+                    settings: null);
                 catalog = Sanitize(rawCatalog);
                 return true;
             }

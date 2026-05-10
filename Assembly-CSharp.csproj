@@ -62,6 +62,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Localization\localizationPack.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PlayerHealthBarController.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\GameDebug.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizedTMPText.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BulletTokenLibrary.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealthChangedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\ProfileManagementUIScreen.cs" />
