@@ -21,7 +21,6 @@ namespace Kernel.UI
         [SerializeField] private Button quitButton;
 
         private bool isOpeningProfileModal;
-        private bool isOpeningOptionsModal;
 
         public override Status currentStatus { get; } = StatusList.InMainMenuStatus;
 
@@ -30,7 +29,6 @@ namespace Kernel.UI
             TryAutoBindReferences();
             HideLegacyLoadButton();
             isOpeningProfileModal = false;
-            isOpeningOptionsModal = false;
             SetButtonsInteractable(true);
             BindButtonCallbacks();
         }
@@ -162,7 +160,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 通过标准 modal 流程打开设置界面，并在打开期间临时锁定启动菜单按钮。
+        /// summary: 通过标准 modal 流程打开设置界面。
         /// param: 无
         /// returns: 可供协程等待的枚举器
         /// </summary>
@@ -174,17 +172,7 @@ namespace Kernel.UI
                 yield break;
             }
 
-            isOpeningOptionsModal = true;
-            SetButtonsInteractable(false);
-            try
-            {
-                yield return ui.ShowModalAndWait<OptionsUIScreen>();
-            }
-            finally
-            {
-                isOpeningOptionsModal = false;
-                SetButtonsInteractable(true);
-            }
+            yield return ui.ShowModalAndWait<OptionsUIScreen>();
         }
 
         /// <summary>
@@ -194,7 +182,7 @@ namespace Kernel.UI
         /// </summary>
         private void HandleStartButtonClicked()
         {
-            if (isOpeningProfileModal || isOpeningOptionsModal)
+            if (isOpeningProfileModal)
             {
                 return;
             }
@@ -221,7 +209,7 @@ namespace Kernel.UI
         /// </summary>
         private void HandleSettingsButtonClicked()
         {
-            if (isOpeningProfileModal || isOpeningOptionsModal)
+            if (isOpeningProfileModal || ui == null || ui.IsNavigating() || ui.GetTopModal() != null)
             {
                 return;
             }

@@ -78,6 +78,7 @@
     <Compile Include="Assets\Editor\Test\CharEnemyMovementTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\CharEnemyVisualPresenterTests.cs" />
+    <Compile Include="Assets\Editor\Test\AudioManagerTests.cs" />
     <Compile Include="Assets\Editor\WallTagColliderBatchTool.cs" />
     <Compile Include="Assets\Editor\Test\StorySequenceParserTests.cs" />
     <Compile Include="Assets\Editor\Test\AttackFormulaCompilerTests.cs" />

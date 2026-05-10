@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using Kernel.Audio;
 using Kernel.GameState;
 using Newtonsoft.Json;
 using TMPro;
@@ -28,6 +29,16 @@ namespace Kernel.UI
         private const string ButtonMode = "button";
         private const string DropdownMode = "dropdown";
         private const string ToggleMode = "toggle";
+        public const string UIScalePlayerPrefsKey = "Options.Display.UIScale";
+        private const float DisplayUIScaleMin = 0.6f;
+        private const float DisplayUIScaleMax = 1.5f;
+        private const float DisplayUIScaleStep = 0.1f;
+        private const string ScreenResolutionsOptionsSource = "screenResolutions";
+        private const string DisplayResolutionEntryId = "resolution";
+        private const string DisplayFullscreenEntryId = "fullscreen";
+        private const string DisplayUIScaleEntryId = "ui_scale";
+        private const string DisplayResolutionPrefsKey = "Options.Display.Resolution";
+        private const string DisplayFullscreenPrefsKey = "Options.Display.Fullscreen";
 
         [Header("Layout")]
         [SerializeField] private RectTransform catalogRoot;
@@ -63,7 +74,10 @@ namespace Kernel.UI
         private bool isRefreshingControls;
         private bool isShowingUnsavedChangesPrompt;
         private bool isResolvingUnsavedChangesPrompt;
+        private bool isShowingBindingPrompt;
+        private bool isClosingBindingPrompt;
         private bool isClosingSelf;
+        private PopUpUIScreen activeBindingPrompt;
 
         public override Status currentStatus { get; } = StatusList.PopUpStatus;
 
@@ -86,6 +100,12 @@ namespace Kernel.UI
         {
             ClearRuntimeView();
             RemoveCurrentStatus();
+        }
+
+        protected override void OnBeforeHide()
+        {
+            CancelActiveBindingRebind();
+            ClearOwnedSelection();
         }
 
         private void OnDestroy()
@@ -335,6 +355,7 @@ namespace Kernel.UI
                 return;
             }
 
+            PrepareDynamicEntries();
             InitializeEntryStates();
             RefreshActionButtons();
 
@@ -422,11 +443,15 @@ namespace Kernel.UI
             TMP_Text buttonText = root.Find("Button/Text (TMP)")?.GetComponent<TMP_Text>();
             TMP_Dropdown dropdown = root.Find("Dropdown")?.GetComponent<TMP_Dropdown>();
             Toggle toggle = root.Find("Toggle")?.GetComponent<Toggle>();
-            string prefsKey = ResolvePrefsKey(category, entry);
-            if (!entryStates.TryGetValue(prefsKey, out OptionsEntryRuntimeState state))
+            OptionsEntryRuntimeState state = null;
+            if (RequiresRuntimeState(entry))
             {
-                state = CreateRuntimeState(category, entry);
-                entryStates[prefsKey] = state;
+                string prefsKey = ResolvePrefsKey(category, entry);
+                if (!entryStates.TryGetValue(prefsKey, out state))
+                {
+                    state = CreateRuntimeState(category, entry);
+                    entryStates[prefsKey] = state;
+                }
             }
 
             SetObjectActive(slider != null ? slider.gameObject : null, entry.Mode == SliderMode);
@@ -446,7 +471,7 @@ namespace Kernel.UI
                     ConfigureToggle(state, entry, settingText, toggle);
                     break;
                 default:
-                    ConfigureButton(entry, settingText, button, buttonText);
+                    ConfigureButton(state, entry, settingText, button, buttonText);
                     break;
             }
         }
@@ -460,7 +485,8 @@ namespace Kernel.UI
             }
 
             ResolveSliderBounds(entry, out float min, out float max);
-            float value = ParseFloatValue(state.CurrentValue, ResolveDefaultSliderValue(entry));
+            float value = ResolveSliderRuntimeValue(entry, ParseFloatValue(state.CurrentValue, ResolveDefaultSliderValue(entry)));
+            state.CurrentValue = FormatStoredFloat(value);
 
             slider.onValueChanged.RemoveAllListeners();
             slider.minValue = min;
@@ -476,7 +502,12 @@ namespace Kernel.UI
                     return;
                 }
 
-                float clampedValue = Mathf.Clamp(nextValue, min, max);
+                float clampedValue = ResolveSliderRuntimeValue(entry, nextValue);
+                if (!Mathf.Approximately(slider.value, clampedValue))
+                {
+                    slider.SetValueWithoutNotify(clampedValue);
+                }
+
                 state.CurrentValue = FormatStoredFloat(clampedValue);
                 SetSettingLabel(label, entry.Title, FormatSliderValue(entry, clampedValue, min, max));
                 RefreshActionButtons();
@@ -553,21 +584,65 @@ namespace Kernel.UI
             });
         }
 
-        private static void ConfigureButton(OptionsEntryData entry, TMP_Text label, Button button, TMP_Text buttonText)
+        private void ConfigureButton(OptionsEntryRuntimeState state, OptionsEntryData entry, TMP_Text label, Button button, TMP_Text buttonText)
         {
             SetSettingLabel(label, entry.Title, string.Empty);
-            if (buttonText != null)
-            {
-                buttonText.text = entry.ButtonText;
-            }
 
             if (button == null)
             {
+                if (buttonText != null)
+                {
+                    buttonText.text = ResolveButtonDisplayText(state, entry);
+                }
+
                 return;
             }
 
             button.onClick.RemoveAllListeners();
-            button.interactable = false;
+            if (!IsBindingEntry(entry) || state == null)
+            {
+                if (buttonText != null)
+                {
+                    buttonText.text = ResolveButtonDisplayText(state, entry);
+                }
+
+                button.interactable = false;
+                return;
+            }
+
+            if (buttonText != null)
+            {
+                buttonText.text = FormatBindingDisplayText(state.CurrentValue);
+            }
+
+            bool canRebind = InputActionManager.Instance != null
+                && InputActionManager.Instance.IsInitialized
+                && !InputActionManager.Instance.IsUnloaded;
+            button.interactable = canRebind && !isShowingBindingPrompt;
+            button.onClick.AddListener(() => HandleBindingButtonClicked(state));
+        }
+
+        private void PrepareDynamicEntries()
+        {
+            IReadOnlyList<OptionsCategoryData> categories = catalog?.Categories != null
+                ? catalog.Categories
+                : Array.Empty<OptionsCategoryData>();
+
+            for (int categoryIndex = 0; categoryIndex < categories.Count; categoryIndex++)
+            {
+                IReadOnlyList<OptionsEntryData> entries = categories[categoryIndex]?.Entries != null
+                    ? categories[categoryIndex].Entries
+                    : Array.Empty<OptionsEntryData>();
+
+                for (int entryIndex = 0; entryIndex < entries.Count; entryIndex++)
+                {
+                    OptionsEntryData entry = entries[entryIndex];
+                    if (UsesScreenResolutionOptions(entry))
+                    {
+                        entry.Options = BuildScreenResolutionChoices();
+                    }
+                }
+            }
         }
 
         private void InitializeEntryStates()
@@ -586,7 +661,7 @@ namespace Kernel.UI
                 for (int entryIndex = 0; entryIndex < entries.Count; entryIndex++)
                 {
                     OptionsEntryData entry = entries[entryIndex];
-                    if (entry == null || entry.Mode == ButtonMode)
+                    if (!RequiresRuntimeState(entry))
                     {
                         continue;
                     }
@@ -618,12 +693,24 @@ namespace Kernel.UI
 
         private static string LoadStoredValue(OptionsEntryData entry, string prefsKey, string defaultValue)
         {
+            if (IsBindingEntry(entry))
+            {
+                return TryGetBindingInfo(entry, out string effectivePath, out _, out _)
+                    ? effectivePath
+                    : defaultValue;
+            }
+
             switch (entry.Mode)
             {
                 case SliderMode:
                     float sliderDefault = ParseFloatValue(defaultValue, ResolveDefaultSliderValue(entry));
-                    return FormatStoredFloat(PlayerPrefs.GetFloat(prefsKey, sliderDefault));
+                    return FormatStoredFloat(ResolveSliderRuntimeValue(entry, PlayerPrefs.GetFloat(prefsKey, sliderDefault)));
                 case DropdownMode:
+                    if (IsDisplayResolutionEntry(entry) && !PlayerPrefs.HasKey(prefsKey))
+                    {
+                        return ResolveCurrentResolutionValue(entry);
+                    }
+
                     if (PlayerPrefs.HasKey(prefsKey))
                     {
                         string storedDropdownValue = PlayerPrefs.GetString(prefsKey, string.Empty);
@@ -635,6 +722,11 @@ namespace Kernel.UI
 
                     return defaultValue;
                 case ToggleMode:
+                    if (IsDisplayFullscreenEntry(entry) && !PlayerPrefs.HasKey(prefsKey))
+                    {
+                        return Screen.fullScreen ? bool.TrueString : bool.FalseString;
+                    }
+
                     bool toggleDefault = string.Equals(defaultValue, bool.TrueString, StringComparison.Ordinal);
                     bool toggleValue = PlayerPrefs.GetInt(prefsKey, toggleDefault ? 1 : 0) != 0;
                     return toggleValue ? bool.TrueString : bool.FalseString;
@@ -645,11 +737,23 @@ namespace Kernel.UI
 
         private static string ResolveDefaultStoredValue(OptionsEntryData entry)
         {
+            if (IsBindingEntry(entry))
+            {
+                return TryGetBindingInfo(entry, out _, out string defaultPath, out _)
+                    ? defaultPath
+                    : string.Empty;
+            }
+
             switch (entry.Mode)
             {
                 case SliderMode:
-                    return FormatStoredFloat(ResolveDefaultSliderValue(entry));
+                    return FormatStoredFloat(ResolveSliderRuntimeValue(entry, ResolveDefaultSliderValue(entry)));
                 case DropdownMode:
+                    if (IsDisplayResolutionEntry(entry))
+                    {
+                        return ResolveCurrentResolutionValue(entry);
+                    }
+
                     return ResolveDefaultDropdownValue(entry);
                 case ToggleMode:
                     return (entry.DefaultBool ?? false) ? bool.TrueString : bool.FalseString;
@@ -674,6 +778,92 @@ namespace Kernel.UI
 
             int defaultIndex = Mathf.Clamp(entry.DefaultOptionIndex ?? 0, 0, choices.Count - 1);
             return choices[defaultIndex].Value;
+        }
+
+        private static List<OptionsChoiceData> BuildScreenResolutionChoices()
+        {
+            List<Vector2Int> resolutions = new();
+            HashSet<string> seen = new(StringComparer.Ordinal);
+            Resolution[] supportedResolutions = Screen.resolutions ?? Array.Empty<Resolution>();
+            for (int i = 0; i < supportedResolutions.Length; i++)
+            {
+                AddResolution(resolutions, seen, supportedResolutions[i].width, supportedResolutions[i].height);
+            }
+
+            AddResolution(resolutions, seen, Screen.currentResolution.width, Screen.currentResolution.height);
+            AddResolution(resolutions, seen, Screen.width, Screen.height);
+            resolutions.Sort((left, right) =>
+            {
+                int widthCompare = left.x.CompareTo(right.x);
+                return widthCompare != 0 ? widthCompare : left.y.CompareTo(right.y);
+            });
+
+            List<OptionsChoiceData> choices = new(resolutions.Count);
+            for (int i = 0; i < resolutions.Count; i++)
+            {
+                string value = FormatResolutionValue(resolutions[i].x, resolutions[i].y);
+                choices.Add(new OptionsChoiceData
+                {
+                    Id = value,
+                    Title = $"{resolutions[i].x} x {resolutions[i].y}",
+                    Value = value,
+                });
+            }
+
+            return choices;
+        }
+
+        private static void AddResolution(List<Vector2Int> resolutions, ISet<string> seen, int width, int height)
+        {
+            if (width <= 0 || height <= 0)
+            {
+                return;
+            }
+
+            string value = FormatResolutionValue(width, height);
+            if (seen.Add(value))
+            {
+                resolutions.Add(new Vector2Int(width, height));
+            }
+        }
+
+        private static string ResolveCurrentResolutionValue(OptionsEntryData entry)
+        {
+            string currentValue = FormatResolutionValue(Screen.width, Screen.height);
+            if (FindChoiceIndex(entry.Options, currentValue) >= 0)
+            {
+                return currentValue;
+            }
+
+            string desktopValue = FormatResolutionValue(Screen.currentResolution.width, Screen.currentResolution.height);
+            if (FindChoiceIndex(entry.Options, desktopValue) >= 0)
+            {
+                return desktopValue;
+            }
+
+            return ResolveDefaultDropdownValue(entry);
+        }
+
+        private static string FormatResolutionValue(int width, int height)
+        {
+            return $"{width}x{height}";
+        }
+
+        private static bool TryParseResolutionValue(string value, out int width, out int height)
+        {
+            width = 0;
+            height = 0;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            string[] parts = value.Trim().Split('x', 'X');
+            return parts.Length == 2
+                && int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out width)
+                && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out height)
+                && width > 0
+                && height > 0;
         }
 
         private static int FindChoiceIndex(IReadOnlyList<OptionsChoiceData> choices, string value)
@@ -710,6 +900,26 @@ namespace Kernel.UI
             return Mathf.Clamp(entry.DefaultValue ?? min, min, max);
         }
 
+        private static float ResolveSliderRuntimeValue(OptionsEntryData entry, float value)
+        {
+            ResolveSliderBounds(entry, out float min, out float max);
+            float clampedValue = Mathf.Clamp(value, min, max);
+            return IsDisplayUIScaleEntry(entry)
+                ? NormalizeUIScaleValue(clampedValue)
+                : clampedValue;
+        }
+
+        public static float NormalizeUIScaleValue(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                return 1f;
+            }
+
+            float steppedValue = Mathf.Round(value / DisplayUIScaleStep) * DisplayUIScaleStep;
+            return Mathf.Clamp(steppedValue, DisplayUIScaleMin, DisplayUIScaleMax);
+        }
+
         private static float ParseFloatValue(string value, float fallback)
         {
             return float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsedValue)
@@ -734,8 +944,108 @@ namespace Kernel.UI
             return $"Options.{categoryId}.{entryId}";
         }
 
+        private static bool RequiresRuntimeState(OptionsEntryData entry)
+        {
+            return entry != null && (entry.Mode != ButtonMode || IsBindingEntry(entry));
+        }
+
+        private static bool UsesScreenResolutionOptions(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == DropdownMode
+                && string.Equals(entry.OptionsSource, ScreenResolutionsOptionsSource, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsDisplayResolutionEntry(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == DropdownMode
+                && (UsesScreenResolutionOptions(entry)
+                    || string.Equals(entry.Id, DisplayResolutionEntryId, StringComparison.Ordinal)
+                    || string.Equals(entry.PlayerPrefsKey, DisplayResolutionPrefsKey, StringComparison.Ordinal));
+        }
+
+        private static bool IsDisplayFullscreenEntry(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == ToggleMode
+                && (string.Equals(entry.Id, DisplayFullscreenEntryId, StringComparison.Ordinal)
+                    || string.Equals(entry.PlayerPrefsKey, DisplayFullscreenPrefsKey, StringComparison.Ordinal));
+        }
+
+        private static bool IsDisplayUIScaleEntry(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == SliderMode
+                && (string.Equals(entry.Id, DisplayUIScaleEntryId, StringComparison.Ordinal)
+                    || string.Equals(entry.PlayerPrefsKey, UIScalePlayerPrefsKey, StringComparison.Ordinal));
+        }
+
+        private static bool IsBindingEntry(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == ButtonMode
+                && !string.IsNullOrWhiteSpace(entry.BindingCollection)
+                && !string.IsNullOrWhiteSpace(entry.BindingActionMap)
+                && !string.IsNullOrWhiteSpace(entry.BindingAction);
+        }
+
+        private static bool TryGetBindingInfo(
+            OptionsEntryData entry,
+            out string effectivePath,
+            out string defaultPath,
+            out string displayString)
+        {
+            effectivePath = string.Empty;
+            defaultPath = string.Empty;
+            displayString = string.Empty;
+
+            InputActionManager inputManager = InputActionManager.Instance;
+            if (inputManager == null || entry == null)
+            {
+                return false;
+            }
+
+            bool found = inputManager.TryGetBindingInfo(
+                entry.BindingCollection,
+                entry.BindingActionMap,
+                entry.BindingAction,
+                entry.BindingName,
+                entry.BindingIndex ?? -1,
+                out effectivePath,
+                out defaultPath,
+                out displayString,
+                out string error);
+            if (!found)
+            {
+                GameDebug.LogWarning($"[OptionsUIScreen] {error}");
+            }
+
+            return found;
+        }
+
+        private static string ResolveButtonDisplayText(OptionsEntryRuntimeState state, OptionsEntryData entry)
+        {
+            if (IsBindingEntry(entry) && state != null)
+            {
+                return FormatBindingDisplayText(state.CurrentValue);
+            }
+
+            return string.IsNullOrWhiteSpace(entry?.ButtonText) ? "暂未开放" : entry.ButtonText;
+        }
+
+        private static string FormatBindingDisplayText(string bindingPath)
+        {
+            return InputActionManager.FormatBindingPathForDisplay(bindingPath);
+        }
+
         private static string FormatSliderValue(OptionsEntryData entry, float value, float min, float max)
         {
+            if (IsDisplayUIScaleEntry(entry))
+            {
+                return $"{NormalizeUIScaleValue(value).ToString("0.0", CultureInfo.InvariantCulture)}x";
+            }
+
             if (!string.IsNullOrWhiteSpace(entry.ValueFormat))
             {
                 string numericValue = value.ToString("0.##", CultureInfo.InvariantCulture);
@@ -778,10 +1088,128 @@ namespace Kernel.UI
             label.text = string.IsNullOrWhiteSpace(valueText) ? title : $"{title}: {valueText}";
         }
 
+        private void HandleBindingButtonClicked(OptionsEntryRuntimeState state)
+        {
+            if (state == null || !IsBindingEntry(state.Entry) || ui == null || isShowingBindingPrompt)
+            {
+                return;
+            }
+
+            StartCoroutine(ShowBindingPromptCo(state));
+        }
+
+        private IEnumerator ShowBindingPromptCo(OptionsEntryRuntimeState state)
+        {
+            InputActionManager inputManager = InputActionManager.Instance;
+            if (inputManager == null || !inputManager.IsInitialized || inputManager.IsUnloaded)
+            {
+                GameDebug.LogWarning("[OptionsUIScreen] Cannot start input rebinding because InputActionManager is not ready.");
+                yield break;
+            }
+
+            isShowingBindingPrompt = true;
+            RefreshActionButtons();
+            try
+            {
+                yield return ui.ShowModalAndWait<PopUpUIScreen>();
+                if (ui.GetTopModal() is not PopUpUIScreen popup)
+                {
+                    yield break;
+                }
+
+                activeBindingPrompt = popup;
+                string currentBinding = FormatBindingDisplayText(state.CurrentValue);
+                popup.Configure(
+                    $"{state.Entry.Title}\n当前绑定：{currentBinding}\n请按下新的按键。\nEsc 或取消会放弃本次绑定。",
+                    onConfirm: CancelActiveBindingRebind,
+                    onClose: CancelActiveBindingRebind,
+                    onTopClose: CancelActiveBindingRebind,
+                    confirmLabel: "取消",
+                    closeLabel: "取消",
+                    shouldCloseAfterConfirm: true,
+                    shouldCloseAfterClose: true);
+
+                if (!inputManager.TryStartInteractiveRebind(
+                        state.Entry.BindingCollection,
+                        state.Entry.BindingActionMap,
+                        state.Entry.BindingAction,
+                        state.Entry.BindingName,
+                        state.Entry.BindingIndex ?? -1,
+                        state.Entry.BindingControlPath,
+                        state.Entry.BindingExpectedControlType,
+                        (succeeded, bindingPath, error) => HandleBindingRebindFinished(state, succeeded, bindingPath, error),
+                        out string startError))
+                {
+                    activeBindingPrompt = null;
+                    popup.Configure(
+                        string.IsNullOrWhiteSpace(startError) ? "无法开始按键绑定。" : startError,
+                        confirmLabel: "确定",
+                        closeLabel: "关闭");
+                }
+            }
+            finally
+            {
+                isShowingBindingPrompt = false;
+                RefreshActionButtons();
+            }
+        }
+
+        private void HandleBindingRebindFinished(OptionsEntryRuntimeState state, bool succeeded, string bindingPath, string error)
+        {
+            if (succeeded && state != null && !string.IsNullOrWhiteSpace(bindingPath))
+            {
+                state.CurrentValue = bindingPath.Trim();
+                RefreshCurrentEntryControls();
+                RefreshActionButtons();
+            }
+            else if (!string.IsNullOrWhiteSpace(error) && !string.Equals(error, "按键绑定已取消。", StringComparison.Ordinal))
+            {
+                GameDebug.LogWarning($"[OptionsUIScreen] {error}");
+            }
+
+            if (ui != null)
+            {
+                StartCoroutine(CloseBindingPromptCo());
+            }
+        }
+
+        private void CancelActiveBindingRebind()
+        {
+            InputActionManager.Instance?.CancelActiveRebind();
+        }
+
+        private IEnumerator CloseBindingPromptCo()
+        {
+            if (ui == null || isClosingBindingPrompt)
+            {
+                yield break;
+            }
+
+            isClosingBindingPrompt = true;
+            try
+            {
+                while (ui.IsNavigating())
+                {
+                    yield return null;
+                }
+
+                if (activeBindingPrompt != null && ui.GetTopModal() == activeBindingPrompt)
+                {
+                    yield return ui.PopModalAndWait();
+                }
+            }
+            finally
+            {
+                activeBindingPrompt = null;
+                isClosingBindingPrompt = false;
+            }
+        }
+
         private void HandleCancelButtonClicked()
         {
-            DiscardPendingChanges();
-            RequestClose();
+            DiscardPendingChangesWithoutRefresh();
+            ClearOwnedSelection();
+            StartCoroutine(CloseSelfCo());
         }
 
         private void HandleResetButtonClicked()
@@ -815,12 +1243,33 @@ namespace Kernel.UI
 
         private void ApplyPendingChanges()
         {
+            bool bindingOverridesChanged = false;
             foreach (OptionsEntryRuntimeState state in entryStates.Values)
             {
-                ApplyStateToPlayerPrefs(state);
+                if (IsBindingEntry(state?.Entry))
+                {
+                    if (!ApplyBindingState(state))
+                    {
+                        continue;
+                    }
+
+                    bindingOverridesChanged = true;
+                }
+                else
+                {
+                    ApplyStateToPlayerPrefs(state);
+                }
+
                 state.OriginalValue = state.CurrentValue;
             }
 
+            if (bindingOverridesChanged)
+            {
+                InputActionManager.Instance?.SaveBindingOverrides();
+            }
+
+            ApplyDisplaySettings();
+            LilithAudioSettings.ApplyStoredSettings();
             PlayerPrefs.Save();
             RefreshActionButtons();
         }
@@ -847,6 +1296,19 @@ namespace Kernel.UI
             RefreshActionButtons();
         }
 
+        private void DiscardPendingChangesWithoutRefresh()
+        {
+            foreach (OptionsEntryRuntimeState state in entryStates.Values)
+            {
+                if (state == null)
+                {
+                    continue;
+                }
+
+                state.CurrentValue = state.OriginalValue;
+            }
+        }
+
         private static void ApplyStateToPlayerPrefs(OptionsEntryRuntimeState state)
         {
             if (state == null || state.Entry == null || string.IsNullOrWhiteSpace(state.PrefsKey))
@@ -869,6 +1331,90 @@ namespace Kernel.UI
                     PlayerPrefs.SetInt(state.PrefsKey, isOn ? 1 : 0);
                     break;
             }
+        }
+
+        private static bool ApplyBindingState(OptionsEntryRuntimeState state)
+        {
+            if (state == null || state.Entry == null)
+            {
+                return false;
+            }
+
+            InputActionManager inputManager = InputActionManager.Instance;
+            if (inputManager == null)
+            {
+                GameDebug.LogWarning($"[OptionsUIScreen] Cannot apply binding '{state.Entry.Id}' because InputActionManager is missing.");
+                return false;
+            }
+
+            bool applied = inputManager.TryApplyBindingOverride(
+                state.Entry.BindingCollection,
+                state.Entry.BindingActionMap,
+                state.Entry.BindingAction,
+                state.Entry.BindingName,
+                state.Entry.BindingIndex ?? -1,
+                state.CurrentValue,
+                out string error);
+            if (!applied)
+            {
+                GameDebug.LogWarning($"[OptionsUIScreen] {error}");
+            }
+
+            return applied;
+        }
+
+        private void ApplyDisplaySettings()
+        {
+            ApplyResolutionAndFullscreenSettings();
+            ApplyUIScaleSetting();
+        }
+
+        private void ApplyResolutionAndFullscreenSettings()
+        {
+            if (!TryFindState(DisplayResolutionEntryId, out OptionsEntryRuntimeState resolutionState)
+                || !TryParseResolutionValue(resolutionState.CurrentValue, out int width, out int height))
+            {
+                return;
+            }
+
+            bool fullscreen = Screen.fullScreen;
+            if (TryFindState(DisplayFullscreenEntryId, out OptionsEntryRuntimeState fullscreenState))
+            {
+                fullscreen = string.Equals(fullscreenState.CurrentValue, bool.TrueString, StringComparison.Ordinal);
+            }
+
+            FullScreenMode mode = fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
+            Screen.SetResolution(width, height, mode);
+        }
+
+        private void ApplyUIScaleSetting()
+        {
+            if (!TryFindState(DisplayUIScaleEntryId, out OptionsEntryRuntimeState uiScaleState)
+                || uiScaleState.Entry == null)
+            {
+                return;
+            }
+
+            ResolveSliderBounds(uiScaleState.Entry, out float min, out float max);
+            float fallback = ResolveDefaultSliderValue(uiScaleState.Entry);
+            float value = ResolveSliderRuntimeValue(uiScaleState.Entry, Mathf.Clamp(ParseFloatValue(uiScaleState.CurrentValue, fallback), min, max));
+            uiScaleState.CurrentValue = FormatStoredFloat(value);
+            UIManager.Instance?.ApplyUIScale(value);
+        }
+
+        private bool TryFindState(string entryId, out OptionsEntryRuntimeState state)
+        {
+            foreach (OptionsEntryRuntimeState candidate in entryStates.Values)
+            {
+                if (candidate?.Entry != null && string.Equals(candidate.Entry.Id, entryId, StringComparison.Ordinal))
+                {
+                    state = candidate;
+                    return true;
+                }
+            }
+
+            state = null;
+            return false;
         }
 
         private void RefreshCurrentEntryControls()
@@ -1117,6 +1663,20 @@ namespace Kernel.UI
             entryPrefab = null;
         }
 
+        private void ClearOwnedSelection()
+        {
+            EventSystem eventSystem = EventSystem.current;
+            if (eventSystem == null || eventSystem.currentSelectedGameObject == null)
+            {
+                return;
+            }
+
+            if (eventSystem.currentSelectedGameObject.transform.IsChildOf(transform))
+            {
+                eventSystem.SetSelectedGameObject(null);
+            }
+        }
+
         private void RemoveCurrentStatus()
         {
             if (StatusController.HasStatus(currentStatus))
@@ -1315,6 +1875,9 @@ namespace Kernel.UI
         [JsonProperty("options")]
         public List<OptionsChoiceData> Options { get; set; } = new();
 
+        [JsonProperty("optionsSource")]
+        public string OptionsSource { get; set; }
+
         [JsonProperty("defaultOptionId")]
         public string DefaultOptionId { get; set; }
 
@@ -1326,6 +1889,27 @@ namespace Kernel.UI
 
         [JsonProperty("buttonText")]
         public string ButtonText { get; set; }
+
+        [JsonProperty("bindingCollection")]
+        public string BindingCollection { get; set; }
+
+        [JsonProperty("bindingActionMap")]
+        public string BindingActionMap { get; set; }
+
+        [JsonProperty("bindingAction")]
+        public string BindingAction { get; set; }
+
+        [JsonProperty("bindingName")]
+        public string BindingName { get; set; }
+
+        [JsonProperty("bindingIndex")]
+        public int? BindingIndex { get; set; }
+
+        [JsonProperty("bindingControlPath")]
+        public string BindingControlPath { get; set; }
+
+        [JsonProperty("bindingExpectedControlType")]
+        public string BindingExpectedControlType { get; set; }
     }
 
     [Serializable]
@@ -1432,10 +2016,18 @@ namespace Kernel.UI
                     WholeNumbers = rawEntry?.WholeNumbers ?? false,
                     ValueFormat = SanitizeOptionalText(rawEntry?.ValueFormat),
                     Options = SanitizeChoices(rawEntry?.Options),
+                    OptionsSource = SanitizeOptionalText(rawEntry?.OptionsSource),
                     DefaultOptionId = SanitizeOptionalText(rawEntry?.DefaultOptionId),
                     DefaultOptionIndex = rawEntry?.DefaultOptionIndex,
                     DefaultBool = rawEntry?.DefaultBool,
                     ButtonText = SanitizeOptionalText(rawEntry?.ButtonText),
+                    BindingCollection = SanitizeOptionalText(rawEntry?.BindingCollection),
+                    BindingActionMap = SanitizeOptionalText(rawEntry?.BindingActionMap),
+                    BindingAction = SanitizeOptionalText(rawEntry?.BindingAction),
+                    BindingName = SanitizeOptionalText(rawEntry?.BindingName),
+                    BindingIndex = rawEntry?.BindingIndex,
+                    BindingControlPath = SanitizeOptionalText(rawEntry?.BindingControlPath),
+                    BindingExpectedControlType = SanitizeOptionalText(rawEntry?.BindingExpectedControlType),
                 });
             }
 

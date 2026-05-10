@@ -136,6 +136,11 @@ MonoBehaviour:
   chainHeadTint: {r: 1, g: 0.97, b: 0.84, a: 1}
   chainBodyTint: {r: 0.9, g: 0.95, b: 1, a: 1}
   chainTailTint: {r: 0.93, g: 1, b: 0.9, a: 1}
+  coreTypeTint: {r: 1, g: 0.82, b: 0.62, a: 1}
+  behaviorTypeTint: {r: 0.66, g: 0.82, b: 1, a: 1}
+  resultTypeTint: {r: 1, g: 0.68, b: 0.68, a: 1}
+  valueTypeTint: {r: 0.68, g: 0.93, b: 0.68, a: 1}
+  fallbackTypeTint: {r: 1, g: 1, b: 1, a: 1}
 --- !u!225 &7585697810695690875
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -165,8 +170,8 @@ MonoBehaviour:
   m_MinHeight: 50
   m_PreferredWidth: 100
   m_PreferredHeight: 100
-  m_FlexibleWidth: 100
-  m_FlexibleHeight: 100
+  m_FlexibleWidth: -1
+  m_FlexibleHeight: -1
   m_LayoutPriority: 1
 --- !u!1 &8619756333913077212
 GameObject:

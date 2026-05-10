@@ -95,6 +95,8 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 
 - UI 基础设施：[`Assets/Scripts/Vocalith/UI`](Assets/Scripts/Vocalith/UI)
   - 入口：[`UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)
+- 音频基础设施：[`Assets/Scripts/Vocalith/Audio`](Assets/Scripts/Vocalith/Audio)
+  - 入口：[`AudioManager.cs`](Assets/Scripts/Vocalith/Audio/AudioManager.cs)，负责持久化单例、BGM crossfade、SFX 播放池与 Master/Music/SFX 三路音量
 - 本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
   - 入口：[`LocalizationManager.cs`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
 - 日志：目录是 [`Assets/Scripts/Vocalith/Log`](Assets/Scripts/Vocalith/Log)，命名空间是 `Vocalith.Logging`
@@ -129,6 +131,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 | --- | --- | --- |
 | [`Docs/ArtistGuide.md`](Docs/ArtistGuide.md) | 美术 | 替换临时美术资源、确认场景 / prefab / UI 视觉入口与注意事项 |
 | [`Docs/DesignGuide.md`](Docs/DesignGuide.md) | 策划 | 编写游戏内文本、任务、敌人、波次、Token、掉落和数值配置 |
+| [`Docs/AudioGuide.md`](Docs/AudioGuide.md) | 音频 / 美术 / 策划 | 导入音乐与音效、设置 Addressable 地址、向程序交付播放需求 |
 
 ## 命名说明
 
@@ -142,6 +145,6 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 ## 已知限制
 
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity) 不能作为独立入口直接运行；当前必须先经过 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) 中的 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 交接
-- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；实际音频/显示应用逻辑与按键重绑定仍待接入
+- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏会调用 `Screen.SetResolution` 应用，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用；首版尚未配置实际音乐资源和玩法音效触发点
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 仍是预留加载入口
 - 当前没有 `asmdef` / `asmref`，模块边界依赖目录与命名空间约定维护

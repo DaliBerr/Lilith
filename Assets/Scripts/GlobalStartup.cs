@@ -1,4 +1,5 @@
 using System.Collections;
+using Kernel.Audio;
 using Kernel.GameState;
 using Kernel.Quest;
 using Kernel.UI;
@@ -87,6 +88,8 @@ namespace Kernel
 
             StatusController.AddStatus(StatusList.GameLoadingStatus);
             yield return StartCoroutine(InitGlobal());
+            LilithAudioSettings.ApplyStoredSettings();
+            ApplyStoredUIScale();
 
             if (StatusController.HasStatus(StatusList.GameLoadingStatus))
             {
@@ -116,6 +119,20 @@ namespace Kernel
             }
 
             yield return UIManager.Instance.PushScreenAndWait<StartUpMenuUI>();
+        }
+
+        private static void ApplyStoredUIScale()
+        {
+            UIManager uiManager = UIManager.Instance;
+            if (uiManager == null)
+            {
+                GameDebug.LogWarning("[GlobalStartup] UIManager is missing. Stored UI scale cannot be applied.");
+                return;
+            }
+
+            float uiScale = OptionsUIScreen.NormalizeUIScaleValue(
+                PlayerPrefs.GetFloat(OptionsUIScreen.UIScalePlayerPrefsKey, uiManager.CurrentUIScale));
+            uiManager.ApplyUIScale(uiScale);
         }
 
         /// <summary>

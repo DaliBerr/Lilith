@@ -15,6 +15,8 @@ using UnityEngine.InputSystem;
 public sealed class InputActionManager : MonoBehaviour
 {
     public static InputActionManager Instance { get; private set; }
+    private const string PlayerBindingOverridesPrefsKey = "Options.Input.PlayerBindingOverrides";
+    private const string UIBindingOverridesPrefsKey = "Options.Input.UIBindingOverrides";
 
     // ====== 在这里放你的各种 Controls（把类型名替换成你项目里的生成类）======
     public PlayerControls Player { get; private set; }
@@ -29,6 +31,7 @@ public sealed class InputActionManager : MonoBehaviour
     private bool _manualEnableRequested = true;
     private bool _textEntryInterlockActive;
     private bool _unloaded;
+    private InputActionRebindingExtensions.RebindingOperation _activeRebindOperation;
 
     /// <summary>
     /// 是否已初始化（Awake 完成 new 并注册）。
@@ -41,6 +44,7 @@ public sealed class InputActionManager : MonoBehaviour
     public bool IsUnloaded => _unloaded;
 
     public bool IsTextEntryInterlockActive => _textEntryInterlockActive;
+    public bool IsRebinding => _activeRebindOperation != null;
 
     /// <summary>
     /// summary: 在首个场景加载前确保场景中存在输入管理器实例。
@@ -107,6 +111,7 @@ public sealed class InputActionManager : MonoBehaviour
         // Save = CreateAndRegister<SaveControls>();
         // Speed = CreateAndRegister<SpeedControls>();
         UI = CreateAndRegister<UIControls>();
+        LoadSavedBindingOverrides();
 
         _initialized = true;
         _unloaded = false;
@@ -200,6 +205,8 @@ public sealed class InputActionManager : MonoBehaviour
     {
         if (!_initialized || _unloaded) return;
 
+        CancelActiveRebind();
+
         // 先全部 Disable，避免 InputSystem 报 “Enable 未 Disable”
         DisableAll();
 
@@ -221,6 +228,358 @@ public sealed class InputActionManager : MonoBehaviour
         _unloaded = true;
         _initialized = false;
         _actionsEnabled = false;
+    }
+
+    public bool TryGetBindingInfo(
+        string collectionName,
+        string actionMapName,
+        string actionName,
+        string bindingName,
+        int bindingIndexOverride,
+        out string effectivePath,
+        out string defaultPath,
+        out string displayString,
+        out string error)
+    {
+        effectivePath = string.Empty;
+        defaultPath = string.Empty;
+        displayString = string.Empty;
+
+        if (!TryResolveBinding(
+                collectionName,
+                actionMapName,
+                actionName,
+                bindingName,
+                bindingIndexOverride,
+                out InputAction action,
+                out int bindingIndex,
+                out error))
+        {
+            return false;
+        }
+
+        InputBinding binding = action.bindings[bindingIndex];
+        effectivePath = binding.effectivePath ?? string.Empty;
+        defaultPath = binding.path ?? string.Empty;
+        displayString = string.IsNullOrEmpty(effectivePath)
+            ? string.Empty
+            : action.GetBindingDisplayString(bindingIndex, InputBinding.DisplayStringOptions.DontIncludeInteractions);
+        return true;
+    }
+
+    public bool TryApplyBindingOverride(
+        string collectionName,
+        string actionMapName,
+        string actionName,
+        string bindingName,
+        int bindingIndexOverride,
+        string bindingPath,
+        out string error)
+    {
+        if (!TryResolveBinding(
+                collectionName,
+                actionMapName,
+                actionName,
+                bindingName,
+                bindingIndexOverride,
+                out InputAction action,
+                out int bindingIndex,
+                out error))
+        {
+            return false;
+        }
+
+        string trimmedPath = bindingPath != null ? bindingPath.Trim() : string.Empty;
+        string defaultPath = action.bindings[bindingIndex].path ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(trimmedPath) || string.Equals(trimmedPath, defaultPath, StringComparison.Ordinal))
+        {
+            action.RemoveBindingOverride(bindingIndex);
+            return true;
+        }
+
+        action.ApplyBindingOverride(bindingIndex, trimmedPath);
+        return true;
+    }
+
+    public bool TryStartInteractiveRebind(
+        string collectionName,
+        string actionMapName,
+        string actionName,
+        string bindingName,
+        int bindingIndexOverride,
+        string requiredControlPath,
+        string expectedControlType,
+        Action<bool, string, string> onFinished,
+        out string error)
+    {
+        if (_activeRebindOperation != null)
+        {
+            error = "已有按键绑定正在等待输入。";
+            return false;
+        }
+
+        if (!TryResolveBinding(
+                collectionName,
+                actionMapName,
+                actionName,
+                bindingName,
+                bindingIndexOverride,
+                out InputAction action,
+                out int bindingIndex,
+                out error))
+        {
+            return false;
+        }
+
+        bool actionMapWasEnabled = action.actionMap.enabled;
+        if (actionMapWasEnabled)
+        {
+            action.actionMap.Disable();
+        }
+
+        string selectedPath = null;
+        InputActionRebindingExtensions.RebindingOperation operation = null;
+        operation = action.PerformInteractiveRebinding(bindingIndex)
+            .WithCancelingThrough("<Keyboard>/escape")
+            .WithControlsExcluding("<Pointer>/position")
+            .WithControlsExcluding("<Pointer>/delta")
+            .WithControlsExcluding("<Mouse>/position")
+            .WithControlsExcluding("<Mouse>/delta")
+            .WithControlsExcluding("<Mouse>/scroll")
+            .WithActionEventNotificationsBeingSuppressed()
+            .OnApplyBinding((_, path) => selectedPath = path)
+            .OnCancel(_ => FinishInteractiveRebind(false, null, "按键绑定已取消。"))
+            .OnComplete(_ => FinishInteractiveRebind(true, selectedPath, null));
+
+        if (!string.IsNullOrWhiteSpace(requiredControlPath))
+        {
+            operation.WithControlsHavingToMatchPath(requiredControlPath.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(expectedControlType))
+        {
+            operation.WithExpectedControlType(expectedControlType.Trim());
+        }
+
+        _activeRebindOperation = operation;
+        try
+        {
+            operation.Start();
+        }
+        catch (Exception exception)
+        {
+            _activeRebindOperation = null;
+            operation.Dispose();
+            if (actionMapWasEnabled)
+            {
+                action.actionMap.Enable();
+            }
+
+            error = $"无法开始按键绑定: {exception.Message}";
+            return false;
+        }
+
+        error = null;
+        return true;
+
+        void FinishInteractiveRebind(bool succeeded, string path, string finishError)
+        {
+            if (_activeRebindOperation == operation)
+            {
+                _activeRebindOperation = null;
+            }
+
+            operation.Dispose();
+            if (actionMapWasEnabled)
+            {
+                action.actionMap.Enable();
+            }
+
+            onFinished?.Invoke(succeeded, path, finishError);
+        }
+    }
+
+    public void CancelActiveRebind()
+    {
+        if (_activeRebindOperation == null)
+        {
+            return;
+        }
+
+        _activeRebindOperation.Cancel();
+    }
+
+    public void SaveBindingOverrides()
+    {
+        SaveBindingOverrides(Player?.asset, PlayerBindingOverridesPrefsKey);
+        SaveBindingOverrides(UI?.asset, UIBindingOverridesPrefsKey);
+        PlayerPrefs.Save();
+    }
+
+    public static string FormatBindingPathForDisplay(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "未绑定";
+        }
+
+        string display = InputControlPath.ToHumanReadableString(
+            path.Trim(),
+            InputControlPath.HumanReadableStringOptions.OmitDevice | InputControlPath.HumanReadableStringOptions.UseShortNames);
+        return string.IsNullOrWhiteSpace(display) ? path.Trim() : display;
+    }
+
+    private void LoadSavedBindingOverrides()
+    {
+        LoadBindingOverrides(Player?.asset, PlayerBindingOverridesPrefsKey);
+        LoadBindingOverrides(UI?.asset, UIBindingOverridesPrefsKey);
+    }
+
+    private static void LoadBindingOverrides(InputActionAsset asset, string prefsKey)
+    {
+        if (asset == null || !PlayerPrefs.HasKey(prefsKey))
+        {
+            return;
+        }
+
+        string overridesJson = PlayerPrefs.GetString(prefsKey, string.Empty);
+        if (!string.IsNullOrWhiteSpace(overridesJson))
+        {
+            asset.LoadBindingOverridesFromJson(overridesJson);
+        }
+    }
+
+    private static void SaveBindingOverrides(InputActionAsset asset, string prefsKey)
+    {
+        if (asset == null)
+        {
+            return;
+        }
+
+        PlayerPrefs.SetString(prefsKey, asset.SaveBindingOverridesAsJson());
+    }
+
+    private bool TryResolveBinding(
+        string collectionName,
+        string actionMapName,
+        string actionName,
+        string bindingName,
+        int bindingIndexOverride,
+        out InputAction action,
+        out int bindingIndex,
+        out string error)
+    {
+        action = null;
+        bindingIndex = -1;
+
+        if (!TryResolveActionAsset(collectionName, out InputActionAsset asset, out error))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(actionMapName) || string.IsNullOrWhiteSpace(actionName))
+        {
+            error = "按键配置缺少 actionMap 或 action。";
+            return false;
+        }
+
+        InputActionMap actionMap = asset.FindActionMap(actionMapName.Trim(), false);
+        if (actionMap == null)
+        {
+            error = $"找不到 InputActionMap: {actionMapName}";
+            return false;
+        }
+
+        action = actionMap.FindAction(actionName.Trim(), false);
+        if (action == null)
+        {
+            error = $"找不到 InputAction: {actionMapName}/{actionName}";
+            return false;
+        }
+
+        if (!TryResolveBindingIndex(action, bindingName, bindingIndexOverride, out bindingIndex))
+        {
+            error = $"找不到绑定: {actionMapName}/{actionName}/{bindingName}";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private bool TryResolveActionAsset(string collectionName, out InputActionAsset asset, out string error)
+    {
+        asset = null;
+        string normalizedName = collectionName != null ? collectionName.Trim() : string.Empty;
+        if (string.Equals(normalizedName, "Player", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalizedName, "PlayerControls", StringComparison.OrdinalIgnoreCase))
+        {
+            asset = Player?.asset;
+        }
+        else if (string.Equals(normalizedName, "UI", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(normalizedName, "UIControls", StringComparison.OrdinalIgnoreCase))
+        {
+            asset = UI?.asset;
+        }
+
+        if (asset != null)
+        {
+            error = null;
+            return true;
+        }
+
+        error = $"找不到 InputAction 集合: {collectionName}";
+        return false;
+    }
+
+    private static bool TryResolveBindingIndex(
+        InputAction action,
+        string bindingName,
+        int bindingIndexOverride,
+        out int bindingIndex)
+    {
+        bindingIndex = -1;
+        if (action == null)
+        {
+            return false;
+        }
+
+        if (bindingIndexOverride >= 0)
+        {
+            if (bindingIndexOverride < action.bindings.Count)
+            {
+                bindingIndex = bindingIndexOverride;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(bindingName))
+        {
+            string trimmedName = bindingName.Trim();
+            for (int i = 0; i < action.bindings.Count; i++)
+            {
+                if (string.Equals(action.bindings[i].name, trimmedName, StringComparison.OrdinalIgnoreCase))
+                {
+                    bindingIndex = i;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        for (int i = 0; i < action.bindings.Count; i++)
+        {
+            if (!action.bindings[i].isComposite)
+            {
+                bindingIndex = i;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

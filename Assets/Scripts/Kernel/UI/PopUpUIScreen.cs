@@ -29,6 +29,7 @@ namespace Kernel.UI
 
         private UnityAction confirmAction;
         private UnityAction closeAction;
+        private UnityAction topCloseAction;
         private bool closeAfterConfirm = true;
         private bool closeAfterClose = true;
 
@@ -85,6 +86,7 @@ namespace Kernel.UI
         /// param name="closeLabel": 关闭按钮文案；为空时保留 prefab 默认值
         /// param name="shouldCloseAfterConfirm": 点击确认后是否自动关闭弹窗
         /// param name="shouldCloseAfterClose": 点击底部关闭后是否自动关闭弹窗
+        /// param name="onTopClose": 点击顶部关闭按钮后执行的回调
         /// returns: 无
         /// </summary>
         public void Configure(
@@ -94,12 +96,14 @@ namespace Kernel.UI
             string confirmLabel = null,
             string closeLabel = null,
             bool shouldCloseAfterConfirm = true,
-            bool shouldCloseAfterClose = true)
+            bool shouldCloseAfterClose = true,
+            UnityAction onTopClose = null)
         {
             TryAutoBindReferences();
             SetInfoText(message);
             SetConfirmButton(confirmLabel, onConfirm, shouldCloseAfterConfirm);
             SetCloseButton(closeLabel, onClose, shouldCloseAfterClose);
+            topCloseAction = onTopClose;
         }
 
         /// <summary>
@@ -246,6 +250,7 @@ namespace Kernel.UI
         private void HandleTopCloseButtonClicked()
         {
             RequestClose();
+            topCloseAction?.Invoke();
         }
 
         /// <summary>
@@ -293,6 +298,7 @@ namespace Kernel.UI
         {
             confirmAction = null;
             closeAction = null;
+            topCloseAction = null;
             closeAfterConfirm = true;
             closeAfterClose = true;
         }

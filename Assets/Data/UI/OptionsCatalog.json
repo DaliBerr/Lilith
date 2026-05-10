@@ -45,24 +45,7 @@
           "title": "分辨率",
           "mode": "dropdown",
           "playerPrefsKey": "Options.Display.Resolution",
-          "defaultOptionId": "1920x1080",
-          "options": [
-            {
-              "id": "1280x720",
-              "title": "1280 x 720",
-              "value": "1280x720"
-            },
-            {
-              "id": "1600x900",
-              "title": "1600 x 900",
-              "value": "1600x900"
-            },
-            {
-              "id": "1920x1080",
-              "title": "1920 x 1080",
-              "value": "1920x1080"
-            }
-          ]
+          "optionsSource": "screenResolutions"
         },
         {
           "id": "fullscreen",
@@ -76,8 +59,8 @@
           "title": "UI 缩放",
           "mode": "slider",
           "playerPrefsKey": "Options.Display.UIScale",
-          "min": 0.8,
-          "max": 1.2,
+          "min": 0.6,
+          "max": 1.5,
           "defaultValue": 1,
           "valueFormat": "{value}x"
         }
@@ -88,22 +71,98 @@
       "title": "控制",
       "entries": [
         {
-          "id": "move_binding",
-          "title": "移动按键",
+          "id": "move_up_binding",
+          "title": "移动 上",
           "mode": "button",
-          "buttonText": "暂未开放"
+          "bindingCollection": "Player",
+          "bindingActionMap": "Movement",
+          "bindingAction": "Move",
+          "bindingName": "up",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
+        },
+        {
+          "id": "move_down_binding",
+          "title": "移动 下",
+          "mode": "button",
+          "bindingCollection": "Player",
+          "bindingActionMap": "Movement",
+          "bindingAction": "Move",
+          "bindingName": "down",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
+        },
+        {
+          "id": "move_left_binding",
+          "title": "移动 左",
+          "mode": "button",
+          "bindingCollection": "Player",
+          "bindingActionMap": "Movement",
+          "bindingAction": "Move",
+          "bindingName": "left",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
+        },
+        {
+          "id": "move_right_binding",
+          "title": "移动 右",
+          "mode": "button",
+          "bindingCollection": "Player",
+          "bindingActionMap": "Movement",
+          "bindingAction": "Move",
+          "bindingName": "right",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
         },
         {
           "id": "attack_binding",
           "title": "攻击按键",
           "mode": "button",
-          "buttonText": "暂未开放"
+          "bindingCollection": "Player",
+          "bindingActionMap": "Movement",
+          "bindingAction": "Fire",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
+        },
+        {
+          "id": "accelerate_binding",
+          "title": "冲刺按键",
+          "mode": "button",
+          "bindingCollection": "Player",
+          "bindingActionMap": "Movement",
+          "bindingAction": "Accelerate",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
         },
         {
           "id": "backpack_binding",
           "title": "背包按键",
           "mode": "button",
-          "buttonText": "暂未开放"
+          "bindingCollection": "UI",
+          "bindingActionMap": "MainScene UI",
+          "bindingAction": "Backpack",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
+        },
+        {
+          "id": "interaction_binding",
+          "title": "交互按键",
+          "mode": "button",
+          "bindingCollection": "UI",
+          "bindingActionMap": "MainScene UI",
+          "bindingAction": "Interaction",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
+        },
+        {
+          "id": "hint_binding",
+          "title": "提示按键",
+          "mode": "button",
+          "bindingCollection": "UI",
+          "bindingActionMap": "MainScene UI",
+          "bindingAction": "Hint",
+          "bindingControlPath": "<Keyboard>/*",
+          "bindingExpectedControlType": "Button"
         }
       ]
     }

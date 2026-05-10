@@ -37,6 +37,12 @@ namespace Vocalith.UI
         public float defaultShow = 0.15f;
         public float defaultHide = 0.12f;
 
+        [Header("Scaling")]
+        [SerializeField, Min(0.1f)] private float minUIScale = 0.5f;
+        [SerializeField, Min(0.1f)] private float maxUIScale = 2f;
+        [SerializeField, Min(0.1f)] private float defaultUIScale = FallbackUIScale;
+
+        private const float FallbackUIScale = 1f;
         private const float TargetAspectRatio = 16f / 9f;
         private const string AspectLetterboxRootName = "AspectLetterboxRoot";
         private const string AspectLetterboxTopBarName = "AspectLetterboxTopBar";
@@ -56,6 +62,7 @@ namespace Vocalith.UI
         private bool hasRootCanvasBaseReferenceResolution;
         private Vector2Int lastAspectScreenSize = new Vector2Int(-1, -1);
         private bool hasAppliedAspectLockLayout;
+        private float currentUIScale = FallbackUIScale;
 
         readonly Stack<UIScreen> screenStack = new();
         readonly Stack<UIScreen> modalStack = new();
@@ -70,6 +77,7 @@ namespace Vocalith.UI
             EnsureEventSystem();
             RenderPipelineManager.beginCameraRendering += HandleBeginCameraRendering;
             EnsureAspectLockRoots();
+            currentUIScale = ClampUIScale(defaultUIScale);
             ApplyAspectLockLayout();
             SceneManager.sceneLoaded += HandleSceneLoaded;
         }
@@ -433,7 +441,7 @@ namespace Vocalith.UI
         }
 
         /// <summary>
-        /// summary: 依据 16:9 安全视口补偿 CanvasScaler 的 referenceResolution，保证锚点布局等价于 1080p 设计区。
+        /// summary: 依据 16:9 安全视口与用户 UI 缩放补偿 CanvasScaler 的 referenceResolution，保证锚点布局等价于 1080p 设计区。
         /// param name="viewport": 当前归一化安全视口
         /// returns: 无
         /// </summary>
@@ -451,9 +459,10 @@ namespace Vocalith.UI
 
             float widthFactor = Mathf.Max(0.0001f, viewport.width);
             float heightFactor = Mathf.Max(0.0001f, viewport.height);
+            float uiScale = Mathf.Max(0.0001f, currentUIScale);
             rootCanvasScaler.referenceResolution = new Vector2(
-                rootCanvasBaseReferenceResolution.x / widthFactor,
-                rootCanvasBaseReferenceResolution.y / heightFactor);
+                rootCanvasBaseReferenceResolution.x / (widthFactor * uiScale),
+                rootCanvasBaseReferenceResolution.y / (heightFactor * uiScale));
         }
 
         /// <summary>
@@ -548,6 +557,61 @@ namespace Vocalith.UI
         public bool IsNavigating()
         {
             return _isNavigating;
+        }
+
+        public float CurrentUIScale => currentUIScale;
+
+        public float MinUIScale
+        {
+            get
+            {
+                ResolveUIScaleRange(out float min, out _);
+                return min;
+            }
+        }
+
+        public float MaxUIScale
+        {
+            get
+            {
+                ResolveUIScaleRange(out _, out float max);
+                return max;
+            }
+        }
+
+        /// <summary>
+        /// summary: 应用用户 UI 缩放倍率；通过根 CanvasScaler 生效，并保留当前 16:9 安全画面逻辑。
+        /// param name="uiScale": 用户 UI 缩放倍率，1 为默认。
+        /// returns: 无
+        /// </summary>
+        public void ApplyUIScale(float uiScale)
+        {
+            currentUIScale = ClampUIScale(uiScale);
+            hasAppliedAspectLockLayout = false;
+            EnsureAspectLockRoots();
+            ApplyAspectLockLayout();
+            Canvas.ForceUpdateCanvases();
+        }
+
+        public float ClampUIScale(float uiScale)
+        {
+            ResolveUIScaleRange(out float min, out float max);
+            if (float.IsNaN(uiScale) || float.IsInfinity(uiScale))
+            {
+                return Mathf.Clamp(FallbackUIScale, min, max);
+            }
+
+            return Mathf.Clamp(uiScale, min, max);
+        }
+
+        private void ResolveUIScaleRange(out float min, out float max)
+        {
+            min = Mathf.Max(0.1f, minUIScale);
+            max = Mathf.Max(0.1f, maxUIScale);
+            if (max < min)
+            {
+                (min, max) = (max, min);
+            }
         }
 
         /// <summary>
@@ -1020,6 +1084,7 @@ namespace Vocalith.UI
         {
             if (s == null) yield break;
 
+            ClearSelectionOwnedBy(s);
             yield return s.Hide(defaultHide);
             if (s == null) yield break;
 
@@ -1031,6 +1096,19 @@ namespace Vocalith.UI
             else
             {
                 Destroy(s.gameObject);
+            }
+        }
+
+        private static void ClearSelectionOwnedBy(UIScreen s)
+        {
+            if (s == null || UnityEventSystem.current == null || UnityEventSystem.current.currentSelectedGameObject == null)
+            {
+                return;
+            }
+
+            if (UnityEventSystem.current.currentSelectedGameObject.transform.IsChildOf(s.transform))
+            {
+                UnityEventSystem.current.SetSelectedGameObject(null);
             }
         }
 
