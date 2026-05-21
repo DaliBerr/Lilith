@@ -25,6 +25,7 @@
     <type fullname="Kernel.UI.TokenSelectUIScreen" preserve="all" />
     <type fullname="Kernel.UI.UpdateUIScreen" preserve="all" />
     <type fullname="StrokeRevealUIWord" preserve="all" />
+    <type fullname="Vocalith.UI.FixedPixelSlicedImage" preserve="all" />
     <type fullname="Kernel.Bullet.TokenModifierDefinition" preserve="nothing" serialized="true" />
     <type fullname="Kernel.Bullet.BulletTokenLibrary/TokenWeightEntry" preserve="nothing" serialized="true" />
     <type fullname="Kernel.UI.ProfileManagementUIScreen/ProfileSlotView" preserve="nothing" serialized="true" />
