@@ -311,6 +311,79 @@ public sealed class StorySequenceParserTests
     }
 
     [UnityTest]
+    public IEnumerator Service_WithDisplayTextFitsPage_SplitsUsingMeasuredPageFit()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(new StorySequenceEntry { Text = "ABCDEF" });
+        parser.DeltaTimeOverride = 100f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://dialog",
+            CharactersPerSecond = 100f,
+            LineHoldSeconds = 0f,
+            AllowDefaultSkipInput = false,
+            DisplayTextFitsPage = text => (text ?? string.Empty).Length <= 3
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        parser.StartCoroutine(parser.RunSequenceForTest(request));
+
+        while (!result.HasValue)
+        {
+            yield return null;
+        }
+
+        Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "ABC"), Is.True);
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "DEF"), Is.True);
+        Assert.That(snapshots.TrueForAll(snapshot => snapshot.FullText.Length <= 3), Is.True);
+    }
+
+    [UnityTest]
+    public IEnumerator Service_WithMaxCharactersPerEntry_SplitsAppendBlocksBeforeOverflow()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(
+            new StorySequenceEntry { Text = "AAAA", DisplayMode = StorySequenceDisplayMode.Append },
+            new StorySequenceEntry { Text = "BBBB", DisplayMode = StorySequenceDisplayMode.Append },
+            new StorySequenceEntry { Text = "CCCC", DisplayMode = StorySequenceDisplayMode.Append });
+        parser.DeltaTimeOverride = 100f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://intro",
+            CharactersPerSecond = 100f,
+            LineHoldSeconds = 0f,
+            AllowDefaultSkipInput = false,
+            MaxCharactersPerEntry = 9
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        parser.StartCoroutine(parser.RunSequenceForTest(request));
+
+        while (!result.HasValue)
+        {
+            yield return null;
+        }
+
+        Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "AAAA\nBBBB"), Is.True);
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "CCCC"), Is.True);
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "AAAA\nBBBB\nCCCC"), Is.False);
+    }
+
+    [UnityTest]
     public IEnumerator Service_AppendDisplayMode_KeepsPreviousLineAndAddsNewline()
     {
         TestStorySequenceParser parser = CreateTestParser();
@@ -544,6 +617,60 @@ public sealed class StorySequenceParserTests
 
         Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
         Assert.That(parser.IsPlaying, Is.False);
+    }
+
+    [Test]
+    public void Service_RequestSkipCurrentDisplayBlockOrFinish_JumpsToNextPageWhenCurrentPageIsRevealing()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(
+            new StorySequenceEntry
+            {
+                Text = "First line",
+                DisplayMode = StorySequenceDisplayMode.Replace
+            },
+            new StorySequenceEntry
+            {
+                Text = "Second line",
+                DisplayMode = StorySequenceDisplayMode.Append
+            },
+            new StorySequenceEntry
+            {
+                Text = "Third line",
+                DisplayMode = StorySequenceDisplayMode.Replace
+            });
+        parser.DeltaTimeOverride = 0f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://intro",
+            CharactersPerSecond = 1f,
+            LineHoldSeconds = 10f,
+            AllowDefaultSkipInput = false
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        ManualCoroutineRunner runner = new(parser.RunSequenceForTest(request));
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "First line"),
+            20,
+            "Initial story page was not published.");
+
+        parser.RequestSkipCurrentDisplayBlockOrFinish();
+        runner.StepUntil(
+            () => snapshots.Exists(snapshot => snapshot.FullText == "Third line" && snapshot.VisibleCharacterCount == 0 && !snapshot.IsEntryFullyRevealed),
+            80,
+            "Story skip button should jump over the current page and start the next page normally.");
+
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "First line\nSecond line" && snapshot.IsEntryFullyRevealed), Is.True);
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "Third line" && snapshot.VisibleCharacterCount == 0 && !snapshot.IsEntryFullyRevealed), Is.True);
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "Third line" && snapshot.IsEntryFullyRevealed), Is.False);
+        Assert.That(result.HasValue, Is.False);
     }
 
     [UnityTest]

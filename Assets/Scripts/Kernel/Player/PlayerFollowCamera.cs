@@ -1,3 +1,4 @@
+using Kernel.GameState;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -74,6 +75,11 @@ public sealed class PlayerFollowCamera : MonoBehaviour
     /// </summary>
     private void HandleYawRotationInput()
     {
+        if (IsYawRotationInputBlocked())
+        {
+            return;
+        }
+
         if (Mouse.current == null || !Mouse.current.rightButton.isPressed)
         {
             return;
@@ -86,6 +92,17 @@ public sealed class PlayerFollowCamera : MonoBehaviour
         }
 
         yaw = Mathf.Repeat(yaw + (horizontalDelta * yawDragSensitivity), 360f);
+    }
+
+    /// <summary>
+    /// summary: 判断当前 UI / 游戏状态是否需要冻结玩家主动拖拽视角输入。
+    /// param: 无
+    /// returns: 暂停菜单或显式暂停状态存在时返回 true
+    /// </summary>
+    private static bool IsYawRotationInputBlocked()
+    {
+        return StatusController.HasStatus(StatusList.InPauseMenuStatus)
+            || StatusController.HasStatus(StatusList.PausedStatus);
     }
 
     /// <summary>

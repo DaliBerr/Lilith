@@ -39,6 +39,7 @@ namespace Kernel.UI
         private const string DisplayResolutionEntryId = "resolution";
         private const string DisplayFullscreenEntryId = "fullscreen";
         private const string DisplayUIScaleEntryId = "ui_scale";
+        private const string LocalizationLanguageEntryId = "language";
         private const string DisplayResolutionPrefsKey = LilithDisplaySettings.ResolutionPrefsKey;
         private const string DisplayFullscreenPrefsKey = LilithDisplaySettings.FullscreenPrefsKey;
         private const string BindingCancelledMessage = "按键绑定已取消。";
@@ -80,6 +81,7 @@ namespace Kernel.UI
         private bool isShowingBindingPrompt;
         private bool isClosingBindingPrompt;
         private bool isClosingSelf;
+        private bool isApplyingPendingChanges;
         private PopUpUIScreen activeBindingPrompt;
 
         public override Status currentStatus { get; } = StatusList.PopUpStatus;
@@ -266,7 +268,7 @@ namespace Kernel.UI
 
                 if (shouldApply)
                 {
-                    ApplyPendingChanges();
+                    yield return ApplyPendingChangesCo();
                 }
                 else
                 {
@@ -456,6 +458,10 @@ namespace Kernel.UI
                 {
                     state = CreateRuntimeState(category, entry);
                     entryStates[prefsKey] = state;
+                }
+                else
+                {
+                    state.Entry = entry;
                 }
             }
 
@@ -672,9 +678,13 @@ namespace Kernel.UI
                     }
 
                     string prefsKey = ResolvePrefsKey(category, entry);
-                    if (!entryStates.ContainsKey(prefsKey))
+                    if (!entryStates.TryGetValue(prefsKey, out OptionsEntryRuntimeState state))
                     {
                         entryStates[prefsKey] = CreateRuntimeState(category, entry);
+                    }
+                    else
+                    {
+                        state.Entry = entry;
                     }
                 }
             }
@@ -711,6 +721,11 @@ namespace Kernel.UI
                     float sliderDefault = ParseFloatValue(defaultValue, ResolveDefaultSliderValue(entry));
                     return FormatStoredFloat(ResolveSliderRuntimeValue(entry, PlayerPrefs.GetFloat(prefsKey, sliderDefault)));
                 case DropdownMode:
+                    if (IsLocalizationLanguageEntry(entry) && !PlayerPrefs.HasKey(prefsKey))
+                    {
+                        return ResolveCurrentLanguageValue(entry);
+                    }
+
                     if (IsDisplayResolutionEntry(entry) && !PlayerPrefs.HasKey(prefsKey))
                     {
                         return ResolveCurrentResolutionValue(entry);
@@ -783,6 +798,14 @@ namespace Kernel.UI
 
             int defaultIndex = Mathf.Clamp(entry.DefaultOptionIndex ?? 0, 0, choices.Count - 1);
             return choices[defaultIndex].Value;
+        }
+
+        private static string ResolveCurrentLanguageValue(OptionsEntryData entry)
+        {
+            string currentLanguage = LocalizationManager.CurrentLanguageTag;
+            return FindChoiceIndex(entry.Options, currentLanguage) >= 0
+                ? currentLanguage
+                : ResolveDefaultDropdownValue(entry);
         }
 
         private static List<OptionsChoiceData> BuildScreenResolutionChoices()
@@ -972,6 +995,14 @@ namespace Kernel.UI
                 && entry.Mode == SliderMode
                 && (string.Equals(entry.Id, DisplayUIScaleEntryId, StringComparison.Ordinal)
                     || string.Equals(entry.PlayerPrefsKey, UIScalePlayerPrefsKey, StringComparison.Ordinal));
+        }
+
+        private static bool IsLocalizationLanguageEntry(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == DropdownMode
+                && (string.Equals(entry.Id, LocalizationLanguageEntryId, StringComparison.Ordinal)
+                    || string.Equals(entry.PlayerPrefsKey, LocalizationManager.PlayerPrefsLanguageKey, StringComparison.Ordinal));
         }
 
         private static bool IsBindingEntry(OptionsEntryData entry)
@@ -1239,40 +1270,61 @@ namespace Kernel.UI
 
         private void HandleApplyButtonClicked()
         {
-            ApplyPendingChanges();
+            StartCoroutine(ApplyPendingChangesCo());
         }
 
-        private void ApplyPendingChanges()
+        private IEnumerator ApplyPendingChangesCo()
         {
-            bool bindingOverridesChanged = false;
-            foreach (OptionsEntryRuntimeState state in entryStates.Values)
+            if (isApplyingPendingChanges)
             {
-                if (IsBindingEntry(state?.Entry))
+                yield break;
+            }
+
+            isApplyingPendingChanges = true;
+            RefreshActionButtons();
+
+            bool shouldApplyLanguage = TryGetPendingLanguageTag(out string languageTag);
+            bool bindingOverridesChanged = false;
+            try
+            {
+                foreach (OptionsEntryRuntimeState state in entryStates.Values)
                 {
-                    if (!ApplyBindingState(state))
+                    if (IsBindingEntry(state?.Entry))
                     {
-                        continue;
+                        if (!ApplyBindingState(state))
+                        {
+                            continue;
+                        }
+
+                        bindingOverridesChanged = true;
+                    }
+                    else
+                    {
+                        ApplyStateToPlayerPrefs(state);
                     }
 
-                    bindingOverridesChanged = true;
+                    state.OriginalValue = state.CurrentValue;
                 }
-                else
+
+                if (bindingOverridesChanged)
                 {
-                    ApplyStateToPlayerPrefs(state);
+                    InputActionManager.Instance?.SaveBindingOverrides();
                 }
 
-                state.OriginalValue = state.CurrentValue;
-            }
+                ApplyDisplaySettings();
+                LilithAudioSettings.ApplyStoredSettings();
+                PlayerPrefs.Save();
 
-            if (bindingOverridesChanged)
+                if (shouldApplyLanguage)
+                {
+                    yield return ApplyLanguageSettingCo(languageTag);
+                }
+            }
+            finally
             {
-                InputActionManager.Instance?.SaveBindingOverrides();
+                isApplyingPendingChanges = false;
+                RefreshActionButtons();
             }
-
-            ApplyDisplaySettings();
-            LilithAudioSettings.ApplyStoredSettings();
-            PlayerPrefs.Save();
-            RefreshActionButtons();
         }
 
         private void DiscardPendingChanges()
@@ -1402,6 +1454,55 @@ namespace Kernel.UI
             UIManager.Instance?.ApplyUIScale(value);
         }
 
+        private bool TryGetPendingLanguageTag(out string languageTag)
+        {
+            languageTag = string.Empty;
+            if (!TryFindState(LocalizationLanguageEntryId, out OptionsEntryRuntimeState languageState)
+                || languageState == null
+                || !IsLocalizationLanguageEntry(languageState.Entry))
+            {
+                return false;
+            }
+
+            languageTag = languageState.CurrentValue != null ? languageState.CurrentValue.Trim() : string.Empty;
+            return !string.IsNullOrWhiteSpace(languageTag)
+                && !string.Equals(languageTag, LocalizationManager.CurrentLanguageTag, StringComparison.Ordinal);
+        }
+
+        private IEnumerator ApplyLanguageSettingCo(string languageTag)
+        {
+            var languageTask = LocalizationManager.SetLanguageAsync(languageTag);
+            while (!languageTask.IsCompleted)
+            {
+                yield return null;
+            }
+
+            if (languageTask.IsFaulted)
+            {
+                GameDebug.LogWarning($"[OptionsUIScreen] Failed to apply language '{languageTag}': {languageTask.Exception?.GetBaseException().Message}");
+                yield break;
+            }
+
+            if (languageTask.IsCanceled)
+            {
+                GameDebug.LogWarning($"[OptionsUIScreen] Applying language '{languageTag}' was canceled.");
+                yield break;
+            }
+
+            int previousCategoryIndex = activeCategoryIndex;
+            hasLoadedCatalog = false;
+            yield return LoadCatalogCo();
+            RebuildView();
+
+            IReadOnlyList<OptionsCategoryData> categories = catalog?.Categories != null
+                ? catalog.Categories
+                : Array.Empty<OptionsCategoryData>();
+            if (previousCategoryIndex > 0 && categories.Count > 0)
+            {
+                SelectCategory(Mathf.Clamp(previousCategoryIndex, 0, categories.Count - 1));
+            }
+        }
+
         private bool TryFindState(string entryId, out OptionsEntryRuntimeState state)
         {
             foreach (OptionsEntryRuntimeState candidate in entryStates.Values)
@@ -1463,6 +1564,15 @@ namespace Kernel.UI
 
         private void RefreshActionButtons()
         {
+            if (isApplyingPendingChanges)
+            {
+                SetButtonVisible(cancelButton, false);
+                SetButtonVisible(applyButton, false);
+                SetButtonVisible(resetButton, false);
+                SetObjectActive(buttonPanel, false);
+                return;
+            }
+
             bool hasPendingChanges = HasPendingChanges();
             bool hasResettableChanges = HasResettableChanges();
 

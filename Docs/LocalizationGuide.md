@@ -366,7 +366,7 @@ enemy.swarm.description
 3. 看 Console 是否有红色错误。
 4. 从 `StartUp` 场景进入游戏。
 5. 检查你改过的界面或剧情。
-6. 请测试或程序同学切换到目标语言再看一遍。
+6. 打开设置，在“显示 / Display”里切换“语言 / Language”，再看一遍目标语言。
 
 重点检查：
 
@@ -388,7 +388,7 @@ enemy.swarm.description
 
 | 原因 | 处理 |
 | --- | --- |
-| 当前语言不是 `en-US` | 请测试或程序同学切换语言 |
+| 当前语言不是 `en-US` | 打开设置，在“显示 / Display”里把语言切到 `en-US` |
 | 文件没有 Addressables label | 请程序同学检查 `Localization` / `LocalizationJson` label |
 | key 写错了 | 对照原文件里的 key 或资产里的 key 字段 |
 | JSON 格式坏了 | 看 Unity Console 红色错误 |

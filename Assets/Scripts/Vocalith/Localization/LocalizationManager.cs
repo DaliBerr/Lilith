@@ -17,7 +17,7 @@ namespace Vocalith.Localization
     /// </summary>
     public static class LocalizationManager
     {
-        const string PlayerPrefsLanguageKey = "LanguageTag";
+        public const string PlayerPrefsLanguageKey = "LanguageTag";
 
         static readonly Dictionary<string, string> _stringTable = new(StringComparer.Ordinal);
 

@@ -123,6 +123,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - UI
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c920e5aab03333e498916168ca27ff8c
+    m_Address: Assets/Prefabs/UI/Loading Panel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: d56f5ebd3341ee44a9db06a9fc20aec1
     m_Address: Assets/Prefabs/UI/StartUp UI Prefab
     m_ReadOnly: 0

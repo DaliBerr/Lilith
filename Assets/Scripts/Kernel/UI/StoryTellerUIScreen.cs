@@ -21,6 +21,18 @@ namespace Kernel.UI
 
         public override Status currentStatus { get; } = StatusList.InMainMenuStatus;
 
+        internal bool DoesStoryTextFitPage(string text)
+        {
+            TryAutoBindReferences();
+            return StoryTextPageUtility.DoesTextFitPage(storyText, text);
+        }
+
+        internal int EstimateStoryTextCapacity(int fallbackCapacity)
+        {
+            TryAutoBindReferences();
+            return StoryTextPageUtility.EstimateTextElementCapacity(storyText, fallbackCapacity);
+        }
+
         protected override void OnInit()
         {
             TryAutoBindReferences();
@@ -198,7 +210,7 @@ namespace Kernel.UI
         /// </summary>
         private void HandleSkipButtonClicked()
         {
-            StorySequenceParser.Instance?.RequestSkipToNextReplaceOrFinish();
+            StorySequenceParser.Instance?.RequestSkipCurrentDisplayBlockOrFinish();
         }
 
         /// <summary>

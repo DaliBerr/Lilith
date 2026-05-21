@@ -68,6 +68,7 @@ namespace Kernel.UI
         public float LineHoldSeconds { get; set; } = 1.2f;
         public bool AllowDefaultSkipInput { get; set; } = true;
         public int MaxCharactersPerEntry { get; set; }
+        public Func<string, bool> DisplayTextFitsPage { get; set; }
         public bool WaitForAdvanceInputAfterEntryReveal { get; set; }
     }
 
@@ -140,6 +141,7 @@ namespace Kernel.UI
         private bool skipToNextReplaceRequested;
         private bool advanceToNextEntryRequested;
         private bool advanceDisplayBlockRequested;
+        private bool advanceDisplayBlockNormallyRequested;
         private bool finishAfterFinalBlockRequested;
         private bool waitForSkipConfirmationOnFinalBlock;
         private bool allowDefaultSkipInput;
@@ -285,6 +287,34 @@ namespace Kernel.UI
             }
 
             skipToNextReplaceRequested = true;
+        }
+
+        /// <summary>
+        /// summary: 请求跳过当前显示页；若当前页还在逐字播放，会直接推进到下一页，最后一页已完整显示时结束播放。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public virtual void RequestSkipCurrentDisplayBlockOrFinish()
+        {
+            if (!isPlaying)
+            {
+                return;
+            }
+
+            if (IsCurrentSnapshotAtFullyRevealedFinalDisplayBlock())
+            {
+                finishAfterFinalBlockRequested = true;
+                return;
+            }
+
+            if (IsCurrentSnapshotAtFullyRevealedDisplayBlockBoundary())
+            {
+                advanceDisplayBlockNormallyRequested = true;
+                return;
+            }
+
+            skipToNextReplaceRequested = true;
+            advanceDisplayBlockNormallyRequested = true;
         }
 
         /// <summary>
@@ -453,6 +483,7 @@ namespace Kernel.UI
             skipToNextReplaceRequested = false;
             advanceToNextEntryRequested = false;
             advanceDisplayBlockRequested = false;
+            advanceDisplayBlockNormallyRequested = false;
             finishAfterFinalBlockRequested = false;
             waitForSkipConfirmationOnFinalBlock = false;
             allowDefaultSkipInput = request.AllowDefaultSkipInput;
@@ -636,11 +667,19 @@ namespace Kernel.UI
                 }
 
                 float elapsed = 0f;
+                bool startNextBlockNormally = false;
                 while (!skipCurrentBlockRequested && elapsed < lineHoldSeconds)
                 {
                     if (TryConsumeSkipToNextReplaceRequest())
                     {
                         skipCurrentBlockRequested = true;
+                        break;
+                    }
+
+                    if (TryConsumeAdvanceDisplayBlockNormallyRequest())
+                    {
+                        startNextBlockNormally = true;
+                        index = blockEndIndex;
                         break;
                     }
 
@@ -655,8 +694,14 @@ namespace Kernel.UI
                     yield return null;
                 }
 
-                if (revealUpcomingBlockImmediately)
+                if (startNextBlockNormally || revealUpcomingBlockImmediately)
                 {
+                    continue;
+                }
+
+                if (!skipCurrentBlockRequested && TryConsumeAdvanceDisplayBlockNormallyRequest())
+                {
+                    index = blockEndIndex;
                     continue;
                 }
 
@@ -701,8 +746,20 @@ namespace Kernel.UI
                         break;
                     }
 
-                    while (isPlaying && !TryConsumeAdvanceDisplayBlockRequest())
+                    bool revealNextBlockImmediately = false;
+                    while (isPlaying)
                     {
+                        if (TryConsumeAdvanceDisplayBlockNormallyRequest())
+                        {
+                            break;
+                        }
+
+                        if (TryConsumeAdvanceDisplayBlockRequest())
+                        {
+                            revealNextBlockImmediately = true;
+                            break;
+                        }
+
                         yield return null;
                     }
 
@@ -711,7 +768,7 @@ namespace Kernel.UI
                         yield break;
                     }
 
-                    revealUpcomingBlockImmediately = true;
+                    revealUpcomingBlockImmediately = revealNextBlockImmediately;
                     index = blockEndIndex;
                 }
             }
@@ -783,6 +840,7 @@ namespace Kernel.UI
             skipToNextReplaceRequested = false;
             advanceToNextEntryRequested = false;
             advanceDisplayBlockRequested = false;
+            advanceDisplayBlockNormallyRequested = false;
             finishAfterFinalBlockRequested = false;
             waitForSkipConfirmationOnFinalBlock = false;
             shouldShowSkipButton = false;
@@ -899,6 +957,22 @@ namespace Kernel.UI
             }
 
             advanceDisplayBlockRequested = false;
+            return true;
+        }
+
+        /// <summary>
+        /// summary: 读取并清空“进入下一显示块但不立刻补完”的请求标记。
+        /// param: 无
+        /// returns: 当前存在未消费的普通翻页请求时返回 true
+        /// </summary>
+        private bool TryConsumeAdvanceDisplayBlockNormallyRequest()
+        {
+            if (!advanceDisplayBlockNormallyRequested)
+            {
+                return false;
+            }
+
+            advanceDisplayBlockNormallyRequested = false;
             return true;
         }
 
@@ -1022,12 +1096,17 @@ namespace Kernel.UI
         /// </summary>
         private static string BuildPrefixText(string accumulatedDisplayText, StorySequenceEntry entry)
         {
+            return BuildPrefixText(accumulatedDisplayText, entry?.DisplayMode ?? StorySequenceDisplayMode.Replace);
+        }
+
+        private static string BuildPrefixText(string accumulatedDisplayText, StorySequenceDisplayMode displayMode)
+        {
             if (string.IsNullOrEmpty(accumulatedDisplayText))
             {
                 return string.Empty;
             }
 
-            return entry != null && entry.DisplayMode == StorySequenceDisplayMode.Append
+            return displayMode == StorySequenceDisplayMode.Append
                 ? $"{accumulatedDisplayText}\n"
                 : string.Empty;
         }
@@ -1053,7 +1132,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 按请求配置预处理可播放条目；当前仅负责把超长对白拆成多个不超过上限的分页条目。
+        /// summary: 按请求配置预处理可播放条目；会把超过当前页面容量的对白或 append 文本块拆成多个分页条目。
         /// param name="data": 原始剧情数据
         /// param name="request": 当前播放请求
         /// returns: 可直接交给播放器消费的条目数据
@@ -1065,13 +1144,15 @@ namespace Kernel.UI
                 return data;
             }
 
-            int maxCharactersPerEntry = Mathf.Max(0, request.MaxCharactersPerEntry);
-            if (maxCharactersPerEntry <= 0)
+            int maxCharactersPerPage = Mathf.Max(0, request.MaxCharactersPerEntry);
+            Func<string, bool> displayTextFitsPage = request.DisplayTextFitsPage;
+            if (maxCharactersPerPage <= 0 && displayTextFitsPage == null)
             {
                 return data;
             }
 
             List<StorySequenceEntry> preparedEntries = new();
+            string accumulatedDisplayText = string.Empty;
             for (int index = 0; index < data.Entries.Count; index++)
             {
                 StorySequenceEntry entry = data.Entries[index];
@@ -1080,7 +1161,7 @@ namespace Kernel.UI
                     continue;
                 }
 
-                AppendPreparedEntries(preparedEntries, entry, maxCharactersPerEntry);
+                AppendPreparedEntries(preparedEntries, entry, maxCharactersPerPage, displayTextFitsPage, ref accumulatedDisplayText);
             }
 
             return new StorySequenceData
@@ -1090,34 +1171,82 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 把单条对白按最大字符数拆成多个可播放条目；溢出的后续分页一律改为 replace，确保单屏文本不会累积超限。
+        /// summary: 把单条对白按页面容量拆成多个可播放条目；溢出的后续分页一律改为 replace，确保单屏文本不会累积超限。
         /// param name="target": 输出条目列表
         /// param name="entry": 当前原始对白
-        /// param name="maxCharactersPerEntry": 单页允许的最大字符数
+        /// param name="maxCharactersPerPage": 单页允许的最大字符数
+        /// param name="displayTextFitsPage": 当前 UI 页面测量函数
+        /// param name="accumulatedDisplayText": 当前屏幕上已经累积的 append 文本
         /// returns: 无
         /// </summary>
-        private static void AppendPreparedEntries(List<StorySequenceEntry> target, StorySequenceEntry entry, int maxCharactersPerEntry)
+        private static void AppendPreparedEntries(
+            List<StorySequenceEntry> target,
+            StorySequenceEntry entry,
+            int maxCharactersPerPage,
+            Func<string, bool> displayTextFitsPage,
+            ref string accumulatedDisplayText)
         {
-            List<string> chunks = SplitTextIntoChunks(entry.Text, maxCharactersPerEntry);
+            StorySequenceDisplayMode firstDisplayMode = ResolveFirstPreparedDisplayMode(
+                accumulatedDisplayText,
+                entry,
+                maxCharactersPerPage,
+                displayTextFitsPage);
+            string prefixText = BuildPrefixText(accumulatedDisplayText, firstDisplayMode);
+            List<string> chunks = SplitTextIntoChunks(entry.Text, prefixText, maxCharactersPerPage, displayTextFitsPage);
+
             for (int chunkIndex = 0; chunkIndex < chunks.Count; chunkIndex++)
             {
+                StorySequenceDisplayMode displayMode = chunkIndex == 0 ? firstDisplayMode : StorySequenceDisplayMode.Replace;
                 target.Add(new StorySequenceEntry
                 {
                     SpeakerId = entry.SpeakerId,
                     DisplayName = entry.DisplayName,
                     Text = chunks[chunkIndex],
-                    DisplayMode = chunkIndex == 0 ? entry.DisplayMode : StorySequenceDisplayMode.Replace
+                    DisplayMode = displayMode
                 });
+
+                accumulatedDisplayText = string.Concat(BuildPrefixText(accumulatedDisplayText, displayMode), chunks[chunkIndex]);
             }
+        }
+
+        /// <summary>
+        /// summary: 解析当前原始条目第一页应使用 append 还是 replace；若 append 后整屏会溢出，则从新页开始。
+        /// param name="accumulatedDisplayText": 当前屏幕上已经累积的 append 文本
+        /// param name="entry": 当前原始条目
+        /// param name="maxCharactersPerPage": 单页允许的最大字符数
+        /// param name="displayTextFitsPage": 当前 UI 页面测量函数
+        /// returns: 第一页应使用的显示模式
+        /// </summary>
+        private static StorySequenceDisplayMode ResolveFirstPreparedDisplayMode(
+            string accumulatedDisplayText,
+            StorySequenceEntry entry,
+            int maxCharactersPerPage,
+            Func<string, bool> displayTextFitsPage)
+        {
+            if (entry == null || entry.DisplayMode != StorySequenceDisplayMode.Append || string.IsNullOrEmpty(accumulatedDisplayText))
+            {
+                return entry?.DisplayMode ?? StorySequenceDisplayMode.Replace;
+            }
+
+            string appendedDisplayText = string.Concat(BuildPrefixText(accumulatedDisplayText, entry.DisplayMode), entry.Text ?? string.Empty);
+            return DoesDisplayTextFitPage(appendedDisplayText, maxCharactersPerPage, displayTextFitsPage)
+                ? StorySequenceDisplayMode.Append
+                : StorySequenceDisplayMode.Replace;
         }
 
         /// <summary>
         /// summary: 按文本元素把一条对白切成若干分页，避免把代理对或组合字符从中间截断。
         /// param name="text": 原始对白文本
-        /// param name="maxCharactersPerEntry": 单页允许的最大文本元素数量
+        /// param name="prefixText": 当前页在正文前保留的 append 前缀
+        /// param name="maxCharactersPerPage": 单页允许的最大文本元素数量
+        /// param name="displayTextFitsPage": 当前 UI 页面测量函数
         /// returns: 拆分后的分页文本列表
         /// </summary>
-        private static List<string> SplitTextIntoChunks(string text, int maxCharactersPerEntry)
+        private static List<string> SplitTextIntoChunks(
+            string text,
+            string prefixText,
+            int maxCharactersPerPage,
+            Func<string, bool> displayTextFitsPage)
         {
             List<string> chunks = new();
             if (string.IsNullOrEmpty(text))
@@ -1125,35 +1254,122 @@ namespace Kernel.UI
                 return chunks;
             }
 
-            if (maxCharactersPerEntry <= 0)
+            if (maxCharactersPerPage <= 0 && displayTextFitsPage == null)
             {
                 chunks.Add(text);
                 return chunks;
             }
 
-            TextElementEnumerator enumerator = StringInfo.GetTextElementEnumerator(text);
+            List<string> elements = GetTextElements(text);
             StringBuilder builder = new();
-            int currentCount = 0;
-            while (enumerator.MoveNext())
+            int elementIndex = 0;
+            string currentPrefix = prefixText ?? string.Empty;
+            int currentPrefixCount = CountTextElements(currentPrefix);
+            while (elementIndex < elements.Count)
             {
-                builder.Append(enumerator.GetTextElement());
-                currentCount++;
-                if (currentCount < maxCharactersPerEntry)
-                {
-                    continue;
-                }
-
+                int remainingCount = elements.Count - elementIndex;
+                int maxChunkCount = maxCharactersPerPage > 0
+                    ? Mathf.Max(1, Mathf.Min(remainingCount, maxCharactersPerPage - currentPrefixCount))
+                    : remainingCount;
+                int chunkCount = ResolveLargestFittingChunkCount(elements, elementIndex, maxChunkCount, currentPrefix, maxCharactersPerPage, displayTextFitsPage);
+                AppendTextElements(builder, elements, elementIndex, chunkCount);
                 chunks.Add(builder.ToString());
                 builder.Clear();
-                currentCount = 0;
-            }
-
-            if (builder.Length > 0)
-            {
-                chunks.Add(builder.ToString());
+                elementIndex += chunkCount;
+                currentPrefix = string.Empty;
+                currentPrefixCount = 0;
             }
 
             return chunks;
+        }
+
+        private static int ResolveLargestFittingChunkCount(
+            IReadOnlyList<string> elements,
+            int startIndex,
+            int maxChunkCount,
+            string prefixText,
+            int maxCharactersPerPage,
+            Func<string, bool> displayTextFitsPage)
+        {
+            int low = 1;
+            int high = Mathf.Max(1, maxChunkCount);
+            int best = 0;
+
+            while (low <= high)
+            {
+                int middle = (low + high) / 2;
+                string candidateChunk = BuildTextElementsString(elements, startIndex, middle);
+                string candidateDisplayText = string.Concat(prefixText ?? string.Empty, candidateChunk);
+                if (DoesDisplayTextFitPage(candidateDisplayText, maxCharactersPerPage, displayTextFitsPage))
+                {
+                    best = middle;
+                    low = middle + 1;
+                }
+                else
+                {
+                    high = middle - 1;
+                }
+            }
+
+            return best > 0 ? best : 1;
+        }
+
+        private static bool DoesDisplayTextFitPage(
+            string displayText,
+            int maxCharactersPerPage,
+            Func<string, bool> displayTextFitsPage)
+        {
+            if (maxCharactersPerPage > 0 && CountTextElements(displayText) > maxCharactersPerPage)
+            {
+                return false;
+            }
+
+            return displayTextFitsPage == null || displayTextFitsPage(displayText ?? string.Empty);
+        }
+
+        private static List<string> GetTextElements(string text)
+        {
+            List<string> elements = new();
+            TextElementEnumerator enumerator = StringInfo.GetTextElementEnumerator(text ?? string.Empty);
+            while (enumerator.MoveNext())
+            {
+                elements.Add(enumerator.GetTextElement());
+            }
+
+            return elements;
+        }
+
+        private static int CountTextElements(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return 0;
+            }
+
+            int count = 0;
+            TextElementEnumerator enumerator = StringInfo.GetTextElementEnumerator(text);
+            while (enumerator.MoveNext())
+            {
+                count++;
+            }
+
+            return count;
+        }
+
+        private static string BuildTextElementsString(IReadOnlyList<string> elements, int startIndex, int count)
+        {
+            StringBuilder builder = new();
+            AppendTextElements(builder, elements, startIndex, count);
+            return builder.ToString();
+        }
+
+        private static void AppendTextElements(StringBuilder builder, IReadOnlyList<string> elements, int startIndex, int count)
+        {
+            int endIndex = Mathf.Min(elements.Count, startIndex + count);
+            for (int index = startIndex; index < endIndex; index++)
+            {
+                builder.Append(elements[index]);
+            }
         }
     }
 }

@@ -93,8 +93,12 @@
 若 Unity MCP 可用，把它视为 Unity Editor 真实状态的一等入口。
 
 - 先读 `mcpforunity://editor/state`
+- 本仓库对应的 Unity MCP 端点是 `http://127.0.0.1:8082/mcp`；`G:\Unity Project\4\4` 对应的是 `http://127.0.0.1:8080/mcp`，`G:\Unity Project\Colo-3D` 对应的是 `http://127.0.0.1:8081/mcp`，不要把默认路由打到另一边。
+- 不要单独信任默认 MCP namespace `unityMCP`。MCP for Unity 可能自动注入 plain `unityMCP` server/alias，且 Codex 工具列表可能延迟暴露 `unityMCP_0` / `unityMCP_1` / `unityMCP_2`。如果 `tool_search` 可用，使用 Unity 前先搜索 Unity MCP 工具，并检查所有暴露的 Unity MCP server namespace。
+- 对本仓库，优先使用解析到 8082 的 server；当前预期是 `unityMCP_2`。`unityMCP_0` 通常对应 `G:\Unity Project\4\4` / 8080，`unityMCP_1` 通常对应 `G:\Unity Project\Colo-3D` / 8081，不要用于本仓库。plain `unityMCP` 只有在 `mcpforunity://instances` 和 `mcpforunity://editor/state` 明确显示 `Lilith`、8082 对应实例、且场景上下文属于本仓库时才可使用。
 - 需要确认 Scene / Prefab / GameObject / Component / Console / Test / Screenshot 状态时，优先走 Unity MCP
 - 不要先靠手读 `.unity` / `.prefab` 猜编辑器真实状态
+- 本 Unity 项目当前不会在外部编辑脚本后自动导入/刷新。编辑 C# 脚本、asmdef、packages 或其他影响编译的资产后，在使用 Unity MCP 检查 Console、场景状态或运行测试前，必须手动触发一次 Unity refresh/import（等效 `Assets/Refresh`），并等待编译/domain reload 完成；然后再读取 `mcpforunity://editor/state`，确认 editor ready 且不在 compiling 后再信任 Console 或测试结果。
 - 修改脚本后，优先用 Unity MCP 检查编译状态和 Console
 - 若 `mcpforunity://instances` 显示多个 Unity 实例，必须先明确目标实例。`set_active_instance` 当前按 MCP server 全局状态生效，不假设它在两个 Codex 会话之间隔离；并行会话可能互相覆盖 active instance
 - 多实例并行工作时，每次读取 MCP resource 前先 `set_active_instance` 到本仓库实例；支持 `unity_instance` 参数的 tool call 优先显式传入目标实例，避免误操作另一个 Unity 项目

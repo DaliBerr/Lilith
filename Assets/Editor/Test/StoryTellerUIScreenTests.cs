@@ -52,7 +52,7 @@ public sealed class StoryTellerUIScreenTests
         Assert.That(skipButtonRoot.activeSelf, Is.True);
 
         skipButton.onClick.Invoke();
-        Assert.That(parser.SkipToNextReplaceRequested, Is.True);
+        Assert.That(parser.SkipCurrentDisplayBlockRequested, Is.True);
 
         InvokeNonPublic(screen, "OnAfterHide");
         parser.EmitSnapshot(new StorySequenceSnapshot(
@@ -133,6 +133,7 @@ public sealed class StoryTellerUIScreenTests
     private sealed class TestStorySequenceParser : StorySequenceParser
     {
         public bool SkipToNextReplaceRequested { get; private set; }
+        public bool SkipCurrentDisplayBlockRequested { get; private set; }
         public bool AdvanceToNextEntryRequested { get; private set; }
 
         public void InitializeForTest()
@@ -148,6 +149,11 @@ public sealed class StoryTellerUIScreenTests
         public override void RequestSkipToNextReplaceOrFinish()
         {
             SkipToNextReplaceRequested = true;
+        }
+
+        public override void RequestSkipCurrentDisplayBlockOrFinish()
+        {
+            SkipCurrentDisplayBlockRequested = true;
         }
 
         public override void RequestAdvanceToNextEntryOrFinish()

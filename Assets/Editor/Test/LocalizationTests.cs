@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Reflection;
 using Kernel.Bullet;
+using Kernel.UI;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using UnityEngine;
@@ -67,6 +68,52 @@ public sealed class LocalizationTests
 
         Assert.That(localized["categories"]?[0]?["title"]?.ToString(), Is.EqualTo("Audio"));
         Assert.That(localized["categories"]?[0]?["entries"]?[0]?["title"]?.ToString(), Is.EqualTo("Master Volume"));
+    }
+
+    [Test]
+    public void OptionsCatalog_LocalizesLanguageDropdown()
+    {
+        bool merged = InvokeMergeJsonPatchPack(@"{
+  ""language"": ""en-US"",
+  ""domain"": ""OptionsCatalog"",
+  ""patches"": {
+    ""display"": { ""title"": ""Display"" },
+    ""language"": { ""title"": ""Language"" },
+    ""zh-Hans-CN"": { ""title"": ""Simplified Chinese"" },
+    ""en-US"": { ""title"": ""English"" }
+  }
+}");
+
+        Assert.That(merged, Is.True);
+
+        bool parsed = OptionsCatalogUtility.TryDeserializeCatalogJson(@"{
+  ""categories"": [
+    {
+      ""id"": ""display"",
+      ""title"": ""显示"",
+      ""entries"": [
+        {
+          ""id"": ""language"",
+          ""title"": ""语言"",
+          ""mode"": ""dropdown"",
+          ""playerPrefsKey"": ""LanguageTag"",
+          ""defaultOptionId"": ""en-US"",
+          ""options"": [
+            { ""id"": ""zh-Hans-CN"", ""title"": ""简体中文"", ""value"": ""zh-Hans-CN"" },
+            { ""id"": ""en-US"", ""title"": ""English"", ""value"": ""en-US"" }
+          ]
+        }
+      ]
+    }
+  ]
+}", out OptionsCatalogData catalog, out string errorMessage);
+
+        Assert.That(parsed, Is.True, errorMessage);
+        OptionsEntryData languageEntry = catalog.Categories[0].Entries[0];
+        Assert.That(catalog.Categories[0].Title, Is.EqualTo("Display"));
+        Assert.That(languageEntry.Title, Is.EqualTo("Language"));
+        Assert.That(languageEntry.Options[0].Title, Is.EqualTo("Simplified Chinese"));
+        Assert.That(languageEntry.Options[1].Title, Is.EqualTo("English"));
     }
 
     [Test]

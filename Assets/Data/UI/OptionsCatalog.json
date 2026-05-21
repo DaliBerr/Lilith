@@ -63,6 +63,25 @@
           "max": 1.5,
           "defaultValue": 1,
           "valueFormat": "{value}x"
+        },
+        {
+          "id": "language",
+          "title": "语言",
+          "mode": "dropdown",
+          "playerPrefsKey": "LanguageTag",
+          "defaultOptionId": "en-US",
+          "options": [
+            {
+              "id": "zh-Hans-CN",
+              "title": "简体中文",
+              "value": "zh-Hans-CN"
+            },
+            {
+              "id": "en-US",
+              "title": "English",
+              "value": "en-US"
+            }
+          ]
         }
       ]
     },

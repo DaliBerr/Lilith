@@ -174,7 +174,7 @@ namespace Kernel
             parser.SequenceCompleted += HandleGuideCompleted;
             try
             {
-                if (!parser.TryPlay(CreateOpeningGuideRequest(), out string errorMessage))
+                if (!parser.TryPlay(CreateOpeningGuideRequest(dialogScreen), out string errorMessage))
                 {
                     GameDebug.LogWarning($"[Startup] Failed to start opening guide dialog: {errorMessage}");
                     yield return UIManager.Instance.PopModalAndWait();
@@ -221,15 +221,17 @@ namespace Kernel
         /// param: 无
         /// returns: 可直接提交给 StorySequenceParser 的请求对象
         /// </summary>
-        private StorySequenceRequest CreateOpeningGuideRequest()
+        private StorySequenceRequest CreateOpeningGuideRequest(DialogUIScreen dialogScreen)
         {
+            int fallbackCapacity = Mathf.Max(1, openingGuideMaxCharactersPerEntry);
             return new StorySequenceRequest
             {
                 Address = string.IsNullOrWhiteSpace(openingGuideAddress) ? DefaultOpeningGuideAddress : openingGuideAddress.Trim(),
                 CharactersPerSecond = openingGuideCharactersPerSecond,
                 LineHoldSeconds = openingGuideLineHoldSeconds,
                 AllowDefaultSkipInput = false,
-                MaxCharactersPerEntry = Mathf.Max(1, openingGuideMaxCharactersPerEntry),
+                MaxCharactersPerEntry = dialogScreen != null ? dialogScreen.EstimateDialogTextCapacity(fallbackCapacity) : fallbackCapacity,
+                DisplayTextFitsPage = dialogScreen != null ? dialogScreen.DoesDialogTextFitPage : null,
                 WaitForAdvanceInputAfterEntryReveal = true
             };
         }

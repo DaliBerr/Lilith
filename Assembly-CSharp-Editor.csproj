@@ -99,6 +99,7 @@
     <Compile Include="Assets\Editor\Test\DialogUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthTests.cs" />
     <Compile Include="Assets\Editor\Test\QuestCatalogJsonUtilityTests.cs" />
+    <Compile Include="Assets\Editor\Test\ProceduralRoomMapTests.cs" />
     <Compile Include="Assets\Editor\Test\BossPhaseControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\MapGridAuthoringTests.cs" />
     <Compile Include="Assets\Editor\Test\StrokeRevealUIWordTests.cs" />

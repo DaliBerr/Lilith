@@ -95,6 +95,11 @@ MonoBehaviour:
   contentRoot: {fileID: 1625778105592616703}
   closeButton: {fileID: 6716191084112242010}
   catalogButtonTemplate: {fileID: 7583869787467620576}
+  scrollRect: {fileID: 5912124235070304537}
+  buttonPanel: {fileID: 8931723607584452882}
+  cancelButton: {fileID: 8981593791398202440}
+  resetButton: {fileID: 4757535002014139925}
+  applyButton: {fileID: 1517262587323138086}
   catalogAddress: Assets/Data/UI/OptionsCatalog
   entryPrefabAddress: Assets/Prefabs/UI/Option Entry Entry
   normalCatalogColor: {r: 1, g: 1, b: 1, a: 1}
@@ -662,7 +667,7 @@ RectTransform:
   - {fileID: 7993200476299586594}
   m_Father: {fileID: 4025600214409274399}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 0.1}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
@@ -682,7 +687,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2699960797132906821}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 
@@ -1688,7 +1693,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8931723607584452882}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 

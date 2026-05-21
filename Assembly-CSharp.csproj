@@ -94,6 +94,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\PopUpUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackProjectileEmitter.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomGraphGenerator.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyBulletTokenDropper.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\GridPathfinder.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualPresenter.cs" />
@@ -106,9 +107,11 @@
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeRevealUIWord.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\GameUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveManager.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\ProceduralRoomMapDebugController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CompiledAttack.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomTemplateData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\RuntimeSaveService.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
@@ -119,6 +122,7 @@
     <Compile Include="Assets\Scripts\Kernel\Quest\QuestPersistenceModels.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCollections.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\GlobalTextInputGuard.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomTypes.cs" />
     <Compile Include="Assets\Scripts\Kernel\Animation\StrokeUIImage.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\StartRoomBattleTeleporter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ResultTokenData.cs" />
@@ -132,12 +136,15 @@
     <Compile Include="Assets\Scripts\Kernel\UI\SettlementUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\GlobalModeSettingsService.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarController.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\TilemapRoomPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewRig.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaCompiler.cs" />
     <Compile Include="Assets\Scripts\Kernel\Display\LilithDisplaySettings.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StorySequenceParser.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\LoadingUIScreen.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\StoryTextPageUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\RunRewardCollectedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterEndedEvent.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
@@ -228,11 +235,11 @@
     <None Include="Assets\TextMesh Pro\Sprites\EmojiOne Attribution.txt" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap-Custom-Atlas.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF.shader" />
+    <None Include="Assets\AddressableAssetsData\link.xml" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile SSD.shader" />
     <None Include="Assets\TextMesh Pro\Resources\LineBreaking Leading Characters.txt" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro_Properties.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro_Surface.cginc" />
-    <None Include="Assets\AddressableAssetsData\link.xml" />
     <None Include="Assets\TextMesh Pro\Resources\LineBreaking Following Characters.txt" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Masking.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF Overlay.shader" />

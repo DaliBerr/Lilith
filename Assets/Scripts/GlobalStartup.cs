@@ -1,14 +1,18 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using Kernel.Audio;
 using Kernel.Display;
 using Kernel.GameState;
 using Kernel.Quest;
 using Kernel.UI;
+using Kernel.Upgrade;
 using Vocalith.Localization;
 using Vocalith.Logging;
 using Vocalith.UI;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.SceneManagement;
 
 namespace Kernel
@@ -22,6 +26,25 @@ namespace Kernel
         public static GlobalStartup Instance { get; private set; }
 
         private const string MainSceneName = "Main";
+        private static readonly string[] DefaultDataLayerPreloadAddresses =
+        {
+            "Assets/Data/UI/OptionsCatalog",
+            "Assets/Data/Quest/QuestCatalog",
+            "Assets/Data/UI/SettlementPresentationCatalog",
+            "Assets/Data/Story/Introduction",
+            "Assets/Data/UI/HintCatalog",
+            "Assets/Data/Story/DialogTest",
+            "Assets/Data/Upgrades/PermanentUpgradeCatalog",
+            "Assets/Data/Localization/StringTables/ui.zh-Hans-CN",
+            "Assets/Data/Localization/StringTables/ui.en-US",
+            "Assets/Data/Localization/JsonPatches/en-US/OptionsCatalog.en-US",
+            "Assets/Data/Localization/JsonPatches/en-US/HintCatalog.en-US",
+            "Assets/Data/Localization/JsonPatches/en-US/SettlementPresentationCatalog.en-US",
+            "Assets/Data/Localization/JsonPatches/en-US/QuestCatalog.en-US",
+            "Assets/Data/Localization/JsonPatches/en-US/PermanentUpgradeCatalog.en-US",
+            "Assets/Data/Localization/JsonPatches/en-US/StorySequence.en-US",
+            "Assets/Data/BulletTokens/Core/InitCore",
+        };
 
         [SerializeField] private bool isEnableDevMode = true;
         [Header("Start Story")]
@@ -29,10 +52,15 @@ namespace Kernel
         [SerializeField] [Min(0f)] private float startStoryCharactersPerSecond = 24f;
         [SerializeField] [Min(0f)] private float startStoryLineHoldSeconds = 1.2f;
 
+        private readonly List<AsyncOperationHandle<UnityEngine.Object>> preloadedDefHandles = new();
         private bool isBootCompleted;
         private bool isStartGameFlowRequested;
         private bool isLoadingMainScene;
         private bool hasHandedOffToMainScene;
+        private bool hasLoadedAllDefs;
+        private bool isLoadingAllDefs;
+        private bool isStartFlowDataLoadCompleted;
+        private float allDefsLoadProgress;
 
         public bool IsBootCompleted => isBootCompleted;
 
@@ -61,6 +89,7 @@ namespace Kernel
         private void OnDestroy()
         {
             UnsubscribeFromNarrativeSequence();
+            ReleasePreloadedDefHandles();
 
             if (Instance == this)
             {
@@ -167,12 +196,12 @@ namespace Kernel
             }
 
             isLoadingMainScene = true;
-            StartCoroutine(LoadMainSceneCo());
+            StartCoroutine(EnterMainSceneAfterDataLoadCo());
             return true;
         }
 
         /// <summary>
-        /// summary: 在 StartUp 菜单后压入剧情介绍界面，并交给 StorySequenceParser 播放默认开场剧情。
+        /// summary: 新档开始时先把 Loading Panel 预压到后台，再播放开场剧情；剧情播放期间并行加载数据层。
         /// param: 无
         /// returns: 协程枚举器
         /// </summary>
@@ -180,37 +209,100 @@ namespace Kernel
         {
             if (UIManager.Instance == null)
             {
-                GameDebug.LogError("[GlobalStartup] UIManager is missing. Story intro will be skipped.");
-                RequestEnterMainScene();
+                GameDebug.LogError("[GlobalStartup] UIManager is missing. Story intro and loading screen will be skipped.");
+                isLoadingMainScene = true;
+                yield return StartCoroutine(LoadDefsForStartFlowCo(null));
+                yield return StartCoroutine(LoadMainSceneCo());
                 yield break;
             }
 
+            isLoadingMainScene = true;
+            EnsureGameLoadingStatus();
+            UIScreen screenBehindLoading = UIManager.Instance.GetTopScreen();
+            yield return UIManager.Instance.PrePushScreenAndWait<LoadingUIScreen>();
+            LoadingUIScreen loadingScreen = UIManager.Instance.GetTopScreen(includeInactive: true) as LoadingUIScreen;
+            SetLoadingProgress(loadingScreen, 0f);
+            if (screenBehindLoading != null && screenBehindLoading.getAlpha() > 0f)
+            {
+                yield return screenBehindLoading.Hide(UIManager.Instance.defaultHide);
+            }
+
+            StartCoroutine(LoadDefsForStartFlowCo(loadingScreen));
             yield return UIManager.Instance.PushScreenAndWait<StoryTellerUIScreen>();
 
-            if (UIManager.Instance.GetTopScreen() is not StoryTellerUIScreen)
+            StoryTellerUIScreen storyScreen = UIManager.Instance.GetTopScreen(includeInactive: true) as StoryTellerUIScreen;
+            bool hasStoryScreen = storyScreen != null;
+            StorySequenceResult storyResult = new(StorySequenceCompletionStatus.Failed, "Story intro was skipped.");
+
+            if (!hasStoryScreen)
             {
                 GameDebug.LogWarning("[GlobalStartup] StoryTellerUIScreen could not be shown. Falling back to Main scene.");
-                RequestEnterMainScene();
-                yield break;
+                if (!isStartFlowDataLoadCompleted && loadingScreen != null)
+                {
+                    yield return loadingScreen.Show(UIManager.Instance.defaultShow);
+                }
             }
-
-            StorySequenceParser parser = StorySequenceParser.Instance;
-            if (parser == null)
+            else
             {
-                GameDebug.LogError("[GlobalStartup] StorySequenceParser is missing. Story intro will be skipped.");
-                RequestEnterMainScene();
-                yield break;
+                StorySequenceParser parser = StorySequenceParser.Instance;
+                if (parser == null)
+                {
+                    GameDebug.LogError("[GlobalStartup] StorySequenceParser is missing. Story intro will be skipped.");
+                }
+                else
+                {
+                    bool isStoryCompleted = false;
+
+                    void HandleStoryCompleted(StorySequenceResult result)
+                    {
+                        storyResult = result;
+                        isStoryCompleted = true;
+                    }
+
+                    parser.SequenceCompleted += HandleStoryCompleted;
+                    try
+                    {
+                        if (!parser.TryPlay(CreateStartStoryRequest(storyScreen), out string errorMessage))
+                        {
+                            storyResult = new StorySequenceResult(StorySequenceCompletionStatus.Failed, errorMessage);
+                            GameDebug.LogWarning($"[GlobalStartup] Failed to start story intro: {errorMessage}");
+                        }
+                        else
+                        {
+                            while (!isStoryCompleted)
+                            {
+                                yield return null;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        parser.SequenceCompleted -= HandleStoryCompleted;
+                    }
+                }
             }
 
-            UnsubscribeFromNarrativeSequence();
-            parser.SequenceCompleted += HandleStartStorySequenceCompleted;
+            HandleStartStorySequenceCompleted(storyResult);
 
-            if (!parser.TryPlay(CreateStartStoryRequest(), out string errorMessage))
+            if (UIManager.Instance != null && UIManager.Instance.GetTopScreen(includeInactive: true) is StoryTellerUIScreen)
             {
-                GameDebug.LogWarning($"[GlobalStartup] Failed to start story intro: {errorMessage}");
-                UnsubscribeFromNarrativeSequence();
-                RequestEnterMainScene();
+                if (isStartFlowDataLoadCompleted)
+                {
+                    yield return UIManager.Instance.PopScreenNoShowAndWait();
+                }
+                else
+                {
+                    yield return UIManager.Instance.PopScreenAndWait();
+                }
             }
+
+            while (!isStartFlowDataLoadCompleted)
+            {
+                yield return null;
+            }
+
+            SetLoadingProgress(loadingScreen, 1f);
+            yield return StartCoroutine(LoadMainSceneCo());
         }
 
         /// <summary>
@@ -257,18 +349,171 @@ namespace Kernel
         {
             var initHandle = Addressables.InitializeAsync();
             yield return initHandle;
-
-            yield return StartCoroutine(LoadAllDefsCoroutine());
         }
 
         /// <summary>
-        /// summary: 预留所有 Def 与数据库的统一加载入口。
-        /// param: 无
+        /// summary: 预加载启动进入 Main 前需要的 Addressables 数据层资源，并按步骤回报进度。
+        /// param name="reportProgress": 可选进度回调，取值范围 0 到 1
         /// returns: 协程枚举器
         /// </summary>
-        private IEnumerator LoadAllDefsCoroutine()
+        private IEnumerator LoadAllDefsCoroutine(Action<float> reportProgress = null)
         {
-            yield return null;
+            if (hasLoadedAllDefs)
+            {
+                ReportAllDefsProgress(1f, reportProgress);
+                yield break;
+            }
+
+            while (isLoadingAllDefs)
+            {
+                ReportAllDefsProgress(allDefsLoadProgress, reportProgress);
+                yield return null;
+            }
+
+            if (hasLoadedAllDefs)
+            {
+                ReportAllDefsProgress(1f, reportProgress);
+                yield break;
+            }
+
+            isLoadingAllDefs = true;
+            bool hasFailedLoad = false;
+            List<string> preloadAddresses = BuildDataLayerPreloadAddressList();
+            int totalStepCount = Mathf.Max(1, preloadAddresses.Count + 1);
+            int completedStepCount = 0;
+
+            ReleasePreloadedDefHandles();
+            ReportAllDefsProgress(0f, reportProgress);
+
+            try
+            {
+                PermanentUpgradeService upgradeService = PermanentUpgradeService.GetOrCreateInstance();
+                if (upgradeService != null)
+                {
+                    yield return upgradeService.LoadCatalogIfNeededCo();
+                }
+
+                completedStepCount++;
+                ReportAllDefsProgress((float)completedStepCount / totalStepCount, reportProgress);
+
+                for (int i = 0; i < preloadAddresses.Count; i++)
+                {
+                    string address = preloadAddresses[i];
+                    AsyncOperationHandle<UnityEngine.Object> handle = Addressables.LoadAssetAsync<UnityEngine.Object>(address);
+                    preloadedDefHandles.Add(handle);
+
+                    while (!handle.IsDone)
+                    {
+                        float stepProgress = Mathf.Clamp01(handle.PercentComplete);
+                        ReportAllDefsProgress((completedStepCount + stepProgress) / totalStepCount, reportProgress);
+                        yield return null;
+                    }
+
+                    if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
+                    {
+                        hasFailedLoad = true;
+                        GameDebug.LogError($"[GlobalStartup] Failed to preload data asset at '{address}'.");
+                        ReleasePreloadedDefHandle(handle);
+                    }
+
+                    completedStepCount++;
+                    ReportAllDefsProgress((float)completedStepCount / totalStepCount, reportProgress);
+                }
+
+                hasLoadedAllDefs = !hasFailedLoad;
+            }
+            finally
+            {
+                isLoadingAllDefs = false;
+                ReportAllDefsProgress(1f, reportProgress);
+            }
+        }
+
+        private IEnumerator LoadDefsForStartFlowCo(LoadingUIScreen loadingScreen)
+        {
+            isStartFlowDataLoadCompleted = false;
+            SetLoadingProgress(loadingScreen, 0f);
+            yield return StartCoroutine(LoadAllDefsCoroutine(progress => SetLoadingProgress(loadingScreen, progress)));
+            SetLoadingProgress(loadingScreen, 1f);
+            isStartFlowDataLoadCompleted = true;
+        }
+
+        private IEnumerator EnterMainSceneAfterDataLoadCo()
+        {
+            LoadingUIScreen loadingScreen = null;
+            EnsureGameLoadingStatus();
+
+            if (UIManager.Instance == null)
+            {
+                GameDebug.LogWarning("[GlobalStartup] UIManager is missing. Loading screen cannot be shown.");
+            }
+            else
+            {
+                yield return UIManager.Instance.PushScreenAndWait<LoadingUIScreen>();
+                loadingScreen = UIManager.Instance.GetTopScreen(includeInactive: true) as LoadingUIScreen;
+            }
+
+            yield return StartCoroutine(LoadDefsForStartFlowCo(loadingScreen));
+            yield return StartCoroutine(LoadMainSceneCo());
+        }
+
+        private static List<string> BuildDataLayerPreloadAddressList()
+        {
+            List<string> addresses = new(DefaultDataLayerPreloadAddresses.Length);
+            HashSet<string> uniqueAddresses = new(StringComparer.Ordinal);
+            for (int i = 0; i < DefaultDataLayerPreloadAddresses.Length; i++)
+            {
+                string address = DefaultDataLayerPreloadAddresses[i]?.Trim();
+                if (!string.IsNullOrEmpty(address) && uniqueAddresses.Add(address))
+                {
+                    addresses.Add(address);
+                }
+            }
+
+            return addresses;
+        }
+
+        private static void SetLoadingProgress(LoadingUIScreen loadingScreen, float progress)
+        {
+            if (loadingScreen != null)
+            {
+                loadingScreen.SetProgress(progress);
+            }
+        }
+
+        private void ReportAllDefsProgress(float progress, Action<float> reportProgress)
+        {
+            allDefsLoadProgress = Mathf.Clamp01(progress);
+            reportProgress?.Invoke(allDefsLoadProgress);
+        }
+
+        private static void EnsureGameLoadingStatus()
+        {
+            if (!StatusController.HasStatus(StatusList.GameLoadingStatus))
+            {
+                StatusController.AddStatus(StatusList.GameLoadingStatus);
+            }
+        }
+
+        private void ReleasePreloadedDefHandles()
+        {
+            for (int i = preloadedDefHandles.Count - 1; i >= 0; i--)
+            {
+                ReleasePreloadedDefHandle(preloadedDefHandles[i]);
+            }
+
+            preloadedDefHandles.Clear();
+        }
+
+        private void ReleasePreloadedDefHandle(AsyncOperationHandle<UnityEngine.Object> handle)
+        {
+            if (!handle.IsValid())
+            {
+                return;
+            }
+
+            Addressables.Release(handle);
+            preloadedDefHandles.Remove(handle);
         }
 
         /// <summary>
@@ -287,7 +532,7 @@ namespace Kernel
 
             if (!StatusController.HasStatus(StatusList.GameLoadingStatus))
             {
-                StatusController.AddStatus(StatusList.GameLoadingStatus);
+                EnsureGameLoadingStatus();
             }
 
             if (UIManager.Instance != null)
@@ -328,7 +573,7 @@ namespace Kernel
         }
 
         /// <summary>
-        /// summary: 接收开场剧情的完成结果；当前只要剧情正常结束、失败或取消，都会继续进入 Main 场景。
+        /// summary: 接收开场剧情的完成结果；成功时写入已读标记，失败或取消只记录日志。
         /// param name="result": 开场剧情的结束结果
         /// returns: 无
         /// </summary>
@@ -349,8 +594,6 @@ namespace Kernel
             {
                 GameDebug.LogWarning("[GlobalStartup] Story intro was cancelled. Falling back to Main scene.");
             }
-
-            RequestEnterMainScene();
         }
 
         /// <summary>
@@ -380,14 +623,17 @@ namespace Kernel
         /// param: 无
         /// returns: 可直接提交给 StorySequenceParser 的请求对象
         /// </summary>
-        private StorySequenceRequest CreateStartStoryRequest()
+        private StorySequenceRequest CreateStartStoryRequest(StoryTellerUIScreen storyScreen)
         {
+            int measuredCapacity = storyScreen != null ? storyScreen.EstimateStoryTextCapacity(260) : 0;
             return new StorySequenceRequest
             {
                 Address = string.IsNullOrWhiteSpace(startStoryAddress) ? DefaultStartStoryAddress : startStoryAddress.Trim(),
                 CharactersPerSecond = startStoryCharactersPerSecond,
                 LineHoldSeconds = startStoryLineHoldSeconds,
-                AllowDefaultSkipInput = true
+                AllowDefaultSkipInput = true,
+                MaxCharactersPerEntry = measuredCapacity,
+                DisplayTextFitsPage = storyScreen != null ? storyScreen.DoesStoryTextFitPage : null
             };
         }
 

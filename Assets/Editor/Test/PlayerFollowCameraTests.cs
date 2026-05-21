@@ -1,7 +1,10 @@
 using System.Collections.Generic;
 using System.Reflection;
+using Kernel.GameState;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 public sealed class PlayerFollowCameraTests
 {
@@ -56,11 +59,78 @@ public sealed class PlayerFollowCameraTests
         Assert.That(followCamera.FocusWorldPoint, Is.EqualTo(expectedFocusPoint).Using(Vector3EqualityComparerWithTolerance(0.001f)));
     }
 
+    [Test]
+    public void HandleYawRotationInput_RightDragOutsidePause_UpdatesYaw()
+    {
+        Mouse testMouse = InputSystem.AddDevice<Mouse>();
+        try
+        {
+            StatusController.ClearStatus();
+            GameObject cameraObject = CreateGameObject("Main Camera");
+            cameraObject.AddComponent<Camera>();
+            PlayerFollowCamera followCamera = cameraObject.AddComponent<PlayerFollowCamera>();
+
+            SetPrivateField(followCamera, "yaw", 35f);
+            SetPrivateField(followCamera, "yawDragSensitivity", 0.2f);
+            QueueRightMouseDrag(testMouse, 50f);
+
+            InvokePrivateVoid(followCamera, "HandleYawRotationInput");
+
+            Assert.That(GetPrivateField<float>(followCamera, "yaw"), Is.EqualTo(45f).Within(0.001f));
+        }
+        finally
+        {
+            StatusController.ClearStatus();
+            InputSystem.RemoveDevice(testMouse);
+        }
+    }
+
+    [Test]
+    public void HandleYawRotationInput_InPauseMenuStatus_KeepsConfiguredYaw()
+    {
+        Mouse testMouse = InputSystem.AddDevice<Mouse>();
+        try
+        {
+            StatusController.ClearStatus();
+            GameObject cameraObject = CreateGameObject("Main Camera");
+            cameraObject.AddComponent<Camera>();
+            PlayerFollowCamera followCamera = cameraObject.AddComponent<PlayerFollowCamera>();
+
+            SetPrivateField(followCamera, "yaw", 35f);
+            SetPrivateField(followCamera, "yawDragSensitivity", 0.2f);
+            QueueRightMouseDrag(testMouse, 50f);
+            StatusController.AddStatus(StatusList.InPauseMenuStatus);
+
+            InvokePrivateVoid(followCamera, "HandleYawRotationInput");
+
+            Assert.That(GetPrivateField<float>(followCamera, "yaw"), Is.EqualTo(35f).Within(0.001f));
+        }
+        finally
+        {
+            StatusController.ClearStatus();
+            InputSystem.RemoveDevice(testMouse);
+        }
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);
         createdObjects.Add(gameObject);
         return gameObject;
+    }
+
+    private static void QueueRightMouseDrag(Mouse mouse, float horizontalDelta)
+    {
+        Assert.That(mouse, Is.Not.Null);
+        mouse.MakeCurrent();
+        MouseState state = new MouseState
+        {
+            delta = new Vector2(horizontalDelta, 0f)
+        }.WithButton(MouseButton.Right);
+
+        InputSystem.QueueStateEvent(mouse, state);
+        InputSystem.Update();
+        Assert.That(Mouse.current, Is.SameAs(mouse));
     }
 
     private static void InvokePrivateVoid(object target, string methodName)
@@ -75,6 +145,13 @@ public sealed class PlayerFollowCameraTests
         FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
         field.SetValue(target, value);
+    }
+
+    private static T GetPrivateField<T>(object target, string fieldName)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        return (T)field.GetValue(target);
     }
 
     private static IEqualityComparer<Vector3> Vector3EqualityComparerWithTolerance(float tolerance)

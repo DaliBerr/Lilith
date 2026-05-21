@@ -55,7 +55,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs)
   - 位于 `StartUp` 场景
   - 负责日志初始化、本地化初始化、`Addressables` 初始化、`Kernel.GameState.StatusController` 初始化
-  - 负责压入启动菜单；开始流程会先弹出 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 选择四个固定栏位，条目需要先选中、再点一次才会进入；新栏位先进入开场 storyteller，再切到 `Main`；已有栏位直接切到 `Main`
+  - 负责压入启动菜单；开始流程会先弹出 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 选择四个固定栏位，条目需要先选中、再点一次才会进入；已有栏位会显示 [`Assets/Scripts/Kernel/UI/LoadingUIScreen.cs`](Assets/Scripts/Kernel/UI/LoadingUIScreen.cs) 并预加载数据后切到 `Main`，新栏位会先把 Loading Panel 后台压栈，在开场 storyteller 播放期间并行加载数据，若剧情结束时仍未完成则继续显示 Loading Panel 等待
 - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
   - 文件名是 `StartUp.cs`，类名是 `Startup`
   - 位于 `Main` 场景
@@ -75,6 +75,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - 地图与寻路：位于 [`Assets/Scripts/Kernel/MapGrid`](Assets/Scripts/Kernel/MapGrid) 与 [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
   - 包含固定网格、双地图 Run flow、Seed 布局生成与格子寻路
   - [`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs) 暴露了边界厚度、障碍数量/尺寸、边缘留白、玩家安全区和刷怪环参数，可用来调节更密或更开的战斗地图
+  - [`Assets/Scripts/Kernel/MapGrid/Rooms`](Assets/Scripts/Kernel/MapGrid/Rooms) 是独立的调试版房间地图系统：`RoomGraphGenerator` 维护本局房间连接，`ProceduralRoomMapDebugController` 在 `Main` 场景远处的 `GeneratedRoomMapRoot` 只渲染当前一个 Tilemap 房间；当前不接入传送门、波次、玩家或敌人，旧 3D 地图仍保留
   - [`Assets/Scripts/Kernel/MapGrid/MapSpawnUtility.cs`](Assets/Scripts/Kernel/MapGrid/MapSpawnUtility.cs) 统一处理最近 Ground 格解析与角色传送吸附
   - [`Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 负责 `StartRoomMapRoot` 与 `CombatMapRoot` 之间的单局切换
 - 攻击与子弹：位于 [`Assets/Scripts/Kernel/Bullet`](Assets/Scripts/Kernel/Bullet)
@@ -152,5 +153,5 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity) 不能作为独立入口直接运行；当前必须先经过 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) 中的 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 交接
 - [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏会通过 `Kernel.Display.LilithDisplaySettings` 调用 `Screen.SetResolution` 应用并在下次启动恢复，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用；首版尚未配置实际音乐资源和玩法音效触发点
-- [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 仍是预留加载入口
+- [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 当前预加载进入 `Main` 前需要的 Addressables 数据层资源；非 Addressable 且由场景直接引用的资产仍随场景加载
 - 当前没有 `asmdef` / `asmref`，模块边界依赖目录与命名空间约定维护

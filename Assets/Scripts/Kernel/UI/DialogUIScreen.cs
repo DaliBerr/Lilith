@@ -21,6 +21,18 @@ namespace Kernel.UI
 
         public override Status currentStatus { get; } = StatusList.InDialogStatus;
 
+        internal bool DoesDialogTextFitPage(string text)
+        {
+            TryAutoBindReferences();
+            return StoryTextPageUtility.DoesTextFitPage(dialogText, text);
+        }
+
+        internal int EstimateDialogTextCapacity(int fallbackCapacity)
+        {
+            TryAutoBindReferences();
+            return StoryTextPageUtility.EstimateTextElementCapacity(dialogText, fallbackCapacity);
+        }
+
         protected override void OnInit()
         {
             TryAutoBindReferences();
