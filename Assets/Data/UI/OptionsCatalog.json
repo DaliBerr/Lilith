@@ -55,6 +55,13 @@
           "defaultBool": true
         },
         {
+          "id": "v_sync",
+          "title": "垂直同步",
+          "mode": "toggle",
+          "playerPrefsKey": "Options.Display.VSync",
+          "defaultBool": true
+        },
+        {
           "id": "ui_scale",
           "title": "UI 缩放",
           "mode": "slider",

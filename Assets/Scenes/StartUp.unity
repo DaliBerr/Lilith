@@ -230,6 +230,9 @@ MonoBehaviour:
   layerToast: {fileID: 1495276750}
   defaultShow: 0.15
   defaultHide: 0.12
+  minUIScale: 0.5
+  maxUIScale: 2
+  defaultUIScale: 1
 --- !u!4 &620652602
 Transform:
   m_ObjectHideFlags: 0

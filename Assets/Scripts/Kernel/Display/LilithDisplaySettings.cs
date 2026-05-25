@@ -7,6 +7,20 @@ namespace Kernel.Display
     {
         public const string ResolutionPrefsKey = "Options.Display.Resolution";
         public const string FullscreenPrefsKey = "Options.Display.Fullscreen";
+        public const string VSyncPrefsKey = "Options.Display.VSync";
+        public const int BaseTargetFrameRateLimit = 360;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ApplyFramePacingBeforeSceneLoad()
+        {
+            ApplyStoredVSyncAndFrameRateLimit();
+        }
+
+        public static void ApplyStoredDisplaySettings()
+        {
+            ApplyStoredResolutionAndFullscreen();
+            ApplyStoredVSyncAndFrameRateLimit();
+        }
 
         public static void ApplyStoredResolutionAndFullscreen()
         {
@@ -38,6 +52,39 @@ namespace Kernel.Display
             int safeHeight = Mathf.Max(1, height);
             FullScreenMode mode = fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
             Screen.SetResolution(safeWidth, safeHeight, mode);
+        }
+
+        public static void ApplyStoredVSyncAndFrameRateLimit()
+        {
+            bool vSyncEnabled = PlayerPrefs.GetInt(VSyncPrefsKey, 1) != 0;
+            ApplyVSyncAndFrameRateLimit(vSyncEnabled);
+        }
+
+        public static void ApplyVSyncAndFrameRateLimit(bool vSyncEnabled)
+        {
+            QualitySettings.vSyncCount = vSyncEnabled ? 1 : 0;
+            ApplyFrameRateLimit();
+        }
+
+        public static void ApplyFrameRateLimit()
+        {
+            Application.targetFrameRate = ResolveTargetFrameRateLimit();
+        }
+
+        public static int ResolveTargetFrameRateLimit()
+        {
+            return ResolveTargetFrameRateLimit(Screen.currentResolution.refreshRateRatio.value);
+        }
+
+        public static int ResolveTargetFrameRateLimit(double displayRefreshRate)
+        {
+            if (double.IsNaN(displayRefreshRate) || double.IsInfinity(displayRefreshRate) || displayRefreshRate <= 0d)
+            {
+                return BaseTargetFrameRateLimit;
+            }
+
+            int refreshRateLimit = Mathf.CeilToInt((float)displayRefreshRate);
+            return Mathf.Max(BaseTargetFrameRateLimit, refreshRateLimit);
         }
 
         public static bool TryParseResolutionValue(string value, out int width, out int height)

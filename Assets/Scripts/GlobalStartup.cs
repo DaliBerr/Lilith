@@ -118,7 +118,7 @@ namespace Kernel
             StatusController.AddStatus(StatusList.GameLoadingStatus);
             yield return StartCoroutine(InitGlobal());
             yield return InitLanguage();
-            LilithDisplaySettings.ApplyStoredResolutionAndFullscreen();
+            LilithDisplaySettings.ApplyStoredDisplaySettings();
             LilithAudioSettings.ApplyStoredSettings();
             ApplyStoredUIScale();
 

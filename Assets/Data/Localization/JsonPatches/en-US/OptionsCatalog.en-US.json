@@ -9,6 +9,7 @@
     "display": { "title": "Display" },
     "resolution": { "title": "Resolution" },
     "fullscreen": { "title": "Fullscreen" },
+    "v_sync": { "title": "Vertical Sync" },
     "ui_scale": { "title": "UI Scale" },
     "language": { "title": "Language" },
     "zh-Hans-CN": { "title": "Simplified Chinese" },

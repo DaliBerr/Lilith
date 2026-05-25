@@ -2,14 +2,14 @@
 
 Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`StartUp` 启动场景到 `Main` gameplay 场景的双阶段启动链路、`Kernel` 业务层、`Vocalith` 基础设施层、固定网格地图工作流、`Main` 场景中的起始房间与战斗地图双地图 Run 骨架、基于 Token 的攻击编译与发射、敌人波次系统，以及运行时存档与本地化基础能力。
 
-本 README 只保留当前实现、稳定路径、核心架构、关键入口和已知限制。仓库硬规则见 [AGENTS.md](AGENTS.md)；更细的 agent 操作流程、委派策略与文档分工由 repo-local [`lilith-repo-operator`](.codex/skills/lilith-repo-operator/SKILL.md) skill 承载。
+本 README 只保留当前实现、稳定路径、核心架构、关键入口和已知限制。仓库硬规则见 [AGENTS.md](AGENTS.md)；更细的 agent 操作流程、委派策略与文档分工由 repo-local [`lilith-repo-operator`](.codex/skills/lilith-repo-operator/SKILL.md) skill 承载。Codex repo-local hooks 配置见 [`.codex/hooks.json`](.codex/hooks.json)，当前 hooks 会在计划模式下注入“有不确定决策就直接询问用户”的提醒，并要求最终回复明确 Memory Consistency Pass 以及 `README.md`、`memory.md`、`AGENTS.md` 的更新评估。
 
 ## 工程事实
 
 - Unity 版本：`6000.3.9f1`
 - 渲染管线：URP
 - 关键包：`Addressables`、`Input System`、`AI Navigation`、`Newtonsoft Json`、`Unity Test Framework`
-- 运行时不再强制固定宽高比；分辨率 / 全屏设置通过 Options 保存，并在启动时应用
+- 运行时不再强制固定宽高比；分辨率 / 全屏 / 垂直同步设置通过 Options 保存，并在启动时应用；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准
 - 启动场景：[`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity)
 - 主 gameplay 场景：[`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
 - 当前仓库没有 `asmdef` / `asmref`
@@ -152,6 +152,6 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 ## 已知限制
 
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity) 不能作为独立入口直接运行；当前必须先经过 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) 中的 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 交接
-- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏会通过 `Kernel.Display.LilithDisplaySettings` 调用 `Screen.SetResolution` 应用并在下次启动恢复，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用；首版尚未配置实际音乐资源和玩法音效触发点
+- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏 / 垂直同步会通过 `Kernel.Display.LilithDisplaySettings` 应用并在下次启动恢复，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准；首版尚未配置实际音乐资源和玩法音效触发点
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 当前预加载进入 `Main` 前需要的 Addressables 数据层资源；非 Addressable 且由场景直接引用的资产仍随场景加载
 - 当前没有 `asmdef` / `asmref`，模块边界依赖目录与命名空间约定维护

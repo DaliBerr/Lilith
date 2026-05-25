@@ -172,7 +172,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 594330143bf64458b42c307fd9dad490, type: 3}
   m_Name: 
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
@@ -288,11 +288,11 @@ MonoBehaviour:
     m_Bottom: 0
   m_ChildAlignment: 0
   m_Spacing: 50
-  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandWidth: 0
   m_ChildForceExpandHeight: 1
   m_ChildControlWidth: 1
   m_ChildControlHeight: 1
-  m_ChildScaleWidth: 1
+  m_ChildScaleWidth: 0
   m_ChildScaleHeight: 1
   m_ReverseArrangement: 0
 --- !u!1 &3536950571749666516
@@ -455,7 +455,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 594330143bf64458b42c307fd9dad490, type: 3}
   m_Name: 
-  m_EditorClassIdentifier:
+  m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.99215686}
   m_RaycastTarget: 1
@@ -720,13 +720,17 @@ PrefabInstance:
       propertyPath: m_Name
       value: Close Button
       objectReference: {fileID: 0}
+    - target: {fileID: 4867928983321438094, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
+      propertyPath: m_MinHeight
+      value: -1
+      objectReference: {fileID: 0}
     - target: {fileID: 6192716622332297935, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_text
       value: "\u5173"
       objectReference: {fileID: 0}
     - target: {fileID: 6192716622332297935, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_fontSize
-      value: 28.6
+      value: 18
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_Pivot.x
@@ -874,13 +878,17 @@ PrefabInstance:
       propertyPath: m_AnchorMin.x
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4867928983321438094, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
+      propertyPath: m_MinHeight
+      value: -1
+      objectReference: {fileID: 0}
     - target: {fileID: 6192716622332297935, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_text
       value: "\u5173\u95ED"
       objectReference: {fileID: 0}
     - target: {fileID: 6192716622332297935, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_fontSize
-      value: 35.25
+      value: 41.1
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_Pivot.x
@@ -1028,13 +1036,17 @@ PrefabInstance:
       propertyPath: m_AnchorMin.x
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4867928983321438094, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
+      propertyPath: m_MinHeight
+      value: -1
+      objectReference: {fileID: 0}
     - target: {fileID: 6192716622332297935, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_text
       value: "\u786E\u8BA4"
       objectReference: {fileID: 0}
     - target: {fileID: 6192716622332297935, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_fontSize
-      value: 35.25
+      value: 41.1
       objectReference: {fileID: 0}
     - target: {fileID: 8832727914353316594, guid: 66932ebf6ab3fdf44b4a40ee1a48d007, type: 3}
       propertyPath: m_Pivot.x

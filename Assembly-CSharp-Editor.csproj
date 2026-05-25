@@ -51,9 +51,11 @@
   <ItemGroup>
     <Compile Include="Assets\Editor\Test\BackPackAttackPreviewControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\QuestServiceTests.cs" />
+    <Compile Include="Assets\Editor\Test\StartUpMenuUITests.cs" />
     <Compile Include="Assets\Editor\Test\WaveDefinitionTests.cs" />
     <Compile Include="Assets\Editor\Test\BossInfoUIScreenTests.cs" />
     <Compile Include="Assets\Editor\SystemCallBlocker.cs" />
+    <Compile Include="Assets\Editor\Test\FixedPixelSlicedImageTests.cs" />
     <Compile Include="Assets\Editor\Test\WaveManagerTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyDefinitionBinderTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyGeneratorTests.cs" />

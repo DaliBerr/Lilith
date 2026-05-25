@@ -38,10 +38,12 @@ namespace Kernel.UI
         private const string ScreenResolutionsOptionsSource = "screenResolutions";
         private const string DisplayResolutionEntryId = "resolution";
         private const string DisplayFullscreenEntryId = "fullscreen";
+        private const string DisplayVSyncEntryId = "v_sync";
         private const string DisplayUIScaleEntryId = "ui_scale";
         private const string LocalizationLanguageEntryId = "language";
         private const string DisplayResolutionPrefsKey = LilithDisplaySettings.ResolutionPrefsKey;
         private const string DisplayFullscreenPrefsKey = LilithDisplaySettings.FullscreenPrefsKey;
+        private const string DisplayVSyncPrefsKey = LilithDisplaySettings.VSyncPrefsKey;
         private const string BindingCancelledMessage = "按键绑定已取消。";
 
         [Header("Layout")]
@@ -449,7 +451,12 @@ namespace Kernel.UI
             Button button = root.Find("Button")?.GetComponent<Button>();
             TMP_Text buttonText = root.Find("Button/Text (TMP)")?.GetComponent<TMP_Text>();
             TMP_Dropdown dropdown = root.Find("Dropdown")?.GetComponent<TMP_Dropdown>();
-            Toggle toggle = root.Find("Toggle")?.GetComponent<Toggle>();
+            Transform toggleRoot = root.Find("Toggle");
+            Toggle toggle = toggleRoot != null ? toggleRoot.GetComponent<Toggle>() : null;
+            if (toggle == null && toggleRoot != null)
+            {
+                toggle = toggleRoot.GetComponentInChildren<Toggle>(true);
+            }
             OptionsEntryRuntimeState state = null;
             if (RequiresRuntimeState(entry))
             {
@@ -468,7 +475,11 @@ namespace Kernel.UI
             SetObjectActive(slider != null ? slider.gameObject : null, entry.Mode == SliderMode);
             SetObjectActive(button != null ? button.gameObject : null, entry.Mode == ButtonMode);
             SetObjectActive(dropdown != null ? dropdown.gameObject : null, entry.Mode == DropdownMode);
-            SetObjectActive(toggle != null ? toggle.gameObject : null, entry.Mode == ToggleMode);
+            GameObject toggleObject = toggleRoot != null
+                ? toggleRoot.gameObject
+                : toggle != null ? toggle.gameObject : null;
+
+            SetObjectActive(toggleObject, entry.Mode == ToggleMode);
 
             switch (entry.Mode)
             {
@@ -747,6 +758,11 @@ namespace Kernel.UI
                         return Screen.fullScreen ? bool.TrueString : bool.FalseString;
                     }
 
+                    if (IsDisplayVSyncEntry(entry) && !PlayerPrefs.HasKey(prefsKey))
+                    {
+                        return bool.TrueString;
+                    }
+
                     bool toggleDefault = string.Equals(defaultValue, bool.TrueString, StringComparison.Ordinal);
                     bool toggleValue = PlayerPrefs.GetInt(prefsKey, toggleDefault ? 1 : 0) != 0;
                     return toggleValue ? bool.TrueString : bool.FalseString;
@@ -987,6 +1003,14 @@ namespace Kernel.UI
                 && entry.Mode == ToggleMode
                 && (string.Equals(entry.Id, DisplayFullscreenEntryId, StringComparison.Ordinal)
                     || string.Equals(entry.PlayerPrefsKey, DisplayFullscreenPrefsKey, StringComparison.Ordinal));
+        }
+
+        private static bool IsDisplayVSyncEntry(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == ToggleMode
+                && (string.Equals(entry.Id, DisplayVSyncEntryId, StringComparison.Ordinal)
+                    || string.Equals(entry.PlayerPrefsKey, DisplayVSyncPrefsKey, StringComparison.Ordinal));
         }
 
         private static bool IsDisplayUIScaleEntry(OptionsEntryData entry)
@@ -1419,6 +1443,7 @@ namespace Kernel.UI
         private void ApplyDisplaySettings()
         {
             ApplyResolutionAndFullscreenSettings();
+            ApplyVSyncSetting();
             ApplyUIScaleSetting();
         }
 
@@ -1437,6 +1462,18 @@ namespace Kernel.UI
             }
 
             LilithDisplaySettings.ApplyResolutionAndFullscreen(width, height, fullscreen);
+        }
+
+        private void ApplyVSyncSetting()
+        {
+            if (!TryFindState(DisplayVSyncEntryId, out OptionsEntryRuntimeState vSyncState))
+            {
+                LilithDisplaySettings.ApplyFrameRateLimit();
+                return;
+            }
+
+            bool vSyncEnabled = string.Equals(vSyncState.CurrentValue, bool.TrueString, StringComparison.Ordinal);
+            LilithDisplaySettings.ApplyVSyncAndFrameRateLimit(vSyncEnabled);
         }
 
         private void ApplyUIScaleSetting()

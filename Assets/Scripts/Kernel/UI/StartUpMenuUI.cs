@@ -1,8 +1,11 @@
 using System.Collections;
 using Kernel.GameState;
+using TMPro;
 using Vocalith.Logging;
 using Vocalith.UI;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.UI;
 
 namespace Kernel.UI
@@ -17,17 +20,42 @@ namespace Kernel.UI
         [Header("Buttons")]
         [SerializeField] private Button startButton;
         [SerializeField] private GameObject loadButtonRoot;
+        [SerializeField] private Button loadButton;
         [SerializeField] private Button settingsButton;
         [SerializeField] private Button quitButton;
 
+        [Header("Seal")]
+        [SerializeField] private Image sealImage;
+
+        private static readonly Color DefaultButtonTextColor = Color.white;
+        private static readonly Color HoverButtonTextColor = new Color(78f / 255f, 69f / 255f, 60f / 255f, 1f);
+        private static readonly string[] SealSpriteAddresses =
+        {
+            "Assets/Art/UI/Start up/Seal/\u4ED9",
+            "Assets/Art/UI/Start up/Seal/\u547D",
+            "Assets/Art/UI/Start up/Seal/\u751F",
+            "Assets/Art/UI/Start up/Seal/\u901D",
+            "Assets/Art/UI/Start up/Seal/\u5BFF",
+            "Assets/Art/UI/Start up/Seal/\u859B",
+            "Assets/Art/UI/Start up/Seal/\u5BFB",
+            "Assets/Art/UI/Start up/Seal/\u9038",
+            "Assets/Art/UI/Start up/Seal/\u90B9",
+            "Assets/Art/UI/Start up/Seal/\u9EC4"
+        };
+
         private bool isOpeningProfileModal;
+        private Coroutine sealSpriteLoadCoroutine;
+        private AsyncOperationHandle<Sprite> activeSealSpriteHandle;
+        private AsyncOperationHandle<Sprite> loadingSealSpriteHandle;
 
         public override Status currentStatus { get; } = StatusList.InMainMenuStatus;
 
         protected override void OnInit()
         {
             TryAutoBindReferences();
-            HideLegacyLoadButton();
+            EnsureButtonRootsVisible();
+            ConfigureButtonVisuals();
+            BeginRandomSealSpriteLoad();
             isOpeningProfileModal = false;
             SetButtonsInteractable(true);
             BindButtonCallbacks();
@@ -40,6 +68,8 @@ namespace Kernel.UI
 
         private void OnDestroy()
         {
+            StopSealSpriteLoad();
+            ReleaseSealSpriteHandles();
             UnbindButtonCallbacks();
             RemoveCurrentStatus();
         }
@@ -56,51 +86,204 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 按当前 StartUp UI Prefab 的层级自动补齐按钮与旧 Load 节点引用。
+        /// summary: 按当前 StartUp UI Prefab 的层级自动补齐四个菜单按钮引用。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void TryAutoBindReferences()
         {
+            startButton ??= FindButton("Button Panel/Start");
             startButton ??= FindButton("Button Panel/Start Button/Edge/Button");
+
+            loadButtonRoot ??= transform.Find("Button Panel/Load")?.gameObject;
             loadButtonRoot ??= transform.Find("Button Panel/Load Button")?.gameObject;
+            loadButton ??= loadButtonRoot != null ? loadButtonRoot.GetComponent<Button>() : null;
+            loadButton ??= FindButton("Button Panel/Load");
+            loadButton ??= FindButton("Button Panel/Load Button/Edge/Button");
+
+            settingsButton ??= FindButton("Button Panel/Settings");
             settingsButton ??= FindButton("Button Panel/Option Button/Edge/Button");
+
+            quitButton ??= FindButton("Button Panel/Quit");
             quitButton ??= FindButton("Button Panel/Quit Button/Edge/Button");
+
+            sealImage ??= transform.Find("Seal Panel")?.GetComponent<Image>();
         }
 
         /// <summary>
-        /// summary: 隐藏旧的 Load 按钮，使开始流程统一走档位弹窗。
+        /// summary: 每次启动菜单初始化时随机加载一张 Addressables Seal 图片。
         /// param: 无
         /// returns: 无
         /// </summary>
-        private void HideLegacyLoadButton()
+        private void BeginRandomSealSpriteLoad()
         {
-            if (loadButtonRoot != null && loadButtonRoot.activeSelf)
+            if (!Application.isPlaying || sealImage == null || SealSpriteAddresses.Length == 0)
             {
-                loadButtonRoot.SetActive(false);
+                return;
+            }
+
+            StopSealSpriteLoad();
+            sealSpriteLoadCoroutine = StartCoroutine(LoadRandomSealSpriteCoroutine());
+        }
+
+        /// <summary>
+        /// summary: 从 Seal Addressables 地址列表中随机挑选并加载一张 Sprite。
+        /// param: 无
+        /// returns: 可供协程等待的枚举器
+        /// </summary>
+        private IEnumerator LoadRandomSealSpriteCoroutine()
+        {
+            int startIndex = Random.Range(0, SealSpriteAddresses.Length);
+            for (int offset = 0; offset < SealSpriteAddresses.Length; offset++)
+            {
+                string address = SealSpriteAddresses[(startIndex + offset) % SealSpriteAddresses.Length];
+                if (string.IsNullOrWhiteSpace(address))
+                {
+                    continue;
+                }
+
+                loadingSealSpriteHandle = Addressables.LoadAssetAsync<Sprite>(address);
+                yield return loadingSealSpriteHandle;
+
+                AsyncOperationHandle<Sprite> completedHandle = loadingSealSpriteHandle;
+                loadingSealSpriteHandle = default;
+                if (completedHandle.Status == AsyncOperationStatus.Succeeded && completedHandle.Result != null)
+                {
+                    ReleaseActiveSealSpriteHandle();
+                    activeSealSpriteHandle = completedHandle;
+                    sealImage.sprite = completedHandle.Result;
+                    sealSpriteLoadCoroutine = null;
+                    yield break;
+                }
+
+                if (completedHandle.IsValid())
+                {
+                    Addressables.Release(completedHandle);
+                }
+            }
+
+            GameDebug.LogWarning("[StartUpMenuUI] Failed to load any startup seal sprite from Addressables.");
+            sealSpriteLoadCoroutine = null;
+        }
+
+        /// <summary>
+        /// summary: 停止当前 Seal Addressables 加载协程并释放正在加载的句柄。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void StopSealSpriteLoad()
+        {
+            if (sealSpriteLoadCoroutine != null)
+            {
+                StopCoroutine(sealSpriteLoadCoroutine);
+                sealSpriteLoadCoroutine = null;
+            }
+
+            ReleaseLoadingSealSpriteHandle();
+        }
+
+        /// <summary>
+        /// summary: 释放 Seal Sprite 的 Addressables 句柄。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ReleaseSealSpriteHandles()
+        {
+            ReleaseLoadingSealSpriteHandle();
+            ReleaseActiveSealSpriteHandle();
+        }
+
+        private void ReleaseLoadingSealSpriteHandle()
+        {
+            if (loadingSealSpriteHandle.IsValid())
+            {
+                Addressables.Release(loadingSealSpriteHandle);
+                loadingSealSpriteHandle = default;
+            }
+        }
+
+        private void ReleaseActiveSealSpriteHandle()
+        {
+            if (activeSealSpriteHandle.IsValid())
+            {
+                Addressables.Release(activeSealSpriteHandle);
+                activeSealSpriteHandle = default;
             }
         }
 
         /// <summary>
-        /// summary: 绑定启动菜单当前仍启用的按钮回调。
+        /// summary: 确保启动菜单四个按钮根节点都默认显示。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void EnsureButtonRootsVisible()
+        {
+            SetButtonRootActive(startButton, true);
+            SetObjectActive(loadButtonRoot, true);
+            SetButtonRootActive(loadButton, true);
+            SetButtonRootActive(settingsButton, true);
+            SetButtonRootActive(quitButton, true);
+        }
+
+        /// <summary>
+        /// summary: 配置四个启动菜单按钮的默认和 hover 视觉状态。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void ConfigureButtonVisuals()
+        {
+            ConfigureButtonVisual(startButton);
+            ConfigureButtonVisual(loadButton);
+            ConfigureButtonVisual(settingsButton);
+            ConfigureButtonVisual(quitButton);
+        }
+
+        /// <summary>
+        /// summary: 配置单个按钮背景和 TMP 文字的 hover 反馈。
+        /// param name="button": 目标按钮
+        /// returns: 无
+        /// </summary>
+        private static void ConfigureButtonVisual(Button button)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.transition = Selectable.Transition.None;
+            Image backgroundImage = button.image != null ? button.image : button.GetComponent<Image>();
+            TMP_Text label = button.GetComponentInChildren<TMP_Text>(true);
+            StartUpButtonHoverFeedback hoverFeedback = button.GetComponent<StartUpButtonHoverFeedback>();
+            if (hoverFeedback == null)
+            {
+                hoverFeedback = button.gameObject.AddComponent<StartUpButtonHoverFeedback>();
+            }
+
+            hoverFeedback.Configure(backgroundImage, label, DefaultButtonTextColor, HoverButtonTextColor);
+        }
+
+        /// <summary>
+        /// summary: 绑定启动菜单四个按钮回调。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void BindButtonCallbacks()
         {
             BindButton(startButton, HandleStartButtonClicked);
+            BindButton(loadButton, HandleStartButtonClicked);
             BindButton(settingsButton, HandleSettingsButtonClicked);
             BindButton(quitButton, HandleQuitButtonClicked);
         }
 
         /// <summary>
-        /// summary: 清理启动菜单按钮回调，避免对象销毁后残留委托。
+        /// summary: 清理启动菜单四个按钮回调，避免对象销毁后残留委托。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void UnbindButtonCallbacks()
         {
             UnbindButton(startButton, HandleStartButtonClicked);
+            UnbindButton(loadButton, HandleStartButtonClicked);
             UnbindButton(settingsButton, HandleSettingsButtonClicked);
             UnbindButton(quitButton, HandleQuitButtonClicked);
         }
@@ -113,6 +296,7 @@ namespace Kernel.UI
         private void SetButtonsInteractable(bool interactable)
         {
             SetButtonInteractable(startButton, interactable);
+            SetButtonInteractable(loadButton, interactable);
             SetButtonInteractable(settingsButton, interactable);
             SetButtonInteractable(quitButton, interactable);
         }
@@ -131,6 +315,40 @@ namespace Kernel.UI
             }
 
             button.interactable = interactable;
+            if (!interactable && button.TryGetComponent(out StartUpButtonHoverFeedback hoverFeedback))
+            {
+                hoverFeedback.ApplyDefaultState();
+            }
+        }
+
+        /// <summary>
+        /// summary: 安全切换按钮所在 GameObject 的显示状态。
+        /// param name="button": 目标按钮
+        /// param name="isActive": 目标显示状态
+        /// returns: 无
+        /// </summary>
+        private static void SetButtonRootActive(Button button, bool isActive)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            SetObjectActive(button.gameObject, isActive);
+        }
+
+        /// <summary>
+        /// summary: 安全切换 GameObject 的显示状态。
+        /// param name="target": 目标对象
+        /// param name="isActive": 目标显示状态
+        /// returns: 无
+        /// </summary>
+        private static void SetObjectActive(GameObject target, bool isActive)
+        {
+            if (target != null && target.activeSelf != isActive)
+            {
+                target.SetActive(isActive);
+            }
         }
 
         /// <summary>

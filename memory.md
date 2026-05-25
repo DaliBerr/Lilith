@@ -1,5 +1,17 @@
 # Memory
 
+## Obsidian Global Memory Migration
+
+Obsidian vault is now the primary cross-session memory layer for agent workflow, project handoff, TODOs, decisions, preferences, and long-term knowledge.
+
+- Global entry: `Index.md`
+- Memory rules: `Memory_Rules.md`
+- Lilith project note: `Projects/Lilith/Lilith.md`
+- Lilith troubleshooting mirror: `Knowledge/Troubleshooting/Lilith_Unity_Troubleshooting.md`
+- Obsidian MCP workflow notes: `Knowledge/Tools/Obsidian_MCP.md`
+
+Keep this file as a repo-local compatibility mirror for high-value Lilith troubleshooting patterns. When adding new durable memory, prefer Obsidian first, then update this file only if the knowledge must remain available without Obsidian.
+
 ## Rigidbody Ground Snap Must Sync Physics Position
 
 - Problem: grounded 角色或敌人根节点先用 `transform.position` 吸附到地图平面后，后续再次按 collider 计算 grounded 位置时，Y 可能被重复抬高。
@@ -97,3 +109,21 @@
 - Fix: 先在同文件内通过唯一锚点确认目标行，再用 PowerShell 做“最小范围字符串替换”完成写入，并立即回读目标片段校验格式；若替换中误写入字面 `` `r`n ``，再做一次精确修复。
 - Verify: 回读场景目标块，确认字段已插入、缩进和换行合法，且仅目标片段变化（例如 `WaveManager` 下新增 `nonBossWaveSequenceProgression` 引用）。
 - Scope: 适用于 Windows 下修改超大 Unity YAML（`*.unity` / `*.prefab`）时 `apply_patch` 不稳定的场景。
+
+
+## UI Image White Tint Can Still Look Gray When Sprite Alpha Is Low
+
+- Problem: UI `Image.color` 在运行时显示为纯白且 alpha 为 1，但按钮 hover 背景仍然视觉发灰或被底图染色。
+- Cause: `Image.color` 只是顶点 tint；Unity UI 最终输出仍会乘以 sprite texture 的 alpha。如果 sprite 自身是半透明白（例如 `Assets/Art/UI/Start up/Button Background.png` 平均 alpha 约 141/255），即使 tint 是 `#FFFFFFFF`，也会和背后的 StartUp 背景混合，看起来像淡灰/偏黄。
+- Fix: 最终采用资源侧修图，而不是运行时 shader/material。按钮背景图主体区域应导出为纯白 RGB `#FFFFFF` 且 alpha 255；只在圆角外沿保留少量抗锯齿半透明像素；不要在图内烘焙灰色、阴影或整体半透明。当前 `StartUpButtonHoverFeedback` 只保留普通 UI Image tint：默认 `Color.white` alpha 0，hover `Color.white`。
+- Verify: 检查源 PNG 像素 alpha；主体白底区域应存在大量 alpha 255 像素，而不是所有像素都低于 255。Unity refresh/compile 无 C# error；`StartUpMenuUITests` EditMode 3/3 通过。
+- Scope: 适用于所有“UI Image tint 已是白色但视觉仍被背景染灰/偏色”的 Unity UI 问题，尤其是半透明按钮背景、hover 高亮和经过底图混合的白色装饰。
+
+
+## MCPForUnity Runtime Assembly Can Enter Player Builds
+
+- Problem: 打包产物的 `Lilith_Data/Managed` 中出现 `MCPForUnity.Runtime.dll`，看起来像 MCP 工具被打进了游戏成品。
+- Cause: `Packages/manifest.json` 把 `com.coplaydev.unity-mcp` 作为正式 UPM 依赖安装；该包的 `Runtime/MCPForUnity.Runtime.asmdef` 中 `includePlatforms` 与 `excludePlatforms` 都为空、`autoReferenced` 为 true，因此 Unity 会把它视为 Player 可用运行时程序集。该包的 `Editor/MCPForUnity.Editor.asmdef` 已限制 `includePlatforms: ["Editor"]`，所以 Editor 侧桥接服务不会随 Player 一起打包；进入 `Managed` 的只是 runtime helper assembly。
+- Fix: 若 release build 不希望包含任何 MCP 程序集，优先从 release 分支/构建配置中移除 `com.coplaydev.unity-mcp`。若仍希望开发环境保留 MCP，则用 fork 或 embedded package 固定版本，并把 `Runtime/MCPForUnity.Runtime.asmdef` 限制为 Editor-only（例如 `includePlatforms: ["Editor"]`）；不要直接改 `Library/PackageCache`，因为缓存会被 Unity/UPM 重建。避免长期使用 `#main` 浮动依赖，最好 pin 到 commit/tag 或本地包。
+- Verify: 检查 `Packages/manifest.json` / `Packages/packages-lock.json` 是否仍含 `com.coplaydev.unity-mcp`；检查包内 `Runtime/MCPForUnity.Runtime.asmdef` 平台限制；重新打包后确认 `*_Data/Managed` 下不再有 `MCPForUnity*.dll`。
+- Scope: 适用于所有“开发工具 UPM 包在 Runtime 文件夹或 runtime asmdef 中包含脚本，导致打包产物出现工具 DLL”的 Unity 包管理问题。

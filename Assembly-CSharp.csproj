@@ -54,6 +54,7 @@
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerFollowCamera.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\CombatVictoryEvent.cs" />
     <Compile Include="Assets\Input\UI Controls.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\StartUpButtonHoverFeedback.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizationManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StartUpMenuUI.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\TokenSelectUIScreen.cs" />
@@ -218,6 +219,7 @@
     <Compile Include="Assets\Scripts\Kernel\Input\InputActionManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PlaceableTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\StatusSaveData.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\UI\FixedPixelSlicedImage.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScale.cs" />
     <Compile Include="Assets\Input\Player Controls.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\DelayedExplosionEffectRuntime.cs" />
@@ -235,7 +237,6 @@
     <None Include="Assets\TextMesh Pro\Sprites\EmojiOne Attribution.txt" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_Bitmap-Custom-Atlas.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF.shader" />
-    <None Include="Assets\AddressableAssetsData\link.xml" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile SSD.shader" />
     <None Include="Assets\TextMesh Pro\Resources\LineBreaking Leading Characters.txt" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro_Properties.cginc" />

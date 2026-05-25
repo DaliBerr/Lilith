@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -File \"$(git rev-parse --show-toplevel)/.codex/hooks/plan_mode_decision_prompt.ps1\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File \"G:\\Unity Project\\Lilith\\.codex\\hooks\\plan_mode_decision_prompt.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Checking plan-mode decision prompt"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -File \"$(git rev-parse --show-toplevel)/.codex/hooks/memory_docs_stop_check.ps1\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File \"G:\\Unity Project\\Lilith\\.codex\\hooks\\memory_docs_stop_check.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Checking memory and documentation closeout"
+          }
+        ]
+      }
+    ]
+  }
+}
