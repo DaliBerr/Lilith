@@ -43,7 +43,9 @@ namespace Kernel.UI
             "Assets/Art/UI/Start up/Seal/\u9EC4"
         };
 
+        private bool isHandlingStartRequest;
         private bool isOpeningProfileModal;
+        private bool isOpeningExitConfirmation;
         private Coroutine sealSpriteLoadCoroutine;
         private AsyncOperationHandle<Sprite> activeSealSpriteHandle;
         private AsyncOperationHandle<Sprite> loadingSealSpriteHandle;
@@ -56,7 +58,9 @@ namespace Kernel.UI
             EnsureButtonRootsVisible();
             ConfigureButtonVisuals();
             BeginRandomSealSpriteLoad();
+            isHandlingStartRequest = false;
             isOpeningProfileModal = false;
+            isOpeningExitConfirmation = false;
             SetButtonsInteractable(true);
             BindButtonCallbacks();
         }
@@ -92,20 +96,32 @@ namespace Kernel.UI
         /// </summary>
         private void TryAutoBindReferences()
         {
-            startButton ??= FindButton("Button Panel/Start");
-            startButton ??= FindButton("Button Panel/Start Button/Edge/Button");
+            if (startButton == null)
+            {
+                startButton = FindButton("Button Panel/Start");
+                startButton ??= FindButton("Button Panel/Start Button");
+            }
 
             loadButtonRoot ??= transform.Find("Button Panel/Load")?.gameObject;
             loadButtonRoot ??= transform.Find("Button Panel/Load Button")?.gameObject;
-            loadButton ??= loadButtonRoot != null ? loadButtonRoot.GetComponent<Button>() : null;
-            loadButton ??= FindButton("Button Panel/Load");
-            loadButton ??= FindButton("Button Panel/Load Button/Edge/Button");
+            if (loadButton == null)
+            {
+                loadButton = loadButtonRoot != null ? loadButtonRoot.GetComponent<Button>() : null;
+                loadButton ??= FindButton("Button Panel/Load");
+                loadButton ??= FindButton("Button Panel/Load Button");
+            }
 
-            settingsButton ??= FindButton("Button Panel/Settings");
-            settingsButton ??= FindButton("Button Panel/Option Button/Edge/Button");
+            if (settingsButton == null)
+            {
+                settingsButton = FindButton("Button Panel/Settings");
+                settingsButton ??= FindButton("Button Panel/Option Button");
+            }
 
-            quitButton ??= FindButton("Button Panel/Quit");
-            quitButton ??= FindButton("Button Panel/Quit Button/Edge/Button");
+            if (quitButton == null)
+            {
+                quitButton = FindButton("Button Panel/Quit");
+                quitButton ??= FindButton("Button Panel/Quit Button");
+            }
 
             sealImage ??= transform.Find("Seal Panel")?.GetComponent<Image>();
         }
@@ -270,7 +286,7 @@ namespace Kernel.UI
         private void BindButtonCallbacks()
         {
             BindButton(startButton, HandleStartButtonClicked);
-            BindButton(loadButton, HandleStartButtonClicked);
+            BindButton(loadButton, HandleLoadButtonClicked);
             BindButton(settingsButton, HandleSettingsButtonClicked);
             BindButton(quitButton, HandleQuitButtonClicked);
         }
@@ -283,7 +299,7 @@ namespace Kernel.UI
         private void UnbindButtonCallbacks()
         {
             UnbindButton(startButton, HandleStartButtonClicked);
-            UnbindButton(loadButton, HandleStartButtonClicked);
+            UnbindButton(loadButton, HandleLoadButtonClicked);
             UnbindButton(settingsButton, HandleSettingsButtonClicked);
             UnbindButton(quitButton, HandleQuitButtonClicked);
         }
@@ -394,13 +410,39 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 响应开始按钮，默认弹出四个固定存档栏位供玩家直接选择。
+        /// summary: 通过通用 Info Popup 打开退出游戏确认弹窗。
+        /// param: 无
+        /// returns: 可供协程等待的枚举器
+        /// </summary>
+        private IEnumerator ShowExitConfirmationModal()
+        {
+            if (ui == null)
+            {
+                GameDebug.LogWarning("[StartUpMenuUI] UIManager is missing. Unable to open exit confirmation.");
+                yield break;
+            }
+
+            isOpeningExitConfirmation = true;
+            SetButtonsInteractable(false);
+            try
+            {
+                yield return GameExitUIUtility.ShowExitConfirmation(ui, nameof(StartUpMenuUI));
+            }
+            finally
+            {
+                isOpeningExitConfirmation = false;
+                SetButtonsInteractable(true);
+            }
+        }
+
+        /// <summary>
+        /// summary: 响应开始按钮，直接在最小空槽位创建新档并进入新档流程。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void HandleStartButtonClicked()
         {
-            if (isOpeningProfileModal)
+            if (isHandlingStartRequest || isOpeningProfileModal || isOpeningExitConfirmation)
             {
                 return;
             }
@@ -417,6 +459,74 @@ namespace Kernel.UI
                 return;
             }
 
+            if (ui == null || ui.IsNavigating() || ui.GetTopModal() != null)
+            {
+                return;
+            }
+
+            RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
+            if (saveService == null)
+            {
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(StartUpMenuUI),
+                    Vocalith.Localization.LocalizationManager.TranslateOrDefault("ui.profile.save_unavailable", "存档服务不可用。")));
+                return;
+            }
+
+            if (!saveService.CreateProfileInNextEmptySlot(out int createdSlotIndex))
+            {
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(StartUpMenuUI),
+                    Vocalith.Localization.LocalizationManager.TranslateOrDefault("ui.profile.create_failed", "新建存档失败。")));
+                return;
+            }
+
+            bool requestAccepted = GlobalStartup.Instance.RequestStartGame();
+            if (!requestAccepted)
+            {
+                saveService.DeleteProfileSlot(createdSlotIndex);
+                StartCoroutine(PopUpUIUtility.ShowInfoPopup(
+                    ui,
+                    nameof(StartUpMenuUI),
+                    Vocalith.Localization.LocalizationManager.TranslateOrDefault("ui.profile.enter_game_failed", "当前无法进入游戏，请稍后再试。")));
+                return;
+            }
+
+            isHandlingStartRequest = true;
+            SetButtonsInteractable(false);
+        }
+
+        /// <summary>
+        /// summary: 响应加载按钮，打开 Profile 弹窗供玩家手动选择已有存档。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void HandleLoadButtonClicked()
+        {
+            if (isHandlingStartRequest || isOpeningProfileModal || isOpeningExitConfirmation)
+            {
+                return;
+            }
+
+            if (GlobalStartup.Instance == null)
+            {
+                GameDebug.LogError("[StartUpMenuUI] GlobalStartup instance is missing.");
+                return;
+            }
+
+            if (!GlobalStartup.Instance.IsBootCompleted)
+            {
+                GameDebug.LogWarning("[StartUpMenuUI] GlobalStartup is still booting.");
+                return;
+            }
+
+            if (ui == null || ui.IsNavigating() || ui.GetTopModal() != null)
+            {
+                return;
+            }
+
             StartCoroutine(ShowProfileManagementModal());
         }
 
@@ -427,7 +537,7 @@ namespace Kernel.UI
         /// </summary>
         private void HandleSettingsButtonClicked()
         {
-            if (isOpeningProfileModal || ui == null || ui.IsNavigating() || ui.GetTopModal() != null)
+            if (isHandlingStartRequest || isOpeningProfileModal || ui == null || ui.IsNavigating() || ui.GetTopModal() != null)
             {
                 return;
             }
@@ -436,28 +546,36 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 响应退出按钮，在编辑器中停止 Play，在构建中直接退出应用。
+        /// summary: 响应退出按钮，先打开确认弹窗，再由确认按钮执行真正退出。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void HandleQuitButtonClicked()
         {
+            if (isHandlingStartRequest || isOpeningProfileModal || isOpeningExitConfirmation || ui == null || ui.IsNavigating() || ui.GetTopModal() != null)
+            {
+                return;
+            }
+
             GameDebug.Log("[StartUpMenuUI] Quit requested from StartUp menu.");
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
+            StartCoroutine(ShowExitConfirmationModal());
         }
 
         /// <summary>
-        /// summary: 按层级路径查找 Button 组件，供自动绑定复用。
-        /// param name="relativePath": 相对当前 prefab 根节点的层级路径
+        /// summary: 按按钮外壳路径查找 Button 组件，兼容直接挂载和子层级挂载。
+        /// param name="relativePath": 相对当前 prefab 根节点的按钮外壳路径
         /// returns: 找到时返回 Button，否则返回 null
         /// </summary>
         private Button FindButton(string relativePath)
         {
-            return transform.Find(relativePath)?.GetComponent<Button>();
+            Transform target = transform.Find(relativePath);
+            if (target == null)
+            {
+                return null;
+            }
+
+            Button button = target.GetComponent<Button>();
+            return button != null ? button : target.GetComponentInChildren<Button>(true);
         }
 
         /// <summary>

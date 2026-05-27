@@ -6,7 +6,7 @@ using Vocalith.Logging;
 using UnityEngine;
 
 /// <summary>
-/// 负责把 DevMode/NormalMode 与四个存档槽位摘要持久化到独立的全局 JSON 文件。
+/// 负责把 DevMode/NormalMode 与存档槽位摘要持久化到独立的全局 JSON 文件。
 /// </summary>
 public static class GlobalModeSettingsService
 {
@@ -132,9 +132,9 @@ public static class GlobalModeSettingsService
     }
 
     /// <summary>
-    /// summary: 返回四个存档栏位摘要的安全副本，供 UI 只读展示。
+    /// summary: 返回存档栏位摘要的安全副本，供 UI 只读展示。
     /// param: 无
-    /// returns: 四个栏位状态的深拷贝数组
+    /// returns: 栏位状态的深拷贝数组
     /// </summary>
     public static ProfileSlotStateData[] GetProfileSlotStatesSnapshot()
     {
@@ -144,7 +144,7 @@ public static class GlobalModeSettingsService
 
     /// <summary>
     /// summary: 更新指定栏位的全局摘要，并立即写回磁盘。
-    /// param name="slotIndex": 目标栏位索引，使用 0 到 3
+    /// param name="slotIndex": 目标栏位索引，使用 0 起始的非负整数
     /// param name="hasProfile": 该栏位当前是否存在存档
     /// param name="lastSavedUtcTicks": 最近一次写盘的 UTC ticks；栏位为空时会被清零
     /// returns: 摘要发生变化时返回 true
@@ -157,7 +157,7 @@ public static class GlobalModeSettingsService
             return false;
         }
 
-        currentSettings.ProfileSlots ??= CreateDefaultProfileSlots();
+        EnsureProfileSlotCapacity(slotIndex + 1);
         ProfileSlotStateData slotState = currentSettings.ProfileSlots[slotIndex] ?? ProfileSlotStateData.CreateDefault();
 
         bool sanitizedHasProfile = hasProfile;
@@ -174,6 +174,27 @@ public static class GlobalModeSettingsService
         currentSettings.Sanitize();
         SaveMode();
         return true;
+    }
+
+    private static void EnsureProfileSlotCapacity(int requiredCount)
+    {
+        int targetCount = Math.Max(SavePathUtility.DefaultProfileSlotCount, requiredCount);
+        if (currentSettings.ProfileSlots != null && currentSettings.ProfileSlots.Length >= targetCount)
+        {
+            return;
+        }
+
+        ProfileSlotStateData[] expandedSlots = CreateDefaultProfileSlots(targetCount);
+        if (currentSettings.ProfileSlots != null)
+        {
+            int copyCount = Math.Min(currentSettings.ProfileSlots.Length, expandedSlots.Length);
+            for (int i = 0; i < copyCount; i++)
+            {
+                expandedSlots[i] = (currentSettings.ProfileSlots[i] ?? ProfileSlotStateData.CreateDefault()).Clone();
+            }
+        }
+
+        currentSettings.ProfileSlots = expandedSlots;
     }
 
     private static bool TryReadSettings(string filePath, out GlobalModeSettingsData settings)
@@ -197,7 +218,7 @@ public static class GlobalModeSettingsService
 
     private static ProfileSlotStateData[] CloneProfileSlots(ProfileSlotStateData[] source)
     {
-        ProfileSlotStateData[] clone = CreateDefaultProfileSlots();
+        ProfileSlotStateData[] clone = CreateDefaultProfileSlots(source?.Length ?? SavePathUtility.DefaultProfileSlotCount);
         if (source == null)
         {
             return clone;
@@ -212,9 +233,10 @@ public static class GlobalModeSettingsService
         return clone;
     }
 
-    private static ProfileSlotStateData[] CreateDefaultProfileSlots()
+    private static ProfileSlotStateData[] CreateDefaultProfileSlots(int count = SavePathUtility.DefaultProfileSlotCount)
     {
-        ProfileSlotStateData[] slots = new ProfileSlotStateData[SavePathUtility.ProfileSlotCount];
+        int slotCount = Math.Max(SavePathUtility.DefaultProfileSlotCount, count);
+        ProfileSlotStateData[] slots = new ProfileSlotStateData[slotCount];
         for (int i = 0; i < slots.Length; i++)
         {
             slots[i] = ProfileSlotStateData.CreateDefault();
@@ -301,7 +323,7 @@ public sealed class GlobalModeSettingsData
 
     private static ProfileSlotStateData[] CloneProfileSlots(ProfileSlotStateData[] source)
     {
-        ProfileSlotStateData[] clone = CreateDefaultProfileSlots();
+        ProfileSlotStateData[] clone = CreateDefaultProfileSlots(source?.Length ?? SavePathUtility.DefaultProfileSlotCount);
         if (source == null)
         {
             return clone;
@@ -318,7 +340,7 @@ public sealed class GlobalModeSettingsData
 
     private static ProfileSlotStateData[] SanitizeProfileSlots(ProfileSlotStateData[] source)
     {
-        ProfileSlotStateData[] sanitized = CreateDefaultProfileSlots();
+        ProfileSlotStateData[] sanitized = CreateDefaultProfileSlots(source?.Length ?? SavePathUtility.DefaultProfileSlotCount);
         if (source == null)
         {
             return sanitized;
@@ -335,9 +357,10 @@ public sealed class GlobalModeSettingsData
         return sanitized;
     }
 
-    private static ProfileSlotStateData[] CreateDefaultProfileSlots()
+    private static ProfileSlotStateData[] CreateDefaultProfileSlots(int count = SavePathUtility.DefaultProfileSlotCount)
     {
-        ProfileSlotStateData[] slots = new ProfileSlotStateData[SavePathUtility.ProfileSlotCount];
+        int slotCount = Math.Max(SavePathUtility.DefaultProfileSlotCount, count);
+        ProfileSlotStateData[] slots = new ProfileSlotStateData[slotCount];
         for (int i = 0; i < slots.Length; i++)
         {
             slots[i] = ProfileSlotStateData.CreateDefault();
@@ -348,7 +371,7 @@ public sealed class GlobalModeSettingsData
 }
 
 /// <summary>
-/// 四个固定存档槽位中单个栏位的全局摘要。
+/// 单个存档槽位的全局摘要。
 /// </summary>
 [Serializable]
 public sealed class ProfileSlotStateData

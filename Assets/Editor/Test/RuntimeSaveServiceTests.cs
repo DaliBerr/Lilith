@@ -119,6 +119,78 @@ public sealed class RuntimeSaveServiceTests
     }
 
     [Test]
+    public void CreateProfileInNextEmptySlot_ReusesSmallestMissingSlot()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        Assert.That(saveService.SelectProfileSlot(1, out _), Is.True);
+        Assert.That(saveService.SelectProfileSlot(3, out _), Is.True);
+        Assert.That(saveService.DeleteProfileSlot(1), Is.True);
+
+        bool createSuccess = saveService.CreateProfileInNextEmptySlot(out int createdSlotIndex);
+
+        Assert.That(createSuccess, Is.True);
+        Assert.That(createdSlotIndex, Is.EqualTo(1));
+        Assert.That(File.Exists(BuildProfilePath(1)), Is.True);
+        Assert.That(saveService.ActiveProfileSlotIndex, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CreateProfileInNextEmptySlot_CanCreateBeyondLegacyFourSlots()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        for (int slotIndex = 0; slotIndex < 4; slotIndex++)
+        {
+            Assert.That(saveService.SelectProfileSlot(slotIndex, out _), Is.True);
+        }
+
+        bool createSuccess = saveService.CreateProfileInNextEmptySlot(out int createdSlotIndex);
+
+        Assert.That(createSuccess, Is.True);
+        Assert.That(createdSlotIndex, Is.EqualTo(4));
+        Assert.That(File.Exists(BuildProfilePath(4)), Is.True);
+    }
+
+    [Test]
+    public void SelectExistingProfileSlot_MissingSlot_DoesNotCreateProfile()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        bool selectSuccess = saveService.SelectExistingProfileSlot(5);
+
+        Assert.That(selectSuccess, Is.False);
+        Assert.That(File.Exists(BuildProfilePath(5)), Is.False);
+        Assert.That(saveService.HasSelectedProfileSlot, Is.False);
+    }
+
+    [Test]
+    public void GetExistingSlotSummaries_ReturnsOnlyExistingSlots()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        Assert.That(saveService.SelectProfileSlot(2, out _), Is.True);
+
+        ProfileSlotSummary[] summaries = saveService.GetExistingSlotSummaries();
+
+        Assert.That(summaries, Has.Length.EqualTo(2));
+        Assert.That(summaries[0].SlotIndex, Is.EqualTo(0));
+        Assert.That(summaries[1].SlotIndex, Is.EqualTo(2));
+        Assert.That(summaries[0].HasProfile, Is.True);
+        Assert.That(summaries[1].HasProfile, Is.True);
+    }
+
+    [Test]
     public void ResetProfile_ResetsRemnantsButLeavesGlobalModeUntouched()
     {
         PrepareCleanSaveEnvironment();

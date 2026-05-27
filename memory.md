@@ -120,6 +120,24 @@ Keep this file as a repo-local compatibility mirror for high-value Lilith troubl
 - Scope: 适用于所有“UI Image tint 已是白色但视觉仍被背景染灰/偏色”的 Unity UI 问题，尤其是半透明按钮背景、hover 高亮和经过底图混合的白色装饰。
 
 
+## UIManager Navigation Lock Must Own Self-Deactivating Screen Close
+
+- Problem: 在 StartUp 主菜单打开 Options 后点击关闭，画面能回到主菜单，但随后 Start/Load/Settings 等需要走 `UIManager` 的按钮看起来失效。
+- Cause: 关闭流程如果由即将被隐藏的 `OptionsUIScreen` 自己 `yield return ui.PopModalAndWait()`，或 `UIManager` 直接 `yield return screen.Hide()`，`UIScreen.Hide()` 末尾的 `gameObject.SetActive(false)` 可能截断/吞掉仍在等待的 coroutine 收尾，导致 `UIManager.RunNavigationLockedWait()` 的 `_isNavigating` 没有恢复为 `false`。此时 modal 已弹栈、`PopUp` 状态也可能已移除，所以表面像“状态切回去了”，实际导航锁仍卡住。
+- Fix: 自关闭 UI 不要等待会销毁/失活自己的 `PopModalAndWait()`；改为把最终关闭排队给 `UIManager.CloseModal(this)` 或 `UIManager.PopScreen()`。`UIManager` 内部对 `Show/Hide/DestroyAfterHide` 这类导航 routine 要由 manager 自己逐帧推进，避免把会自失活的 screen coroutine 作为嵌套 coroutine 交给 Unity 调度；EditMode 非 Addressables 实例销毁使用 `DestroyImmediate`。
+- Verify: [`Assets/Editor/Test/OptionsUIScreenTests.cs`](Assets/Editor/Test/OptionsUIScreenTests.cs) 的 `RequestClose_WhenOptionsIsTopModal_ReleasesUIManagerNavigationLock`；相邻 [`Assets/Editor/Test/StartUpMenuUITests.cs`](Assets/Editor/Test/StartUpMenuUITests.cs) 仍应通过。
+- Scope: 适用于所有通过 `UIManager` 管理、关闭时会 `SetActive(false)` 或销毁自身的 Screen / Modal。症状是 UI 已视觉返回上一层，但后续按钮点击无法继续 push/show/pop。
+
+
+## UIManager ClearAll Must Own Interrupted Close Transitions
+
+- Problem: 在 StartUp Profile / Load 存档界面快速点两次同一栏位进入旧档后，Main 场景正常进入，但一个半透明 Profile Popup 残留在 gameplay 画面上且不可交互。
+- Cause: 旧档进入流程会先请求 `GlobalStartup.RequestEnterMainScene()`，再排队关闭 Profile modal；随后 `LoadMainSceneCo()` 会调用 `UIManager.ClearAllScreensAndModals()`。旧 `CloseModal()` 在关闭协程真正运行前就把 modal 从 `modalStack` 弹出，若清屏在淡出期间 `StopAllCoroutines()`，`DestroyAfterHide()` 被打断，而这个 modal 已不在 stack 中，清屏也就找不到它，最终留下已淡出一半的孤儿 UI。
+- Fix: `CloseModal()` / `PopModalAndWait()` / `CloseTopModal()` 不在调度协程前弹栈，而是在导航锁内确认栈顶后再弹出并销毁；`UIManager` 追踪已弹栈但仍在 Hide 动画中的 `closingScreens`；`ClearAllScreensAndModals()` 改为同步停掉过渡、销毁 closing screens 与剩余 screen/modal stack，并当场释放 `_isNavigating`。
+- Verify: [`Assets/Editor/Test/OptionsUIScreenTests.cs`](Assets/Editor/Test/OptionsUIScreenTests.cs) 的 `ClearAllScreensAndModals_WhenModalCloseIsInterrupted_DestroysPoppedModal`；相邻 `RequestClose_WhenOptionsIsTopModal_ReleasesUIManagerNavigationLock`、`StartUpMenuUITests` 四个用例与 `TokenSelectModalTests` 仍应通过。
+- Scope: 适用于所有“切场景 / 回主菜单 / 强制清屏”与 UI 淡出关闭竞态。典型症状是下一个画面已经进入，但上一层 UI 以半透明、无交互状态残留。
+
+
 ## MCPForUnity Runtime Assembly Can Enter Player Builds
 
 - Problem: 打包产物的 `Lilith_Data/Managed` 中出现 `MCPForUnity.Runtime.dll`，看起来像 MCP 工具被打进了游戏成品。

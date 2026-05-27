@@ -52,6 +52,8 @@ namespace Vocalith.UI
 
         readonly Stack<UIScreen> screenStack = new();
         readonly Stack<UIScreen> modalStack = new();
+        // 已弹出栈但仍在 Hide 动画里的界面，ClearAll 也必须接管销毁。
+        readonly HashSet<UIScreen> closingScreens = new();
         readonly Dictionary<GameObject, AsyncOperationHandle<GameObject>> addrInstances = new();
         readonly Dictionary<Type, UIScreen> overlayRegistry = new();
 
@@ -377,7 +379,10 @@ namespace Vocalith.UI
             _isNavigating = true;
             try
             {
-                yield return routine;
+                while (routine != null && routine.MoveNext())
+                {
+                    yield return routine.Current;
+                }
             }
             finally
             {
@@ -396,22 +401,13 @@ namespace Vocalith.UI
             {
                 // 取消所有正在运行的 Push/Pop/Show/Hide 协程，避免栈被并发修改或卡在 timeScale=0 的等待里
                 StopAllCoroutines();
-                _isNavigating = false;
             }
 
-            StartCoroutine(ClearAllScreensAndModalsCo());
-        }
-                /// <summary>
-        /// 清空栈的协程实现：优先清 Modal，再清 Screen，避免遮罩残留或 UI 顺序问题。
-        /// </summary>
-        /// <param name="none">无</param>
-        /// <returns>协程枚举器</returns>
-        private IEnumerator ClearAllScreensAndModalsCo()
-        {
-            // 这里不使用 RunNavigationLocked：它会在忙时 yield break 直接吞请求
             _isNavigating = true;
             try
             {
+                DestroyClosingScreensImmediate();
+
                 // 先清 Modal
                 while (modalStack.Count > 0)
                 {
@@ -425,9 +421,6 @@ namespace Vocalith.UI
                     var s = screenStack.Pop();
                     DestroyScreenImmediate(s);
                 }
-
-                // 让 Unity 有一帧处理 Destroy / ReleaseInstance
-                yield return null;
             }
             finally
             {
@@ -444,17 +437,46 @@ namespace Vocalith.UI
         {
             if (s == null) return;
 
-            // 先失活，避免一帧闪烁（可选，但通常更稳）
-            if (s.gameObject != null) s.gameObject.SetActive(false);
+            UntrackClosingScreen(s);
+            ClearSelectionOwnedBy(s);
 
-            if (addrInstances.TryGetValue(s.gameObject, out var handle))
+            // 先失活，避免一帧闪烁（可选，但通常更稳）
+            GameObject target = s.gameObject;
+            if (target != null) target.SetActive(false);
+
+            ReleaseOrDestroyScreenObject(target);
+        }
+
+        private void DestroyClosingScreensImmediate()
+        {
+            if (closingScreens.Count == 0)
             {
-                addrInstances.Remove(s.gameObject);
+                return;
+            }
+
+            List<UIScreen> screens = new(closingScreens);
+            closingScreens.Clear();
+            for (int i = 0; i < screens.Count; i++)
+            {
+                DestroyScreenImmediate(screens[i]);
+            }
+        }
+
+        private void ReleaseOrDestroyScreenObject(GameObject target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (addrInstances.TryGetValue(target, out var handle))
+            {
+                addrInstances.Remove(target);
                 UnityEngine.AddressableAssets.Addressables.ReleaseInstance(handle);
             }
             else
             {
-                Destroy(s.gameObject);
+                DestroyScreenObject(target);
             }
         }
         // --------- 公共 API ---------
@@ -488,7 +510,7 @@ namespace Vocalith.UI
         public IEnumerator PopModalAndWait()
         {
             if (modalStack.Count == 0) yield break;
-            yield return RunNavigationLockedWait(DestroyAfterHide(modalStack.Pop()));
+            yield return RunNavigationLockedWait(PopTopModalCo());
         }
         public IEnumerator ShowModalAndWait<T>() where T : UIScreen
         {
@@ -510,7 +532,7 @@ namespace Vocalith.UI
         public void CloseTopModal()
         {
             if (modalStack.Count == 0) return;
-            StartCoroutine(RunNavigationLockedWait(DestroyAfterHide(modalStack.Pop())));
+            StartCoroutine(RunNavigationLockedWait(PopTopModalCo()));
         }
 
         /// <summary>
@@ -525,13 +547,13 @@ namespace Vocalith.UI
                 return;
             }
 
-            var top = GetTopModal(false);
+            UIScreen top = GetTopModal(false);
             if (top != target)
             {
                 return;
             }
 
-            StartCoroutine(RunNavigationLockedWait(DestroyAfterHide(modalStack.Pop())));
+            StartCoroutine(RunNavigationLockedWait(CloseModalCo(target)));
         }
 
         public void CloseTop()
@@ -567,7 +589,11 @@ namespace Vocalith.UI
         //     return ov;
         // }
 
-        public void HideAndDestroy(UIScreen s) => StartCoroutine(DestroyAfterHide(s));
+        public void HideAndDestroy(UIScreen s)
+        {
+            TrackClosingScreen(s);
+            StartCoroutine(DestroyAfterHide(s));
+        }
 
         /// <summary>
         /// 确保指定 Overlay prefab 已实例化并完成初始化；已存在时不会重复创建。
@@ -629,31 +655,92 @@ namespace Vocalith.UI
         IEnumerator PushScreenCo<T>() where T : UIScreen
         {
             if (screenStack.Count > 0 && screenStack.Peek().getAlpha()>0f)
-                yield return screenStack.Peek().Hide(defaultHide);
+            {
+                IEnumerator hideRoutine = screenStack.Peek().Hide(defaultHide);
+                while (hideRoutine.MoveNext())
+                {
+                    yield return hideRoutine.Current;
+                }
+            }
 
             T screen = null;
             yield return CreateScreenCo<T>(UILayer.Screen, s => screen = s);
             if (screen == null) yield break;
 
             screenStack.Push(screen);
-            yield return screen.Show(defaultShow);
+            IEnumerator showRoutine = screen.Show(defaultShow);
+            while (showRoutine.MoveNext())
+            {
+                yield return showRoutine.Current;
+            }
         }
 
         IEnumerator PopScreenCo()
         {
             // GameDebug.Log("stack count:"+screenStack.Count);
             var top = screenStack.Pop();
-            yield return DestroyAfterHide(top);
+            IEnumerator destroyRoutine = DestroyAfterHide(top);
+            while (destroyRoutine.MoveNext())
+            {
+                yield return destroyRoutine.Current;
+            }
 
             if (screenStack.Count > 0)
-                yield return screenStack.Peek().Show(defaultShow);
+            {
+                IEnumerator showRoutine = screenStack.Peek().Show(defaultShow);
+                while (showRoutine.MoveNext())
+                {
+                    yield return showRoutine.Current;
+                }
+            }
         }
         IEnumerator PopScreenCoNoShow()
         {
             // GameDebug.Log("stack count:"+screenStack.Count);
             var top = screenStack.Pop();
-            yield return DestroyAfterHide(top);
+            IEnumerator destroyRoutine = DestroyAfterHide(top);
+            while (destroyRoutine.MoveNext())
+            {
+                yield return destroyRoutine.Current;
+            }
         }
+
+        IEnumerator PopTopModalCo()
+        {
+            if (modalStack.Count == 0)
+            {
+                yield break;
+            }
+
+            UIScreen top = modalStack.Pop();
+            IEnumerator destroyRoutine = DestroyAfterHide(top);
+            while (destroyRoutine.MoveNext())
+            {
+                yield return destroyRoutine.Current;
+            }
+        }
+
+        IEnumerator CloseModalCo(UIScreen target)
+        {
+            if (target == null || modalStack.Count == 0)
+            {
+                yield break;
+            }
+
+            UIScreen top = GetTopModal(false);
+            if (top != target || modalStack.Count == 0)
+            {
+                yield break;
+            }
+
+            UIScreen popped = modalStack.Pop();
+            IEnumerator destroyRoutine = DestroyAfterHide(popped);
+            while (destroyRoutine.MoveNext())
+            {
+                yield return destroyRoutine.Current;
+            }
+        }
+
         IEnumerator ShowModalCo<T>() where T : UIScreen
         {
             T modal = null;
@@ -661,7 +748,11 @@ namespace Vocalith.UI
             if (modal == null) yield break;
 
             modalStack.Push(modal);
-            yield return modal.Show(defaultShow);
+            IEnumerator showRoutine = modal.Show(defaultShow);
+            while (showRoutine.MoveNext())
+            {
+                yield return showRoutine.Current;
+            }
         }
 
         IEnumerator CreateScreenCo<T>(UILayer layer, Action<T> onReady) where T : UIScreen
@@ -837,18 +928,54 @@ namespace Vocalith.UI
         {
             if (s == null) yield break;
 
+            TrackClosingScreen(s);
             ClearSelectionOwnedBy(s);
-            yield return s.Hide(defaultHide);
-            if (s == null) yield break;
-
-            if (addrInstances.TryGetValue(s.gameObject, out var handle))
+            IEnumerator hideRoutine = s.Hide(defaultHide);
+            while (hideRoutine.MoveNext())
             {
-                addrInstances.Remove(s.gameObject);
-                Addressables.ReleaseInstance(handle);
+                yield return hideRoutine.Current;
+            }
+
+            if (s == null)
+            {
+                UntrackClosingScreen(s);
+                yield break;
+            }
+
+            ReleaseOrDestroyScreenObject(s.gameObject);
+            UntrackClosingScreen(s);
+        }
+
+        private void TrackClosingScreen(UIScreen screen)
+        {
+            if (!ReferenceEquals(screen, null))
+            {
+                closingScreens.Add(screen);
+            }
+        }
+
+        private void UntrackClosingScreen(UIScreen screen)
+        {
+            if (!ReferenceEquals(screen, null))
+            {
+                closingScreens.Remove(screen);
+            }
+        }
+
+        private static void DestroyScreenObject(GameObject target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(target);
             }
             else
             {
-                Destroy(s.gameObject);
+                DestroyImmediate(target);
             }
         }
 

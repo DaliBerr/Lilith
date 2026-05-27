@@ -157,7 +157,7 @@ public sealed class BackPackInventoryTests
     [Test]
     public void Prefab_BackPackGridUsesFixedEightColumns()
     {
-        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/BackPackUI.prefab");
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Backpack/BackPackUI.prefab");
 
         try
         {
@@ -176,7 +176,7 @@ public sealed class BackPackInventoryTests
     [Test]
     public void Prefab_BackPackUI_WiresHoverPreviewPrefab()
     {
-        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/BackPackUI.prefab");
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Backpack/BackPackUI.prefab");
 
         try
         {

@@ -284,7 +284,8 @@ namespace Kernel.UI
                 ?? root.Find("Close");
             if (namedCloseButton != null)
             {
-                return namedCloseButton.GetComponent<Button>();
+                Button button = namedCloseButton.GetComponent<Button>();
+                return button != null ? button : namedCloseButton.GetComponentInChildren<Button>(true);
             }
 
             Button[] buttons = root.GetComponentsInChildren<Button>(true);

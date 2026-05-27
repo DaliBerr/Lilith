@@ -195,6 +195,68 @@ namespace Kernel.MapGrid.Editor.Tests
             Assert.That(presenter.LastAppliedFloorTileCount + presenter.LastAppliedWallTileCount, Is.EqualTo(49));
         }
 
+        [Test]
+        public void ProceduralRoomMapDebugController_TryGetCurrentLayout_ReflectsGeneratedCurrentRoom()
+        {
+            TilemapRoomPresenter presenter = CreatePresenter(out _, out _);
+            Tile floorTile = CreateTile();
+            Tile wallTile = CreateTile();
+            SetPrivateField(presenter, "floorTile", floorTile);
+            SetPrivateField(presenter, "wallTile", wallTile);
+
+            GameObject controllerObject = CreateGameObject("Debug Controller");
+            ProceduralRoomMapDebugController controller = controllerObject.AddComponent<ProceduralRoomMapDebugController>();
+            SetPrivateField(controller, "roomPresenter", presenter);
+            SetPrivateField(controller, "roomTemplates", CreateDefaultTemplateSet());
+
+            Assert.That(controller.TryGetCurrentLayout(out _, out string missingError), Is.False);
+            Assert.That(missingError, Does.Contain("Current room graph"));
+
+            Assert.That(controller.GenerateRun(out string generateError), Is.True, generateError);
+            Assert.That(controller.TryGetCurrentLayout(out RoomResolvedLayout layout, out string layoutError), Is.True, layoutError);
+            Assert.That(layout.TemplateId, Is.EqualTo("start"));
+            Assert.That(layout.PlayerEntryCells, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void ProceduralRoom2DDebugBootstrap_GenerateAndSpawn_SpawnsAtPlayerEntryAndBindsCamera()
+        {
+            TilemapRoomPresenter presenter = CreatePresenter(out Tilemap floorTilemap, out _);
+            Tile floorTile = CreateTile();
+            Tile wallTile = CreateTile();
+            SetPrivateField(presenter, "floorTile", floorTile);
+            SetPrivateField(presenter, "wallTile", wallTile);
+
+            GameObject controllerObject = CreateGameObject("GeneratedRoomMapRoot");
+            ProceduralRoomMapDebugController controller = controllerObject.AddComponent<ProceduralRoomMapDebugController>();
+            SetPrivateField(controller, "roomPresenter", presenter);
+            SetPrivateField(controller, "roomTemplates", CreateDefaultTemplateSet());
+
+            GameObject playerPrefabObject = CreateGameObject("Player2DPrefab");
+            playerPrefabObject.AddComponent<Rigidbody2D>();
+            playerPrefabObject.AddComponent<CircleCollider2D>();
+            Player2DMovementController playerPrefab = playerPrefabObject.AddComponent<Player2DMovementController>();
+
+            GameObject cameraObject = CreateGameObject("Main Camera");
+            cameraObject.AddComponent<Camera>();
+            Player2DIsometricCamera cameraController = cameraObject.AddComponent<Player2DIsometricCamera>();
+
+            ProceduralRoom2DDebugBootstrap bootstrap = controllerObject.AddComponent<ProceduralRoom2DDebugBootstrap>();
+            SetPrivateField(bootstrap, "roomController", controller);
+            SetPrivateField(bootstrap, "roomPresenter", presenter);
+            SetPrivateField(bootstrap, "playerPrefab", playerPrefab);
+            SetPrivateField(bootstrap, "targetCamera", cameraController);
+            SetPrivateField(bootstrap, "spawnOnStart", false);
+
+            Assert.That(bootstrap.GenerateAndSpawn(out string error), Is.True, error);
+
+            Vector3 expectedPosition = floorTilemap.GetCellCenterWorld(new Vector3Int(3, 3, 0));
+            Assert.That(bootstrap.SpawnedPlayer, Is.Not.Null);
+            Assert.That(bootstrap.SpawnedPlayer.transform.position.x, Is.EqualTo(expectedPosition.x).Within(0.0001f));
+            Assert.That(bootstrap.SpawnedPlayer.transform.position.y, Is.EqualTo(expectedPosition.y).Within(0.0001f));
+            Assert.That(cameraController.Target, Is.EqualTo(bootstrap.SpawnedPlayer.transform));
+        }
+
         private static void AssertTemplateFails(RoomTemplateData template, string expectedErrorFragment)
         {
             bool success = template.TryResolveLayout(Array.Empty<RoomDirection>(), out _, out string error);

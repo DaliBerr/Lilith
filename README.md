@@ -55,7 +55,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs)
   - 位于 `StartUp` 场景
   - 负责日志初始化、本地化初始化、`Addressables` 初始化、`Kernel.GameState.StatusController` 初始化
-  - 负责压入启动菜单；开始流程会先弹出 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 选择四个固定栏位，条目需要先选中、再点一次才会进入；已有栏位会显示 [`Assets/Scripts/Kernel/UI/LoadingUIScreen.cs`](Assets/Scripts/Kernel/UI/LoadingUIScreen.cs) 并预加载数据后切到 `Main`，新栏位会先把 Loading Panel 后台压栈，在开场 storyteller 播放期间并行加载数据，若剧情结束时仍未完成则继续显示 Loading Panel 等待
+  - 负责压入启动菜单；点击 `Start` 会直接在最小空存档槽位创建新档，并先把 Loading Panel 后台压栈，在开场 storyteller 播放期间并行加载数据，若剧情结束时仍未完成则继续显示 Loading Panel 等待；点击 `Load` 才会打开 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 展示已有存档，条目需要先选中、再点一次才会加载并切到 `Main`
 - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
   - 文件名是 `StartUp.cs`，类名是 `Startup`
   - 位于 `Main` 场景
@@ -75,7 +75,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - 地图与寻路：位于 [`Assets/Scripts/Kernel/MapGrid`](Assets/Scripts/Kernel/MapGrid) 与 [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
   - 包含固定网格、双地图 Run flow、Seed 布局生成与格子寻路
   - [`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs) 暴露了边界厚度、障碍数量/尺寸、边缘留白、玩家安全区和刷怪环参数，可用来调节更密或更开的战斗地图
-  - [`Assets/Scripts/Kernel/MapGrid/Rooms`](Assets/Scripts/Kernel/MapGrid/Rooms) 是独立的调试版房间地图系统：`RoomGraphGenerator` 维护本局房间连接，`ProceduralRoomMapDebugController` 在 `Main` 场景远处的 `GeneratedRoomMapRoot` 只渲染当前一个 Tilemap 房间；当前不接入传送门、波次、玩家或敌人，旧 3D 地图仍保留
+  - [`Assets/Scripts/Kernel/MapGrid/Rooms`](Assets/Scripts/Kernel/MapGrid/Rooms) 是独立的调试版房间地图系统：`RoomGraphGenerator` 维护本局房间连接，`GeneratedRoomMapRoot` 上的 `ProceduralRoom2DDebugBootstrap` 运行时统一调用 `ProceduralRoomMapDebugController` 生成当前 Tilemap 房间，并把 [`Assets/Prefabs/Player/Test2DCharacterSprite.prefab`](Assets/Prefabs/Player/Test2DCharacterSprite.prefab) 生到第一个 `P` 入口格中心；2D 调试玩家使用 [`Assets/Scripts/Kernel/Player/Player2DMovementController.cs`](Assets/Scripts/Kernel/Player/Player2DMovementController.cs) 做 XY 平面移动/冲刺/鼠标朝向，`Main Camera` 上的 [`Assets/Scripts/Kernel/Player/Player2DIsometricCamera.cs`](Assets/Scripts/Kernel/Player/Player2DIsometricCamera.cs) 在运行时接管为沿 Z 轴看的正交跟随镜头；当前仍不接入传送门、波次、敌人、攻击、拾取或正式 run flow，旧 3D 地图与 `MapRunFlowController` 链路仍保留
   - [`Assets/Scripts/Kernel/MapGrid/MapSpawnUtility.cs`](Assets/Scripts/Kernel/MapGrid/MapSpawnUtility.cs) 统一处理最近 Ground 格解析与角色传送吸附
   - [`Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 负责 `StartRoomMapRoot` 与 `CombatMapRoot` 之间的单局切换
 - 攻击与子弹：位于 [`Assets/Scripts/Kernel/Bullet`](Assets/Scripts/Kernel/Bullet)
@@ -90,7 +90,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - 存档入口：[`RuntimeSaveService.cs`](Assets/Scripts/Kernel/Save/RuntimeSaveService.cs)
   - `UIInputRouter` 当前支持 `Hint(Tab)`：在 `MainUIScreen` 与 `BackPackUIScreen` 上开关 [`Assets/Scripts/Kernel/UI/HintUIScreen.cs`](Assets/Scripts/Kernel/UI/HintUIScreen.cs)；背包顶部 Hint 按钮与 Tab 走同一条路由
   - `HintUIScreen` 打开时会进入 `InHint` 状态，并与背包一致阻断玩家战斗输入和敌人行为
-  - 当前存档使用四个固定栏位：`profile-slot-1.json` 到 `profile-slot-4.json` 分别保存每个栏位的永久数据，`global-mode.json` 保存 `DevMode` / `NormalMode` 与四个栏位的摘要状态
+  - 当前存档使用动态槽位：`profile-slot-N.json` 保存每个栏位的永久数据，`global-mode.json` 保存 `DevMode` / `NormalMode` 与已知槽位摘要；新档会复用最小空槽位，加载弹窗只展示已有存档
 
 ### 基础设施层 `Vocalith`
 

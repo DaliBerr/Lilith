@@ -105,6 +105,8 @@ namespace Kernel.UI
 
         protected override void OnAfterHide()
         {
+            isClosingSelf = false;
+            isResolvingUnsavedChangesPrompt = false;
             ClearRuntimeView();
             RemoveCurrentStatus();
         }
@@ -120,6 +122,8 @@ namespace Kernel.UI
             UnbindButtons();
             ClearRuntimeView();
             ReleaseEntryPrefabHandle();
+            isClosingSelf = false;
+            isResolvingUnsavedChangesPrompt = false;
             RemoveCurrentStatus();
         }
 
@@ -157,25 +161,24 @@ namespace Kernel.UI
             }
 
             isClosingSelf = true;
-            try
+            while (ui.IsNavigating())
             {
-                while (ui.IsNavigating())
-                {
-                    yield return null;
-                }
-
-                if (ui.GetTopModal() == this)
-                {
-                    yield return ui.PopModalAndWait();
-                    yield break;
-                }
-
-                if (ui.GetTopScreen() == this)
-                {
-                    yield return ui.PopScreenAndWait();
-                }
+                yield return null;
             }
-            finally
+
+            bool closeQueued = false;
+            if (ui.GetTopModal() == this)
+            {
+                ui.CloseModal(this);
+                closeQueued = true;
+            }
+            else if (ui.GetTopScreen() == this)
+            {
+                ui.PopScreen();
+                closeQueued = true;
+            }
+
+            if (!closeQueued)
             {
                 isClosingSelf = false;
             }
@@ -1654,7 +1657,11 @@ namespace Kernel.UI
         {
             catalogRoot ??= transform.Find("Top Panel/Catalog") as RectTransform;
             contentRoot ??= transform.Find("Body/Scroll View/Viewport/Content") as RectTransform;
-            closeButton ??= transform.Find("Top Panel/Close Button/Edge/Button")?.GetComponent<Button>();
+            if (closeButton == null)
+            {
+                closeButton = FindButton("Top Panel/Close Button");
+            }
+
             scrollRect ??= transform.Find("Body/Scroll View")?.GetComponent<ScrollRect>();
             buttonPanel ??= transform.Find("Body/Button Panel")?.gameObject;
             cancelButton ??= transform.Find("Body/Button Panel/Cancel")?.GetComponent<Button>();
@@ -1664,6 +1671,18 @@ namespace Kernel.UI
             {
                 catalogButtonTemplate ??= catalogRoot.Find("Setting Catalog Button Prefab")?.gameObject;
             }
+        }
+
+        private Button FindButton(string relativePath)
+        {
+            Transform target = transform.Find(relativePath);
+            if (target == null)
+            {
+                return null;
+            }
+
+            Button button = target.GetComponent<Button>();
+            return button != null ? button : target.GetComponentInChildren<Button>(true);
         }
 
         private void HideTemplates()

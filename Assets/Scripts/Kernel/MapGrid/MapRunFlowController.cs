@@ -64,6 +64,7 @@ namespace Kernel.MapGrid
         private IDisposable bossEndedSubscription;
         private IDisposable rewardCollectedSubscription;
         private SettlementSnapshot currentSettlementSnapshot;
+        private readonly CombatRunTimer combatRunTimer = new();
         private int completedWaveCount;
         private int defeatedBossCount;
         private bool hasPresentedSettlementThisRun;
@@ -76,6 +77,8 @@ namespace Kernel.MapGrid
         private PlaceableTokenData cachedTutorialReturnToken;
 
         public RunFlowState CurrentState => currentState;
+        public bool IsCombatTimerRunning => combatRunTimer.IsRunning;
+        public double CombatTimerElapsedSeconds => combatRunTimer.GetElapsedSeconds(Time.timeAsDouble);
 
         private void Awake()
         {
@@ -165,6 +168,102 @@ namespace Kernel.MapGrid
         {
             snapshot = currentSettlementSnapshot;
             return snapshot != null;
+        }
+
+        /// <summary>
+        /// summary: 读取当前战斗计时快照；迁移期仅供外部入口显式调用。
+        /// param: 无
+        /// returns: 当前战斗计时快照
+        /// </summary>
+        public CombatRunTimerSnapshot GetCombatTimerSnapshot()
+        {
+            return GetCombatTimerSnapshot(Time.timeAsDouble);
+        }
+
+        /// <summary>
+        /// summary: 使用指定逻辑时间读取当前战斗计时快照，便于测试或自定义时钟调用。
+        /// param name="currentTimeSeconds": 当前逻辑时间，单位秒
+        /// returns: 当前战斗计时快照
+        /// </summary>
+        public CombatRunTimerSnapshot GetCombatTimerSnapshot(double currentTimeSeconds)
+        {
+            return combatRunTimer.GetSnapshot(currentTimeSeconds);
+        }
+
+        /// <summary>
+        /// summary: 显式开始战斗计时；已经运行时不会重置起点。
+        /// param: 无
+        /// returns: 本次成功进入计时运行态时返回 true
+        /// </summary>
+        public bool TryStartCombatTimer()
+        {
+            return TryStartCombatTimer(Time.timeAsDouble);
+        }
+
+        /// <summary>
+        /// summary: 使用指定逻辑时间显式开始战斗计时；已经运行时不会重置起点。
+        /// param name="currentTimeSeconds": 当前逻辑时间，单位秒
+        /// returns: 本次成功进入计时运行态时返回 true
+        /// </summary>
+        public bool TryStartCombatTimer(double currentTimeSeconds)
+        {
+            return combatRunTimer.TryStart(currentTimeSeconds);
+        }
+
+        /// <summary>
+        /// summary: 显式重新开始战斗计时，并清除上一轮停止结果。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void RestartCombatTimer()
+        {
+            RestartCombatTimer(Time.timeAsDouble);
+        }
+
+        /// <summary>
+        /// summary: 使用指定逻辑时间显式重新开始战斗计时，并清除上一轮停止结果。
+        /// param name="currentTimeSeconds": 当前逻辑时间，单位秒
+        /// returns: 无
+        /// </summary>
+        public void RestartCombatTimer(double currentTimeSeconds)
+        {
+            combatRunTimer.Restart(currentTimeSeconds);
+        }
+
+        /// <summary>
+        /// summary: 显式停止战斗计时，并记录胜利、玩家死亡或取消等停止原因。
+        /// param name="stopReason": 本次停止原因
+        /// param name="snapshot": 停止后或当前已有的计时快照
+        /// returns: 本次确实把计时器从运行态切到停止态时返回 true
+        /// </summary>
+        public bool TryStopCombatTimer(CombatRunTimerStopReason stopReason, out CombatRunTimerSnapshot snapshot)
+        {
+            return TryStopCombatTimer(stopReason, Time.timeAsDouble, out snapshot);
+        }
+
+        /// <summary>
+        /// summary: 使用指定逻辑时间显式停止战斗计时，并记录胜利、玩家死亡或取消等停止原因。
+        /// param name="stopReason": 本次停止原因
+        /// param name="currentTimeSeconds": 当前逻辑时间，单位秒
+        /// param name="snapshot": 停止后或当前已有的计时快照
+        /// returns: 本次确实把计时器从运行态切到停止态时返回 true
+        /// </summary>
+        public bool TryStopCombatTimer(
+            CombatRunTimerStopReason stopReason,
+            double currentTimeSeconds,
+            out CombatRunTimerSnapshot snapshot)
+        {
+            return combatRunTimer.TryStop(currentTimeSeconds, stopReason, out snapshot);
+        }
+
+        /// <summary>
+        /// summary: 清空当前战斗计时状态。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        public void ResetCombatTimer()
+        {
+            combatRunTimer.Reset();
         }
 
         /// <summary>

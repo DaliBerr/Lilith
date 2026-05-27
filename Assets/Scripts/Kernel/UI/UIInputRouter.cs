@@ -531,6 +531,12 @@ namespace Kernel.UI
                 }
 
                 UIScreen topScreen = uiManager.GetTopScreen();
+                if (topScreen is StartUpMenuUI)
+                {
+                    yield return GameExitUIUtility.ShowExitConfirmation(uiManager, nameof(UIInputRouter));
+                    yield break;
+                }
+
                 if (topScreen is SettlementUIScreen)
                 {
                     yield return CloseSettlementScreenAndResetRun(uiManager);

@@ -189,7 +189,11 @@ namespace Kernel.UI
         private void TryAutoBindReferences()
         {
             topPanel ??= transform.Find("Top Panel") as RectTransform;
-            topCloseButton ??= FindButton("Top Panel/Close Button/Edge/Button");
+            if (topCloseButton == null)
+            {
+                topCloseButton = FindButton("Top Panel/Close Button");
+            }
+
             if (topCloseButton != null)
             {
                 topCloseButtonText ??= topCloseButton.GetComponentInChildren<TMP_Text>(true);
@@ -205,13 +209,21 @@ namespace Kernel.UI
             infoText ??= mainContent.Find("Info/Text")?.GetComponent<TMP_Text>();
             buttonPanel ??= mainContent.Find("Button") as RectTransform;
 
-            confirmButton ??= FindButton("Main Content/Button/Confirm Buton/Edge/Button");
+            if (confirmButton == null)
+            {
+                confirmButton = FindButton("Main Content/Button/Confirm Buton");
+            }
+
             if (confirmButton != null)
             {
                 confirmButtonText ??= confirmButton.GetComponentInChildren<TMP_Text>(true);
             }
 
-            closeButton ??= FindButton("Main Content/Button/Close Button/Edge/Button");
+            if (closeButton == null)
+            {
+                closeButton = FindButton("Main Content/Button/Close Button");
+            }
+
             if (closeButton != null)
             {
                 closeButtonText ??= closeButton.GetComponentInChildren<TMP_Text>(true);
@@ -304,13 +316,20 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 按层级路径查找 Button 组件，供自动绑定复用。
-        /// param name="relativePath": 相对当前 prefab 根节点的层级路径
+        /// summary: 按按钮外壳路径查找 Button 组件，兼容直接挂载和子层级挂载。
+        /// param name="relativePath": 相对当前 prefab 根节点的按钮外壳路径
         /// returns: 找到时返回 Button，否则返回 null
         /// </summary>
         private Button FindButton(string relativePath)
         {
-            return transform.Find(relativePath)?.GetComponent<Button>();
+            Transform target = transform.Find(relativePath);
+            if (target == null)
+            {
+                return null;
+            }
+
+            Button button = target.GetComponent<Button>();
+            return button != null ? button : target.GetComponentInChildren<Button>(true);
         }
 
         /// <summary>

@@ -49,13 +49,16 @@
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\6000.3.9f1\Editor\Data\Tools\BuildPipeline\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Editor\Test\Player2DIsometricCameraTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackAttackPreviewControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\QuestServiceTests.cs" />
     <Compile Include="Assets\Editor\Test\StartUpMenuUITests.cs" />
     <Compile Include="Assets\Editor\Test\WaveDefinitionTests.cs" />
     <Compile Include="Assets\Editor\Test\BossInfoUIScreenTests.cs" />
+    <Compile Include="Assets\Editor\Test\ProfileManagementUIScreenTests.cs" />
     <Compile Include="Assets\Editor\SystemCallBlocker.cs" />
     <Compile Include="Assets\Editor\Test\FixedPixelSlicedImageTests.cs" />
+    <Compile Include="Assets\Editor\Test\GameExitUIUtilityTests.cs" />
     <Compile Include="Assets\Editor\Test\WaveManagerTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyDefinitionBinderTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyGeneratorTests.cs" />
@@ -71,6 +74,7 @@
     <Compile Include="Assets\Editor\Test\LilithDisplaySettingsTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyBulletTokenDropperTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyAttackExtensionTests.cs" />
+    <Compile Include="Assets\Editor\Test\Player2DMovementControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\ScriptableObjectOnValidateTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackInventoryTests.cs" />
     <Compile Include="Assets\Editor\Test\BulletTokenPickupTests.cs" />
@@ -112,8 +116,10 @@
     <Compile Include="Assets\Editor\CompileBeforePlay.cs" />
     <Compile Include="Assets\Editor\Test\CharGlyphPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\MapSpawnUtilityTests.cs" />
+    <Compile Include="Assets\Editor\Test\CombatRunTimerTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthBarControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\StoryTellerUIScreenTests.cs" />
+    <Compile Include="Assets\Editor\Test\OptionsUIScreenTests.cs" />
     <Compile Include="Assets\Editor\AttackTokenAssetGenerator.cs" />
     <Compile Include="Assets\Editor\Test\RuntimeSaveServiceTests.cs" />
     <Compile Include="Assets\Editor\MapGridMigrationUtility.cs" />

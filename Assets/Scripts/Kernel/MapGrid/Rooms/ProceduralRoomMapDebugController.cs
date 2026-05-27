@@ -95,6 +95,19 @@ namespace Kernel.MapGrid
             return RenderNode(node, out error);
         }
 
+        public bool TryGetCurrentLayout(out RoomResolvedLayout layout, out string error)
+        {
+            layout = null;
+            error = null;
+            if (currentGraph == null || !currentGraph.TryGetCurrentNode(out RoomGraphNode node))
+            {
+                error = "Current room graph is missing or has no current room.";
+                return false;
+            }
+
+            return node.TryResolveLayout(out layout, out error);
+        }
+
         public bool RenderFirstConnectedRoom(out string error)
         {
             error = null;

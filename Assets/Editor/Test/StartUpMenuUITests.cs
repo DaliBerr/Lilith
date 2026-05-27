@@ -1,10 +1,12 @@
 using System.Collections.Generic;
+using System.Collections;
 using System.Reflection;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 public sealed class StartUpMenuUITests
@@ -96,6 +98,22 @@ public sealed class StartUpMenuUITests
         Assert.That(GetNonPublicField<Image>(screen, "sealImage"), Is.SameAs(sealImage));
     }
 
+    [Test]
+    public void OnInit_BindsStartAndLoadToSeparateHandlers()
+    {
+        StartUpMenuUI screen = CreateStartUpMenuUI(out List<Button> buttons, out _, out _);
+
+        InvokeNonPublic(screen, "OnInit");
+
+        List<string> startListeners = GetRuntimeListenerMethodNames(buttons[0].onClick);
+        List<string> loadListeners = GetRuntimeListenerMethodNames(buttons[1].onClick);
+
+        Assert.That(startListeners, Does.Contain("HandleStartButtonClicked"));
+        Assert.That(startListeners, Does.Not.Contain("HandleLoadButtonClicked"));
+        Assert.That(loadListeners, Does.Contain("HandleLoadButtonClicked"));
+        Assert.That(loadListeners, Does.Not.Contain("HandleStartButtonClicked"));
+    }
+
     private StartUpMenuUI CreateStartUpMenuUI(out List<Button> buttons, out List<Image> backgrounds, out List<TMP_Text> labels)
     {
         GameObject root = CreateUiObject("StartUp UI Prefab");
@@ -180,6 +198,32 @@ public sealed class StartUpMenuUITests
         FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null, $"{target.GetType().Name}.{fieldName} should exist.");
         return (T)field.GetValue(target);
+    }
+
+    private static List<string> GetRuntimeListenerMethodNames(UnityEvent unityEvent)
+    {
+        List<string> methodNames = new();
+        FieldInfo callsField = typeof(UnityEventBase).GetField("m_Calls", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(callsField, Is.Not.Null, "UnityEventBase.m_Calls should exist.");
+        object calls = callsField.GetValue(unityEvent);
+        FieldInfo runtimeCallsField = calls.GetType().GetField("m_RuntimeCalls", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(runtimeCallsField, Is.Not.Null, "InvokableCallList.m_RuntimeCalls should exist.");
+        IList runtimeCalls = (IList)runtimeCallsField.GetValue(calls);
+
+        foreach (object runtimeCall in runtimeCalls)
+        {
+            FieldInfo delegateField = runtimeCall.GetType().GetField("Delegate", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(delegateField, Is.Not.Null, "InvokableCall.Delegate should exist.");
+            if (delegateField.GetValue(runtimeCall) is System.Delegate callback)
+            {
+                foreach (System.Delegate invocation in callback.GetInvocationList())
+                {
+                    methodNames.Add(invocation.Method.Name);
+                }
+            }
+        }
+
+        return methodNames;
     }
 
     private static void AssertColor(Color actual, Color expected)

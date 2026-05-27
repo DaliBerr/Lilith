@@ -8,7 +8,7 @@ using UnityEngine;
 using Vocalith.Logging;
 
 /// <summary>
-/// 提供四个固定永久档栏位的选择、加载、保存与删除入口。
+/// 提供永久档栏位的创建、选择、加载、保存与删除入口。
 /// </summary>
 [DefaultExecutionOrder(-940)]
 [DisallowMultipleComponent]
@@ -111,14 +111,21 @@ public sealed class RuntimeSaveService : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 返回四个栏位的摘要视图；会顺手修正全局摘要与磁盘状态的偏差。
+    /// summary: 返回从 0 到当前已知最大栏位的摘要视图；会顺手修正全局摘要与磁盘状态的偏差。
     /// param: 无
-    /// returns: 长度固定为 4 的栏位摘要数组
+    /// returns: 至少包含旧版 4 个栏位的摘要数组
     /// </summary>
     public ProfileSlotSummary[] GetSlotSummaries()
     {
         ProfileSlotStateData[] states = GlobalModeSettingsService.GetProfileSlotStatesSnapshot();
-        ProfileSlotSummary[] summaries = new ProfileSlotSummary[SavePathUtility.ProfileSlotCount];
+        int[] existingSlotIndices = SavePathUtility.EnumerateExistingProfileSlotIndices();
+        int summaryCount = Math.Max(SavePathUtility.DefaultProfileSlotCount, states?.Length ?? 0);
+        if (existingSlotIndices.Length > 0)
+        {
+            summaryCount = Math.Max(summaryCount, existingSlotIndices[^1] + 1);
+        }
+
+        ProfileSlotSummary[] summaries = new ProfileSlotSummary[summaryCount];
 
         for (int slotIndex = 0; slotIndex < summaries.Length; slotIndex++)
         {
@@ -142,8 +149,64 @@ public sealed class RuntimeSaveService : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: 返回当前磁盘上所有已有永久档的摘要，供 Load 弹窗只展示可加载存档。
+    /// param: 无
+    /// returns: 按槽位索引升序排列的已有永久档摘要数组
+    /// </summary>
+    public ProfileSlotSummary[] GetExistingSlotSummaries()
+    {
+        int[] existingSlotIndices = SavePathUtility.EnumerateExistingProfileSlotIndices();
+        if (existingSlotIndices.Length == 0)
+        {
+            return Array.Empty<ProfileSlotSummary>();
+        }
+
+        ProfileSlotStateData[] states = GlobalModeSettingsService.GetProfileSlotStatesSnapshot();
+        List<ProfileSlotSummary> summaries = new(existingSlotIndices.Length);
+        for (int i = 0; i < existingSlotIndices.Length; i++)
+        {
+            int slotIndex = existingSlotIndices[i];
+            string filePath = SavePathUtility.GetProfileFilePath(slotIndex);
+            if (!File.Exists(filePath))
+            {
+                continue;
+            }
+
+            long storedTicks = states != null && slotIndex < states.Length && states[slotIndex] != null
+                ? states[slotIndex].LastSavedUtcTicks
+                : 0L;
+            long lastSavedUtcTicks = ResolveSaveTimestamp(filePath, storedTicks);
+            GlobalModeSettingsService.SetProfileSlotState(slotIndex, hasProfile: true, lastSavedUtcTicks);
+            summaries.Add(new ProfileSlotSummary(slotIndex, hasProfile: true, lastSavedUtcTicks));
+        }
+
+        return summaries.ToArray();
+    }
+
+    /// <summary>
+    /// summary: 在当前最小空槽位创建新的默认永久档，并选中该槽位。
+    /// param name="slotIndex": 成功时输出新建档案所在槽位
+    /// returns: 成功创建并写入新永久档时返回 true
+    /// </summary>
+    public bool CreateProfileInNextEmptySlot(out int slotIndex)
+    {
+        slotIndex = SavePathUtility.InvalidProfileSlotIndex;
+        try
+        {
+            slotIndex = SavePathUtility.FindNextEmptyProfileSlotIndex();
+        }
+        catch (Exception exception)
+        {
+            GameDebug.LogError($"[RuntimeSaveService] Failed to find an empty profile slot.\n{exception}");
+            return false;
+        }
+
+        return CreateNewProfileInSlot(slotIndex);
+    }
+
+    /// <summary>
     /// summary: 选中一个存档栏位；若栏位为空则立即创建默认永久档并标记为新存档。
-    /// param name="slotIndex": 目标栏位索引，使用 0 到 3
+    /// param name="slotIndex": 目标栏位索引，使用 0 起始的非负整数
     /// param name="isNewSlot": 输出该栏位在本次选择前是否为空
     /// returns: 成功切换到目标栏位时返回 true
     /// </summary>
@@ -166,18 +229,53 @@ public sealed class RuntimeSaveService : MonoBehaviour
         shouldShowOpeningGuideOnMainSceneEntry = isNewSlot;
         if (isNewSlot)
         {
-            currentProfile = PermanentProfileData.CreateDefault();
-            hasLoadedProfile = true;
-            ApplyProfileToRuntime();
-            return WriteProfileToDisk();
+            return CreateNewProfileInSelectedSlot();
         }
 
         return LoadProfileInternal(forceReload: true);
     }
 
     /// <summary>
+    /// summary: 只选中并加载已有永久档；目标文件不存在时不会创建新档。
+    /// param name="slotIndex": 目标栏位索引，使用 0 起始的非负整数
+    /// returns: 成功加载已有永久档时返回 true
+    /// </summary>
+    public bool SelectExistingProfileSlot(int slotIndex)
+    {
+        if (!SavePathUtility.IsValidProfileSlotIndex(slotIndex))
+        {
+            GameDebug.LogWarning($"[RuntimeSaveService] Invalid profile slot index '{slotIndex}'.");
+            return false;
+        }
+
+        string filePath = SavePathUtility.GetProfileFilePath(slotIndex);
+        if (!File.Exists(filePath))
+        {
+            GameDebug.LogWarning($"[RuntimeSaveService] Profile slot '{slotIndex}' does not exist.");
+            return false;
+        }
+
+        activeSlotIndex = slotIndex;
+        hasLoadedProfile = false;
+        currentProfile = PermanentProfileData.CreateDefault();
+        shouldShowOpeningGuideOnMainSceneEntry = false;
+
+        if (LoadProfileInternal(forceReload: true, applyToRuntime: true, requireExistingFile: true))
+        {
+            return true;
+        }
+
+        activeSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
+        hasLoadedProfile = false;
+        currentProfile = PermanentProfileData.CreateDefault();
+        shouldShowOpeningGuideOnMainSceneEntry = false;
+        ApplyProfileToRuntime();
+        return false;
+    }
+
+    /// <summary>
     /// summary: 删除指定栏位的永久档文件，并同步清空全局栏位摘要。
-    /// param name="slotIndex": 目标栏位索引，使用 0 到 3
+    /// param name="slotIndex": 目标栏位索引，使用 0 起始的非负整数
     /// returns: 删除成功或目标文件原本不存在时返回 true
     /// </summary>
     public bool DeleteProfileSlot(int slotIndex)
@@ -688,7 +786,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
         return LoadProfileInternal(forceReload: false, applyToRuntime);
     }
 
-    private bool LoadProfileInternal(bool forceReload, bool applyToRuntime = true)
+    private bool LoadProfileInternal(bool forceReload, bool applyToRuntime = true, bool requireExistingFile = false)
     {
         if (!EnsureSelectedSlot())
         {
@@ -707,6 +805,10 @@ public sealed class RuntimeSaveService : MonoBehaviour
 
         SavePathUtility.EnsureSaveDirectoryExists();
         string filePath = GetActiveProfilePath();
+        if (requireExistingFile && !File.Exists(filePath))
+        {
+            return false;
+        }
 
         PermanentProfileData loadedProfile;
         if (File.Exists(filePath))
@@ -738,6 +840,36 @@ public sealed class RuntimeSaveService : MonoBehaviour
         }
 
         return true;
+    }
+
+    private bool CreateNewProfileInSlot(int slotIndex)
+    {
+        if (!SavePathUtility.IsValidProfileSlotIndex(slotIndex))
+        {
+            GameDebug.LogWarning($"[RuntimeSaveService] Invalid profile slot index '{slotIndex}'.");
+            return false;
+        }
+
+        string filePath = SavePathUtility.GetProfileFilePath(slotIndex);
+        if (File.Exists(filePath))
+        {
+            GameDebug.LogWarning($"[RuntimeSaveService] Profile slot '{slotIndex}' is already occupied.");
+            return false;
+        }
+
+        activeSlotIndex = slotIndex;
+        hasLoadedProfile = false;
+        currentProfile = PermanentProfileData.CreateDefault();
+        shouldShowOpeningGuideOnMainSceneEntry = true;
+        return CreateNewProfileInSelectedSlot();
+    }
+
+    private bool CreateNewProfileInSelectedSlot()
+    {
+        currentProfile = PermanentProfileData.CreateDefault();
+        hasLoadedProfile = true;
+        ApplyProfileToRuntime();
+        return WriteProfileToDisk();
     }
 
     private bool TryReadProfile(string filePath, out PermanentProfileData profile)
@@ -872,7 +1004,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
 }
 
 /// <summary>
-/// 四个固定存档槽位在 UI 中展示用的只读摘要。
+/// 存档槽位在 UI 中展示用的只读摘要。
 /// </summary>
 public readonly struct ProfileSlotSummary
 {

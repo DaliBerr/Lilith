@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Kernel.GameState;
 using TMPro;
@@ -12,7 +13,7 @@ using Vocalith.UI;
 namespace Kernel.UI
 {
     /// <summary>
-    /// Profile Popup prefab 的运行时控制脚本，负责展示四个固定存档栏位。
+    /// Profile Popup prefab 的运行时控制脚本，负责展示可加载的已有存档。
     /// </summary>
     [DisallowMultipleComponent]
     [UIPrefab("Assets/Prefabs/UI/Profile Popup")]
@@ -29,11 +30,13 @@ namespace Kernel.UI
             [SerializeField] private Button triggerButton;
             [SerializeField] private Button deleteButton;
             [SerializeField] private GameObject voidInfo;
+            [SerializeField] private TMP_Text voidText;
 
             [NonSerialized] private Color rootDefaultColor = Color.white;
             [NonSerialized] private Color deleteDefaultColor = Color.white;
             [NonSerialized] private bool hasCapturedDefaultColors;
 
+            public RectTransform Root => root;
             public Button TriggerButton => triggerButton;
             public Button DeleteButton => deleteButton;
 
@@ -52,21 +55,28 @@ namespace Kernel.UI
                 triggerButton ??= slotRoot.Find("Trigger Button")?.GetComponent<Button>();
                 deleteButton ??= slotRoot.Find("Delete Button")?.GetComponent<Button>();
                 voidInfo ??= slotRoot.Find("Void Info")?.gameObject;
+                voidText ??= slotRoot.Find("Void Info/Text (TMP)")?.GetComponent<TMP_Text>();
 
                 CaptureDefaultColors();
             }
 
             public void Apply(ProfileSlotSummary summary, bool isSelected, bool isDeleteConfirmArmed, Color selectedColor, Color deleteConfirmColor)
             {
-                if (root != null && !root.gameObject.activeSelf)
-                {
-                    root.gameObject.SetActive(true);
-                }
-
+                SetObjectActive(root != null ? root.gameObject : null, true);
                 SetObjectActive(timePanel, summary.HasProfile);
                 SetObjectActive(contentPanel, summary.HasProfile);
                 SetObjectActive(deleteButton != null ? deleteButton.gameObject : null, summary.HasProfile);
                 SetObjectActive(voidInfo, !summary.HasProfile);
+
+                if (triggerButton != null)
+                {
+                    triggerButton.interactable = summary.HasProfile;
+                }
+
+                if (deleteButton != null)
+                {
+                    deleteButton.interactable = summary.HasProfile;
+                }
 
                 if (rootImage != null)
                 {
@@ -83,6 +93,40 @@ namespace Kernel.UI
                     timeText.text = summary.HasProfile
                         ? FormatSaveTime(summary.LastSavedUtcTicks)
                         : string.Empty;
+                }
+            }
+
+            public void ApplyEmptyState(string message)
+            {
+                SetObjectActive(root != null ? root.gameObject : null, true);
+                SetObjectActive(timePanel, false);
+                SetObjectActive(contentPanel, false);
+                SetObjectActive(deleteButton != null ? deleteButton.gameObject : null, false);
+                SetObjectActive(voidInfo, true);
+
+                if (triggerButton != null)
+                {
+                    triggerButton.interactable = false;
+                }
+
+                if (deleteButton != null)
+                {
+                    deleteButton.interactable = false;
+                }
+
+                if (rootImage != null)
+                {
+                    rootImage.color = rootDefaultColor;
+                }
+
+                if (timeText != null)
+                {
+                    timeText.text = string.Empty;
+                }
+
+                if (voidText != null)
+                {
+                    voidText.text = message;
                 }
             }
 
@@ -120,13 +164,14 @@ namespace Kernel.UI
         [SerializeField] private RectTransform topPanel;
         [SerializeField] private TMP_Text titleText;
         [SerializeField] private Button topCloseButton;
-        [SerializeField] private RectTransform mainContent;
-        [SerializeField] private Color selectedSlotColor = new Color(0.78f, 0.89f, 1f, 1f);
+        [SerializeField] private RectTransform slotListContent;
+        [SerializeField] private RectTransform slotTemplate;
+        [SerializeField] private Color selectedSlotColor = new(0.78f, 0.89f, 1f, 1f);
         [SerializeField] private Color deleteConfirmColor = Color.red;
-        [SerializeField] private ProfileSlotView[] slotViews = new ProfileSlotView[SavePathUtility.ProfileSlotCount];
 
-        private UnityAction[] triggerButtonCallbacks = Array.Empty<UnityAction>();
-        private UnityAction[] deleteButtonCallbacks = Array.Empty<UnityAction>();
+        private readonly List<ProfileSlotView> renderedSlotViews = new();
+        private readonly List<UnityAction> triggerButtonCallbacks = new();
+        private readonly List<UnityAction> deleteButtonCallbacks = new();
         private int selectedSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
         private int pendingDeleteSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
         private bool isHandlingSlotAction;
@@ -165,7 +210,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 根据当前 Profile Popup prefab 的固定层级自动补齐常用引用。
+        /// summary: 根据当前 Profile Popup prefab 的滚动列表层级自动补齐常用引用。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -175,43 +220,41 @@ namespace Kernel.UI
             topPanel ??= popupRoot?.Find("Top Panel") as RectTransform;
             titleText ??= popupRoot?.Find("Top Panel/Tittle")?.GetComponent<TMP_Text>();
             titleText ??= popupRoot?.Find("Top Panel/Title")?.GetComponent<TMP_Text>();
-            topCloseButton ??= popupRoot?.Find("Top Panel/Close Button/Edge/Button")?.GetComponent<Button>();
-            mainContent ??= popupRoot?.Find("Main Content") as RectTransform;
-
-            EnsureSlotViews();
-
-            for (int slotIndex = 0; slotIndex < slotViews.Length; slotIndex++)
+            if (topCloseButton == null)
             {
-                slotViews[slotIndex] ??= new ProfileSlotView();
-                Transform slotRoot = mainContent != null && slotIndex < mainContent.childCount
-                    ? mainContent.GetChild(slotIndex)
-                    : null;
+                topCloseButton = FindButton(popupRoot, "Top Panel/Close Button");
+            }
 
-                slotViews[slotIndex].TryAutoBind(slotRoot);
+            slotListContent ??= popupRoot?.Find("Main /Viewport/Content") as RectTransform;
+            slotListContent ??= popupRoot?.Find("Main/Viewport/Content") as RectTransform;
+            slotListContent ??= popupRoot?.Find("Main Content") as RectTransform;
+
+            if (slotTemplate == null && slotListContent != null && slotListContent.childCount > 0)
+            {
+                slotTemplate = slotListContent.GetChild(0) as RectTransform;
             }
         }
 
+        private static Button FindButton(Transform root, string relativePath)
+        {
+            Transform target = root != null ? root.Find(relativePath) : null;
+            if (target == null)
+            {
+                return null;
+            }
+
+            Button button = target.GetComponent<Button>();
+            return button != null ? button : target.GetComponentInChildren<Button>(true);
+        }
+
         /// <summary>
-        /// summary: 绑定顶部关闭按钮和四个栏位的触发按钮。
+        /// summary: 绑定顶部关闭按钮；存档条目按钮会在刷新列表时动态绑定。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void BindButtonCallbacks()
         {
             BindButton(topCloseButton, HandleCloseClicked);
-            EnsureCallbackArrays();
-
-            for (int slotIndex = 0; slotIndex < slotViews.Length; slotIndex++)
-            {
-                ProfileSlotView slotView = slotViews[slotIndex];
-                if (slotView == null)
-                {
-                    continue;
-                }
-
-                BindButton(slotView.TriggerButton, triggerButtonCallbacks[slotIndex]);
-                BindButton(slotView.DeleteButton, deleteButtonCallbacks[slotIndex]);
-            }
         }
 
         /// <summary>
@@ -222,27 +265,11 @@ namespace Kernel.UI
         private void UnbindButtonCallbacks()
         {
             UnbindButton(topCloseButton, HandleCloseClicked);
-            if (slotViews == null)
-            {
-                return;
-            }
-
-            EnsureCallbackArrays();
-            for (int slotIndex = 0; slotIndex < slotViews.Length; slotIndex++)
-            {
-                ProfileSlotView slotView = slotViews[slotIndex];
-                if (slotView == null)
-                {
-                    continue;
-                }
-
-                UnbindButton(slotView.TriggerButton, triggerButtonCallbacks[slotIndex]);
-                UnbindButton(slotView.DeleteButton, deleteButtonCallbacks[slotIndex]);
-            }
+            UnbindRenderedSlotCallbacks();
         }
 
         /// <summary>
-        /// summary: 刷新四个固定栏位的可视状态；存在存档时显示时间，否则显示 Void Info。
+        /// summary: 刷新可滚动列表；只展示当前磁盘上已有的存档。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -260,20 +287,13 @@ namespace Kernel.UI
                 return;
             }
 
-            ProfileSlotSummary[] summaries = saveService.GetSlotSummaries();
-            NormalizePendingDeleteState(summaries);
-
-            int maxCount = Math.Min(slotViews.Length, summaries.Length);
-            for (int slotIndex = 0; slotIndex < maxCount; slotIndex++)
-            {
-                bool isSelected = selectedSlotIndex == slotIndex;
-                bool isDeleteConfirmArmed = pendingDeleteSlotIndex == slotIndex && summaries[slotIndex].HasProfile;
-                slotViews[slotIndex]?.Apply(summaries[slotIndex], isSelected, isDeleteConfirmArmed, selectedSlotColor, deleteConfirmColor);
-            }
+            ProfileSlotSummary[] summaries = saveService.GetExistingSlotSummaries();
+            NormalizeTransientSlotState(summaries);
+            RebuildSlotRows(summaries);
         }
 
         /// <summary>
-        /// summary: 响应某个栏位的开始按钮；第一次点击只选中，第二次点击同一栏位才真正进入。
+        /// summary: 响应某个已有存档栏位；第一次点击只选中，第二次点击同一栏位才真正加载。
         /// param name="slotIndex": 被点击的栏位索引
         /// returns: 无
         /// </summary>
@@ -316,22 +336,18 @@ namespace Kernel.UI
             RefreshView();
 
             isHandlingSlotAction = true;
-            if (!saveService.SelectProfileSlot(slotIndex, out bool isNewSlot))
+            if (!saveService.SelectExistingProfileSlot(slotIndex))
             {
                 isHandlingSlotAction = false;
+                RefreshView();
                 StartCoroutine(PopUpUIUtility.ShowInfoPopup(
                     ui,
                     nameof(ProfileManagementUIScreen),
-                    LocalizationManager.TranslateOrDefault("ui.profile.slot_init_failed", "当前栏位初始化失败。")));
+                    LocalizationManager.TranslateOrDefault("ui.profile.slot_missing", "该存档已不存在。")));
                 return;
             }
 
-            RefreshView();
-
-            bool requestAccepted = isNewSlot
-                ? startup.RequestStartGame()
-                : startup.RequestEnterMainScene();
-
+            bool requestAccepted = startup.RequestEnterMainScene();
             if (!requestAccepted)
             {
                 isHandlingSlotAction = false;
@@ -432,7 +448,7 @@ namespace Kernel.UI
                 return LocalizationManager.TranslateOrDefault("ui.profile.unknown_time", "Unknown Time");
             }
 
-            DateTime utcTime = new DateTime(utcTicks, DateTimeKind.Utc);
+            DateTime utcTime = new(utcTicks, DateTimeKind.Utc);
             DateTime localTime = utcTime.ToLocalTime();
             TimeSpan elapsed = DateTime.UtcNow - utcTime;
             if (elapsed < TimeSpan.Zero)
@@ -480,42 +496,96 @@ namespace Kernel.UI
                 Math.Max(1, (int)Math.Floor(elapsed.TotalSeconds)));
         }
 
-        /// <summary>
-        /// summary: 为四个栏位准备稳定的点击回调缓存，避免重复创建闭包或移除失败。
-        /// param: 无
-        /// returns: 无
-        /// </summary>
-        private void EnsureCallbackArrays()
+        private void RebuildSlotRows(ProfileSlotSummary[] summaries)
         {
-            if (triggerButtonCallbacks.Length != SavePathUtility.ProfileSlotCount)
+            EnsureRenderedSlotViewCount(Math.Max(1, summaries?.Length ?? 0));
+            UnbindRenderedSlotCallbacks();
+
+            if (renderedSlotViews.Count == 0)
             {
-                triggerButtonCallbacks = new UnityAction[SavePathUtility.ProfileSlotCount];
+                GameDebug.LogWarning("[ProfileManagementUIScreen] Profile slot template is missing.");
+                return;
             }
 
-            if (deleteButtonCallbacks.Length != SavePathUtility.ProfileSlotCount)
+            int summaryCount = summaries?.Length ?? 0;
+            for (int i = 0; i < renderedSlotViews.Count; i++)
             {
-                deleteButtonCallbacks = new UnityAction[SavePathUtility.ProfileSlotCount];
+                ProfileSlotView slotView = renderedSlotViews[i];
+                if (slotView?.Root != null)
+                {
+                    slotView.Root.gameObject.SetActive(i < Math.Max(1, summaryCount));
+                }
             }
 
-            for (int slotIndex = 0; slotIndex < SavePathUtility.ProfileSlotCount; slotIndex++)
+            if (summaryCount == 0)
             {
-                int capturedSlotIndex = slotIndex;
-                triggerButtonCallbacks[slotIndex] ??= () => HandleSlotTriggered(capturedSlotIndex);
-                deleteButtonCallbacks[slotIndex] ??= () => HandleDeleteSlotClicked(capturedSlotIndex);
+                renderedSlotViews[0].ApplyEmptyState(LocalizationManager.TranslateOrDefault("ui.profile.no_saves", "暂无可加载存档。"));
+                return;
+            }
+
+            for (int i = 0; i < summaryCount; i++)
+            {
+                ProfileSlotSummary summary = summaries[i];
+                ProfileSlotView slotView = renderedSlotViews[i];
+                bool isSelected = selectedSlotIndex == summary.SlotIndex;
+                bool isDeleteConfirmArmed = pendingDeleteSlotIndex == summary.SlotIndex && summary.HasProfile;
+                slotView.Apply(summary, isSelected, isDeleteConfirmArmed, selectedSlotColor, deleteConfirmColor);
+
+                int capturedSlotIndex = summary.SlotIndex;
+                UnityAction triggerCallback = () => HandleSlotTriggered(capturedSlotIndex);
+                UnityAction deleteCallback = () => HandleDeleteSlotClicked(capturedSlotIndex);
+                triggerButtonCallbacks.Add(triggerCallback);
+                deleteButtonCallbacks.Add(deleteCallback);
+                BindButton(slotView.TriggerButton, triggerCallback);
+                BindButton(slotView.DeleteButton, deleteCallback);
             }
         }
 
-        /// <summary>
-        /// summary: 确保 slotViews 数组长度固定为四个栏位。
-        /// param: 无
-        /// returns: 无
-        /// </summary>
-        private void EnsureSlotViews()
+        private void EnsureRenderedSlotViewCount(int requiredCount)
         {
-            if (slotViews == null || slotViews.Length != SavePathUtility.ProfileSlotCount)
+            if (slotTemplate == null)
             {
-                slotViews = new ProfileSlotView[SavePathUtility.ProfileSlotCount];
+                TryAutoBindReferences();
             }
+
+            if (slotTemplate == null)
+            {
+                return;
+            }
+
+            if (renderedSlotViews.Count == 0)
+            {
+                ProfileSlotView templateView = new();
+                templateView.TryAutoBind(slotTemplate);
+                renderedSlotViews.Add(templateView);
+            }
+
+            while (renderedSlotViews.Count < requiredCount)
+            {
+                RectTransform cloneRoot = Instantiate(slotTemplate, slotListContent != null ? slotListContent : slotTemplate.parent);
+                cloneRoot.gameObject.name = $"{slotTemplate.gameObject.name} ({renderedSlotViews.Count + 1})";
+                ProfileSlotView slotView = new();
+                slotView.TryAutoBind(cloneRoot);
+                renderedSlotViews.Add(slotView);
+            }
+        }
+
+        private void UnbindRenderedSlotCallbacks()
+        {
+            int triggerCount = Math.Min(triggerButtonCallbacks.Count, renderedSlotViews.Count);
+            for (int i = 0; i < triggerCount; i++)
+            {
+                UnbindButton(renderedSlotViews[i].TriggerButton, triggerButtonCallbacks[i]);
+            }
+
+            int deleteCount = Math.Min(deleteButtonCallbacks.Count, renderedSlotViews.Count);
+            for (int i = 0; i < deleteCount; i++)
+            {
+                UnbindButton(renderedSlotViews[i].DeleteButton, deleteButtonCallbacks[i]);
+            }
+
+            triggerButtonCallbacks.Clear();
+            deleteButtonCallbacks.Clear();
         }
 
         /// <summary>
@@ -531,19 +601,18 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 当当前待确认删除的栏位已经不存在或无效时，自动清理删除确认状态。
-        /// param name="summaries": 当前栏位快照
+        /// summary: 当当前选中或待删除栏位已经不存在时，自动清理临时状态。
+        /// param name="summaries": 当前已有存档快照
         /// returns: 无
         /// </summary>
-        private void NormalizePendingDeleteState(ProfileSlotSummary[] summaries)
+        private void NormalizeTransientSlotState(ProfileSlotSummary[] summaries)
         {
-            if (!SavePathUtility.IsValidProfileSlotIndex(pendingDeleteSlotIndex))
+            if (!ContainsSlot(summaries, selectedSlotIndex))
             {
-                pendingDeleteSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
-                return;
+                selectedSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
             }
 
-            if (summaries == null || pendingDeleteSlotIndex >= summaries.Length || !summaries[pendingDeleteSlotIndex].HasProfile)
+            if (!ContainsSlot(summaries, pendingDeleteSlotIndex))
             {
                 pendingDeleteSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
             }
@@ -557,6 +626,24 @@ namespace Kernel.UI
         private void ClearDeleteConfirmationState()
         {
             pendingDeleteSlotIndex = SavePathUtility.InvalidProfileSlotIndex;
+        }
+
+        private static bool ContainsSlot(ProfileSlotSummary[] summaries, int slotIndex)
+        {
+            if (!SavePathUtility.IsValidProfileSlotIndex(slotIndex) || summaries == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < summaries.Length; i++)
+            {
+                if (summaries[i].SlotIndex == slotIndex && summaries[i].HasProfile)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

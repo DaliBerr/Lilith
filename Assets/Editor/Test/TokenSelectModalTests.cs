@@ -12,7 +12,7 @@ using VocalithRandom = Vocalith.Random;
 
 public sealed class TokenSelectModalTests
 {
-    private const string SelectionPrefabPath = "Assets/Prefabs/UI/BulletToken Selection Prefab.prefab";
+    private const string SelectionPrefabPath = "Assets/Prefabs/UI/TokenSelect/BulletToken Selection Prefab.prefab";
 
     private readonly List<UnityEngine.Object> createdObjects = new();
 
@@ -292,7 +292,7 @@ public sealed class TokenSelectModalTests
     [Test]
     public void TokenSelectPanelPrefab_WiresLibraryAndSelectionPrefab()
     {
-        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Token Select Panel.prefab");
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/TokenSelect/Token Select Panel.prefab");
 
         try
         {
