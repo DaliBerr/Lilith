@@ -117,6 +117,47 @@ public sealed class LocalizationTests
     }
 
     [Test]
+    public void OptionsCatalog_LocalizesScreenShakeGameplayToggle()
+    {
+        bool merged = InvokeMergeJsonPatchPack(@"{
+  ""language"": ""en-US"",
+  ""domain"": ""OptionsCatalog"",
+  ""patches"": {
+    ""gameplay"": { ""title"": ""Gameplay"" },
+    ""screen_shake"": { ""title"": ""Screen Shake"" }
+  }
+}");
+
+        Assert.That(merged, Is.True);
+
+        bool parsed = OptionsCatalogUtility.TryDeserializeCatalogJson(@"{
+  ""categories"": [
+    {
+      ""id"": ""gameplay"",
+      ""title"": ""游戏"",
+      ""entries"": [
+        {
+          ""id"": ""screen_shake"",
+          ""title"": ""屏幕震动"",
+          ""mode"": ""toggle"",
+          ""playerPrefsKey"": ""Options.Gameplay.ScreenShake"",
+          ""defaultBool"": true
+        }
+      ]
+    }
+  ]
+}", out OptionsCatalogData catalog, out string errorMessage);
+
+        Assert.That(parsed, Is.True, errorMessage);
+        OptionsEntryData screenShakeEntry = catalog.Categories[0].Entries[0];
+        Assert.That(catalog.Categories[0].Title, Is.EqualTo("Gameplay"));
+        Assert.That(screenShakeEntry.Title, Is.EqualTo("Screen Shake"));
+        Assert.That(screenShakeEntry.Mode, Is.EqualTo("toggle"));
+        Assert.That(screenShakeEntry.PlayerPrefsKey, Is.EqualTo(ScreenShakeSettings.PlayerPrefsKey));
+        Assert.That(screenShakeEntry.DefaultBool, Is.True);
+    }
+
+    [Test]
     public void TokenDisplay_UsesKeyWhenPresentAndSerializedTextAsFallback()
     {
         LocalizationManager.RegisterString("token.test.display", "Fire");

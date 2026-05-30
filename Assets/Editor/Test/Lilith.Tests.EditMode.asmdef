@@ -1,0 +1,30 @@
+{
+    "name": "Lilith.Tests.EditMode",
+    "rootNamespace": "",
+    "references": [
+        "Lilith.Bootstrap",
+        "Lilith.Input",
+        "Lilith.Kernel",
+        "Lilith.Vocalith",
+        "Lilith.Editor",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,4 +1,10 @@
 ﻿<Solution>
+  <Project Path="Lilith.Tests.EditMode.csproj" />
+  <Project Path="Lilith.Kernel.csproj" />
+  <Project Path="Lilith.Input.csproj" />
+  <Project Path="Lilith.Vocalith.csproj" />
+  <Project Path="Lilith.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="Lilith.Bootstrap.csproj" />
 </Solution>

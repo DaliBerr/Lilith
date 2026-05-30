@@ -132,17 +132,21 @@ public sealed class RuntimeSaveService : MonoBehaviour
             string filePath = SavePathUtility.GetProfileFilePath(slotIndex);
             bool hasProfile = File.Exists(filePath);
             long lastSavedUtcTicks = 0L;
+            long lastOpenedUtcTicks = 0L;
             if (hasProfile)
             {
                 long storedTicks = states != null && slotIndex < states.Length && states[slotIndex] != null
                     ? states[slotIndex].LastSavedUtcTicks
+                    : 0L;
+                lastOpenedUtcTicks = states != null && slotIndex < states.Length && states[slotIndex] != null
+                    ? states[slotIndex].LastOpenedUtcTicks
                     : 0L;
 
                 lastSavedUtcTicks = ResolveSaveTimestamp(filePath, storedTicks);
             }
 
             GlobalModeSettingsService.SetProfileSlotState(slotIndex, hasProfile, lastSavedUtcTicks);
-            summaries[slotIndex] = new ProfileSlotSummary(slotIndex, hasProfile, lastSavedUtcTicks);
+            summaries[slotIndex] = new ProfileSlotSummary(slotIndex, hasProfile, lastSavedUtcTicks, lastOpenedUtcTicks);
         }
 
         return summaries;
@@ -151,7 +155,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
     /// <summary>
     /// summary: 返回当前磁盘上所有已有永久档的摘要，供 Load 弹窗只展示可加载存档。
     /// param: 无
-    /// returns: 按槽位索引升序排列的已有永久档摘要数组
+    /// returns: 按最近打开时间降序排列的已有永久档摘要数组
     /// </summary>
     public ProfileSlotSummary[] GetExistingSlotSummaries()
     {
@@ -175,11 +179,15 @@ public sealed class RuntimeSaveService : MonoBehaviour
             long storedTicks = states != null && slotIndex < states.Length && states[slotIndex] != null
                 ? states[slotIndex].LastSavedUtcTicks
                 : 0L;
+            long lastOpenedUtcTicks = states != null && slotIndex < states.Length && states[slotIndex] != null
+                ? states[slotIndex].LastOpenedUtcTicks
+                : 0L;
             long lastSavedUtcTicks = ResolveSaveTimestamp(filePath, storedTicks);
-            GlobalModeSettingsService.SetProfileSlotState(slotIndex, hasProfile: true, lastSavedUtcTicks);
-            summaries.Add(new ProfileSlotSummary(slotIndex, hasProfile: true, lastSavedUtcTicks));
+            GlobalModeSettingsService.SetProfileSlotState(slotIndex, hasProfile: true, lastSavedUtcTicks: lastSavedUtcTicks);
+            summaries.Add(new ProfileSlotSummary(slotIndex, hasProfile: true, lastSavedUtcTicks: lastSavedUtcTicks, lastOpenedUtcTicks: lastOpenedUtcTicks));
         }
 
+        summaries.Sort(CompareProfileSlotSummariesByRecentOpen);
         return summaries.ToArray();
     }
 
@@ -232,7 +240,13 @@ public sealed class RuntimeSaveService : MonoBehaviour
             return CreateNewProfileInSelectedSlot();
         }
 
-        return LoadProfileInternal(forceReload: true);
+        bool loadSuccess = LoadProfileInternal(forceReload: true);
+        if (loadSuccess)
+        {
+            MarkActiveProfileOpened();
+        }
+
+        return loadSuccess;
     }
 
     /// <summary>
@@ -262,6 +276,7 @@ public sealed class RuntimeSaveService : MonoBehaviour
 
         if (LoadProfileInternal(forceReload: true, applyToRuntime: true, requireExistingFile: true))
         {
+            MarkActiveProfileOpened();
             return true;
         }
 
@@ -869,7 +884,34 @@ public sealed class RuntimeSaveService : MonoBehaviour
         currentProfile = PermanentProfileData.CreateDefault();
         hasLoadedProfile = true;
         ApplyProfileToRuntime();
-        return WriteProfileToDisk();
+        bool createSuccess = WriteProfileToDisk();
+        if (createSuccess)
+        {
+            MarkActiveProfileOpened();
+        }
+
+        return createSuccess;
+    }
+
+    private void MarkActiveProfileOpened()
+    {
+        if (!SavePathUtility.IsValidProfileSlotIndex(activeSlotIndex))
+        {
+            return;
+        }
+
+        long lastSavedUtcTicks = currentProfile != null ? currentProfile.LastSavedUtcTicks : 0L;
+        if (lastSavedUtcTicks <= 0L)
+        {
+            string filePath = GetActiveProfilePath();
+            lastSavedUtcTicks = File.Exists(filePath) ? ResolveSaveTimestamp(filePath, 0L) : 0L;
+        }
+
+        GlobalModeSettingsService.SetProfileSlotState(
+            activeSlotIndex,
+            hasProfile: true,
+            lastSavedUtcTicks: lastSavedUtcTicks,
+            lastOpenedUtcTicks: DateTime.UtcNow.Ticks);
     }
 
     private bool TryReadProfile(string filePath, out PermanentProfileData profile)
@@ -1001,6 +1043,23 @@ public sealed class RuntimeSaveService : MonoBehaviour
         DateTime lastWriteUtc = File.GetLastWriteTimeUtc(filePath);
         return lastWriteUtc == default ? 0L : lastWriteUtc.Ticks;
     }
+
+    private static int CompareProfileSlotSummariesByRecentOpen(ProfileSlotSummary left, ProfileSlotSummary right)
+    {
+        int openedComparison = right.LastOpenedOrSavedUtcTicks.CompareTo(left.LastOpenedOrSavedUtcTicks);
+        if (openedComparison != 0)
+        {
+            return openedComparison;
+        }
+
+        int savedComparison = right.LastSavedUtcTicks.CompareTo(left.LastSavedUtcTicks);
+        if (savedComparison != 0)
+        {
+            return savedComparison;
+        }
+
+        return left.SlotIndex.CompareTo(right.SlotIndex);
+    }
 }
 
 /// <summary>
@@ -1008,14 +1067,17 @@ public sealed class RuntimeSaveService : MonoBehaviour
 /// </summary>
 public readonly struct ProfileSlotSummary
 {
-    public ProfileSlotSummary(int slotIndex, bool hasProfile, long lastSavedUtcTicks)
+    public ProfileSlotSummary(int slotIndex, bool hasProfile, long lastSavedUtcTicks, long lastOpenedUtcTicks)
     {
         SlotIndex = slotIndex;
         HasProfile = hasProfile;
         LastSavedUtcTicks = lastSavedUtcTicks;
+        LastOpenedUtcTicks = lastOpenedUtcTicks;
     }
 
     public int SlotIndex { get; }
     public bool HasProfile { get; }
     public long LastSavedUtcTicks { get; }
+    public long LastOpenedUtcTicks { get; }
+    public long LastOpenedOrSavedUtcTicks => LastOpenedUtcTicks > 0L ? LastOpenedUtcTicks : LastSavedUtcTicks;
 }

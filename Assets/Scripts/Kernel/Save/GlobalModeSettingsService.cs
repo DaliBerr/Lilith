@@ -147,9 +147,10 @@ public static class GlobalModeSettingsService
     /// param name="slotIndex": 目标栏位索引，使用 0 起始的非负整数
     /// param name="hasProfile": 该栏位当前是否存在存档
     /// param name="lastSavedUtcTicks": 最近一次写盘的 UTC ticks；栏位为空时会被清零
+    /// param name="lastOpenedUtcTicks": 最近一次打开该栏位的 UTC ticks；传入负数时保留现有打开时间
     /// returns: 摘要发生变化时返回 true
     /// </summary>
-    public static bool SetProfileSlotState(int slotIndex, bool hasProfile, long lastSavedUtcTicks)
+    public static bool SetProfileSlotState(int slotIndex, bool hasProfile, long lastSavedUtcTicks, long lastOpenedUtcTicks = -1L)
     {
         LoadMode();
         if (!SavePathUtility.IsValidProfileSlotIndex(slotIndex))
@@ -161,14 +162,25 @@ public static class GlobalModeSettingsService
         ProfileSlotStateData slotState = currentSettings.ProfileSlots[slotIndex] ?? ProfileSlotStateData.CreateDefault();
 
         bool sanitizedHasProfile = hasProfile;
-        long sanitizedTicks = sanitizedHasProfile ? Math.Max(0L, lastSavedUtcTicks) : 0L;
-        if (slotState.HasProfile == sanitizedHasProfile && slotState.LastSavedUtcTicks == sanitizedTicks)
+        long sanitizedSavedTicks = sanitizedHasProfile ? Math.Max(0L, lastSavedUtcTicks) : 0L;
+        long sanitizedOpenedTicks = 0L;
+        if (sanitizedHasProfile)
+        {
+            sanitizedOpenedTicks = lastOpenedUtcTicks >= 0L
+                ? Math.Max(0L, lastOpenedUtcTicks)
+                : Math.Max(0L, slotState.LastOpenedUtcTicks);
+        }
+
+        if (slotState.HasProfile == sanitizedHasProfile
+            && slotState.LastSavedUtcTicks == sanitizedSavedTicks
+            && slotState.LastOpenedUtcTicks == sanitizedOpenedTicks)
         {
             return false;
         }
 
         slotState.HasProfile = sanitizedHasProfile;
-        slotState.LastSavedUtcTicks = sanitizedTicks;
+        slotState.LastSavedUtcTicks = sanitizedSavedTicks;
+        slotState.LastOpenedUtcTicks = sanitizedOpenedTicks;
         slotState.Sanitize();
         currentSettings.ProfileSlots[slotIndex] = slotState;
         currentSettings.Sanitize();
@@ -378,6 +390,7 @@ public sealed class ProfileSlotStateData
 {
     public bool HasProfile;
     public long LastSavedUtcTicks;
+    public long LastOpenedUtcTicks;
 
     /// <summary>
     /// summary: 创建一个空栏位的默认摘要。
@@ -401,7 +414,8 @@ public sealed class ProfileSlotStateData
         ProfileSlotStateData clone = new()
         {
             HasProfile = HasProfile,
-            LastSavedUtcTicks = LastSavedUtcTicks
+            LastSavedUtcTicks = LastSavedUtcTicks,
+            LastOpenedUtcTicks = LastOpenedUtcTicks
         };
 
         clone.Sanitize();
@@ -418,9 +432,11 @@ public sealed class ProfileSlotStateData
         if (!HasProfile)
         {
             LastSavedUtcTicks = 0L;
+            LastOpenedUtcTicks = 0L;
             return;
         }
 
         LastSavedUtcTicks = Math.Max(0L, LastSavedUtcTicks);
+        LastOpenedUtcTicks = Math.Max(0L, LastOpenedUtcTicks);
     }
 }

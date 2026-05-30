@@ -45,6 +45,9 @@ namespace Kernel.UI
         [SerializeField, Range(0f, 1f)] private float dangerFlashAlpha = 0.35f;
         [SerializeField, Min(0.01f)] private float dangerFlashDuration = 0.16f;
 
+        [Header("Objective Arrow")]
+        [SerializeField] private ObjectiveArrowView objectiveArrowView;
+
         [Header("Linked Outline")]
         [SerializeField] private Color linkedOutlineColor = new(1f, 0.84f, 0.35f, 0.95f);
         [SerializeField, Min(1f)] private float linkedOutlineThickness = 4f;
@@ -81,6 +84,7 @@ namespace Kernel.UI
         public QuestEntryView QuestEntryPrefab => questEntryPrefab;
         public RectTransform DangerEdge => dangerEdge;
         public Image DangerEdgeImage => dangerEdgeImage;
+        public ObjectiveArrowView ObjectiveArrowView => objectiveArrowView;
 
         protected override void OnInit()
         {
@@ -110,6 +114,7 @@ namespace Kernel.UI
             ClearRuntimeSpellSlots();
             currentPlayerHealth = null;
             DisposePlayerHealthSubscription();
+            objectiveArrowView?.ClearTarget();
             ResetDangerEdgeDisplay();
         }
 
@@ -122,6 +127,7 @@ namespace Kernel.UI
             ClearRuntimeSpellSlots();
             currentPlayerHealth = null;
             DisposePlayerHealthSubscription();
+            objectiveArrowView?.ClearTarget();
             ResetDangerEdgeDisplay();
         }
 
@@ -152,6 +158,15 @@ namespace Kernel.UI
             if (dangerEdge != null)
             {
                 dangerEdgeImage ??= dangerEdge.GetComponent<Image>();
+            }
+
+            if (objectiveArrowView == null)
+            {
+                Transform arrowPanel = transform.Find("Arrow Panel");
+                if (arrowPanel != null)
+                {
+                    objectiveArrowView = arrowPanel.GetComponent<ObjectiveArrowView>();
+                }
             }
 
             topPanel ??= transform.Find("TopPanel") as RectTransform;

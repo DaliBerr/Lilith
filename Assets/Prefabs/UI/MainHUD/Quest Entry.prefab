@@ -234,7 +234,7 @@ MonoBehaviour:
   m_PreferredWidth: -1
   m_PreferredHeight: 45
   m_FlexibleWidth: -1
-  m_FlexibleHeight: 45
+  m_FlexibleHeight: -1
   m_LayoutPriority: 1
 --- !u!225 &7134826059912374401
 CanvasGroup:

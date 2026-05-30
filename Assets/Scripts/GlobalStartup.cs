@@ -83,6 +83,7 @@ namespace Kernel
             }
 
             Instance = this;
+            StartupFlowBridge.Register(this, () => isBootCompleted, RequestStartGame, RequestEnterMainScene);
             DontDestroyOnLoad(gameObject);
         }
 
@@ -90,6 +91,7 @@ namespace Kernel
         {
             UnsubscribeFromNarrativeSequence();
             ReleasePreloadedDefHandles();
+            StartupFlowBridge.Unregister(this);
 
             if (Instance == this)
             {

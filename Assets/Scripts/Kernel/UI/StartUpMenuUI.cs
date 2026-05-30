@@ -447,13 +447,13 @@ namespace Kernel.UI
                 return;
             }
 
-            if (GlobalStartup.Instance == null)
+            if (!StartupFlowBridge.HasStartup)
             {
                 GameDebug.LogError("[StartUpMenuUI] GlobalStartup instance is missing.");
                 return;
             }
 
-            if (!GlobalStartup.Instance.IsBootCompleted)
+            if (!StartupFlowBridge.IsBootCompleted)
             {
                 GameDebug.LogWarning("[StartUpMenuUI] GlobalStartup is still booting.");
                 return;
@@ -483,7 +483,7 @@ namespace Kernel.UI
                 return;
             }
 
-            bool requestAccepted = GlobalStartup.Instance.RequestStartGame();
+            bool requestAccepted = StartupFlowBridge.RequestStartGame();
             if (!requestAccepted)
             {
                 saveService.DeleteProfileSlot(createdSlotIndex);
@@ -510,13 +510,13 @@ namespace Kernel.UI
                 return;
             }
 
-            if (GlobalStartup.Instance == null)
+            if (!StartupFlowBridge.HasStartup)
             {
                 GameDebug.LogError("[StartUpMenuUI] GlobalStartup instance is missing.");
                 return;
             }
 
-            if (!GlobalStartup.Instance.IsBootCompleted)
+            if (!StartupFlowBridge.IsBootCompleted)
             {
                 GameDebug.LogWarning("[StartUpMenuUI] GlobalStartup is still booting.");
                 return;

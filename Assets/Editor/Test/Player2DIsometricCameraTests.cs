@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -40,10 +41,38 @@ public sealed class Player2DIsometricCameraTests
         Assert.That(followCamera.Target, Is.EqualTo(target.transform));
     }
 
+    [Test]
+    public void LateUpdate_AppliesRequestedScreenShakeAfterOrthographicFollow()
+    {
+        GameObject cameraObject = CreateGameObject("Camera");
+        cameraObject.AddComponent<Camera>();
+        Player2DIsometricCamera followCamera = cameraObject.AddComponent<Player2DIsometricCamera>();
+        GameObject target = CreateGameObject("Target");
+        target.transform.position = new Vector3(2f, 3f, 0f);
+
+        followCamera.SetTarget(target.transform);
+        PlayerPrefs.DeleteKey(ScreenShakeSettings.PlayerPrefsKey);
+        followCamera.RequestScreenShake(0.5f, 0.5f, 1f);
+        InvokePrivateVoid(followCamera, "LateUpdate");
+
+        Vector3 expectedPosition = new(2f, 3f, -10f);
+        float shakeDistance = Vector3.Distance(cameraObject.transform.position, expectedPosition);
+
+        Assert.That(shakeDistance, Is.GreaterThan(0.001f));
+        Assert.That(shakeDistance, Is.LessThan(1f));
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);
         createdObjects.Add(gameObject);
         return gameObject;
+    }
+
+    private static void InvokePrivateVoid(object target, string methodName)
+    {
+        MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
+        method.Invoke(target, null);
     }
 }

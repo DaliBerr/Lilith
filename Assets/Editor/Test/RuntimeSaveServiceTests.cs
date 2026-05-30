@@ -45,6 +45,7 @@ public sealed class RuntimeSaveServiceTests
         Assert.That(saveService.GetProfileSnapshot().RemnantCount, Is.EqualTo(0));
         Assert.That(summaries[0].HasProfile, Is.True);
         Assert.That(summaries[0].LastSavedUtcTicks, Is.GreaterThan(0L));
+        Assert.That(summaries[0].LastOpenedUtcTicks, Is.GreaterThan(0L));
     }
 
     [Test]
@@ -172,7 +173,25 @@ public sealed class RuntimeSaveServiceTests
     }
 
     [Test]
-    public void GetExistingSlotSummaries_ReturnsOnlyExistingSlots()
+    public void SelectExistingProfileSlot_UpdatesLastOpenedTimestamp()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        long lastSavedUtcTicks = ReadProfileFromDisk(0).LastSavedUtcTicks;
+        Assert.That(GlobalModeSettingsService.SetProfileSlotState(0, hasProfile: true, lastSavedUtcTicks: lastSavedUtcTicks, lastOpenedUtcTicks: 1L), Is.True);
+
+        bool selectSuccess = saveService.SelectExistingProfileSlot(0);
+
+        ProfileSlotStateData[] slotStates = GlobalModeSettingsService.GetProfileSlotStatesSnapshot();
+        Assert.That(selectSuccess, Is.True);
+        Assert.That(slotStates[0].LastOpenedUtcTicks, Is.GreaterThan(1L));
+    }
+
+    [Test]
+    public void GetExistingSlotSummaries_ReturnsOnlyExistingSlotsSortedByRecentOpen()
     {
         PrepareCleanSaveEnvironment();
         CreateWallet(initialCount: 0);
@@ -180,14 +199,18 @@ public sealed class RuntimeSaveServiceTests
 
         Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
         Assert.That(saveService.SelectProfileSlot(2, out _), Is.True);
+        Assert.That(GlobalModeSettingsService.SetProfileSlotState(0, hasProfile: true, lastSavedUtcTicks: 100L, lastOpenedUtcTicks: 200L), Is.True);
+        Assert.That(GlobalModeSettingsService.SetProfileSlotState(2, hasProfile: true, lastSavedUtcTicks: 300L, lastOpenedUtcTicks: 400L), Is.True);
 
         ProfileSlotSummary[] summaries = saveService.GetExistingSlotSummaries();
 
         Assert.That(summaries, Has.Length.EqualTo(2));
-        Assert.That(summaries[0].SlotIndex, Is.EqualTo(0));
-        Assert.That(summaries[1].SlotIndex, Is.EqualTo(2));
+        Assert.That(summaries[0].SlotIndex, Is.EqualTo(2));
+        Assert.That(summaries[1].SlotIndex, Is.EqualTo(0));
         Assert.That(summaries[0].HasProfile, Is.True);
         Assert.That(summaries[1].HasProfile, Is.True);
+        Assert.That(summaries[0].LastOpenedUtcTicks, Is.EqualTo(400L));
+        Assert.That(summaries[1].LastOpenedUtcTicks, Is.EqualTo(200L));
     }
 
     [Test]

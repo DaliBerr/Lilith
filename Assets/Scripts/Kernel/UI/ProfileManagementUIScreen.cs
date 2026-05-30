@@ -91,7 +91,7 @@ namespace Kernel.UI
                 if (timeText != null)
                 {
                     timeText.text = summary.HasProfile
-                        ? FormatSaveTime(summary.LastSavedUtcTicks)
+                        ? FormatProfileTime(summary.LastOpenedOrSavedUtcTicks)
                         : string.Empty;
                 }
             }
@@ -314,8 +314,7 @@ namespace Kernel.UI
                 return;
             }
 
-            GlobalStartup startup = GlobalStartup.Instance;
-            if (startup == null || !startup.IsBootCompleted)
+            if (!StartupFlowBridge.HasStartup || !StartupFlowBridge.IsBootCompleted)
             {
                 StartCoroutine(PopUpUIUtility.ShowInfoPopup(
                     ui,
@@ -347,7 +346,7 @@ namespace Kernel.UI
                 return;
             }
 
-            bool requestAccepted = startup.RequestEnterMainScene();
+            bool requestAccepted = StartupFlowBridge.RequestEnterMainScene();
             if (!requestAccepted)
             {
                 isHandlingSlotAction = false;
@@ -438,10 +437,10 @@ namespace Kernel.UI
 
         /// <summary>
         /// summary: 把 UTC ticks 格式化为“绝对时间 + 相对时间”文案。
-        /// param name="utcTicks": 最近一次保存时间的 UTC ticks
+        /// param name="utcTicks": 最近一次打开时间的 UTC ticks；旧档缺少打开时间时会回退到保存时间
         /// returns: 可直接赋值给 TMP_Text 的本地时间字符串
         /// </summary>
-        private static string FormatSaveTime(long utcTicks)
+        private static string FormatProfileTime(long utcTicks)
         {
             if (utcTicks <= 0L)
             {

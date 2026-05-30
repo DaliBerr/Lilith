@@ -14,6 +14,8 @@
     "language": { "title": "Language" },
     "zh-Hans-CN": { "title": "Simplified Chinese" },
     "en-US": { "title": "English" },
+    "gameplay": { "title": "Gameplay" },
+    "screen_shake": { "title": "Screen Shake" },
     "controls": { "title": "Controls" },
     "move_up_binding": { "title": "Move Up" },
     "move_down_binding": { "title": "Move Down" },

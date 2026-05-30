@@ -25,25 +25,34 @@ public sealed class PlayerFollowCamera : MonoBehaviour
     [SerializeField, Min(MinimumNearClipPlane)] private float nearClipPlane = 0.3f;
     [SerializeField, Min(MinimumNearClipPlane + MinimumClipPlaneGap)] private float farClipPlane = 4000f;
     [SerializeField] private bool snapOnEnable = true;
+    [SerializeField] private ScreenShakeState screenShake = new();
 
     private Camera cachedCamera;
 
     public Transform TargetPlayer => targetPlayer;
     public Vector3 FocusOffset => focusOffset;
     public Vector3 FocusWorldPoint => ResolveFocusWorldPoint();
+    public Vector3 CurrentScreenShakeOffset => EnsureScreenShakeState().CurrentOffset;
 
     private void Awake()
     {
         EnsureCameraReference();
+        EnsureScreenShakeState();
         ApplyCameraSettings();
     }
 
     private void OnEnable()
     {
+        EnsureScreenShakeState().Enable();
         if (snapOnEnable)
         {
             SnapToTarget();
         }
+    }
+
+    private void OnDisable()
+    {
+        screenShake?.Disable();
     }
 
     private void LateUpdate()
@@ -54,6 +63,7 @@ public sealed class PlayerFollowCamera : MonoBehaviour
             return;
         }
 
+        position += TickScreenShake(rotation);
         transform.SetPositionAndRotation(position, rotation);
     }
 
@@ -64,8 +74,14 @@ public sealed class PlayerFollowCamera : MonoBehaviour
         nearClipPlane = Mathf.Max(MinimumNearClipPlane, nearClipPlane);
         farClipPlane = Mathf.Max(nearClipPlane + MinimumClipPlaneGap, farClipPlane);
         yawDragSensitivity = Mathf.Max(0f, yawDragSensitivity);
+        EnsureScreenShakeState();
         EnsureCameraReference();
         ApplyCameraSettings();
+    }
+
+    public void RequestScreenShake(float amplitude, float duration, float frequency = 0f)
+    {
+        EnsureScreenShakeState().RequestShake(amplitude, duration, frequency);
     }
 
     /// <summary>
@@ -206,5 +222,17 @@ public sealed class PlayerFollowCamera : MonoBehaviour
 
         cachedCamera = GetComponent<Camera>();
         return cachedCamera != null;
+    }
+
+    private ScreenShakeState EnsureScreenShakeState()
+    {
+        screenShake ??= new ScreenShakeState();
+        screenShake.Sanitize();
+        return screenShake;
+    }
+
+    private Vector3 TickScreenShake(Quaternion cameraRotation)
+    {
+        return EnsureScreenShakeState().Tick(Time.unscaledDeltaTime, cameraRotation);
     }
 }

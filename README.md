@@ -9,12 +9,16 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - Unity 版本：`6000.3.9f1`
 - 渲染管线：URP
 - 关键包：`Addressables`、`Input System`、`AI Navigation`、`Newtonsoft Json`、`Unity Test Framework`
-- 运行时不再强制固定宽高比；分辨率 / 全屏 / 垂直同步设置通过 Options 保存，并在启动时应用；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准
+- 分辨率 / 全屏 / 垂直同步设置通过 Options 保存，并在启动时应用；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准
 - 启动场景：[`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity)
 - 主 gameplay 场景：[`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity)
-- 当前仓库没有 `asmdef` / `asmref`
-  - 运行时代码默认编进 `Assembly-CSharp`
-  - Editor 代码默认编进 `Assembly-CSharp-Editor`
+- 当前仓库使用保守 `asmdef` 分层；项目脚本不再默认编进 `Assembly-CSharp` / `Assembly-CSharp-Editor`
+  - `Lilith.Input`：Input System 生成的 `PlayerControls` / `UIControls`
+  - `Lilith.Vocalith`：基础设施层
+  - `Lilith.Kernel`：游戏业务层
+  - `Lilith.Bootstrap`：`StartUp` / `Main` 场景启动交接入口
+  - `Lilith.Editor`：Editor 工具
+  - `Lilith.Tests.EditMode`：EditMode 测试
 
 ## 稳定入口路径
 
@@ -42,10 +46,12 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 | Data / Prefab | 运行时配置、剧情文本、Prefab 真源 | [`Assets/Data`](Assets/Data) + [`Assets/Prefabs`](Assets/Prefabs) |
 | Editor / Test | 地图与资产工具、EditMode 测试 | [`Assets/Editor`](Assets/Editor) + [`Assets/Editor/Test`](Assets/Editor/Test) |
 
-当前分层以目录和命名空间约定为主，尚未通过 `asmdef` 做编译级隔离。可以把它理解为：
+当前 `asmdef` 只做保守分层，不按 gameplay 子模块细拆。可以把它理解为：
 
 - `Kernel` 负责“游戏里发生什么”
 - `Vocalith` 负责“这些系统依赖什么基础设施运行”
+- `Bootstrap` 负责“启动场景如何把流程交给游戏层”，通过 `Kernel.StartupFlowBridge` 让启动 UI 请求进入 `GlobalStartup`
+- `Input` 负责“Input System 生成代码供游戏层引用”
 - `Assets/Data` 与 `Assets/Prefabs` 负责运行时配置和资源真源
 
 ## 关键模块
@@ -55,7 +61,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs)
   - 位于 `StartUp` 场景
   - 负责日志初始化、本地化初始化、`Addressables` 初始化、`Kernel.GameState.StatusController` 初始化
-  - 负责压入启动菜单；点击 `Start` 会直接在最小空存档槽位创建新档，并先把 Loading Panel 后台压栈，在开场 storyteller 播放期间并行加载数据，若剧情结束时仍未完成则继续显示 Loading Panel 等待；点击 `Load` 才会打开 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 展示已有存档，条目需要先选中、再点一次才会加载并切到 `Main`
+  - 负责压入启动菜单；点击 `Start` 会直接在最小空存档槽位创建新档，并先把 Loading Panel 后台压栈，在开场 storyteller 播放期间并行加载数据，若剧情结束时仍未完成则继续显示 Loading Panel 等待；点击 `Load` 才会打开 [`Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs`](Assets/Scripts/Kernel/UI/ProfileManagementUIScreen.cs) 按最近打开时间展示已有存档，条目需要先选中、再点一次才会加载并切到 `Main`
 - [`Assets/Scripts/StartUp.cs`](Assets/Scripts/StartUp.cs)
   - 文件名是 `StartUp.cs`，类名是 `Startup`
   - 位于 `Main` 场景
@@ -72,6 +78,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - 入口：[`StatusController.cs`](Assets/Scripts/Kernel/Status/StatusController.cs)
 - UI：位于 [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI)
   - 当前主入口包括 `StartUpMenuUI`、`OptionsUIScreen`、`StoryTellerUIScreen`、`DialogUIScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`HintUIScreen`、`PopUpUIScreen`、`ProfileManagementUIScreen`、`TokenSelectUIScreen`、`UpdateUIScreen`、`SettlementUIScreen`
+  - `MainUI.prefab` 预埋隐藏的 `ObjectiveArrowView`，后续系统可通过 `MainUIScreen.ObjectiveArrowView.Bind(camera, target)` 显示世界目标箭头；当前不绑定具体玩法目标，HUD 隐藏时会清空目标
 - 地图与寻路：位于 [`Assets/Scripts/Kernel/MapGrid`](Assets/Scripts/Kernel/MapGrid) 与 [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)
   - 包含固定网格、双地图 Run flow、Seed 布局生成与格子寻路
   - [`Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs`](Assets/Scripts/Kernel/ArenaSeedMapGenerator.cs) 暴露了边界厚度、障碍数量/尺寸、边缘留白、玩家安全区和刷怪环参数，可用来调节更密或更开的战斗地图
@@ -90,7 +97,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - 存档入口：[`RuntimeSaveService.cs`](Assets/Scripts/Kernel/Save/RuntimeSaveService.cs)
   - `UIInputRouter` 当前支持 `Hint(Tab)`：在 `MainUIScreen` 与 `BackPackUIScreen` 上开关 [`Assets/Scripts/Kernel/UI/HintUIScreen.cs`](Assets/Scripts/Kernel/UI/HintUIScreen.cs)；背包顶部 Hint 按钮与 Tab 走同一条路由
   - `HintUIScreen` 打开时会进入 `InHint` 状态，并与背包一致阻断玩家战斗输入和敌人行为
-  - 当前存档使用动态槽位：`profile-slot-N.json` 保存每个栏位的永久数据，`global-mode.json` 保存 `DevMode` / `NormalMode` 与已知槽位摘要；新档会复用最小空槽位，加载弹窗只展示已有存档
+  - 当前存档使用动态槽位：`profile-slot-N.json` 保存每个栏位的永久数据，`global-mode.json` 保存 `DevMode` / `NormalMode`、已知槽位摘要与最近打开时间；新档会复用最小空槽位，加载弹窗只展示已有存档，并按最近打开时间从上到下排序，旧档缺少打开时间时回退保存时间
 
 ### 基础设施层 `Vocalith`
 
@@ -152,6 +159,6 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 ## 已知限制
 
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity) 不能作为独立入口直接运行；当前必须先经过 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) 中的 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 交接
-- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏 / 垂直同步会通过 `Kernel.Display.LilithDisplaySettings` 应用并在下次启动恢复，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准；首版尚未配置实际音乐资源和玩法音效触发点
+- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，并在 `Apply` 时把暂存控件值写入 `PlayerPrefs`；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏 / 垂直同步会通过 `Kernel.Display.LilithDisplaySettings` 应用并在下次启动恢复，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用，游戏项中的屏幕震动开关会被 `ScreenShakeState` 读取；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准；首版尚未配置实际音乐资源和玩法音效触发点
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 当前预加载进入 `Main` 前需要的 Addressables 数据层资源；非 Addressable 且由场景直接引用的资产仍随场景加载
-- 当前没有 `asmdef` / `asmref`，模块边界依赖目录与命名空间约定维护
+- 当前 `asmdef` 是第一版保守切分：`Kernel` 内部 UI / Bullet / Enemy / MapGrid / Quest 等子模块仍在同一程序集内，后续若要细拆需要先解开这些子模块之间的双向或横向依赖。

@@ -60,6 +60,37 @@ public sealed class PlayerFollowCameraTests
     }
 
     [Test]
+    public void LateUpdate_AppliesRequestedScreenShakeAfterPerspectivePose()
+    {
+        GameObject playerObject = CreateGameObject("Player");
+        playerObject.transform.position = new Vector3(12f, 7.5f, 18f);
+
+        GameObject cameraObject = CreateGameObject("Main Camera");
+        cameraObject.AddComponent<Camera>();
+        PlayerFollowCamera followCamera = cameraObject.AddComponent<PlayerFollowCamera>();
+
+        SetPrivateField(followCamera, "targetPlayer", playerObject.transform);
+        SetPrivateField(followCamera, "focusOffset", new Vector3(0f, 8f, 0f));
+        SetPrivateField(followCamera, "distance", 260f);
+        SetPrivateField(followCamera, "pitch", 55f);
+        SetPrivateField(followCamera, "yaw", 35f);
+
+        InvokePrivateVoid(followCamera, "Awake");
+        PlayerPrefs.DeleteKey(ScreenShakeSettings.PlayerPrefsKey);
+        followCamera.RequestScreenShake(1f, 0.5f, 1f);
+        InvokePrivateVoid(followCamera, "LateUpdate");
+
+        Quaternion expectedRotation = Quaternion.Euler(55f, 35f, 0f);
+        Vector3 expectedFocusPoint = playerObject.transform.position + new Vector3(0f, 8f, 0f);
+        Vector3 expectedPosition = expectedFocusPoint - (expectedRotation * Vector3.forward * 260f);
+        float shakeDistance = Vector3.Distance(cameraObject.transform.position, expectedPosition);
+
+        Assert.That(shakeDistance, Is.GreaterThan(0.001f));
+        Assert.That(shakeDistance, Is.LessThan(2f));
+        Assert.That(Quaternion.Angle(cameraObject.transform.rotation, expectedRotation), Is.LessThan(0.001f));
+    }
+
+    [Test]
     public void HandleYawRotationInput_RightDragOutsidePause_UpdatesYaw()
     {
         Mouse testMouse = InputSystem.AddDevice<Mouse>();

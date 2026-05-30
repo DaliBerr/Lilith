@@ -93,6 +93,19 @@
       ]
     },
     {
+      "id": "gameplay",
+      "title": "游戏",
+      "entries": [
+        {
+          "id": "screen_shake",
+          "title": "屏幕震动",
+          "mode": "toggle",
+          "playerPrefsKey": "Options.Gameplay.ScreenShake",
+          "defaultBool": true
+        }
+      ]
+    },
+    {
       "id": "controls",
       "title": "控制",
       "entries": [

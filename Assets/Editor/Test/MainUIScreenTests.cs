@@ -6,11 +6,14 @@ using Kernel.Quest;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 
 public sealed class MainUIScreenTests
 {
+    private const string MainUIPrefabPath = "Assets/Prefabs/UI/MainHUD/MainUI.prefab";
+
     private readonly List<Object> createdObjects = new();
 
     [TearDown]
@@ -186,6 +189,75 @@ public sealed class MainUIScreenTests
         Assert.That(runtimeEntries.ContainsKey("quest_done"), Is.False);
     }
 
+    [Test]
+    public void MainUIScreen_AutoBindsObjectiveArrowView()
+    {
+        MainUIScreen screen = CreateMainUIScreen(out _, out _, out _);
+
+        InvokeNonPublic(screen, "OnInit");
+
+        Assert.That(screen.ObjectiveArrowView, Is.Not.Null);
+        Assert.That(screen.ObjectiveArrowView.name, Is.EqualTo("Arrow Panel"));
+    }
+
+    [Test]
+    public void MainUIScreen_OnAfterHideClearsObjectiveArrowTarget()
+    {
+        MainUIScreen screen = CreateMainUIScreen(out _, out _, out _);
+        InvokeNonPublic(screen, "OnInit");
+        GameObject target = CreateGameObject("Target");
+
+        screen.ObjectiveArrowView.Bind(null, target.transform);
+        Assert.That(GetSerializedObjectReference<Transform>(screen.ObjectiveArrowView, "targetTransform"), Is.SameAs(target.transform));
+
+        InvokeNonPublic(screen, "OnAfterHide");
+
+        Assert.That(GetSerializedObjectReference<Transform>(screen.ObjectiveArrowView, "targetTransform"), Is.Null);
+    }
+
+    [Test]
+    public void MainUIPrefabContainsHiddenObjectiveArrowView()
+    {
+        GameObject root = PrefabUtility.LoadPrefabContents(MainUIPrefabPath);
+        try
+        {
+            MainUIScreen screen = root.GetComponent<MainUIScreen>();
+            Assert.That(screen, Is.Not.Null);
+
+            ObjectiveArrowView arrowView = GetSerializedObjectReference<ObjectiveArrowView>(screen, "objectiveArrowView");
+            Assert.That(arrowView, Is.Not.Null);
+            Assert.That(arrowView.name, Is.EqualTo("Arrow Panel"));
+
+            RectTransform panelRoot = GetSerializedObjectReference<RectTransform>(arrowView, "panelRoot");
+            Assert.That(panelRoot, Is.Not.Null);
+            Assert.That(panelRoot.name, Is.EqualTo("Arrow Panel"));
+
+            Image panelImage = panelRoot.GetComponent<Image>();
+            Assert.That(panelImage, Is.Not.Null);
+            Assert.That(panelImage.raycastTarget, Is.False);
+
+            RectTransform arrowRect = GetSerializedObjectReference<RectTransform>(arrowView, "arrowRect");
+            Assert.That(arrowRect, Is.Not.Null);
+            Assert.That(arrowRect.name, Is.EqualTo("Arrow"));
+            Assert.That(arrowRect.gameObject.activeSelf, Is.False);
+            Assert.That(arrowRect.sizeDelta.x, Is.EqualTo(64f).Within(0.001f));
+            Assert.That(arrowRect.sizeDelta.y, Is.EqualTo(64f).Within(0.001f));
+            Assert.That(arrowRect.anchorMin, Is.EqualTo(new Vector2(0.5f, 0.5f)));
+            Assert.That(arrowRect.anchorMax, Is.EqualTo(new Vector2(0.5f, 0.5f)));
+
+            Image arrowImage = GetSerializedObjectReference<Image>(arrowView, "arrowImage");
+            Assert.That(arrowImage, Is.Not.Null);
+            Assert.That(arrowImage.raycastTarget, Is.False);
+            Assert.That(arrowImage.preserveAspect, Is.True);
+            Assert.That(arrowImage.sprite, Is.Not.Null);
+            StringAssert.StartsWith("ObjectiveArrow", arrowImage.sprite.name);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+    }
+
     private MainUIScreen CreateMainUIScreen(out RectTransform spellPanel, out BackPackGridSlotView templateSlot, out RectTransform questListRoot)
     {
         GameObject root = CreateUiObject("MainUI");
@@ -219,7 +291,37 @@ public sealed class MainUIScreenTests
         quests.AddComponent<ContentSizeFitter>();
         questListRoot = quests.GetComponent<RectTransform>();
 
+        CreateObjectiveArrowView(root.transform);
+
         return screen;
+    }
+
+    private ObjectiveArrowView CreateObjectiveArrowView(Transform parent)
+    {
+        GameObject panelObject = CreateUiObject("Arrow Panel", parent);
+        Image panelImage = panelObject.AddComponent<Image>();
+        panelImage.raycastTarget = true;
+        RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+        panelRect.anchorMin = Vector2.zero;
+        panelRect.anchorMax = Vector2.one;
+        panelRect.offsetMin = Vector2.zero;
+        panelRect.offsetMax = Vector2.zero;
+
+        GameObject arrowObject = CreateUiObject("Arrow", panelObject.transform);
+        RectTransform arrowRect = arrowObject.GetComponent<RectTransform>();
+        arrowRect.anchorMin = new Vector2(0.5f, 0.5f);
+        arrowRect.anchorMax = new Vector2(0.5f, 0.5f);
+        arrowRect.pivot = new Vector2(0.5f, 0.5f);
+        arrowRect.sizeDelta = new Vector2(64f, 64f);
+        Image arrowImage = arrowObject.AddComponent<Image>();
+        arrowImage.raycastTarget = true;
+        arrowObject.SetActive(false);
+
+        ObjectiveArrowView arrowView = panelObject.AddComponent<ObjectiveArrowView>();
+        SetNonPublicField(arrowView, "panelRoot", panelRect);
+        SetNonPublicField(arrowView, "arrowRect", arrowRect);
+        SetNonPublicField(arrowView, "arrowImage", arrowImage);
+        return arrowView;
     }
 
     private QuestEntryView CreateQuestEntryTemplate(string name)
@@ -355,6 +457,13 @@ public sealed class MainUIScreenTests
         FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null, $"{target.GetType().Name}.{fieldName} should exist.");
         field.SetValue(target, value);
+    }
+
+    private static T GetSerializedObjectReference<T>(Object target, string propertyName)
+        where T : Object
+    {
+        SerializedObject serializedObject = new(target);
+        return serializedObject.FindProperty(propertyName).objectReferenceValue as T;
     }
 
     private static List<BackPackGridSlotView> GetVisibleSpellSlots(RectTransform spellPanel)
