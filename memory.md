@@ -138,6 +138,15 @@ Keep this file as a repo-local compatibility mirror for high-value Lilith troubl
 - Scope: 适用于所有“切场景 / 回主菜单 / 强制清屏”与 UI 淡出关闭竞态。典型症状是下一个画面已经进入，但上一层 UI 以半透明、无交互状态残留。
 
 
+## UIScreen Root Stretch Can Come From UIManager NormalizeRect
+
+- Problem: 修改 UI prefab 根 `RectTransform` 的 anchors / offsets 后，运行时打开该 UI 仍会被拉伸到整个 Canvas 或 Modal layer。
+- Cause: `UIManager.CreateScreenCo<T>()` 在 Addressables 实例化后会默认调用 `NormalizeRect(go.transform as RectTransform)`，把 `anchorMin/anchorMax` 改成 `(0,0)` / `(1,1)`，并把 offset 清零。只改 prefab 根锚点会在运行时被这一步覆盖。
+- Fix: 对确实不是全屏铺满的 `UIScreen` 子类覆盖 `PreservePrefabRootRectTransform => true`；同时确保该 prefab 的关键序列化引用已重绑，并让自动绑定兼容当前层级。背包修复见 [`Assets/Scripts/Kernel/UI/BackPackUIScreen.cs`](Assets/Scripts/Kernel/UI/BackPackUIScreen.cs)、[`Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs`](Assets/Scripts/Kernel/UI/BackPackAttackPreviewController.cs) 与 [`Assets/Prefabs/UI/Backpack/BackPackUI.prefab`](Assets/Prefabs/UI/Backpack/BackPackUI.prefab)。
+- Verify: Unity refresh/compile 后 Console error 为 0；`BackPackUIScreenTests` + `BackPackInventoryTests` 26/26 通过；手动 Play 时背包根应保持 prefab root anchors，不再被 UIManager 自动铺满。
+- Scope: 适用于所有通过 `UIManager` 创建、但根节点不应全屏铺满的 `UIScreen` / Modal；全屏 UI 继续使用默认 normalize 行为即可。
+
+
 ## MCPForUnity Runtime Assembly Can Enter Player Builds
 
 - Problem: 打包产物的 `Lilith_Data/Managed` 中出现 `MCPForUnity.Runtime.dll`，看起来像 MCP 工具被打进了游戏成品。

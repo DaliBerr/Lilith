@@ -52,6 +52,7 @@
     <Compile Include="Assets\Editor\Test\Player2DIsometricCameraTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackAttackPreviewControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\QuestServiceTests.cs" />
+    <Compile Include="Assets\Editor\Test\SpellDescriptionGeneratorTests.cs" />
     <Compile Include="Assets\Editor\Test\StartUpMenuUITests.cs" />
     <Compile Include="Assets\Editor\Test\WaveDefinitionTests.cs" />
     <Compile Include="Assets\Editor\Test\BossInfoUIScreenTests.cs" />

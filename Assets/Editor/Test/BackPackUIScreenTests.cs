@@ -125,6 +125,13 @@ public sealed class BackPackUIScreenTests
         Assert.That(hoverPreview.BoundToken, Is.SameAs(inventoryToken));
         Assert.That(hoverPreview.SelectButton, Is.Not.Null);
         Assert.That(hoverPreview.SelectButton.gameObject.activeSelf, Is.False);
+        RectTransform hoverRect = hoverPreview.transform as RectTransform;
+        Assert.That(hoverRect, Is.Not.Null);
+        Assert.That(hoverRect.pivot.x, Is.EqualTo(0f).Within(0.0001f));
+        Assert.That(hoverRect.pivot.y, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(hoverRect.localScale.x, Is.EqualTo(0.7f).Within(0.0001f));
+        Assert.That(hoverRect.localScale.y, Is.EqualTo(0.7f).Within(0.0001f));
+        Assert.That(hoverRect.localScale.z, Is.EqualTo(1f).Within(0.0001f));
     }
 
     [Test]
@@ -145,9 +152,51 @@ public sealed class BackPackUIScreenTests
         Assert.That(hoverRect, Is.Not.Null);
         Vector2 before = hoverRect.anchoredPosition;
 
-        screen.NotifySlotHoverMove(inventorySlots[0], CreatePointerEventData(new Vector2(420f, 220f)));
+        Vector2 pointerPosition = new(0f, 100f);
+        screen.NotifySlotHoverMove(inventorySlots[0], CreatePointerEventData(pointerPosition));
         Vector2 after = hoverRect.anchoredPosition;
         Assert.That(after, Is.Not.EqualTo(before));
+
+        RectTransform dragPreviewLayer = GetPrivateField<RectTransform>(screen, "dragPreviewLayer");
+        Assert.That(RectTransformUtility.ScreenPointToLocalPointInRectangle(dragPreviewLayer, pointerPosition, null, out Vector2 expectedLocalPoint), Is.True);
+        Assert.That(after.x, Is.EqualTo(expectedLocalPoint.x).Within(0.01f));
+        Assert.That(after.y, Is.EqualTo(expectedLocalPoint.y).Within(0.01f));
+    }
+
+    [Test]
+    public void NotifySlotHoverMove_ClampsScaledTopLeftPreviewWithinLayer()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_clamp", "Clamp");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        screen.NotifySlotHoverEnter(inventorySlots[0], CreatePointerEventData(new Vector2(400f, 300f)));
+
+        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
+        RectTransform hoverRect = hoverPreview.transform as RectTransform;
+        RectTransform dragPreviewLayer = GetPrivateField<RectTransform>(screen, "dragPreviewLayer");
+        Assert.That(hoverRect, Is.Not.Null);
+        Assert.That(dragPreviewLayer, Is.Not.Null);
+
+        screen.NotifySlotHoverMove(inventorySlots[0], CreatePointerEventData(new Vector2(10000f, 10000f)));
+
+        Rect layerRect = dragPreviewLayer.rect;
+        Vector2 scaledSize = new(
+            hoverRect.rect.width * Mathf.Abs(hoverRect.localScale.x),
+            hoverRect.rect.height * Mathf.Abs(hoverRect.localScale.y));
+        float minX = layerRect.xMin + scaledSize.x * hoverRect.pivot.x;
+        float maxX = layerRect.xMax - scaledSize.x * (1f - hoverRect.pivot.x);
+        float minY = layerRect.yMin + scaledSize.y * hoverRect.pivot.y;
+        float maxY = layerRect.yMax - scaledSize.y * (1f - hoverRect.pivot.y);
+
+        Assert.That(hoverRect.anchoredPosition.x, Is.GreaterThanOrEqualTo(minX - 0.01f));
+        Assert.That(hoverRect.anchoredPosition.x, Is.LessThanOrEqualTo(maxX + 0.01f));
+        Assert.That(hoverRect.anchoredPosition.y, Is.GreaterThanOrEqualTo(minY - 0.01f));
+        Assert.That(hoverRect.anchoredPosition.y, Is.LessThanOrEqualTo(maxY + 0.01f));
     }
 
     [Test]
@@ -366,6 +415,105 @@ public sealed class BackPackUIScreenTests
         Assert.That(saveService.HasStoryFlag(TutorialQuestConstants.SpellBookCompiledFlagId), Is.True);
     }
 
+    [Test]
+    public void RefreshFromCurrentPlayer_WritesSpellDescriptionText()
+    {
+        CoreTokenData coreToken = CreateToken<CoreTokenData>("spell_description_fire", "Fire");
+        coreToken.CoreType = AttackCoreType.Fire;
+        CreatePlayerWithState(null, coreToken);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TMP_Text spellDescriptionText = GetPrivateField<TMP_Text>(screen, "spellDescriptionText");
+        Assert.That(spellDescriptionText, Is.Not.Null);
+        Assert.That(spellDescriptionText.richText, Is.True);
+        Assert.That(spellDescriptionText.text, Does.Contain("<color=#FF7A3D>"));
+        Assert.That(spellDescriptionText.text, Does.Contain("火"));
+    }
+
+    [Test]
+    public void RefreshFromCurrentPlayer_UsesSpellDescriptionCatalogJson()
+    {
+        CoreTokenData coreToken = CreateToken<CoreTokenData>("spell_description_catalog_fire", "Fire");
+        coreToken.CoreType = AttackCoreType.Fire;
+        CreatePlayerWithState(null, coreToken);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        TextAsset catalogJson = new(CreateCustomSpellDescriptionCatalogJson())
+        {
+            name = "Custom Spell Description Catalog",
+        };
+        createdObjects.Add(catalogJson);
+        SetPrivateField(screen, "spellDescriptionCatalogJson", catalogJson);
+
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TMP_Text spellDescriptionText = GetPrivateField<TMP_Text>(screen, "spellDescriptionText");
+        Assert.That(spellDescriptionText.text, Does.Contain("焰"));
+        Assert.That(spellDescriptionText.text, Does.Contain("文案表起咒"));
+        Assert.That(spellDescriptionText.text, Does.Contain("穿表而出"));
+        Assert.That(spellDescriptionText.text, Does.Contain("表中伤"));
+    }
+
+    [Test]
+    public void SyncSpellBookToLoadout_RefreshesSpellDescriptionText()
+    {
+        CreatePlayerWithState(null, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TMP_Text spellDescriptionText = GetPrivateField<TMP_Text>(screen, "spellDescriptionText");
+        string before = spellDescriptionText.text;
+
+        CoreTokenData iceToken = CreateToken<CoreTokenData>("spell_description_ice", "Ice");
+        iceToken.CoreType = AttackCoreType.Ice;
+        List<TokenCellOccupancy> spellBookCells = GetPrivateField<List<TokenCellOccupancy>>(screen, "spellBookCells");
+        spellBookCells[0] = new TokenCellOccupancy(iceToken, 0, 0, true);
+
+        InvokeNonPublic(screen, "SyncSpellBookToLoadout");
+
+        Assert.That(spellDescriptionText.text, Is.Not.EqualTo(before));
+        Assert.That(spellDescriptionText.text, Does.Contain("冰"));
+        Assert.That(spellDescriptionText.text, Does.Contain("<color=#FF7A3D>"));
+    }
+
+    [Test]
+    public void ClearAllSlots_ClearsSpellDescriptionText()
+    {
+        CoreTokenData coreToken = CreateToken<CoreTokenData>("spell_description_clear", "Fire");
+        CreatePlayerWithState(null, coreToken);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TMP_Text spellDescriptionText = GetPrivateField<TMP_Text>(screen, "spellDescriptionText");
+        Assert.That(spellDescriptionText.text, Is.Not.Empty);
+
+        InvokeNonPublic(screen, "ClearAllSlots");
+
+        Assert.That(spellDescriptionText.text, Is.Empty);
+    }
+
+    [Test]
+    public void RefreshFromCurrentPlayer_WithoutPlayerClearsSpellDescriptionText()
+    {
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+
+        TMP_Text spellDescriptionText = GetPrivateField<TMP_Text>(screen, "spellDescriptionText");
+        spellDescriptionText.text = "旧法术描述";
+
+        screen.RefreshFromCurrentPlayer();
+
+        Assert.That(spellDescriptionText.text, Is.Empty);
+    }
+
     private BackPackUIScreen CreateBackPackUIScreen()
     {
         GameObject root = CreateUiObject("BackPackUI");
@@ -383,6 +531,10 @@ public sealed class BackPackUIScreenTests
             CreateSlotView($"Spell Slot {i + 1:D2}", spellBookObject.transform);
         }
 
+        GameObject descriptionPanel = CreateUiObject("Description Panel", mainContent);
+        GameObject descriptionText = CreateUiObject("Text (TMP)", descriptionPanel.transform);
+        descriptionText.AddComponent<TextMeshProUGUI>();
+
         RectTransform leftPanel = CreateUiObject("Left Panel", mainContent).GetComponent<RectTransform>();
         CreateUiObject("Preview Animation", leftPanel);
 
@@ -398,6 +550,7 @@ public sealed class BackPackUIScreenTests
     private BulletTokenSelectionView CreateHoverPreviewTemplate()
     {
         GameObject root = CreateUiObject("Hover Preview Template");
+        (root.transform as RectTransform).sizeDelta = new Vector2(460f, 500f);
         root.AddComponent<CanvasGroup>();
         BulletTokenSelectionView selectionView = root.AddComponent<BulletTokenSelectionView>();
 
@@ -580,6 +733,35 @@ public sealed class BackPackUIScreenTests
             Assert.That(cell.item, Is.SameAs(expectedItem));
             Assert.That(cell.anchorIndex, Is.EqualTo(anchorIndex));
         }
+    }
+
+    private static string CreateCustomSpellDescriptionCatalogJson()
+    {
+        return @"
+{
+  ""coreLabels"": [
+    { ""coreType"": ""Fire"", ""label"": ""焰"" }
+  ],
+  ""mainSentenceTemplates"": [
+    ""{core}自文案表起咒，{behavior}，{result}。""
+  ],
+  ""behaviorPhrases"": [
+    {
+      ""behaviorType"": ""Straight"",
+      ""phraseTemplates"": [
+        ""<behavior>穿表而出</behavior>""
+      ]
+    }
+  ],
+  ""resultPhrases"": [
+    {
+      ""resultType"": ""DirectDamage"",
+      ""phraseTemplates"": [
+        ""留下<result>表中伤</result>""
+      ]
+    }
+  ]
+}";
     }
 
     private static void PrepareCleanSaveEnvironment()

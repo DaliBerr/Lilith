@@ -86,7 +86,8 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - [`Assets/Scripts/Kernel/MapGrid/MapSpawnUtility.cs`](Assets/Scripts/Kernel/MapGrid/MapSpawnUtility.cs) 统一处理最近 Ground 格解析与角色传送吸附
   - [`Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs`](Assets/Scripts/Kernel/MapGrid/MapRunFlowController.cs) 负责 `StartRoomMapRoot` 与 `CombatMapRoot` 之间的单局切换
 - 攻击与子弹：位于 [`Assets/Scripts/Kernel/Bullet`](Assets/Scripts/Kernel/Bullet)
-  - 入口：[`AttackFormulaCompiler.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs)、[`CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
+  - 入口：[`AttackFormulaCompiler.cs`](Assets/Scripts/Kernel/Bullet/AttackFormulaCompiler.cs)、[`SpellDescriptionGenerator.cs`](Assets/Scripts/Kernel/Bullet/SpellDescriptionGenerator.cs)、[`CharBullet.cs`](Assets/Scripts/Kernel/Bullet/CharBullet.cs)
+  - `SpellDescriptionGenerator` 基于 `CompiledAttack` 生成背包 Spell Book 的短中文 TMP rich text 描述；文案库位于 [`Assets/Data/UI/SpellDescriptionCatalog.json`](Assets/Data/UI/SpellDescriptionCatalog.json)，只做 UI 表现，不改变 token 编译或战斗结算
   - Token 数据资产位于 [`Assets/Scripts/Kernel/Bullet/TokenData`](Assets/Scripts/Kernel/Bullet/TokenData)
 - 敌人与波次：位于 [`Assets/Scripts/Kernel/Enemy`](Assets/Scripts/Kernel/Enemy)
   - 入口：[`EnemyDefinition.cs`](Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs)、[`EnemyGenerator.cs`](Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs)、[`WaveDefinition.cs`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs)、[`WaveManager.cs`](Assets/Scripts/Kernel/Enemy/WaveManager.cs)

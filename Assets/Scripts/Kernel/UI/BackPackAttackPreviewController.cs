@@ -13,7 +13,8 @@ namespace Kernel.UI
     public sealed class BackPackAttackPreviewController : MonoBehaviour
     {
         private const string DefaultStatusMessage = "Preview Targets: Dummy Formation";
-        private const string PreviewRootPath = "MainContent/Left Panel/Preview Animation";
+        private const string LegacyPreviewRootPath = "MainContent/Left Panel/Preview Animation";
+        private const string CurrentPreviewRootPath = "Grids Preview Panel/Left Panel/Preview Animation";
         private const int ExplosionSegmentCount = 48;
 
         [Header("UI")]
@@ -223,9 +224,41 @@ namespace Kernel.UI
 
         private void TryAutoBindReferences()
         {
-            previewRoot ??= transform.Find(PreviewRootPath) as RectTransform;
+            previewRoot ??= ResolvePreviewRoot();
             previewImage ??= previewRoot != null ? previewRoot.GetComponentInChildren<RawImage>(includeInactive: true) : null;
             statusLabel ??= previewRoot != null ? previewRoot.GetComponentInChildren<TMP_Text>(includeInactive: true) : null;
+        }
+
+        private RectTransform ResolvePreviewRoot()
+        {
+            return transform.Find(CurrentPreviewRootPath) as RectTransform
+                ?? transform.Find(LegacyPreviewRootPath) as RectTransform
+                ?? FindRectTransform(transform, "Preview Animation");
+        }
+
+        private static RectTransform FindRectTransform(Transform root, string targetName)
+        {
+            if (root == null || string.IsNullOrEmpty(targetName))
+            {
+                return null;
+            }
+
+            Transform directChild = root.Find(targetName);
+            if (directChild != null)
+            {
+                return directChild as RectTransform;
+            }
+
+            for (int i = 0; i < root.childCount; i++)
+            {
+                RectTransform match = FindRectTransform(root.GetChild(i), targetName);
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>

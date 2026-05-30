@@ -161,7 +161,7 @@ public sealed class BackPackInventoryTests
 
         try
         {
-            GridLayoutGroup grid = prefabRoot.transform.Find("MainContent/BackPack Grid Panel/Grid")?.GetComponent<GridLayoutGroup>();
+            GridLayoutGroup grid = prefabRoot.transform.Find("Grids Preview Panel/BackPack Grid Panel/Grid")?.GetComponent<GridLayoutGroup>();
 
             Assert.That(grid, Is.Not.Null);
             Assert.That(grid.constraint, Is.EqualTo(GridLayoutGroup.Constraint.FixedColumnCount));
@@ -182,10 +182,29 @@ public sealed class BackPackInventoryTests
         {
             BackPackUIScreen screen = prefabRoot.GetComponent<BackPackUIScreen>();
             Assert.That(screen, Is.Not.Null);
+            Assert.That(screen.PreservePrefabRootRectTransform, Is.True);
+
+            RectTransform mainContent = GetPrivateField<RectTransform>(screen, "mainContent");
+            Assert.That(mainContent, Is.EqualTo(prefabRoot.transform as RectTransform));
 
             BulletTokenSelectionView hoverPreviewPrefab = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewPrefab");
             Assert.That(hoverPreviewPrefab, Is.Not.Null);
             Assert.That(hoverPreviewPrefab.GetComponent<BulletTokenSelectionView>(), Is.Not.Null);
+
+            TMP_Text spellDescriptionText = GetPrivateField<TMP_Text>(screen, "spellDescriptionText");
+            Assert.That(spellDescriptionText, Is.Not.Null);
+            Assert.That(spellDescriptionText.richText, Is.True);
+
+            TextAsset spellDescriptionCatalogJson = GetPrivateField<TextAsset>(screen, "spellDescriptionCatalogJson");
+            Assert.That(spellDescriptionCatalogJson, Is.Not.Null);
+            Assert.That(spellDescriptionCatalogJson.name, Is.EqualTo("SpellDescriptionCatalog"));
+
+            Vector2 hoverPreviewScreenOffset = GetPrivateField<Vector2>(screen, "hoverPreviewScreenOffset");
+            Assert.That(hoverPreviewScreenOffset.x, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(hoverPreviewScreenOffset.y, Is.EqualTo(0f).Within(0.0001f));
+
+            float hoverPreviewScale = GetPrivateField<float>(screen, "hoverPreviewScale");
+            Assert.That(hoverPreviewScale, Is.EqualTo(0.7f).Within(0.0001f));
         }
         finally
         {

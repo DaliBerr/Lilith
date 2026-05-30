@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Kernel.Bullet;
 using Kernel.GameState;
 using Kernel.Quest;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -31,10 +32,13 @@ namespace Kernel.UI
         [SerializeField] private Button hintButton;
         [SerializeField] private BackPackGridSlotView slotPrefab;
         [SerializeField] private BackPackAttackPreviewController attackPreviewController;
+        [SerializeField] private TMP_Text spellDescriptionText;
+        [SerializeField] private TextAsset spellDescriptionCatalogJson;
 
         [Header("Hover Preview")]
         [SerializeField] private BulletTokenSelectionView hoverPreviewPrefab;
-        [SerializeField] private Vector2 hoverPreviewScreenOffset = new(28f, -28f);
+        [SerializeField] private Vector2 hoverPreviewScreenOffset = Vector2.zero;
+        [SerializeField, Min(0.01f)] private float hoverPreviewScale = 0.7f;
 
         [Header("Linked Outline")]
         [SerializeField] private Color linkedOutlineColor = new(1f, 0.84f, 0.35f, 0.95f);
@@ -65,8 +69,11 @@ namespace Kernel.UI
         private BulletTokenSelectionView hoverPreviewView;
         private BackPackGridSlotView activeHoverSlot;
         private PlaceableTokenData activeHoverItem;
+        private TextAsset cachedSpellDescriptionCatalogJson;
+        private SpellDescriptionCatalogData cachedSpellDescriptionCatalog;
 
         public override Status currentStatus { get; } = StatusList.InBackPackStatus;
+        public override bool PreservePrefabRootRectTransform => true;
 
         protected override void OnInit()
         {
@@ -132,6 +139,7 @@ namespace Kernel.UI
             {
                 ClearAllSlots();
                 attackPreviewController?.ClearPreview();
+                ClearSpellDescription();
                 return;
             }
 
@@ -140,6 +148,7 @@ namespace Kernel.UI
             RefreshInventorySlots();
             RefreshSpellBookSlots();
             RefreshAttackPreview();
+            RefreshSpellDescription();
         }
 
         /// <summary>
@@ -927,8 +936,10 @@ namespace Kernel.UI
             {
                 previewRect.anchorMin = new Vector2(0.5f, 0.5f);
                 previewRect.anchorMax = new Vector2(0.5f, 0.5f);
-                previewRect.pivot = new Vector2(0.5f, 0.5f);
+                previewRect.pivot = new Vector2(0f, 1f);
                 previewRect.anchoredPosition = Vector2.zero;
+                float previewScale = Mathf.Max(0.01f, hoverPreviewScale);
+                previewRect.localScale = new Vector3(previewScale, previewScale, 1f);
             }
 
             CanvasGroup canvasGroup = hoverPreviewView.GetComponent<CanvasGroup>();
@@ -1018,11 +1029,14 @@ namespace Kernel.UI
             Rect layerRect = dragPreviewLayer.rect;
             Rect previewRectBounds = previewRect.rect;
             Vector2 previewPivot = previewRect.pivot;
+            Vector3 previewScale = previewRect.localScale;
+            float previewWidth = previewRectBounds.width * Mathf.Abs(previewScale.x);
+            float previewHeight = previewRectBounds.height * Mathf.Abs(previewScale.y);
 
-            float minX = layerRect.xMin + previewRectBounds.width * previewPivot.x;
-            float maxX = layerRect.xMax - previewRectBounds.width * (1f - previewPivot.x);
-            float minY = layerRect.yMin + previewRectBounds.height * previewPivot.y;
-            float maxY = layerRect.yMax - previewRectBounds.height * (1f - previewPivot.y);
+            float minX = layerRect.xMin + previewWidth * previewPivot.x;
+            float maxX = layerRect.xMax - previewWidth * (1f - previewPivot.x);
+            float minY = layerRect.yMin + previewHeight * previewPivot.y;
+            float maxY = layerRect.yMax - previewHeight * (1f - previewPivot.y);
             if (minX > maxX || minY > maxY)
             {
                 return targetLocalPosition;
@@ -1249,20 +1263,55 @@ namespace Kernel.UI
         private void TryAutoBindReferences()
         {
             mainContent ??= transform.Find("MainContent") as RectTransform;
-            if (mainContent == null)
-            {
-                return;
-            }
+            mainContent ??= transform as RectTransform;
 
-            topPanel ??= mainContent.Find("Top Panel") as RectTransform;
-            spellBook ??= topPanel?.Find("Spell Book") as RectTransform;
-            leftPanel ??= mainContent.Find("Left Panel") as RectTransform;
-            previewAnimation ??= leftPanel?.Find("Preview Animation") as RectTransform;
-            backPackGridPanel ??= mainContent.Find("BackPack Grid Panel") as RectTransform;
-            backPackGrid ??= backPackGridPanel?.Find("Grid") as RectTransform;
-            hintButton ??= topPanel?.Find("Hint Button")?.GetComponent<Button>();
+            topPanel ??= FindRectTransform(mainContent, "Top Panel");
+            spellBook ??= FindRectTransform(topPanel, "Spell Book");
+            leftPanel ??= FindRectTransform(mainContent, "Left Panel");
+            previewAnimation ??= FindRectTransform(leftPanel, "Preview Animation");
+            backPackGridPanel ??= FindRectTransform(mainContent, "BackPack Grid Panel");
+            backPackGrid ??= FindRectTransform(backPackGridPanel, "Grid");
+            hintButton ??= FindComponent<Button>(topPanel, "Hint Button");
             slotPrefab ??= ResolveTemplateSlot();
             attackPreviewController ??= GetComponent<BackPackAttackPreviewController>();
+            spellDescriptionText ??= FindDescriptionText(mainContent);
+        }
+
+        private static TMP_Text FindDescriptionText(Transform root)
+        {
+            RectTransform panel = FindRectTransform(root, "Description Panel");
+            return panel != null ? panel.GetComponentInChildren<TMP_Text>(includeInactive: true) : null;
+        }
+
+        private static RectTransform FindRectTransform(Transform root, string targetName)
+        {
+            if (root == null || string.IsNullOrEmpty(targetName))
+            {
+                return null;
+            }
+
+            Transform directChild = root.Find(targetName);
+            if (directChild != null)
+            {
+                return directChild as RectTransform;
+            }
+
+            for (int i = 0; i < root.childCount; i++)
+            {
+                RectTransform match = FindRectTransform(root.GetChild(i), targetName);
+                if (match != null)
+                {
+                    return match;
+                }
+            }
+
+            return null;
+        }
+
+        private static T FindComponent<T>(Transform root, string targetName) where T : Component
+        {
+            RectTransform rectTransform = FindRectTransform(root, targetName);
+            return rectTransform != null ? rectTransform.GetComponent<T>() : null;
         }
 
         /// <summary>
@@ -1494,6 +1543,7 @@ namespace Kernel.UI
         {
             if (currentLoadout == null)
             {
+                ClearSpellDescription();
                 return;
             }
 
@@ -1510,6 +1560,7 @@ namespace Kernel.UI
             }
 
             RefreshAttackPreview();
+            RefreshSpellDescription();
         }
 
         /// <summary>
@@ -1562,6 +1613,7 @@ namespace Kernel.UI
         {
             CancelActiveDragSession();
             attackPreviewController?.ClearPreview();
+            ClearSpellDescription();
             if (currentInventory != null)
             {
                 currentInventory.Changed -= HandleInventoryChanged;
@@ -1596,6 +1648,7 @@ namespace Kernel.UI
 
             BackPackTokenLayoutUtility.ClearCells(spellBookCells);
             RefreshSpellBookSlots();
+            ClearSpellDescription();
         }
 
         private void ApplyBackPackGridLayoutDefaults()
@@ -1760,6 +1813,63 @@ namespace Kernel.UI
 
             CompiledAttack compiledAttack = currentLoadout != null ? currentLoadout.CurrentCompiledAttack : null;
             attackPreviewController.RefreshPreview(currentPlayer, compiledAttack);
+        }
+
+        private void RefreshSpellDescription()
+        {
+            TryAutoBindReferences();
+            if (spellDescriptionText == null)
+            {
+                return;
+            }
+
+            spellDescriptionText.richText = true;
+            if (currentLoadout == null)
+            {
+                spellDescriptionText.text = string.Empty;
+                return;
+            }
+
+            spellDescriptionText.text = SpellDescriptionGenerator.GenerateRichText(
+                currentLoadout.CurrentCompiledAttack,
+                currentLoadout.Items,
+                ResolveSpellDescriptionCatalog());
+        }
+
+        private void ClearSpellDescription()
+        {
+            TryAutoBindReferences();
+            if (spellDescriptionText == null)
+            {
+                return;
+            }
+
+            spellDescriptionText.richText = true;
+            spellDescriptionText.text = string.Empty;
+        }
+
+        private SpellDescriptionCatalogData ResolveSpellDescriptionCatalog()
+        {
+            if (spellDescriptionCatalogJson == null)
+            {
+                cachedSpellDescriptionCatalogJson = null;
+                cachedSpellDescriptionCatalog = null;
+                return null;
+            }
+
+            if (cachedSpellDescriptionCatalogJson == spellDescriptionCatalogJson)
+            {
+                return cachedSpellDescriptionCatalog;
+            }
+
+            cachedSpellDescriptionCatalogJson = spellDescriptionCatalogJson;
+            if (!SpellDescriptionCatalogData.TryDeserializeJson(spellDescriptionCatalogJson.text, out cachedSpellDescriptionCatalog, out string errorMessage))
+            {
+                GameDebug.LogWarning($"[BackPackUIScreen] Failed to parse spell description catalog '{spellDescriptionCatalogJson.name}': {errorMessage}");
+                cachedSpellDescriptionCatalog = null;
+            }
+
+            return cachedSpellDescriptionCatalog;
         }
     }
 }

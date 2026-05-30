@@ -441,6 +441,23 @@ namespace Kernel.UI
                     yield break;
                 }
 
+                if (uiManager.GetTopModal() is HintUIScreen)
+                {
+                    yield return uiManager.PopModalAndWait();
+                    if (uiManager.GetTopModal() is BackPackUIScreen)
+                    {
+                        yield break;
+                    }
+
+                    if (uiManager.GetTopModal() != null || uiManager.GetTopScreen() is not MainUIScreen)
+                    {
+                        yield break;
+                    }
+
+                    yield return uiManager.ShowModalAndWait<BackPackUIScreen>();
+                    yield break;
+                }
+
                 if (uiManager.GetTopScreen() is BackPackUIScreen)
                 {
                     yield return uiManager.PopScreenAndWait();
@@ -485,6 +502,12 @@ namespace Kernel.UI
 
                 if (topModal is BackPackUIScreen)
                 {
+                    yield return uiManager.PopModalAndWait();
+                    if (uiManager.GetTopModal() != null || uiManager.GetTopScreen() is not MainUIScreen)
+                    {
+                        yield break;
+                    }
+
                     yield return uiManager.ShowModalAndWait<HintUIScreen>();
                     yield break;
                 }
@@ -495,7 +518,19 @@ namespace Kernel.UI
                 }
 
                 UIScreen topScreen = uiManager.GetTopScreen();
-                if (topScreen is MainUIScreen || topScreen is BackPackUIScreen)
+                if (topScreen is BackPackUIScreen)
+                {
+                    yield return uiManager.PopScreenAndWait();
+                    if (uiManager.GetTopModal() != null || uiManager.GetTopScreen() is not MainUIScreen)
+                    {
+                        yield break;
+                    }
+
+                    yield return uiManager.ShowModalAndWait<HintUIScreen>();
+                    yield break;
+                }
+
+                if (topScreen is MainUIScreen)
                 {
                     yield return uiManager.ShowModalAndWait<HintUIScreen>();
                 }
@@ -775,6 +810,11 @@ namespace Kernel.UI
 
             UIScreen topModal = uiManager.GetTopModal();
             if (topModal is BackPackUIScreen)
+            {
+                return true;
+            }
+
+            if (topModal is HintUIScreen)
             {
                 return true;
             }

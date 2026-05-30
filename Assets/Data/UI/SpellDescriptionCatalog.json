@@ -1,0 +1,148 @@
+{
+  "colors": {
+    "core": "#FF7A3D",
+    "behavior": "#66C7FF",
+    "result": "#FF5C7A",
+    "value": "#FFD166",
+    "special": "#B98CFF"
+  },
+  "emptySpellPrompts": [
+    "放入<core>核心</core>词，法术才会成形。",
+    "Spell Book 还缺少<core>核心</core>词。",
+    "先安放<core>核心</core>，咒文才有源头。"
+  ],
+  "mainSentenceTemplates": [
+    "{core}咒沿符轨成形，{behavior}，命中时{result}。",
+    "{core}势被压入咒轨，{behavior}后{result}。",
+    "{core}在掌心收束，{behavior}，随后{result}。"
+  ],
+  "coreLabels": [
+    { "coreType": "Fire", "label": "火" },
+    { "coreType": "Ice", "label": "冰" },
+    { "coreType": "Thunder", "label": "雷" },
+    { "coreType": "Edge", "label": "刃" },
+    { "coreType": "Light", "label": "光" },
+    { "coreType": "Shadow", "label": "影" },
+    { "coreType": "Toxin", "label": "毒" }
+  ],
+  "behaviorPhrases": [
+    {
+      "behaviorType": "Straight",
+      "phraseTemplates": [
+        "<behavior>沿直线贯出</behavior>",
+        "<behavior>笔直射出</behavior>"
+      ]
+    },
+    {
+      "behaviorType": "Spread",
+      "countUnit": "道",
+      "phraseTemplates": [
+        "分作<value>{count}</value><behavior>散射</behavior>",
+        "铺开成<value>{count}</value><behavior>散射</behavior>弹线"
+      ]
+    },
+    {
+      "behaviorType": "Bounce",
+      "countUnit": "次",
+      "phraseTemplates": [
+        "<behavior>弹射</behavior><value>{count}</value>",
+        "带着<value>{count}</value><behavior>弹射</behavior>余势"
+      ],
+      "fallbackPhraseTemplates": [
+        "<behavior>多次弹射</behavior>"
+      ]
+    },
+    {
+      "behaviorType": "Chain",
+      "phraseTemplates": [
+        "<behavior>链式牵引</behavior>"
+      ]
+    },
+    {
+      "behaviorType": "Orbit",
+      "phraseTemplates": [
+        "<behavior>环绕目标</behavior>"
+      ]
+    },
+    {
+      "behaviorType": "Pierce",
+      "countUnit": "次",
+      "phraseTemplates": [
+        "<behavior>穿透</behavior><value>{count}</value>",
+        "带着<value>{count}</value><behavior>穿透</behavior>余势"
+      ],
+      "fallbackPhraseTemplates": [
+        "<behavior>连续穿透</behavior>"
+      ]
+    },
+    {
+      "behaviorType": "Homing",
+      "phraseTemplates": [
+        "<behavior>追踪目标</behavior>",
+        "带着<behavior>追踪</behavior>弧线逼近"
+      ]
+    }
+  ],
+  "resultPhrases": [
+    {
+      "resultType": "DirectDamage",
+      "phraseTemplates": [
+        "造成<result>直击</result>",
+        "留下<result>直接伤害</result>"
+      ]
+    },
+    {
+      "resultType": "Explosion",
+      "phraseTemplates": [
+        "引发<result>爆炸</result>",
+        "炸开一圈<result>爆炸</result>余波"
+      ]
+    },
+    {
+      "resultType": "StatusEffect",
+      "phraseTemplates": [
+        "施加<result>控制</result>",
+        "压出<result>控制</result>印记"
+      ]
+    },
+    {
+      "resultType": "SpawnChild",
+      "phraseTemplates": [
+        "<result>召出子咒</result>"
+      ]
+    },
+    {
+      "resultType": "Split",
+      "phraseTemplates": [
+        "裂成<result>分裂</result>子弹",
+        "迸出<result>分裂</result>余弹"
+      ]
+    },
+    {
+      "resultType": "Healing",
+      "phraseTemplates": [
+        "化作<result>治疗</result>回流",
+        "返还<result>治疗</result>光屑"
+      ]
+    }
+  ],
+  "specialEffects": [
+    { "effect": "Burn", "phrase": "<special>灼烧</special>" },
+    { "effect": "Slow", "phrase": "<special>减速</special>" },
+    { "effect": "ThunderChain", "phrase": "<special>雷链</special>" },
+    { "effect": "ArmoredBonus", "phrase": "<special>破甲</special>" },
+    { "effect": "Split", "phrase": "<special>分裂余弹</special>" },
+    { "effect": "Control", "phrase": "<special>压制</special>" }
+  ],
+  "effectSeparator": "、",
+  "specialSentenceTemplates": [
+    "余波附带{effects}。",
+    "余辉短暂留下{effects}。",
+    "命中后还会留下{effects}。"
+  ],
+  "manyItemSpecialSentenceTemplates": [
+    "余波附带{effects}。",
+    "多重词元让余波带上{effects}。",
+    "命中后还会留下{effects}。"
+  ]
+}
