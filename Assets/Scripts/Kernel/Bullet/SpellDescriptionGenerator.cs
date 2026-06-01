@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using UnityEngine;
 using VocalithRandom = Vocalith.Random;
@@ -16,48 +17,55 @@ namespace Kernel.Bullet
         private const string ResultToken = "{result}";
         private const string CountToken = "{count}";
         private const string EffectsToken = "{effects}";
+        private const string BindingsToken = "{bindings}";
+        private const string ConsumerToken = "{consumer}";
+        private const string ValueTextToken = "{value}";
+        private const string StructuresToken = "{structures}";
+        private const string SpellBookToken = "{spellBook}";
+        private const string TraitsToken = "{traits}";
 
         private static readonly SpellDescriptionCatalogData DefaultCatalog = SpellDescriptionCatalogData.CreateDefault();
 
-        /// <summary>
-        /// summary: 生成可直接写入 TMP_Text 的 rich text 法术描述。
-        /// param name="compiledAttack": 当前 Spell Book 编译结果
-        /// param name="items": 当前 Spell Book 中的可放置 token 物件；第一版仅用于判断是否为空
-        /// returns: 短中文 rich text 描述
-        /// </summary>
-        public static string GenerateRichText(CompiledAttack compiledAttack, IReadOnlyList<PlaceableTokenData> items = null)
+        public static string GenerateRichText(CompiledSpellProgram spellProgram, IReadOnlyList<PlaceableTokenData> items = null)
         {
-            return GenerateRichText(compiledAttack, items, null, new VocalithRandom());
+            return GenerateRichText(spellProgram, items, null, null, new VocalithRandom());
         }
 
-        public static string GenerateRichText(CompiledAttack compiledAttack, IReadOnlyList<PlaceableTokenData> items, SpellDescriptionCatalogData catalog)
+        public static string GenerateRichText(CompiledSpellProgram spellProgram, IReadOnlyList<PlaceableTokenData> items, SpellDescriptionCatalogData catalog)
         {
-            return GenerateRichText(compiledAttack, items, catalog, new VocalithRandom());
+            return GenerateRichText(spellProgram, items, catalog, null, new VocalithRandom());
         }
 
-        internal static string GenerateRichText(CompiledAttack compiledAttack, IReadOnlyList<PlaceableTokenData> items, VocalithRandom random)
+        public static string GenerateRichText(
+            CompiledSpellProgram spellProgram,
+            IReadOnlyList<PlaceableTokenData> items,
+            SpellDescriptionCatalogData catalog,
+            SpellBookData spellBook)
         {
-            return GenerateRichText(compiledAttack, items, null, random);
+            return GenerateRichText(spellProgram, items, catalog, spellBook, new VocalithRandom());
         }
 
         internal static string GenerateRichText(
-            CompiledAttack compiledAttack,
+            CompiledSpellProgram spellProgram,
             IReadOnlyList<PlaceableTokenData> items,
             SpellDescriptionCatalogData catalog,
+            SpellBookData spellBook,
             VocalithRandom random)
         {
             VocalithRandom rng = random ?? new VocalithRandom();
             SpellDescriptionCatalogData resolvedCatalog = catalog ?? DefaultCatalog;
-            if (compiledAttack == null || !compiledAttack.CanFire || compiledAttack.CoreType == AttackCoreType.None)
+            SpellProjectileNode primaryProjectile = null;
+            spellProgram?.TryGetPrimaryProjectile(out primaryProjectile);
+            if (primaryProjectile == null || !primaryProjectile.CanFire || primaryProjectile.CoreType == AttackCoreType.None)
             {
                 return FormatTemplate(Pick(resolvedCatalog.emptySpellPrompts, rng), resolvedCatalog, null);
             }
 
-            string core = Highlight(ResolveCoreLabel(compiledAttack.CoreType, resolvedCatalog), resolvedCatalog.colors.core);
-            string behavior = ResolveBehaviorPhrase(compiledAttack, resolvedCatalog, rng);
-            string result = ResolveResultPhrase(compiledAttack, resolvedCatalog, rng);
+            string core = Highlight(ResolveCoreLabel(primaryProjectile.CoreType, resolvedCatalog), resolvedCatalog.colors.core);
+            string behavior = ResolveBehaviorPhrase(primaryProjectile, resolvedCatalog, rng);
+            string result = ResolveResultPhrase(primaryProjectile, resolvedCatalog, rng);
             string main = PickMainSentence(core, behavior, result, resolvedCatalog, rng);
-            string special = BuildSpecialSentence(compiledAttack, items, resolvedCatalog, rng);
+            string special = BuildProgramSpecialSentence(spellProgram, primaryProjectile, items, resolvedCatalog, spellBook, rng);
             return string.IsNullOrEmpty(special) ? main : main + "\n" + special;
         }
 
@@ -101,16 +109,16 @@ namespace Kernel.Bullet
             return coreType == AttackCoreType.None ? "核心" : coreName;
         }
 
-        private static string ResolveBehaviorPhrase(CompiledAttack compiledAttack, SpellDescriptionCatalogData catalog, VocalithRandom random)
+        private static string ResolveBehaviorPhrase(SpellProjectileNode projectile, SpellDescriptionCatalogData catalog, VocalithRandom random)
         {
-            SpellDescriptionBehaviorEntry entry = FindBehaviorEntry(compiledAttack.BehaviorType, catalog)
+            SpellDescriptionBehaviorEntry entry = FindBehaviorEntry(projectile.BehaviorType, catalog)
                 ?? FindBehaviorEntry(AttackBehaviorType.Straight, catalog);
             if (entry == null)
             {
                 return Highlight("笔直射出", catalog.colors.behavior);
             }
 
-            int count = ResolveBehaviorCount(compiledAttack);
+            int count = ResolveBehaviorCount(projectile);
             bool needsCount = !string.IsNullOrEmpty(entry.countUnit);
             IReadOnlyList<string> templates = needsCount && count <= 0 && entry.fallbackPhraseTemplates != null && entry.fallbackPhraseTemplates.Count > 0
                 ? entry.fallbackPhraseTemplates
@@ -123,13 +131,13 @@ namespace Kernel.Bullet
             return FormatTemplate(Pick(templates, random), catalog, replacements);
         }
 
-        private static int ResolveBehaviorCount(CompiledAttack compiledAttack)
+        private static int ResolveBehaviorCount(SpellProjectileNode projectile)
         {
-            return compiledAttack.BehaviorType switch
+            return projectile.BehaviorType switch
             {
-                AttackBehaviorType.Spread => Mathf.Max(1, compiledAttack.SpreadProjectileCount),
-                AttackBehaviorType.Bounce => Mathf.Max(0, compiledAttack.AttackSpec.bounceCount),
-                AttackBehaviorType.Pierce => Mathf.Max(0, compiledAttack.AttackSpec.pierceCount),
+                AttackBehaviorType.Spread => Mathf.Max(1, projectile.ProjectileCount),
+                AttackBehaviorType.Bounce => Mathf.Max(0, projectile.AttackSpec.bounceCount),
+                AttackBehaviorType.Pierce => Mathf.Max(0, projectile.AttackSpec.pierceCount),
                 _ => 0,
             };
         }
@@ -154,9 +162,9 @@ namespace Kernel.Bullet
             return null;
         }
 
-        private static string ResolveResultPhrase(CompiledAttack compiledAttack, SpellDescriptionCatalogData catalog, VocalithRandom random)
+        private static string ResolveResultPhrase(SpellProjectileNode projectile, SpellDescriptionCatalogData catalog, VocalithRandom random)
         {
-            SpellDescriptionResultEntry entry = FindResultEntry(compiledAttack.ResultType, catalog)
+            SpellDescriptionResultEntry entry = FindResultEntry(projectile.ResultType, catalog)
                 ?? FindResultEntry(AttackResultType.DirectDamage, catalog);
             if (entry == null)
             {
@@ -186,22 +194,436 @@ namespace Kernel.Bullet
             return null;
         }
 
-        private static string BuildSpecialSentence(
-            CompiledAttack compiledAttack,
+        private static string BuildProgramSpecialSentence(
+            CompiledSpellProgram spellProgram,
+            SpellProjectileNode primaryProjectile,
+            IReadOnlyList<PlaceableTokenData> items,
+            SpellDescriptionCatalogData catalog,
+            SpellBookData spellBook,
+            VocalithRandom random)
+        {
+            List<string> sentences = new();
+            AddSentenceIfNotEmpty(sentences, BuildEffectSentence(primaryProjectile, items, catalog, random));
+            AddSentenceIfNotEmpty(sentences, BuildValueBindingSentence(items, catalog, random));
+            AddSentenceIfNotEmpty(sentences, BuildProgramStructureSentence(spellProgram, catalog, random));
+            AddSentenceIfNotEmpty(sentences, BuildSpellBookTraitSentence(spellBook, catalog, random));
+            return JoinSentences(sentences);
+        }
+
+        private static string BuildProgramStructureSentence(
+            CompiledSpellProgram spellProgram,
+            SpellDescriptionCatalogData catalog,
+            VocalithRandom random)
+        {
+            SpellCastBlock block = spellProgram != null ? spellProgram.PrimaryCastBlock : null;
+            if (block == null)
+            {
+                return string.Empty;
+            }
+
+            List<string> structures = new();
+            AddMulticastStructure(structures, block);
+            AddModifierStructure(structures, block);
+            AddTriggerPayloadStructure(structures, block);
+            if (structures.Count <= 0)
+            {
+                return string.Empty;
+            }
+
+            Dictionary<string, string> replacements = new()
+            {
+                { StructuresToken, JoinEffects(structures, catalog.structureSeparator) },
+            };
+            return FormatTemplate(Pick(catalog.structureSentenceTemplates, random), catalog, replacements);
+        }
+
+        private static string BuildSpellBookTraitSentence(
+            SpellBookData spellBook,
+            SpellDescriptionCatalogData catalog,
+            VocalithRandom random)
+        {
+            if (spellBook == null)
+            {
+                return string.Empty;
+            }
+
+            List<string> traits = new()
+            {
+                $"<value>{spellBook.SlotCount}</value>槽",
+                $"冷却<value>{FormatSeconds(spellBook.CastCooldownSeconds)}</value>秒",
+            };
+            if (spellBook.CastsPerActivation > 1)
+            {
+                traits.Add($"每次激活<value>{ToChineseNumber(spellBook.CastsPerActivation)}</value>轮");
+                if (spellBook.ActivationSpreadAngleStep > 0f)
+                {
+                    traits.Add($"激活扇形<value>{FormatSeconds(spellBook.ActivationSpreadAngleStep)}</value>度");
+                }
+            }
+
+            if (spellBook.UsesEnergy)
+            {
+                traits.Add($"能量<value>{FormatSeconds(spellBook.EnergyCapacity)}</value>");
+                traits.Add($"消耗<value>{FormatSeconds(spellBook.EnergyCostPerActivation)}</value>");
+                if (spellBook.EnergyRegenPerSecond > 0f)
+                {
+                    traits.Add($"回复<value>{FormatSeconds(spellBook.EnergyRegenPerSecond)}</value>/秒");
+                }
+            }
+
+            if (spellBook.HasExecutorModifiers)
+            {
+                traits.Add($"内建强化<value>{ToChineseNumber(spellBook.ExecutorModifiers.Count)}</value>项");
+                AddExecutorModifierTraits(traits, spellBook);
+            }
+
+            int fixedItemCount = CountFixedItems(spellBook);
+            if (fixedItemCount > 0)
+            {
+                string placement = spellBook.FixedItemPlacement == SpellBookFixedItemPlacement.BeforeEquipped ? "前置" : "后置";
+                traits.Add($"{placement}常驻<value>{ToChineseNumber(fixedItemCount)}</value>词元");
+            }
+
+            Dictionary<string, string> replacements = new()
+            {
+                { SpellBookToken, $"<special>{spellBook.DisplayName}</special>" },
+                { TraitsToken, JoinEffects(traits, "、") },
+            };
+            return FormatTemplate(Pick(catalog.spellBookTraitSentenceTemplates, random), catalog, replacements);
+        }
+
+        private static void AddExecutorModifierTraits(List<string> traits, SpellBookData spellBook)
+        {
+            if (traits == null || spellBook == null || !spellBook.HasExecutorModifiers)
+            {
+                return;
+            }
+
+            List<string> modifierTraits = new();
+            for (int i = 0; i < spellBook.ExecutorModifiers.Count; i++)
+            {
+                TokenModifierDefinition modifier = spellBook.ExecutorModifiers[i].GetSanitized();
+                if (string.IsNullOrWhiteSpace(modifier.expression))
+                {
+                    continue;
+                }
+
+                modifierTraits.Add($"{ResolveExecutorModifierTargetLabel(modifier.target)}<value>{FormatModifierExpression(modifier.expression)}</value>");
+            }
+
+            if (modifierTraits.Count > 0)
+            {
+                traits.Add($"内建{JoinLimited(modifierTraits, "、", 3)}");
+            }
+        }
+
+        private static string ResolveExecutorModifierTargetLabel(TokenModifierTarget target)
+        {
+            return target switch
+            {
+                TokenModifierTarget.TextColor => "文字颜色",
+                TokenModifierTarget.FontSize => "字号",
+                TokenModifierTarget.ScaleMultiplier => "弹体尺寸",
+                TokenModifierTarget.ProjectileSpeed => "速度",
+                TokenModifierTarget.MaxLifetime => "寿命",
+                TokenModifierTarget.MaxTravelDistance => "射程",
+                TokenModifierTarget.ImpactRadiusMultiplier => "碰撞半径",
+                TokenModifierTarget.ResultCount => "结果数量",
+                TokenModifierTarget.ResultDuration => "结果时长",
+                TokenModifierTarget.ResultMultiplier => "结果倍率",
+                TokenModifierTarget.Damage => "伤害",
+                _ => target.ToString(),
+            };
+        }
+
+        private static string FormatModifierExpression(string expression)
+        {
+            string trimmed = expression != null ? expression.Trim() : string.Empty;
+            if (trimmed.StartsWith("*=", StringComparison.Ordinal))
+            {
+                return "x" + trimmed.Substring(2);
+            }
+
+            if (trimmed.StartsWith("+=", StringComparison.Ordinal) ||
+                trimmed.StartsWith("-=", StringComparison.Ordinal) ||
+                trimmed.StartsWith("/=", StringComparison.Ordinal))
+            {
+                return trimmed[0] + trimmed.Substring(2);
+            }
+
+            return trimmed;
+        }
+
+        private static void AddMulticastStructure(List<string> structures, SpellCastBlock block)
+        {
+            if (block == null || block.Projectiles.Count <= 1)
+            {
+                return;
+            }
+
+            structures.Add($"<special>CastBlock</special>同轮释放<value>{ToChineseNumber(block.Projectiles.Count)}</value>枚外层法术");
+        }
+
+        private static void AddModifierStructure(List<string> structures, SpellCastBlock block)
+        {
+            List<string> modifiers = new();
+            AddModifierPhrases(modifiers, block);
+            if (block?.Payloads != null)
+            {
+                for (int i = 0; i < block.Payloads.Count; i++)
+                {
+                    AddModifierPhrases(modifiers, block.Payloads[i]?.InnerBlock);
+                }
+            }
+
+            if (modifiers.Count <= 0)
+            {
+                return;
+            }
+
+            structures.Add($"<special>Modifier</special>{JoinLimited(modifiers, "、", 3)}");
+        }
+
+        private static void AddTriggerPayloadStructure(List<string> structures, SpellCastBlock block)
+        {
+            if (block?.Payloads == null || block.Payloads.Count <= 0)
+            {
+                return;
+            }
+
+            List<string> payloads = new();
+            for (int i = 0; i < block.Payloads.Count; i++)
+            {
+                SpellPayloadBlock payload = block.Payloads[i];
+                if (payload == null)
+                {
+                    continue;
+                }
+
+                string trigger = ResolveTriggerLabel(payload.TriggerType);
+                string content = ResolvePayloadContent(payload.InnerBlock);
+                payloads.Add($"{trigger}后{content}");
+            }
+
+            if (payloads.Count > 0)
+            {
+                structures.Add($"<special>Trigger/Payload</special>{JoinEffects(payloads, "、")}");
+            }
+        }
+
+        private static void AddModifierPhrases(List<string> modifiers, SpellCastBlock block)
+        {
+            if (modifiers == null || block?.Modifiers == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < block.Modifiers.Count; i++)
+            {
+                SpellModifierNode modifier = block.Modifiers[i];
+                if (modifier?.SourceToken == null)
+                {
+                    continue;
+                }
+
+                string label = ResolveTokenLabel(modifier.SourceToken);
+                string scope = ResolveModifierScopeLabel(modifier.Scope, modifier.TargetCount);
+                string phrase = $"<special>{label}</special>指向{scope}";
+                if (!ContainsExact(modifiers, phrase))
+                {
+                    modifiers.Add(phrase);
+                }
+            }
+        }
+
+        private static string ResolvePayloadContent(SpellCastBlock innerBlock)
+        {
+            if (innerBlock == null)
+            {
+                return "执行载荷";
+            }
+
+            List<string> content = new();
+            if (innerBlock.Projectiles.Count > 0)
+            {
+                content.Add($"释放<value>{ToChineseNumber(innerBlock.Projectiles.Count)}</value>枚内层法术");
+            }
+
+            if (innerBlock.PayloadEffects.Count > 0)
+            {
+                List<string> effects = new();
+                for (int i = 0; i < innerBlock.PayloadEffects.Count; i++)
+                {
+                    string label = ResolvePayloadEffectLabel(innerBlock.PayloadEffects[i]);
+                    if (!string.IsNullOrEmpty(label))
+                    {
+                        effects.Add(label);
+                    }
+                }
+
+                if (effects.Count > 0)
+                {
+                    content.Add($"结算{JoinEffects(effects, "、")}");
+                }
+            }
+
+            return content.Count > 0 ? JoinEffects(content, "并") : "执行载荷";
+        }
+
+        private static string ResolvePayloadEffectLabel(SpellPayloadEffectNode effect)
+        {
+            if (effect == null)
+            {
+                return string.Empty;
+            }
+
+            string label = effect.ResultType switch
+            {
+                AttackResultType.Explosion => "爆炸",
+                AttackResultType.StatusEffect => "控制",
+                AttackResultType.Split => "分裂",
+                AttackResultType.Healing => "治疗",
+                AttackResultType.DirectDamage => "直击",
+                _ => !string.IsNullOrWhiteSpace(effect.DisplayText) ? effect.DisplayText : effect.ResultType.ToString(),
+            };
+            return $"<result>{label}</result>";
+        }
+
+        private static string ResolveTriggerLabel(SpellTriggerType triggerType)
+        {
+            return triggerType == SpellTriggerType.OnHit ? "命中" : "触发";
+        }
+
+        private static string ResolveModifierScopeLabel(SpellModifierScope scope, int targetCount)
+        {
+            return scope switch
+            {
+                SpellModifierScope.NextToken => "下一个词元",
+                SpellModifierScope.NextN => $"后<value>{ToChineseNumber(Mathf.Max(1, targetCount))}</value>个词元",
+                SpellModifierScope.CurrentBlock => "当前<special>CastBlock</special>",
+                SpellModifierScope.CurrentPayload => "当前<special>Payload</special>",
+                SpellModifierScope.GlobalProgram => "整次法术程序",
+                _ => "未知作用域",
+            };
+        }
+
+        private static string ResolveTokenLabel(BaseTokenData token)
+        {
+            string label = token != null ? token.GetResolvedDisplayText() : string.Empty;
+            return string.IsNullOrWhiteSpace(label) && token != null ? token.name : label;
+        }
+
+        private static int CountFixedItems(SpellBookData spellBook)
+        {
+            int count = 0;
+            IReadOnlyList<PlaceableTokenData> fixedItems = spellBook != null ? spellBook.FixedCastItems : null;
+            if (fixedItems == null)
+            {
+                return count;
+            }
+
+            for (int i = 0; i < fixedItems.Count; i++)
+            {
+                if (fixedItems[i] != null)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static void AddSentenceIfNotEmpty(List<string> sentences, string sentence)
+        {
+            if (!string.IsNullOrEmpty(sentence))
+            {
+                sentences.Add(sentence);
+            }
+        }
+
+        private static string JoinSentences(IReadOnlyList<string> sentences)
+        {
+            if (sentences == null || sentences.Count <= 0)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder builder = new();
+            for (int i = 0; i < sentences.Count; i++)
+            {
+                builder.Append(sentences[i]);
+            }
+
+            return builder.ToString();
+        }
+
+        private static string JoinLimited(IReadOnlyList<string> entries, string separator, int maxEntries)
+        {
+            if (entries == null || entries.Count <= 0)
+            {
+                return string.Empty;
+            }
+
+            int limit = Mathf.Clamp(maxEntries, 1, entries.Count);
+            StringBuilder builder = new();
+            string resolvedSeparator = separator ?? string.Empty;
+            for (int i = 0; i < limit; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(resolvedSeparator);
+                }
+
+                builder.Append(entries[i]);
+            }
+
+            if (entries.Count > limit)
+            {
+                builder.Append("等");
+            }
+
+            return builder.ToString();
+        }
+
+        private static bool ContainsExact(IReadOnlyList<string> entries, string value)
+        {
+            if (entries == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (string.Equals(entries[i], value, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static string FormatSeconds(float seconds)
+        {
+            return Mathf.Max(0f, seconds).ToString("0.##", CultureInfo.InvariantCulture);
+        }
+
+        private static string BuildEffectSentence(
+            SpellProjectileNode projectile,
             IReadOnlyList<PlaceableTokenData> items,
             SpellDescriptionCatalogData catalog,
             VocalithRandom random)
         {
             List<string> effects = new();
-            CoreEffectPayload coreEffects = compiledAttack.CoreEffects.GetSanitized();
-            ResultEffectPayload resultEffects = compiledAttack.ResultEffects.GetSanitized();
+            CoreEffectPayload coreEffects = projectile.CoreEffects.GetSanitized();
+            ResultEffectPayload resultEffects = projectile.ResultEffects.GetSanitized();
 
             AddEffectIf(effects, coreEffects.HasBurn, "Burn", catalog);
             AddEffectIf(effects, coreEffects.HasSlow, "Slow", catalog);
             AddEffectIf(effects, coreEffects.HasThunderChain, "ThunderChain", catalog);
             AddEffectIf(effects, coreEffects.HasArmoredBonus, "ArmoredBonus", catalog);
-            AddEffectIf(effects, compiledAttack.ResultType == AttackResultType.Split && resultEffects.HasSplit, "Split", catalog);
-            AddEffectIf(effects, compiledAttack.ResultType == AttackResultType.StatusEffect && resultEffects.HasControl, "Control", catalog);
+            AddEffectIf(effects, projectile.ResultType == AttackResultType.Split && resultEffects.HasSplit, "Split", catalog);
+            AddEffectIf(effects, projectile.ResultType == AttackResultType.StatusEffect && resultEffects.HasControl, "Control", catalog);
 
             if (effects.Count <= 0)
             {
@@ -219,6 +641,252 @@ namespace Kernel.Bullet
                 { EffectsToken, joined },
             };
             return FormatTemplate(Pick(templates, random), catalog, replacements);
+        }
+
+        private static string BuildValueBindingSentence(
+            IReadOnlyList<PlaceableTokenData> items,
+            SpellDescriptionCatalogData catalog,
+            VocalithRandom random)
+        {
+            List<string> bindings = ResolveValueBindingPhrases(items, catalog);
+            if (bindings.Count <= 0)
+            {
+                return string.Empty;
+            }
+
+            Dictionary<string, string> replacements = new()
+            {
+                { BindingsToken, JoinEffects(bindings, catalog.valueBindingSeparator) },
+            };
+            return FormatTemplate(Pick(catalog.valueBindingSentenceTemplates, random), catalog, replacements);
+        }
+
+        private static List<string> ResolveValueBindingPhrases(IReadOnlyList<PlaceableTokenData> items, SpellDescriptionCatalogData catalog)
+        {
+            List<BaseTokenData> tokens = ExpandDescriptionTokens(items);
+            List<string> phrases = new();
+            CoreTokenData coreToken = null;
+            BehaviorTokenData behaviorToken = null;
+            ResultTokenData resultToken = null;
+            BaseTokenData pendingConsumer = null;
+            bool hasExplicitResult = false;
+
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                BaseTokenData token = tokens[i];
+                if (token == null)
+                {
+                    continue;
+                }
+
+                switch (token.TokenType)
+                {
+                    case TokenType.Core:
+                        if (coreToken == null && token is CoreTokenData candidateCore)
+                        {
+                            coreToken = candidateCore;
+                        }
+
+                        break;
+
+                    case TokenType.Behavior:
+                        if (coreToken != null &&
+                            !hasExplicitResult &&
+                            behaviorToken == null &&
+                            token is BehaviorTokenData candidateBehavior)
+                        {
+                            behaviorToken = candidateBehavior;
+                            pendingConsumer = SpellValueParameterUtility.CanConsumeValue(candidateBehavior)
+                                ? candidateBehavior
+                                : null;
+                        }
+
+                        break;
+
+                    case TokenType.Result:
+                        if (coreToken != null &&
+                            resultToken == null &&
+                            token is ResultTokenData candidateResult)
+                        {
+                            resultToken = candidateResult;
+                            hasExplicitResult = true;
+                            pendingConsumer = SpellValueParameterUtility.CanConsumeValue(candidateResult)
+                                ? candidateResult
+                                : null;
+                        }
+
+                        break;
+
+                    case TokenType.Value:
+                        if (pendingConsumer != null && token is ValueTokenData valueToken)
+                        {
+                            string phrase = CreateValueBindingPhrase(pendingConsumer, valueToken, catalog);
+                            if (!string.IsNullOrEmpty(phrase))
+                            {
+                                phrases.Add(phrase);
+                            }
+
+                            pendingConsumer = null;
+                        }
+
+                        break;
+                }
+            }
+
+            return phrases;
+        }
+
+        private static List<BaseTokenData> ExpandDescriptionTokens(IReadOnlyList<PlaceableTokenData> items)
+        {
+            List<BaseTokenData> tokens = new();
+            if (items == null)
+            {
+                return tokens;
+            }
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                items[i]?.AppendCompileTokens(tokens);
+            }
+
+            return tokens;
+        }
+
+        private static string CreateValueBindingPhrase(
+            BaseTokenData consumer,
+            ValueTokenData valueToken,
+            SpellDescriptionCatalogData catalog)
+        {
+            SpellValueParameterKind parameterKind = ResolveConsumerParameterKind(consumer);
+            if (parameterKind == SpellValueParameterKind.None)
+            {
+                return string.Empty;
+            }
+
+            string tokenType = ResolveConsumerTokenTypeName(consumer);
+            SpellDescriptionValueBindingEntry entry = FindValueBindingEntry(tokenType, parameterKind, catalog);
+            string template = entry != null
+                ? entry.phrase
+                : BuildFallbackValueBindingTemplate(consumer);
+            Dictionary<string, string> replacements = new()
+            {
+                { ValueTextToken, ResolveValueLabel(valueToken) },
+                { ConsumerToken, ResolveConsumerLabel(consumer) },
+            };
+            return FormatTemplate(template, catalog, replacements);
+        }
+
+        private static SpellValueParameterKind ResolveConsumerParameterKind(BaseTokenData consumer)
+        {
+            if (consumer is BehaviorTokenData behaviorToken)
+            {
+                return SpellValueParameterUtility.CanConsumeValue(behaviorToken)
+                    ? behaviorToken.ValueParameterKind
+                    : SpellValueParameterKind.None;
+            }
+
+            if (consumer is ResultTokenData resultToken)
+            {
+                return SpellValueParameterUtility.CanConsumeValue(resultToken)
+                    ? resultToken.ValueParameterKind
+                    : SpellValueParameterKind.None;
+            }
+
+            return SpellValueParameterKind.None;
+        }
+
+        private static string ResolveConsumerTokenTypeName(BaseTokenData consumer)
+        {
+            if (consumer is BehaviorTokenData behaviorToken)
+            {
+                return behaviorToken.BehaviorType.ToString();
+            }
+
+            if (consumer is ResultTokenData resultToken)
+            {
+                return resultToken.ResultType.ToString();
+            }
+
+            return string.Empty;
+        }
+
+        private static string ResolveConsumerLabel(BaseTokenData consumer)
+        {
+            if (consumer is BehaviorTokenData behaviorToken)
+            {
+                return behaviorToken.BehaviorType switch
+                {
+                    AttackBehaviorType.Spread => "散射",
+                    AttackBehaviorType.Bounce => "弹射",
+                    AttackBehaviorType.Pierce => "穿透",
+                    AttackBehaviorType.Homing => "追踪",
+                    _ => consumer.GetResolvedDisplayText(),
+                };
+            }
+
+            if (consumer is ResultTokenData resultToken)
+            {
+                return resultToken.ResultType switch
+                {
+                    AttackResultType.Explosion => "爆炸",
+                    AttackResultType.StatusEffect => "控制",
+                    AttackResultType.Split => "分裂",
+                    AttackResultType.Healing => "治疗",
+                    AttackResultType.DirectDamage => "直击",
+                    _ => consumer.GetResolvedDisplayText(),
+                };
+            }
+
+            return consumer != null ? consumer.GetResolvedDisplayText() : string.Empty;
+        }
+
+        private static string ResolveValueLabel(ValueTokenData valueToken)
+        {
+            if (valueToken == null)
+            {
+                return string.Empty;
+            }
+
+            string displayText = valueToken.GetResolvedDisplayText();
+            if (!string.IsNullOrWhiteSpace(displayText))
+            {
+                return displayText;
+            }
+
+            return Mathf.Approximately(valueToken.NumericValue, Mathf.Round(valueToken.NumericValue))
+                ? ToChineseNumber(Mathf.RoundToInt(valueToken.NumericValue))
+                : valueToken.NumericValue.ToString("0.##");
+        }
+
+        private static SpellDescriptionValueBindingEntry FindValueBindingEntry(
+            string tokenType,
+            SpellValueParameterKind parameterKind,
+            SpellDescriptionCatalogData catalog)
+        {
+            if (catalog?.valueBindings == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < catalog.valueBindings.Count; i++)
+            {
+                SpellDescriptionValueBindingEntry entry = catalog.valueBindings[i];
+                if (entry != null &&
+                    entry.parameterKind == parameterKind &&
+                    string.Equals(entry.tokenType, tokenType, StringComparison.OrdinalIgnoreCase))
+                {
+                    return entry;
+                }
+            }
+
+            return null;
+        }
+
+        private static string BuildFallbackValueBindingTemplate(BaseTokenData consumer)
+        {
+            return consumer is BehaviorTokenData
+                ? "<value>{value}</value>归入<behavior>{consumer}</behavior>"
+                : "<value>{value}</value>归入<result>{consumer}</result>";
         }
 
         private static void AddEffectIf(List<string> effects, bool condition, string effect, SpellDescriptionCatalogData catalog)

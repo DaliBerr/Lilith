@@ -134,6 +134,17 @@
     { "effect": "Split", "phrase": "<special>分裂余弹</special>" },
     { "effect": "Control", "phrase": "<special>压制</special>" }
   ],
+  "valueBindings": [
+    { "tokenType": "Spread", "parameterKind": 1, "phrase": "<value>{value}</value>归入<behavior>{consumer}</behavior>数量" },
+    { "tokenType": "Bounce", "parameterKind": 1, "phrase": "<value>{value}</value>归入<behavior>{consumer}</behavior>次数" },
+    { "tokenType": "Pierce", "parameterKind": 1, "phrase": "<value>{value}</value>归入<behavior>{consumer}</behavior>次数" },
+    { "tokenType": "Explosion", "parameterKind": 2, "phrase": "<value>{value}</value>定出<result>{consumer}</result>范围" },
+    { "tokenType": "Explosion", "parameterKind": 3, "phrase": "<value>{value}</value>延后<result>{consumer}</result>爆发" },
+    { "tokenType": "Split", "parameterKind": 1, "phrase": "<value>{value}</value>归入<result>{consumer}</result>数量" },
+    { "tokenType": "StatusEffect", "parameterKind": 1, "phrase": "<value>{value}</value>归入<result>{consumer}</result>阈值" },
+    { "tokenType": "StatusEffect", "parameterKind": 3, "phrase": "<value>{value}</value>拉长<result>{consumer}</result>持续" },
+    { "tokenType": "Healing", "parameterKind": 2, "phrase": "<value>{value}</value>铺开<result>{consumer}</result>范围" }
+  ],
   "effectSeparator": "、",
   "specialSentenceTemplates": [
     "余波附带{effects}。",
@@ -144,5 +155,19 @@
     "余波附带{effects}。",
     "多重词元让余波带上{effects}。",
     "命中后还会留下{effects}。"
+  ],
+  "valueBindingSeparator": "、",
+  "valueBindingSentenceTemplates": [
+    "数值词：{bindings}。",
+    "数值落点：{bindings}。"
+  ],
+  "structureSeparator": "；",
+  "structureSentenceTemplates": [
+    "结构：{structures}。",
+    "构筑层级：{structures}。"
+  ],
+  "spellBookTraitSentenceTemplates": [
+    "法术书：{spellBook}，{traits}。",
+    "执行器：{spellBook}，{traits}。"
   ]
 }

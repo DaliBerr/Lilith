@@ -76,6 +76,33 @@ public sealed class BackPackUIScreenTests
     }
 
     [Test]
+    public void RefreshFromCurrentPlayer_BindsSpellBookLoadoutSlotCount()
+    {
+        CoreTokenData firstToken = CreateToken<CoreTokenData>("slot_count_first", "First");
+        CoreTokenData secondToken = CreateToken<CoreTokenData>("slot_count_second", "Second");
+        CoreTokenData overflowToken = CreateToken<CoreTokenData>("slot_count_overflow", "Overflow");
+        CreatePlayer(out _, out SpellBookLoadout loadout);
+        SpellBookData spellBook = CreateSpellBook(slotCount: 2);
+        loadout.SetSpellBook(spellBook);
+        loadout.SetItems(new PlaceableTokenData[]
+        {
+            firstToken,
+            secondToken,
+            overflowToken,
+        });
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> spellBookSlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "spellBookSlots");
+        Assert.That(spellBookSlots.Count, Is.EqualTo(2));
+        Assert.That(spellBookSlots[0].Item, Is.SameAs(firstToken));
+        Assert.That(spellBookSlots[1].Item, Is.SameAs(secondToken));
+        Assert.That(loadout.EquippedItems.Count, Is.EqualTo(2));
+    }
+
+    [Test]
     public void NotifySlotBeginDrag_WithLinkedItem_ShowsDragOutlinePreview()
     {
         LinkedTokenData inventoryLinked = CreateLinkedToken("inventory_linked",
@@ -304,7 +331,7 @@ public sealed class BackPackUIScreenTests
             CreateToken<CoreTokenData>("spell_swap_core", "SpellCore"),
             CreateToken<ResultTokenData>("spell_swap_result", "SpellResult"));
 
-        CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout);
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out SpellBookLoadout loadout);
         Assert.That(inventory.TryPlaceItem(0, inventoryLinked), Is.True);
         loadout.SetItems(new[] { spellLinked });
 
@@ -319,8 +346,8 @@ public sealed class BackPackUIScreenTests
         screen.NotifySlotEndDrag(inventorySlots[0]);
 
         AssertInventoryItem(inventory, 0, spellLinked, 2);
-        Assert.That(loadout.Items.Count, Is.EqualTo(1));
-        Assert.That(loadout.Items[0], Is.SameAs(inventoryLinked));
+        Assert.That(loadout.EquippedItems.Count, Is.EqualTo(1));
+        Assert.That(loadout.EquippedItems[0], Is.SameAs(inventoryLinked));
     }
 
     [Test]
@@ -333,7 +360,7 @@ public sealed class BackPackUIScreenTests
             CreateToken<CoreTokenData>("spell_swap_back_core", "SpellBackCore"),
             CreateToken<ResultTokenData>("spell_swap_back_result", "SpellBackResult"));
 
-        CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout);
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out SpellBookLoadout loadout);
         Assert.That(inventory.TryPlaceItem(0, inventoryLinked), Is.True);
         loadout.SetItems(new[] { spellLinked });
 
@@ -348,8 +375,8 @@ public sealed class BackPackUIScreenTests
         screen.NotifySlotEndDrag(spellBookSlots[0]);
 
         AssertInventoryItem(inventory, 0, spellLinked, 2);
-        Assert.That(loadout.Items.Count, Is.EqualTo(1));
-        Assert.That(loadout.Items[0], Is.SameAs(inventoryLinked));
+        Assert.That(loadout.EquippedItems.Count, Is.EqualTo(1));
+        Assert.That(loadout.EquippedItems[0], Is.SameAs(inventoryLinked));
     }
 
     [Test]
@@ -360,7 +387,7 @@ public sealed class BackPackUIScreenTests
             CreateToken<ResultTokenData>("inventory_no_swap_result", "InventoryNoSwapResult"));
         CoreTokenData spellSingle = CreateToken<CoreTokenData>("spell_single_no_swap", "SpellSingleNoSwap");
 
-        CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout);
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out SpellBookLoadout loadout);
         Assert.That(inventory.TryPlaceItem(0, inventoryLinked), Is.True);
         loadout.SetItems(new[] { spellSingle });
 
@@ -375,8 +402,8 @@ public sealed class BackPackUIScreenTests
         screen.NotifySlotEndDrag(inventorySlots[0]);
 
         AssertInventoryItem(inventory, 0, inventoryLinked, 2);
-        Assert.That(loadout.Items.Count, Is.EqualTo(1));
-        Assert.That(loadout.Items[0], Is.SameAs(spellSingle));
+        Assert.That(loadout.EquippedItems.Count, Is.EqualTo(1));
+        Assert.That(loadout.EquippedItems[0], Is.SameAs(spellSingle));
     }
 
     [Test]
@@ -591,7 +618,7 @@ public sealed class BackPackUIScreenTests
 
     private void CreatePlayerWithState(PlaceableTokenData inventoryItem, PlaceableTokenData spellBookItem)
     {
-        CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout);
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out SpellBookLoadout loadout);
         if (inventoryItem != null)
         {
             Assert.That(inventory.TryPlaceItem(0, inventoryItem), Is.True);
@@ -603,13 +630,23 @@ public sealed class BackPackUIScreenTests
         }
     }
 
-    private void CreatePlayer(out PlayerBulletTokenInventory inventory, out AttackFormulaLoadout loadout)
+    private void CreatePlayer(out PlayerBulletTokenInventory inventory, out SpellBookLoadout loadout)
     {
         GameObject player = CreateGameObject("Player");
         player.AddComponent<PlayerPlaneMovement>();
         inventory = player.AddComponent<PlayerBulletTokenInventory>();
         inventory.EnsureInitialized();
-        loadout = player.AddComponent<AttackFormulaLoadout>();
+        loadout = player.AddComponent<SpellBookLoadout>();
+    }
+
+    private SpellBookData CreateSpellBook(int slotCount)
+    {
+        SpellBookData spellBook = ScriptableObject.CreateInstance<SpellBookData>();
+        createdObjects.Add(spellBook);
+        spellBook.SpellBookId = $"test_book_{slotCount}";
+        spellBook.DisplayName = $"Test Book {slotCount}";
+        spellBook.SlotCount = slotCount;
+        return spellBook;
     }
 
     private RuntimeSaveService CreateSaveService()

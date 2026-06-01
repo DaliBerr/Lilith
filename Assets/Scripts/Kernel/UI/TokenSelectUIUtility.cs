@@ -46,5 +46,33 @@ namespace Kernel.UI
 
             tokenSelectScreen.SetCallbacks(onSelected, onCancelled);
         }
+
+        public static IEnumerator ShowRewardSelectModal(
+            UIManager uiManager,
+            string callerName,
+            Action<RunRewardOption> onSelected,
+            Action onCancelled = null)
+        {
+            if (uiManager == null)
+            {
+                GameDebug.LogWarning($"[{callerName}] Unable to show token select modal: UIManager is missing.");
+                yield break;
+            }
+
+            if (uiManager.GetTopModal() is TokenSelectUIScreen existingModal)
+            {
+                existingModal.SetRewardCallbacks(onSelected, onCancelled);
+                yield break;
+            }
+
+            yield return uiManager.ShowModalAndWait<TokenSelectUIScreen>();
+            if (uiManager.GetTopModal() is not TokenSelectUIScreen tokenSelectScreen)
+            {
+                GameDebug.LogWarning($"[{callerName}] Failed to resolve token select modal instance.");
+                yield break;
+            }
+
+            tokenSelectScreen.SetRewardCallbacks(onSelected, onCancelled);
+        }
     }
 }

@@ -62,10 +62,13 @@
     <Compile Include="Assets\Editor\Test\WaveManagerTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyDefinitionBinderTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyGeneratorTests.cs" />
+    <Compile Include="Assets\Editor\Test\SpellBookLoadoutTests.cs" />
+    <Compile Include="Assets\Editor\Test\SpellSystemBaselineTests.cs" />
     <Compile Include="Assets\Editor\Test\ResponsiveLayoutGroupFitterTests.cs" />
     <Compile Include="Assets\Editor\Test\MapRunFlowControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\Test\PlayerFollowCameraTests.cs" />
+    <Compile Include="Assets\Editor\Test\SpellProgramProjectileCompilerTests.cs" />
     <Compile Include="Assets\Editor\Test\GridPathfinderTests.cs" />
     <Compile Include="Assets\Editor\Test\ObjectiveArrowViewTests.cs" />
     <Compile Include="Assets\Editor\Test\GlobalStartupTests.cs" />
@@ -74,6 +77,7 @@
     <Compile Include="Assets\Editor\Test\EnemyBulletTokenDropperTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyAttackExtensionTests.cs" />
     <Compile Include="Assets\Editor\Test\Player2DMovementControllerTests.cs" />
+    <Compile Include="Assets\Editor\Test\UIButtonPressScaleFeedbackTests.cs" />
     <Compile Include="Assets\Editor\Test\ScriptableObjectOnValidateTests.cs" />
     <Compile Include="Assets\Editor\Test\BackPackInventoryTests.cs" />
     <Compile Include="Assets\Editor\Test\BulletTokenPickupTests.cs" />
@@ -88,7 +92,6 @@
     <Compile Include="Assets\Editor\Test\CharEnemyVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\AudioManagerTests.cs" />
     <Compile Include="Assets\Editor\Test\StorySequenceParserTests.cs" />
-    <Compile Include="Assets\Editor\Test\AttackFormulaCompilerTests.cs" />
     <Compile Include="Assets\Editor\Test\StartRoomBattleTeleporterTests.cs" />
     <Compile Include="Assets\Editor\Test\ArenaSeedMapGenerationTests.cs" />
     <Compile Include="Assets\Editor\Test\PermanentUpgradeServiceTests.cs" />
@@ -99,6 +102,7 @@
     <Compile Include="Assets\Editor\Test\PlayerVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\DialogUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthTests.cs" />
+    <Compile Include="Assets\Editor\Test\SpellProgramCompilerTests.cs" />
     <Compile Include="Assets\Editor\Test\QuestCatalogJsonUtilityTests.cs" />
     <Compile Include="Assets\Editor\Test\ProceduralRoomMapTests.cs" />
     <Compile Include="Assets\Editor\Test\BossPhaseControllerTests.cs" />

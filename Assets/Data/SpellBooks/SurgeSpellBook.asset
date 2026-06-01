@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5a294e144754a147a8184d192171cd6, type: 3}
+  m_Name: SurgeSpellBook
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.SpellBookData
+  spellBookId: surge_spellbook
+  displayName: Surge Spellbook
+  selectionDescription: 5 slots, fast cooldown, burst energy, triple activation fan, native damage x0.8, then recharge.
+  slotCount: 5
+  castCooldownSeconds: 0.18
+  castsPerActivation: 3
+  activationSpreadAngleStep: 8
+  energyCapacity: 3
+  energyRegenPerSecond: 0.75
+  energyCostPerActivation: 1
+  executorModifiers:
+  - target: 10
+    expression: "*=0.8"
+  fixedItemPlacement: 0
+  fixedCastItems: []

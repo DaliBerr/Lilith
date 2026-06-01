@@ -115,6 +115,23 @@ public sealed class TokenSelectModalTests
     }
 
     [Test]
+    public void SpellBookRewardLibrary_SampleChoices_ExcludesZeroWeightSpellBooks()
+    {
+        SpellBookData wideBook = CreateSpellBook("wide", "Wide Spellbook", 7, 0.4f, "7 slots");
+        SpellBookData quickBook = CreateSpellBook("quick", "Quick Spellbook", 4, 0.12f, "4 slots");
+        SpellBookRewardLibrary library = CreateRuntimeSpellBookLibrary(wideBook, quickBook);
+        library.SetSpellBookWeight(wideBook, 1f);
+        library.SetSpellBookWeight(quickBook, 0f);
+
+        for (int i = 0; i < 8; i++)
+        {
+            List<SpellBookData> sample = library.SampleChoices(new VocalithRandom(2000 + i), desiredCount: 1);
+            Assert.That(sample.Count, Is.EqualTo(1));
+            Assert.That(sample[0], Is.SameAs(wideBook));
+        }
+    }
+
+    [Test]
     public void SelectionView_RebindDoesNotDuplicateClickListeners()
     {
         BulletTokenSelectionView view = CreateSelectionViewInstance();
@@ -153,6 +170,130 @@ public sealed class TokenSelectModalTests
         Assert.That(view.TokenText.text, Is.EqualTo("FireBoom"));
         Assert.That(view.CatalogText.text, Is.EqualTo("核心"));
         AssertColorApproximately(view.RootImage.color, new Color(1f, 0.73f, 0.36f, 1f));
+    }
+
+    [Test]
+    public void SelectionView_BindsSpellProgramTokenTypes_ShowsCatalogLabels()
+    {
+        BulletTokenSelectionView view = CreateSelectionViewInstance();
+        TokenSelectUIScreen screen = CreateScreenRoot();
+        ModifierTokenData modifier = CreateToken<ModifierTokenData>("modifier_haste", "Haste", "Modify the next token");
+        MulticastTokenData multicast = CreateToken<MulticastTokenData>("dual_cast", "Dual", "Cast two projectiles");
+        TriggerTokenData trigger = CreateToken<TriggerTokenData>("on_hit", "Hit", "Run payload on hit");
+        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "End", PayloadBoundaryKind.End);
+
+        view.Bind(screen, modifier);
+        Assert.That(view.CatalogText.text, Is.EqualTo("修饰"));
+        AssertColorApproximately(view.RootImage.color, new Color(0.74f, 0.62f, 1f, 1f));
+
+        view.Bind(screen, multicast);
+        Assert.That(view.CatalogText.text, Is.EqualTo("多重"));
+        AssertColorApproximately(view.RootImage.color, new Color(1f, 0.84f, 0.42f, 1f));
+
+        view.Bind(screen, trigger);
+        Assert.That(view.CatalogText.text, Is.EqualTo("触发"));
+        AssertColorApproximately(view.RootImage.color, new Color(0.42f, 0.92f, 0.95f, 1f));
+
+        view.Bind(screen, payloadEnd);
+        Assert.That(view.CatalogText.text, Is.EqualTo("载荷"));
+        AssertColorApproximately(view.RootImage.color, new Color(1f, 0.62f, 0.84f, 1f));
+    }
+
+    [Test]
+    public void SelectionView_BindsSpellBookReward_ShowsSpellBookCatalog()
+    {
+        BulletTokenSelectionView view = CreateSelectionViewInstance();
+        TokenSelectUIScreen screen = CreateScreenRoot();
+        SpellBookData spellBook = CreateSpellBook(
+            "quick",
+            "Quick Spellbook",
+            4,
+            0.12f,
+            "4 槽，快速冷却，适合短链构筑。");
+
+        view.Bind(screen, RunRewardOption.FromSpellBook(spellBook));
+
+        Assert.That(view.BoundToken, Is.Null);
+        Assert.That(view.BoundReward.Kind, Is.EqualTo(RunRewardOptionKind.SpellBook));
+        Assert.That(view.BoundReward.SpellBook, Is.SameAs(spellBook));
+        Assert.That(view.TokenText.text, Is.EqualTo("Quick Spellbook"));
+        Assert.That(view.DescriptionText.text, Is.EqualTo("4 槽，快速冷却，适合短链构筑。"));
+        Assert.That(view.CatalogText.text, Is.EqualTo("法术书"));
+        AssertColorApproximately(view.RootImage.color, new Color(0.48f, 0.86f, 0.68f, 1f));
+    }
+
+    [Test]
+    public void TokenSelectUIScreen_BuildsCardsFromSpellProgramTokenLibrary()
+    {
+        PlaceableTokenData[] rewards =
+        {
+            CreateToken<CoreTokenData>("fire", "Fire", "Hot core"),
+            CreateToken<ValueTokenData>("value_2", "2", "Numeric value"),
+            CreateToken<ModifierTokenData>("modifier_haste", "Haste", "Modify the next token"),
+            CreateToken<MulticastTokenData>("dual_cast", "Dual", "Cast two projectiles"),
+            CreateToken<TriggerTokenData>("on_hit", "Hit", "Run payload on hit"),
+            CreateToken<PayloadBoundaryTokenData>("payload_start", "Start", "Start payload"),
+            CreatePayloadBoundaryToken("payload_end", "End", PayloadBoundaryKind.End),
+        };
+        BulletTokenLibrary library = CreateRuntimeLibrary(rewards);
+        TokenSelectUIScreen screen = CreateScreenRoot(library);
+        screen.SetChoiceCountOverride(rewards.Length);
+        screen.SetSelectionRandom(new VocalithRandom(12));
+
+        InvokeNonPublic(screen, "OnInit");
+
+        Assert.That(screen.RuntimeCards.Count, Is.EqualTo(rewards.Length));
+        AssertCardTypesInclude(
+            screen.RuntimeCards,
+            TokenType.Core,
+            TokenType.Value,
+            TokenType.Modifier,
+            TokenType.Multicast,
+            TokenType.Trigger,
+            TokenType.PayloadStart,
+            TokenType.PayloadEnd);
+    }
+
+    [Test]
+    public void TokenSelectUIScreen_BuildsCardsFromMixedRewardLibraries()
+    {
+        CoreTokenData fire = CreateToken<CoreTokenData>("fire", "Fire", "Hot core");
+        BulletTokenLibrary tokenLibrary = CreateRuntimeLibrary(fire);
+        SpellBookData wideBook = CreateSpellBook("wide", "Wide Spellbook", 7, 0.4f, "7 slots");
+        SpellBookData quickBook = CreateSpellBook("quick", "Quick Spellbook", 4, 0.12f, "4 slots");
+        SpellBookRewardLibrary spellBookLibrary = CreateRuntimeSpellBookLibrary(wideBook, quickBook);
+        TokenSelectUIScreen screen = CreateScreenRoot(tokenLibrary, spellBookLibrary: spellBookLibrary);
+        screen.SetChoiceCountOverride(3);
+        screen.SetSelectionRandom(new VocalithRandom(12));
+
+        InvokeNonPublic(screen, "OnInit");
+
+        Assert.That(screen.RuntimeCards.Count, Is.EqualTo(3));
+        Assert.That(ContainsRewardKind(screen.RuntimeCards, RunRewardOptionKind.Token), Is.True);
+        Assert.That(ContainsRewardKind(screen.RuntimeCards, RunRewardOptionKind.SpellBook), Is.True);
+        Assert.That(ContainsSpellBook(screen.RuntimeCards, wideBook), Is.True);
+        Assert.That(ContainsSpellBook(screen.RuntimeCards, quickBook), Is.True);
+    }
+
+    [Test]
+    public void TokenSelectUIScreen_RewardCallbackReceivesSpellBookReward()
+    {
+        SpellBookData quickBook = CreateSpellBook("quick", "Quick Spellbook", 4, 0.12f, "4 slots");
+        SpellBookRewardLibrary spellBookLibrary = CreateRuntimeSpellBookLibrary(quickBook);
+        TokenSelectUIScreen screen = CreateScreenRoot(spellBookLibrary: spellBookLibrary);
+        RunRewardOption selectedReward = RunRewardOption.None;
+        screen.SetRewardCallbacks(reward => selectedReward = reward);
+        screen.SetChoiceCountOverride(1);
+        screen.SetSelectionRandom(new VocalithRandom(3));
+
+        InvokeNonPublic(screen, "OnInit");
+        Assert.That(screen.RuntimeCards.Count, Is.EqualTo(1));
+
+        screen.RuntimeCards[0].SelectButton.onClick.Invoke();
+
+        Assert.That(selectedReward.Kind, Is.EqualTo(RunRewardOptionKind.SpellBook));
+        Assert.That(selectedReward.SpellBook, Is.SameAs(quickBook));
+        Assert.That(screen.RuntimeCards.Count, Is.EqualTo(0));
     }
 
     [Test]
@@ -308,7 +449,10 @@ public sealed class TokenSelectModalTests
         }
     }
 
-    private TokenSelectUIScreen CreateScreenRoot(BulletTokenLibrary library = null, BulletTokenSelectionView prefab = null)
+    private TokenSelectUIScreen CreateScreenRoot(
+        BulletTokenLibrary library = null,
+        BulletTokenSelectionView prefab = null,
+        SpellBookRewardLibrary spellBookLibrary = null)
     {
         GameObject root = CreateUiObject("Token Select Panel");
         root.AddComponent<Image>();
@@ -322,6 +466,11 @@ public sealed class TokenSelectModalTests
         if (library != null)
         {
             screen.SetBulletTokenLibrary(library);
+        }
+
+        if (spellBookLibrary != null)
+        {
+            screen.SetSpellBookRewardLibrary(spellBookLibrary);
         }
 
         prefab ??= GetSelectionPrefabTemplate();
@@ -364,6 +513,33 @@ public sealed class TokenSelectModalTests
         return library;
     }
 
+    private SpellBookRewardLibrary CreateRuntimeSpellBookLibrary(params SpellBookData[] spellBooks)
+    {
+        SpellBookRewardLibrary library = ScriptableObject.CreateInstance<SpellBookRewardLibrary>();
+        createdObjects.Add(library);
+        library.SetSpellBooks(spellBooks);
+        return library;
+    }
+
+    private SpellBookData CreateSpellBook(
+        string spellBookId,
+        string displayName,
+        int slotCount,
+        float castCooldownSeconds,
+        string selectionDescription)
+    {
+        SpellBookData spellBook = ScriptableObject.CreateInstance<SpellBookData>();
+        spellBook.SpellBookId = spellBookId;
+        spellBook.DisplayName = displayName;
+        spellBook.SlotCount = slotCount;
+        spellBook.CastCooldownSeconds = castCooldownSeconds;
+        spellBook.CastsPerActivation = 1;
+        spellBook.SelectionDescription = selectionDescription;
+        spellBook.name = spellBookId;
+        createdObjects.Add(spellBook);
+        return spellBook;
+    }
+
     private T CreateToken<T>(string tokenId, string displayText, string description) where T : BaseTokenData
     {
         T token = ScriptableObject.CreateInstance<T>();
@@ -372,6 +548,13 @@ public sealed class TokenSelectModalTests
         token.Description = description;
         token.name = tokenId;
         createdObjects.Add(token);
+        return token;
+    }
+
+    private PayloadBoundaryTokenData CreatePayloadBoundaryToken(string tokenId, string displayText, PayloadBoundaryKind kind)
+    {
+        PayloadBoundaryTokenData token = CreateToken<PayloadBoundaryTokenData>(tokenId, displayText, $"{displayText} payload");
+        token.BoundaryKind = kind;
         return token;
     }
 
@@ -384,6 +567,41 @@ public sealed class TokenSelectModalTests
         token.name = itemId;
         createdObjects.Add(token);
         return token;
+    }
+
+    private static void AssertCardTypesInclude(IReadOnlyList<BulletTokenSelectionView> cards, params TokenType[] expectedTypes)
+    {
+        List<TokenType> actualTypes = new();
+        for (int i = 0; i < cards.Count; i++)
+        {
+            Assert.That(cards[i].BoundToken, Is.Not.Null);
+            actualTypes.Add(ResolvePrimaryTokenType(cards[i].BoundToken));
+        }
+
+        for (int i = 0; i < expectedTypes.Length; i++)
+        {
+            Assert.That(actualTypes.Contains(expectedTypes[i]), Is.True, $"Expected Token Select sample to include {expectedTypes[i]}.");
+        }
+    }
+
+    private static TokenType ResolvePrimaryTokenType(PlaceableTokenData token)
+    {
+        if (token is BaseTokenData baseToken)
+        {
+            return baseToken.TokenType;
+        }
+
+        List<BaseTokenData> compileTokens = new();
+        token?.AppendCompileTokens(compileTokens);
+        for (int i = 0; i < compileTokens.Count; i++)
+        {
+            if (compileTokens[i] != null && compileTokens[i].TokenType != TokenType.None)
+            {
+                return compileTokens[i].TokenType;
+            }
+        }
+
+        return TokenType.None;
     }
 
     private static int GetRuntimeListenerCount(Button button)
@@ -418,6 +636,42 @@ public sealed class TokenSelectModalTests
             Assert.That(cards[i].BoundToken, Is.Not.Null);
             Assert.That(cards[i].TokenText.text, Is.Not.Empty);
         }
+    }
+
+    private static bool ContainsRewardKind(IReadOnlyList<BulletTokenSelectionView> cards, RunRewardOptionKind kind)
+    {
+        if (cards == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            if (cards[i] != null && cards[i].BoundReward.Kind == kind)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsSpellBook(IReadOnlyList<BulletTokenSelectionView> cards, SpellBookData spellBook)
+    {
+        if (cards == null || spellBook == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            if (cards[i] != null && cards[i].BoundReward.SpellBook == spellBook)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AssertColorApproximately(Color actual, Color expected, float tolerance = 0.0001f)

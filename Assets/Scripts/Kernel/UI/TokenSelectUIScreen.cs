@@ -28,13 +28,15 @@ namespace Kernel.UI
 
         [Header("Data")]
         [SerializeField] private BulletTokenLibrary bulletTokenLibrary;
+        [SerializeField] private SpellBookRewardLibrary spellBookRewardLibrary;
         [SerializeField] private BulletTokenSelectionView selectionPrefab;
 
         private readonly List<BulletTokenSelectionView> runtimeCards = new();
         private Action<PlaceableTokenData> selectedCallback;
+        private Action<RunRewardOption> selectedRewardCallback;
         private Action cancelledCallback;
         private SelectionOutcome pendingOutcome = SelectionOutcome.None;
-        private PlaceableTokenData pendingSelection;
+        private RunRewardOption pendingSelection;
         private VocalithRandom selectionRandom;
         private int choiceCountOverride = 3;
         private bool hasInitialized;
@@ -56,6 +58,8 @@ namespace Kernel.UI
         /// returns: BulletTokenLibrary 资产引用
         /// </summary>
         public BulletTokenLibrary BulletTokenLibrary => bulletTokenLibrary;
+
+        public SpellBookRewardLibrary SpellBookRewardLibrary => spellBookRewardLibrary;
 
         /// <summary>
         /// summary: 当前使用的卡片 prefab 引用。
@@ -96,8 +100,9 @@ namespace Kernel.UI
             ClearRuntimeCards();
             RemoveCurrentStatus();
             selectedCallback = null;
+            selectedRewardCallback = null;
             cancelledCallback = null;
-            pendingSelection = null;
+            pendingSelection = RunRewardOption.None;
             pendingOutcome = SelectionOutcome.None;
             hasResolvedOutcome = false;
         }
@@ -122,6 +127,14 @@ namespace Kernel.UI
         public void SetCallbacks(Action<PlaceableTokenData> onSelected, Action onCancelled = null)
         {
             selectedCallback = onSelected;
+            selectedRewardCallback = null;
+            cancelledCallback = onCancelled;
+        }
+
+        public void SetRewardCallbacks(Action<RunRewardOption> onSelected, Action onCancelled = null)
+        {
+            selectedCallback = null;
+            selectedRewardCallback = onSelected;
             cancelledCallback = onCancelled;
         }
 
@@ -133,6 +146,19 @@ namespace Kernel.UI
         public void SetBulletTokenLibrary(BulletTokenLibrary library)
         {
             bulletTokenLibrary = library;
+            RefreshIfInitialized();
+        }
+
+        public void SetSpellBookRewardLibrary(SpellBookRewardLibrary library)
+        {
+            spellBookRewardLibrary = library;
+            RefreshIfInitialized();
+        }
+
+        public void SetRewardLibraries(BulletTokenLibrary tokenLibrary, SpellBookRewardLibrary bookLibrary)
+        {
+            bulletTokenLibrary = tokenLibrary;
+            spellBookRewardLibrary = bookLibrary;
             RefreshIfInitialized();
         }
 
@@ -176,12 +202,17 @@ namespace Kernel.UI
         /// </summary>
         public void RequestSelection(PlaceableTokenData token)
         {
-            if (token == null || hasResolvedOutcome)
+            RequestSelection(RunRewardOption.FromToken(token));
+        }
+
+        public void RequestSelection(RunRewardOption reward)
+        {
+            if (!reward.IsValid || hasResolvedOutcome)
             {
                 return;
             }
 
-            pendingSelection = token;
+            pendingSelection = reward;
             pendingOutcome = SelectionOutcome.Selected;
             RequestClose();
         }
@@ -246,46 +277,104 @@ namespace Kernel.UI
                 return;
             }
 
-            if (bulletTokenLibrary == null)
+            if (bulletTokenLibrary == null && spellBookRewardLibrary == null)
             {
                 LogMissingConfiguration("BulletTokenLibrary is missing.");
                 return;
             }
 
-            IReadOnlyList<PlaceableTokenData> tokenPool = bulletTokenLibrary.GetTokens();
-            if (tokenPool == null || tokenPool.Count <= 0)
+            List<RunRewardOption> sampledRewards = SampleRewardChoices();
+            if (sampledRewards == null || sampledRewards.Count <= 0)
             {
-                LogMissingConfiguration("BulletTokenLibrary is empty.");
-                return;
-            }
-
-            VocalithRandom rng = selectionRandom ??= CreateDefaultRandom();
-            int desiredCount = choiceCountOverride > 0 ? choiceCountOverride : 3;
-            List<PlaceableTokenData> sampledTokens = bulletTokenLibrary.SampleChoices(rng, desiredCount);
-            if (sampledTokens == null || sampledTokens.Count <= 0)
-            {
-                LogMissingConfiguration("No valid tokens were sampled.");
+                LogMissingConfiguration("No valid rewards were sampled.");
                 return;
             }
 
             hasLoggedConfigurationWarning = false;
             pendingOutcome = SelectionOutcome.None;
-            pendingSelection = null;
+            pendingSelection = RunRewardOption.None;
             hasResolvedOutcome = false;
 
-            for (int i = 0; i < sampledTokens.Count; i++)
+            for (int i = 0; i < sampledRewards.Count; i++)
             {
-                PlaceableTokenData token = sampledTokens[i];
-                if (token == null)
+                RunRewardOption reward = sampledRewards[i];
+                if (!reward.IsValid)
                 {
                     continue;
                 }
 
                 BulletTokenSelectionView card = Instantiate(selectionPrefab, mainContent, false);
                 card.name = $"Token Choice {i + 1:D2}";
-                card.Bind(this, token);
+                card.Bind(this, reward);
                 runtimeCards.Add(card);
             }
+        }
+
+        private List<RunRewardOption> SampleRewardChoices()
+        {
+            VocalithRandom rng = selectionRandom ??= CreateDefaultRandom();
+            int desiredCount = choiceCountOverride > 0 ? choiceCountOverride : 3;
+            List<WeightedRewardCandidate> candidates = CollectWeightedRewardCandidates();
+            if (candidates.Count <= 0)
+            {
+                return new List<RunRewardOption>();
+            }
+
+            int targetCount = Mathf.Clamp(desiredCount, 0, candidates.Count);
+            if (targetCount <= 0)
+            {
+                return new List<RunRewardOption>();
+            }
+
+            List<RunRewardOption> sampledRewards = new(targetCount);
+            for (int i = 0; i < targetCount; i++)
+            {
+                int selectedIndex = PickWeightedIndex(candidates, rng);
+                sampledRewards.Add(candidates[selectedIndex].Reward);
+                candidates.RemoveAt(selectedIndex);
+            }
+
+            return sampledRewards;
+        }
+
+        private List<WeightedRewardCandidate> CollectWeightedRewardCandidates()
+        {
+            List<WeightedRewardCandidate> candidates = new();
+            HashSet<int> seenObjectIds = new();
+
+            if (bulletTokenLibrary != null)
+            {
+                IReadOnlyList<BulletTokenLibrary.TokenWeightEntry> tokenWeights = bulletTokenLibrary.TokenWeights;
+                for (int i = 0; i < tokenWeights.Count; i++)
+                {
+                    PlaceableTokenData token = tokenWeights[i] != null ? tokenWeights[i].Token : null;
+                    float drawWeight = tokenWeights[i] != null ? Mathf.Max(0f, tokenWeights[i].DrawWeight) : 0f;
+                    if (token == null || drawWeight <= 0f || !seenObjectIds.Add(token.GetInstanceID()))
+                    {
+                        continue;
+                    }
+
+                    candidates.Add(new WeightedRewardCandidate(RunRewardOption.FromToken(token), drawWeight));
+                }
+            }
+
+            if (spellBookRewardLibrary != null)
+            {
+                IReadOnlyList<SpellBookRewardLibrary.SpellBookWeightEntry> spellBookWeights = spellBookRewardLibrary.SpellBookWeights;
+                for (int i = 0; i < spellBookWeights.Count; i++)
+                {
+                    SpellBookData spellBook = spellBookWeights[i] != null ? spellBookWeights[i].SpellBook : null;
+                    float drawWeight = spellBookWeights[i] != null ? Mathf.Max(0f, spellBookWeights[i].DrawWeight) : 0f;
+                    if (spellBook == null || drawWeight <= 0f || !seenObjectIds.Add(spellBook.GetInstanceID()))
+                    {
+                        continue;
+                    }
+
+                    candidates.Add(new WeightedRewardCandidate(RunRewardOption.FromSpellBook(spellBook), drawWeight));
+                }
+            }
+
+            return candidates;
         }
 
         private void FinalizeOutcomeIfNeeded()
@@ -306,7 +395,11 @@ namespace Kernel.UI
             {
                 if (resolvedOutcome == SelectionOutcome.Selected)
                 {
-                    selectedCallback?.Invoke(pendingSelection);
+                    selectedRewardCallback?.Invoke(pendingSelection);
+                    if (selectedCallback != null && pendingSelection.Kind == RunRewardOptionKind.Token)
+                    {
+                        selectedCallback.Invoke(pendingSelection.Token);
+                    }
                 }
                 else
                 {
@@ -316,8 +409,9 @@ namespace Kernel.UI
             finally
             {
                 pendingOutcome = SelectionOutcome.None;
-                pendingSelection = null;
+                pendingSelection = RunRewardOption.None;
                 selectedCallback = null;
+                selectedRewardCallback = null;
                 cancelledCallback = null;
             }
         }
@@ -354,6 +448,39 @@ namespace Kernel.UI
             return new VocalithRandom(unchecked(GetInstanceID() ^ Environment.TickCount));
         }
 
+        private static int PickWeightedIndex(List<WeightedRewardCandidate> candidates, VocalithRandom random)
+        {
+            if (candidates == null || candidates.Count <= 0)
+            {
+                return 0;
+            }
+
+            VocalithRandom rng = random ?? new VocalithRandom();
+            double totalWeight = 0d;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                totalWeight += candidates[i].Weight;
+            }
+
+            if (totalWeight <= 0d)
+            {
+                return rng.Next(0, candidates.Count);
+            }
+
+            double roll = rng.NextDouble01() * totalWeight;
+            double cumulativeWeight = 0d;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                cumulativeWeight += candidates[i].Weight;
+                if (roll <= cumulativeWeight)
+                {
+                    return i;
+                }
+            }
+
+            return candidates.Count - 1;
+        }
+
         private static void DestroyChild(GameObject child)
         {
             if (child == null)
@@ -377,6 +504,18 @@ namespace Kernel.UI
             {
                 StatusController.RemoveStatus(currentStatus);
             }
+        }
+
+        private readonly struct WeightedRewardCandidate
+        {
+            public WeightedRewardCandidate(RunRewardOption reward, float weight)
+            {
+                Reward = reward;
+                Weight = weight;
+            }
+
+            public RunRewardOption Reward { get; }
+            public float Weight { get; }
         }
     }
 }

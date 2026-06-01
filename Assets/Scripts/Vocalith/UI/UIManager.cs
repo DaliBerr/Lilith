@@ -49,6 +49,7 @@ namespace Vocalith.UI
         private bool hasRootCanvasBaseReferenceResolution;
         private float currentUIScale = FallbackUIScale;
         private ResponsiveLayoutGroupFitter responsiveLayoutFitter;
+        private UIButtonPressScaleAutoInstaller buttonPressScaleInstaller;
 
         readonly Stack<UIScreen> screenStack = new();
         readonly Stack<UIScreen> modalStack = new();
@@ -66,6 +67,7 @@ namespace Vocalith.UI
             currentUIScale = ClampUIScale(defaultUIScale);
             CacheRootCanvasScaler();
             EnsureLayerRoots();
+            EnsureButtonPressScaleInstaller();
             ApplyRootCanvasScale();
             ApplyResponsiveLayouts();
             ResetGameCameraViewports();
@@ -90,6 +92,7 @@ namespace Vocalith.UI
         {
             EnsureEventSystem();
             EnsureLayerRoots();
+            EnsureButtonPressScaleInstaller();
             ApplyRootCanvasScale();
             ApplyResponsiveLayouts();
             ResetGameCameraViewports();
@@ -1025,6 +1028,26 @@ namespace Vocalith.UI
             }
 
             responsiveLayoutFitter.SetRoot(root);
+        }
+
+        private void EnsureButtonPressScaleInstaller()
+        {
+            if (rootCanvas == null)
+            {
+                buttonPressScaleInstaller = null;
+                return;
+            }
+
+            if (buttonPressScaleInstaller == null || buttonPressScaleInstaller.gameObject != rootCanvas.gameObject)
+            {
+                buttonPressScaleInstaller = rootCanvas.GetComponent<UIButtonPressScaleAutoInstaller>();
+                if (buttonPressScaleInstaller == null)
+                {
+                    buttonPressScaleInstaller = rootCanvas.gameObject.AddComponent<UIButtonPressScaleAutoInstaller>();
+                }
+            }
+
+            buttonPressScaleInstaller.SetRoot(rootCanvas);
         }
     }
 }

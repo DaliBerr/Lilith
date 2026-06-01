@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5a294e144754a147a8184d192171cd6, type: 3}
+  m_Name: ApprenticeSpellBook
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.SpellBookData
+  spellBookId: apprentice_spellbook
+  displayName: Apprentice Spellbook
+  selectionDescription: 5 slots, standard cooldown, no fixed cast items.
+  slotCount: 5
+  castCooldownSeconds: 0.25
+  castsPerActivation: 1
+  activationSpreadAngleStep: 0
+  energyCapacity: 0
+  energyRegenPerSecond: 0
+  energyCostPerActivation: 0
+  executorModifiers: []
+  fixedItemPlacement: 0
+  fixedCastItems: []

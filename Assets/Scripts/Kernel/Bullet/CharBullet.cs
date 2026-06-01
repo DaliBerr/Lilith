@@ -24,6 +24,8 @@ public sealed class CharBullet : MonoBehaviour
     private const float HomingTargetRefreshIntervalSeconds = 0.12f;
     private const float DefaultDelayedExplosionIndicatorWidth = 0.2f;
     private const float DefaultDelayedExplosionIndicatorHeightOffset = 0.08f;
+    private const int MaxPayloadDepth = 4;
+    private const int MaxPayloadDerivedProjectileCount = 64;
     private const string EnemyTagName = "Enemy_Object";
     private static readonly Color DefaultDelayedExplosionIndicatorColor = new(1f, 0.1f, 0.1f, 0.92f);
     // private const string AlternateEnemyTagName = "Enemy";
@@ -63,6 +65,7 @@ public sealed class CharBullet : MonoBehaviour
     [SerializeField, Min(0f)] private float impactRadiusMultiplier = 1f;
 
     private readonly HashSet<int> impactedTargetRoots = new();
+    private readonly List<SpellPayloadBlock> activePayloads = new();
     private Vector3 baseLocalScale = Vector3.one;
     private float baseImpactRadius = 0.5f;
     private float fontSizeDrivenImpactRadius;
@@ -76,7 +79,7 @@ public sealed class CharBullet : MonoBehaviour
     private bool hasPreviousImpactCheckCenter;
     private bool isActiveShot;
     private bool ignoreGameplayPauseStatus;
-    private CompiledAttack compiledAttack;
+    private SpellProjectileNode currentProjectileNode;
     private CharBullet spawnTemplate;
     private BulletTargetPolicy targetPolicy = BulletTargetPolicy.EnemiesOnly;
     private int remainingBounceCount;
@@ -151,7 +154,8 @@ public sealed class CharBullet : MonoBehaviour
     public float ImpactRadiusMultiplier => impactRadiusMultiplier;
     public float Damage => attackSpec.damage;
     public AttackSpec CurrentAttackSpec => attackSpec;
-    public CompiledAttack CurrentCompiledAttack => compiledAttack;
+    public SpellProjectileNode CurrentProjectileNode => currentProjectileNode;
+    public IReadOnlyList<SpellPayloadBlock> CurrentPayloads => activePayloads;
     public BulletTargetPolicy TargetPolicy => targetPolicy;
 
     private void Awake()
@@ -167,30 +171,43 @@ public sealed class CharBullet : MonoBehaviour
         ApplyScaleMultiplier();
     }
 
-    /// <summary>
-    /// summary: 初始化一次新的子弹发射，并额外注入编译后的高层攻击语义。
-    /// param: owner 发射者根节点，用于忽略自碰撞
-    /// param: spawnPosition 子弹出生世界坐标
-    /// param: shotDirection 本次发射方向
-    /// param: shotAttackSpec 本次发射使用的攻击配置
-    /// param: shotCompiledAttack 本次发射对应的编译结果
-    /// param: shotTargetPolicy 本次发射允许命中的目标策略
-    /// returns: 无
-    /// </summary>
     public void InitializeShot(
         Transform owner,
         Vector3 spawnPosition,
         Vector3 shotDirection,
         AttackSpec shotAttackSpec,
-        CompiledAttack shotCompiledAttack,
+        SpellProjectileNode shotProjectileNode,
         BulletTargetPolicy shotTargetPolicy = BulletTargetPolicy.EnemiesOnly)
+    {
+        InitializeShotCore(owner, spawnPosition, shotDirection, shotAttackSpec, shotProjectileNode, shotTargetPolicy);
+    }
+
+    private void InitializeShotCore(
+        Transform owner,
+        Vector3 spawnPosition,
+        Vector3 shotDirection,
+        AttackSpec shotAttackSpec,
+        SpellProjectileNode shotProjectileNode,
+        BulletTargetPolicy shotTargetPolicy)
     {
         TryCacheBindings(overwriteExisting: true);
         EnsureCompatiblePhysicsBindings(allowFallbackCreation: false);
         EnsureImpactColliderConfiguration();
-        AttackSpec resolvedAttackSpec = shotCompiledAttack != null ? shotCompiledAttack.AttackSpec : shotAttackSpec;
+        AttackSpec resolvedAttackSpec = shotProjectileNode != null ? shotProjectileNode.AttackSpec : shotAttackSpec;
         attackSpec = resolvedAttackSpec.GetSanitized();
-        compiledAttack = shotCompiledAttack;
+        currentProjectileNode = shotProjectileNode;
+        activePayloads.Clear();
+        if (shotProjectileNode != null)
+        {
+            for (int i = 0; i < shotProjectileNode.Payloads.Count; i++)
+            {
+                if (shotProjectileNode.Payloads[i] != null)
+                {
+                    activePayloads.Add(shotProjectileNode.Payloads[i]);
+                }
+            }
+        }
+
         spawnTemplate ??= this;
         targetPolicy = shotTargetPolicy;
         ownerRoot = owner;
@@ -216,7 +233,7 @@ public sealed class CharBullet : MonoBehaviour
         ApplyFacingDirection(shotDirection);
         IgnoreOwnerCollisions();
         ResetImpactCheckState();
-        ApplyCompiledAttackPresentation();
+        ApplyProjectilePresentation();
 
         // LogShotInitialized(spawnPosition, shotDirection, attackSpec.projectileSpeed);
         // LogSpawnOverlapIfNeeded();
@@ -1140,7 +1157,8 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldUseHomingBehavior()
     {
-        return attackSpec.behaviorType == AttackBehaviorType.Homing || compiledAttack?.BehaviorType == AttackBehaviorType.Homing;
+        return attackSpec.behaviorType == AttackBehaviorType.Homing ||
+               currentProjectileNode?.BehaviorType == AttackBehaviorType.Homing;
     }
 
     /// <summary>
@@ -1606,9 +1624,18 @@ public sealed class CharBullet : MonoBehaviour
         float directDamage = ResolveDirectDamage(primaryEnemy);
         bool shouldApplyHealing = ShouldApplyHealingOnImpact();
         bool appliedDirectEffect = TryApplyConfiguredDirectDamage(other, targetRoot, "Direct", directDamage, out Enemy damagedEnemy, out _);
-        if (appliedDirectEffect && !shouldApplyHealing)
+        if (appliedDirectEffect)
         {
-            TryApplyPostHitEffects(targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy);
+            if (shouldApplyHealing)
+            {
+                TryApplyHealingAreaAt(impactPoint, GetResultEffects().effectRadius, directDamage, targetRoot);
+            }
+            else
+            {
+                TryApplyPostHitEffects(targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy);
+            }
+
+            TryExecuteOnHitPayloads(impactPoint, directDamage, other, damagedEnemy != null ? damagedEnemy : primaryEnemy, targetRoot);
         }
 
         ApplyLifeCost(attackSpec.impactLifeCost);
@@ -1628,6 +1655,7 @@ public sealed class CharBullet : MonoBehaviour
         stopFurtherProcessing = false;
         if (!ShouldBounceOnEnvironment())
         {
+            TryExecuteOnHitPayloads(GetImpactPoint(other), Damage, null, null, null);
             ApplyLifeCost(attackSpec.impactLifeCost);
             stopFurtherProcessing = true;
             return true;
@@ -1910,7 +1938,7 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         TryApplyCoreEnemyEffects(damagedEnemy);
-        TryApplyResultEnemyEffects(damagedEnemy);
+        TryApplyResultEnemyEffects(damagedEnemy, impactPoint);
     }
 
     /// <summary>
@@ -1947,22 +1975,21 @@ public sealed class CharBullet : MonoBehaviour
     /// param: enemy 当前主命中的敌人
     /// returns: 无
     /// </summary>
-    private void TryApplyResultEnemyEffects(Enemy enemy)
+    private void TryApplyResultEnemyEffects(Enemy enemy, Vector3 impactPoint)
     {
         if (enemy == null || enemy.Equals(null) || !ShouldTriggerControl())
         {
             return;
         }
 
-        TryNotifyEnemyControlHit(enemy);
-
-        if (!enemy.TryGetComponent(out EnemyStatusEffectController statusController))
+        ResultEffectPayload resultEffects = GetResultEffects();
+        if (resultEffects.effectRadius > 0f)
         {
+            TryApplyControlAreaAt(impactPoint, resultEffects.effectRadius, resultEffects, null);
             return;
         }
 
-        ResultEffectPayload resultEffects = GetResultEffects();
-        statusController.RegisterControlHit(resultEffects.controlTriggerCount, resultEffects.controlDuration);
+        TryApplyControlToEnemy(enemy, resultEffects);
     }
 
     /// <summary>
@@ -2153,34 +2180,58 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private void TryEmitSplitProjectiles(Vector3 impactPoint, Transform targetRoot, float directDamage)
     {
-        if (!ShouldTriggerSplit() || compiledAttack == null)
+        if (!ShouldTriggerSplit())
         {
             return;
         }
 
         ResultEffectPayload resultEffects = GetResultEffects();
-        CharBullet template = spawnTemplate != null ? spawnTemplate : this;
-        CompiledAttack childAttack = compiledAttack.Clone();
-        AttackSpec childSpec = childAttack.AttackSpec;
-        childSpec.damage = Mathf.Max(0f, directDamage * resultEffects.splitDamageMultiplier);
-        childSpec.resultType = AttackResultType.DirectDamage;
-        childAttack.AttackSpec = childSpec.GetSanitized();
-        childAttack.ResultType = AttackResultType.DirectDamage;
-        childAttack.ResultEffects = default;
-        childAttack.HasExplosion = false;
-        childAttack.ExplosionRadius = 0f;
+        TryEmitSplitProjectiles(
+            impactPoint,
+            targetRoot,
+            directDamage,
+            resultEffects,
+            currentProjectileNode,
+            int.MaxValue);
+    }
 
-        for (int i = 0; i < resultEffects.splitProjectileCount; i++)
+    private int TryEmitSplitProjectiles(
+        Vector3 impactPoint,
+        Transform targetRoot,
+        float directDamage,
+        ResultEffectPayload resultEffects,
+        SpellProjectileNode splitProjectile,
+        int remainingBudget)
+    {
+        if (!resultEffects.HasSplit || remainingBudget <= 0)
+        {
+            return 0;
+        }
+
+        CharBullet template = spawnTemplate != null ? spawnTemplate : this;
+        SpellProjectileNode childProjectile = CreateSplitChildProjectile(
+            splitProjectile,
+            directDamage,
+            resultEffects);
+        if (childProjectile == null || !childProjectile.CanFire)
+        {
+            return 0;
+        }
+
+        int emittedCount = 0;
+        int childProjectileCount = Mathf.Max(1, childProjectile.ProjectileCount);
+        int requestedSplitCount = Mathf.Min(resultEffects.splitProjectileCount, remainingBudget / childProjectileCount);
+        for (int i = 0; i < requestedSplitCount && emittedCount < remainingBudget; i++)
         {
             Vector3 splitDirection = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, 360f), Vector3.up) * Vector3.forward;
             Vector3 spawnOffset = splitDirection * Mathf.Max(ResolveImpactRadius() + 0.05f, 0.1f);
             List<CharBullet> spawnedBullets = new();
-            AttackProjectileEmitter.Emit(
+            emittedCount += AttackProjectileEmitter.Emit(
                 template,
                 ownerRoot != null ? ownerRoot : transform,
                 impactPoint + spawnOffset,
                 splitDirection,
-                childAttack,
+                childProjectile,
                 targetPolicy,
                 null,
                 spawnedBullets);
@@ -2197,6 +2248,320 @@ public sealed class CharBullet : MonoBehaviour
                 spawnedBullet.SetIgnoreGameplayPauseStatus(ignoreGameplayPauseStatus);
             }
         }
+
+        return emittedCount;
+    }
+
+    private static SpellProjectileNode CreateSplitChildProjectile(
+        SpellProjectileNode splitProjectile,
+        float directDamage,
+        ResultEffectPayload resultEffects)
+    {
+        if (splitProjectile == null)
+        {
+            return null;
+        }
+
+        float childDamage = Mathf.Max(0f, directDamage * resultEffects.splitDamageMultiplier);
+        return SpellProjectileNode.CreateDirectDamageChild(splitProjectile, childDamage);
+    }
+
+    private void TryExecuteOnHitPayloads(
+        Vector3 impactPoint,
+        float baseDamage,
+        Collider payloadCollider,
+        Enemy payloadEnemy,
+        Transform targetRoot)
+    {
+        if (activePayloads.Count <= 0)
+        {
+            return;
+        }
+
+        float payloadBaseDamage = baseDamage > 0f ? baseDamage : Damage;
+        int remainingDerivedProjectiles = MaxPayloadDerivedProjectileCount;
+        for (int i = 0; i < activePayloads.Count; i++)
+        {
+            SpellPayloadBlock payload = activePayloads[i];
+            if (payload == null || payload.TriggerType != SpellTriggerType.OnHit || payload.InnerBlock == null)
+            {
+                continue;
+            }
+
+            SpellCastBlock innerBlock = payload.InnerBlock;
+            if (innerBlock.Depth > MaxPayloadDepth)
+            {
+                GameDebug.LogWarning("[CharBullet] Ignored trigger payload because it exceeds the maximum payload depth.");
+                continue;
+            }
+
+            int payloadEffectProjectileCount = TryApplyPayloadEffects(
+                innerBlock,
+                impactPoint,
+                payloadBaseDamage,
+                payloadCollider,
+                payloadEnemy,
+                targetRoot,
+                remainingDerivedProjectiles);
+            remainingDerivedProjectiles = Mathf.Max(0, remainingDerivedProjectiles - payloadEffectProjectileCount);
+            if (remainingDerivedProjectiles > 0)
+            {
+                remainingDerivedProjectiles -= TryEmitPayloadProjectiles(innerBlock, impactPoint, targetRoot, remainingDerivedProjectiles);
+            }
+        }
+    }
+
+    private int TryApplyPayloadEffects(
+        SpellCastBlock innerBlock,
+        Vector3 impactPoint,
+        float baseDamage,
+        Collider payloadCollider,
+        Enemy payloadEnemy,
+        Transform targetRoot,
+        int remainingProjectileBudget)
+    {
+        IReadOnlyList<SpellPayloadEffectNode> effects = innerBlock.PayloadEffects;
+        int emittedProjectiles = 0;
+        for (int i = 0; i < effects.Count; i++)
+        {
+            SpellPayloadEffectNode effect = effects[i];
+            if (effect == null)
+            {
+                continue;
+            }
+
+            ResultEffectPayload resultEffects = effect.ResultEffects;
+            if (effect.ResultType == AttackResultType.Explosion)
+            {
+                float explosionRadius = Mathf.Max(0f, resultEffects.explosionRadius);
+                float explosionDamage = Mathf.Max(0f, baseDamage * resultEffects.explosionDamageMultiplier);
+                if (explosionRadius > 0f && explosionDamage > 0f)
+                {
+                    TryApplyExplosionDamageImmediately(impactPoint, explosionRadius, explosionDamage);
+                }
+
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.StatusEffect)
+            {
+                TryApplyPayloadControlEffect(payloadEnemy, impactPoint, resultEffects);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Healing)
+            {
+                float healingAmount = Mathf.Max(0f, baseDamage * resultEffects.healingMultiplier);
+                TryApplyPayloadHealingEffect(payloadCollider, payloadEnemy, targetRoot, impactPoint, healingAmount, resultEffects.effectRadius);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Split)
+            {
+                int budgetForEffect = Mathf.Max(0, remainingProjectileBudget - emittedProjectiles);
+                emittedProjectiles += TryEmitSplitProjectiles(
+                    impactPoint,
+                    targetRoot,
+                    baseDamage,
+                    resultEffects,
+                    currentProjectileNode,
+                    budgetForEffect);
+            }
+        }
+
+        return emittedProjectiles;
+    }
+
+    private void TryApplyPayloadControlEffect(Enemy enemy, Vector3 impactPoint, ResultEffectPayload resultEffects)
+    {
+        if (!resultEffects.HasControl)
+        {
+            return;
+        }
+
+        if (resultEffects.effectRadius > 0f)
+        {
+            TryApplyControlAreaAt(impactPoint, resultEffects.effectRadius, resultEffects, null);
+            return;
+        }
+
+        TryApplyControlToEnemy(enemy, resultEffects);
+    }
+
+    private bool TryApplyControlToEnemy(Enemy enemy, ResultEffectPayload resultEffects)
+    {
+        if (enemy == null || enemy.Equals(null) || !resultEffects.HasControl)
+        {
+            return false;
+        }
+
+        TryNotifyEnemyControlHit(enemy);
+        if (enemy.TryGetComponent(out EnemyStatusEffectController statusController))
+        {
+            return statusController.RegisterControlHit(resultEffects.controlTriggerCount, resultEffects.controlDuration);
+        }
+
+        return false;
+    }
+
+    private int TryApplyControlAreaAt(Vector3 impactPoint, float controlRadius, ResultEffectPayload resultEffects, Transform excludedRoot)
+    {
+        if (controlRadius <= 0f || !resultEffects.HasControl || !ShouldDamageEnemies())
+        {
+            return 0;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(impactPoint, controlRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        HashSet<int> controlledRoots = new();
+        int controlledCount = 0;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            Enemy enemy = overlap.GetComponentInParent<Enemy>();
+            if (overlapRoot == null ||
+                (excludedRoot != null && overlapRoot == excludedRoot) ||
+                !controlledRoots.Add(overlapRoot.GetInstanceID()) ||
+                !IsEnemyImpactTarget(overlap, overlapRoot, enemy))
+            {
+                continue;
+            }
+
+            if (TryApplyControlToEnemy(enemy, resultEffects))
+            {
+                controlledCount++;
+            }
+        }
+
+        return controlledCount;
+    }
+
+    private void TryApplyPayloadHealingEffect(
+        Collider payloadCollider,
+        Enemy enemy,
+        Transform targetRoot,
+        Vector3 impactPoint,
+        float healingAmount,
+        float healingRadius)
+    {
+        if (healingAmount <= 0f)
+        {
+            return;
+        }
+
+        if (healingRadius > 0f)
+        {
+            TryApplyHealingAreaAt(impactPoint, healingRadius, healingAmount, null);
+            return;
+        }
+
+        if (payloadCollider == null || targetRoot == null)
+        {
+            return;
+        }
+
+        if (enemy != null && !enemy.Equals(null))
+        {
+            TryApplyHealingToEnemy(payloadCollider, targetRoot, "PayloadHealing", healingAmount, out _);
+        }
+
+        TryApplyHealingToPlayer(payloadCollider, targetRoot, "PayloadHealing", healingAmount, out _);
+    }
+
+    private int TryApplyHealingAreaAt(Vector3 impactPoint, float healingRadius, float healingAmount, Transform excludedRoot)
+    {
+        if (healingRadius <= 0f || healingAmount <= 0f)
+        {
+            return 0;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(impactPoint, healingRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        HashSet<int> healedRoots = new();
+        int healedCount = 0;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            if (overlapRoot == null ||
+                (excludedRoot != null && overlapRoot == excludedRoot) ||
+                !healedRoots.Add(overlapRoot.GetInstanceID()))
+            {
+                continue;
+            }
+
+            bool healed = false;
+            healed |= TryApplyHealingToEnemy(overlap, overlapRoot, "HealingArea", healingAmount, out _);
+            healed |= TryApplyHealingToPlayer(overlap, overlapRoot, "HealingArea", healingAmount, out _);
+            if (healed)
+            {
+                healedCount++;
+            }
+        }
+
+        return healedCount;
+    }
+
+    private int TryEmitPayloadProjectiles(SpellCastBlock innerBlock, Vector3 impactPoint, Transform targetRoot, int remainingBudget)
+    {
+        if (remainingBudget <= 0 || innerBlock.Projectiles.Count <= 0)
+        {
+            return 0;
+        }
+
+        CharBullet template = spawnTemplate != null ? spawnTemplate : this;
+        Transform payloadOwner = ownerRoot != null ? ownerRoot : transform;
+        Vector3 baseDirection = direction.sqrMagnitude > MinimumVectorSqrMagnitude ? direction.normalized : Vector3.forward;
+        int emittedCount = 0;
+        for (int i = 0; i < innerBlock.Projectiles.Count && emittedCount < remainingBudget; i++)
+        {
+            SpellProjectileNode projectile = innerBlock.Projectiles[i];
+            if (projectile == null || !projectile.CanFire)
+            {
+                continue;
+            }
+
+            Vector3 spawnOffset = baseDirection * Mathf.Max(ResolveImpactRadius() + 0.05f, 0.1f);
+            List<CharBullet> spawnedBullets = new();
+            emittedCount += AttackProjectileEmitter.Emit(
+                template,
+                payloadOwner,
+                impactPoint + spawnOffset,
+                baseDirection,
+                projectile,
+                targetPolicy,
+                null,
+                spawnedBullets);
+
+            for (int bulletIndex = 0; bulletIndex < spawnedBullets.Count; bulletIndex++)
+            {
+                CharBullet spawnedBullet = spawnedBullets[bulletIndex];
+                if (spawnedBullet == null)
+                {
+                    continue;
+                }
+
+                spawnedBullet.RegisterIgnoredTargetRoot(targetRoot);
+                spawnedBullet.SetIgnoreGameplayPauseStatus(ignoreGameplayPauseStatus);
+            }
+        }
+
+        return emittedCount;
     }
 
     /// <summary>
@@ -2263,7 +2628,8 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldBounceOnEnvironment()
     {
-        return attackSpec.behaviorType == AttackBehaviorType.Bounce || compiledAttack?.BehaviorType == AttackBehaviorType.Bounce;
+        return attackSpec.behaviorType == AttackBehaviorType.Bounce ||
+               currentProjectileNode?.BehaviorType == AttackBehaviorType.Bounce;
     }
 
     /// <summary>
@@ -2273,7 +2639,12 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private CoreEffectPayload GetCoreEffects()
     {
-        return compiledAttack != null ? compiledAttack.CoreEffects.GetSanitized() : default;
+        if (currentProjectileNode != null)
+        {
+            return currentProjectileNode.CoreEffects.GetSanitized();
+        }
+
+        return default;
     }
 
     /// <summary>
@@ -2283,7 +2654,12 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private ResultEffectPayload GetResultEffects()
     {
-        return compiledAttack != null ? compiledAttack.ResultEffects.GetSanitized() : default;
+        if (currentProjectileNode != null)
+        {
+            return currentProjectileNode.ResultEffects.GetSanitized();
+        }
+
+        return default;
     }
 
     /// <summary>
@@ -2293,9 +2669,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldTriggerSplit()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return compiledAttack.ResultType == AttackResultType.Split && compiledAttack.ResultEffects.HasSplit;
+            return currentProjectileNode.ResultType == AttackResultType.Split && currentProjectileNode.ResultEffects.HasSplit;
         }
 
         return attackSpec.resultType == AttackResultType.Split;
@@ -2308,9 +2684,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldTriggerControl()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return compiledAttack.ResultType == AttackResultType.StatusEffect && compiledAttack.ResultEffects.HasControl;
+            return currentProjectileNode.ResultType == AttackResultType.StatusEffect && currentProjectileNode.ResultEffects.HasControl;
         }
 
         return attackSpec.resultType == AttackResultType.StatusEffect;
@@ -2323,9 +2699,12 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldApplyHealingOnImpact()
     {
-        return compiledAttack != null
-            ? compiledAttack.ResultType == AttackResultType.Healing
-            : attackSpec.resultType == AttackResultType.Healing;
+        if (currentProjectileNode != null)
+        {
+            return currentProjectileNode.ResultType == AttackResultType.Healing;
+        }
+
+        return attackSpec.resultType == AttackResultType.Healing;
     }
 
     /// <summary>
@@ -2426,9 +2805,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldTriggerExplosion()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return compiledAttack.HasExplosion;
+            return currentProjectileNode.HasExplosion;
         }
 
         return attackSpec.resultType == AttackResultType.Explosion;
@@ -2441,9 +2820,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private float GetExplosionRadius()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return Mathf.Max(0f, compiledAttack.ExplosionRadius);
+            return Mathf.Max(0f, currentProjectileNode.ExplosionRadius);
         }
 
         return 0f;
@@ -2456,9 +2835,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private float GetExplosionDelaySeconds()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return Mathf.Max(0f, compiledAttack.ResultEffects.explosionDelaySeconds);
+            return Mathf.Max(0f, currentProjectileNode.ResultEffects.explosionDelaySeconds);
         }
 
         return 0f;
@@ -2622,39 +3001,46 @@ public sealed class CharBullet : MonoBehaviour
         impactCollider.radius = baseImpactRadius * scaleMultiplier * impactRadiusMultiplier;
     }
 
-    private void ApplyCompiledAttackPresentation()
+    private void ApplyProjectilePresentation()
     {
-        float resolvedScaleMultiplier = compiledAttack != null ? Mathf.Max(0f, compiledAttack.ScaleMultiplier) : scaleMultiplier;
-        float resolvedImpactRadiusMultiplier = compiledAttack != null ? Mathf.Max(0f, compiledAttack.ImpactRadiusMultiplier) : impactRadiusMultiplier;
+        SpellProjectileNode projectile = currentProjectileNode;
+        float resolvedScaleMultiplier = projectile != null
+            ? Mathf.Max(0f, projectile.ScaleMultiplier)
+            : scaleMultiplier;
+        float resolvedImpactRadiusMultiplier = projectile != null
+            ? Mathf.Max(0f, projectile.ImpactRadiusMultiplier)
+            : impactRadiusMultiplier;
 
         TrySetScaleMultiplier(resolvedScaleMultiplier);
         TrySetImpactRadiusMultiplier(resolvedImpactRadiusMultiplier);
 
-        if (compiledAttack == null)
+        if (projectile != null)
         {
+            if (!string.IsNullOrEmpty(projectile.DisplayText))
+            {
+                TrySetText(projectile.DisplayText);
+            }
+
+            if (projectile.HasTextColorOverride)
+            {
+                TrySetTextColor(projectile.TextColor);
+            }
+
+            if (projectile.HasFontSizeOverride)
+            {
+                float baseFontSize = GetCurrentGlyphSquareSize();
+                TrySetFontSize(projectile.ResolveFontSize(baseFontSize));
+            }
+
+            if (visualPresenter != null)
+            {
+                visualPresenter.ApplyCompiledAppearance(projectile, this);
+            }
+
             return;
         }
 
-        if (!string.IsNullOrEmpty(compiledAttack.DisplayText))
-        {
-            TrySetText(compiledAttack.DisplayText);
-        }
-
-        if (compiledAttack.HasTextColorOverride)
-        {
-            TrySetTextColor(compiledAttack.TextColor);
-        }
-
-        if (compiledAttack.HasFontSizeOverride)
-        {
-            float baseFontSize = GetCurrentGlyphSquareSize();
-            TrySetFontSize(compiledAttack.ResolveFontSize(baseFontSize));
-        }
-
-        if (visualPresenter != null)
-        {
-            visualPresenter.ApplyCompiledAppearance(compiledAttack, this);
-        }
+        visualPresenter?.RefreshPreview();
     }
 
     private void NotifyVisualPresenterPreview()

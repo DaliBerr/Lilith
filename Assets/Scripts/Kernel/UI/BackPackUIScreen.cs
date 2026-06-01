@@ -19,7 +19,7 @@ namespace Kernel.UI
     public sealed class BackPackUIScreen : GameUIScreen
     {
         private const int InventorySlotCount = PlayerBulletTokenInventory.Capacity;
-        private const int SpellBookSlotCount = 5;
+        private const int DefaultSpellBookSlotCount = 5;
 
         [Header("Layout")]
         [SerializeField] private RectTransform mainContent;
@@ -46,14 +46,14 @@ namespace Kernel.UI
         [SerializeField] private Vector2 linkedOutlinePadding = new(6f, 6f);
 
         private readonly List<BackPackGridSlotView> inventorySlots = new(InventorySlotCount);
-        private readonly List<BackPackGridSlotView> spellBookSlots = new(SpellBookSlotCount);
-        private readonly List<TokenCellOccupancy> spellBookCells = new(SpellBookSlotCount);
+        private readonly List<BackPackGridSlotView> spellBookSlots = new(DefaultSpellBookSlotCount);
+        private readonly List<TokenCellOccupancy> spellBookCells = new(DefaultSpellBookSlotCount);
         private readonly List<LinkedTokenOutlineView> inventoryLinkedOutlines = new();
         private readonly List<LinkedTokenOutlineView> spellBookLinkedOutlines = new();
 
         private PlayerPlaneMovement currentPlayer;
         private PlayerBulletTokenInventory currentInventory;
-        private AttackFormulaLoadout currentLoadout;
+        private SpellBookLoadout currentLoadout;
         private BackPackGridSlotView activeDragSource;
         private PlaceableTokenData activeDragItem;
         private int activeDragSourceAnchorIndex = -1;
@@ -143,6 +143,8 @@ namespace Kernel.UI
                 return;
             }
 
+            EnsureSpellBookCellsInitialized();
+            BindStaticSpellBookSlots();
             currentInventory.EnsureInitialized();
             PopulateSpellBookFromLoadout();
             RefreshInventorySlots();
@@ -456,7 +458,7 @@ namespace Kernel.UI
 
         private bool TryPlaceSpellBookItem(int targetAnchorIndex, PlaceableTokenData item, int anchorIndexToIgnore = -1)
         {
-            return BackPackTokenLayoutUtility.CanPlaceItem(spellBookCells, targetAnchorIndex, SpellBookSlotCount, item, anchorIndexToIgnore);
+            return BackPackTokenLayoutUtility.CanPlaceItem(spellBookCells, targetAnchorIndex, GetSpellBookSlotCount(), item, anchorIndexToIgnore);
         }
 
         private bool TryRemoveSpellBookItemAtCell(int index, out PlaceableTokenData item, out int anchorIndex)
@@ -526,7 +528,8 @@ namespace Kernel.UI
             conflictItem = null;
             conflictAnchorIndex = -1;
             int span = ResolveItemSpan(movingItem);
-            if (!IsPlacementInBounds(targetAnchorIndex, span, SpellBookSlotCount, SpellBookSlotCount))
+            int spellBookSlotCount = GetSpellBookSlotCount();
+            if (!IsPlacementInBounds(targetAnchorIndex, span, spellBookSlotCount, spellBookSlotCount))
             {
                 return false;
             }
@@ -1357,19 +1360,25 @@ namespace Kernel.UI
 
         private void EnsureSpellBookCellsInitialized()
         {
-            while (spellBookCells.Count < SpellBookSlotCount)
+            int spellBookSlotCount = GetSpellBookSlotCount();
+            while (spellBookCells.Count < spellBookSlotCount)
             {
                 spellBookCells.Add(TokenCellOccupancy.Empty);
             }
 
-            if (spellBookCells.Count > SpellBookSlotCount)
+            if (spellBookCells.Count > spellBookSlotCount)
             {
-                spellBookCells.RemoveRange(SpellBookSlotCount, spellBookCells.Count - SpellBookSlotCount);
+                spellBookCells.RemoveRange(spellBookSlotCount, spellBookCells.Count - spellBookSlotCount);
             }
         }
 
+        private int GetSpellBookSlotCount()
+        {
+            return currentLoadout != null ? Mathf.Max(1, currentLoadout.SlotCount) : DefaultSpellBookSlotCount;
+        }
+
         /// <summary>
-        /// summary: 绑定 prefab 中预放的 5 个 Spell Book 槽位，不在运行时额外创建这部分结构。
+        /// summary: 绑定 prefab 中预放的 Spell Book 槽位，并按当前法术书槽位数显示可用格。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -1381,6 +1390,8 @@ namespace Kernel.UI
                 return;
             }
 
+            int spellBookSlotCount = GetSpellBookSlotCount();
+            int staticSlotCount = 0;
             for (int i = 0; i < spellBook.childCount; i++)
             {
                 BackPackGridSlotView slotView = spellBook.GetChild(i).GetComponent<BackPackGridSlotView>();
@@ -1389,13 +1400,22 @@ namespace Kernel.UI
                     continue;
                 }
 
+                bool isAvailable = staticSlotCount < spellBookSlotCount;
+                slotView.gameObject.SetActive(isAvailable);
+                if (!isAvailable)
+                {
+                    staticSlotCount++;
+                    continue;
+                }
+
                 slotView.Initialize(this, BackPackSlotArea.SpellBook, spellBookSlots.Count);
                 spellBookSlots.Add(slotView);
+                staticSlotCount++;
             }
 
-            if (spellBookSlots.Count != SpellBookSlotCount)
+            if (spellBookSlots.Count < spellBookSlotCount)
             {
-                GameDebug.LogWarning($"[BackPackUIScreen] Spell Book expects {SpellBookSlotCount} static slots, but found {spellBookSlots.Count}.");
+                GameDebug.LogWarning($"[BackPackUIScreen] Spell Book expects {spellBookSlotCount} static slots, but found {spellBookSlots.Count}.");
             }
         }
 
@@ -1444,7 +1464,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 当玩家对象存在时，缓存其移动、库存与编译 loadout 组件，并同步库存刷新事件。
+        /// summary: 当玩家对象存在时，缓存其移动、库存与法术书 loadout 组件，并同步库存刷新事件。
         /// param: 无
         /// returns: 成功解析到玩家、库存和 loadout 时返回 true
         /// </summary>
@@ -1459,11 +1479,11 @@ namespace Kernel.UI
             }
 
             PlayerBulletTokenInventory inventory = currentPlayer.GetComponent<PlayerBulletTokenInventory>();
-            AttackFormulaLoadout loadout = currentPlayer.GetComponent<AttackFormulaLoadout>();
+            SpellBookLoadout loadout = currentPlayer.GetComponent<SpellBookLoadout>();
             if (inventory == null || loadout == null)
             {
                 ReleaseBindings();
-                GameDebug.LogWarning("[BackPackUIScreen] Player is missing PlayerBulletTokenInventory or AttackFormulaLoadout.");
+                GameDebug.LogWarning("[BackPackUIScreen] Player is missing PlayerBulletTokenInventory or SpellBookLoadout.");
                 return false;
             }
 
@@ -1513,17 +1533,17 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 用当前 loadout 的 item 顺序填充 Spell Book，并把超过 5 格的历史 item 尝试回填到背包库存。
+        /// summary: 用当前法术书 loadout 的装备 item 顺序填充 Spell Book，并把超过槽位上限的历史 item 尝试回填到背包库存。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void PopulateSpellBookFromLoadout()
         {
             EnsureSpellBookCellsInitialized();
-            int storedOverflowCount = BackPackTokenLayoutUtility.PopulateSpellBookCells(currentLoadout != null ? currentLoadout.Items : null, spellBookCells, currentInventory, out int droppedOverflowCount);
+            int storedOverflowCount = BackPackTokenLayoutUtility.PopulateSpellBookCells(currentLoadout != null ? currentLoadout.EquippedItems : null, spellBookCells, currentInventory, out int droppedOverflowCount);
             if (storedOverflowCount > 0)
             {
-                GameDebug.LogWarning($"[BackPackUIScreen] Returned {storedOverflowCount} overflow item(s) from Spell Book to inventory because they no longer fit the 5-slot width.");
+                GameDebug.LogWarning($"[BackPackUIScreen] Returned {storedOverflowCount} overflow item(s) from Spell Book to inventory because they no longer fit the {GetSpellBookSlotCount()}-slot width.");
             }
 
             if (droppedOverflowCount > 0)
@@ -1535,7 +1555,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 收集 Spell Book 当前的锚点 item，并在顺序发生变化时实时写回 AttackFormulaLoadout。
+        /// summary: 收集 Spell Book 当前的锚点 item，并在顺序发生变化时实时写回 SpellBookLoadout。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -1548,13 +1568,13 @@ namespace Kernel.UI
             }
 
             List<PlaceableTokenData> nextItems = BackPackTokenLayoutUtility.BuildCompactLoadoutItems(spellBookCells);
-            if (BackPackTokenLayoutUtility.SequenceEquals(currentLoadout.Items, nextItems))
+            if (BackPackTokenLayoutUtility.SequenceEquals(currentLoadout.EquippedItems, nextItems))
             {
                 return;
             }
 
             currentLoadout.SetItems(nextItems);
-            if (currentLoadout.TryGetCompiledAttack(out _))
+            if (currentLoadout.TryGetCompiledProgram(out _))
             {
                 TryMarkStoryFlag(TutorialQuestConstants.SpellBookCompiledFlagId);
             }
@@ -1811,8 +1831,8 @@ namespace Kernel.UI
                 return;
             }
 
-            CompiledAttack compiledAttack = currentLoadout != null ? currentLoadout.CurrentCompiledAttack : null;
-            attackPreviewController.RefreshPreview(currentPlayer, compiledAttack);
+            CompiledSpellProgram compiledProgram = currentLoadout != null ? currentLoadout.CurrentCompiledProgram : null;
+            attackPreviewController.RefreshPreview(currentPlayer, compiledProgram);
         }
 
         private void RefreshSpellDescription()
@@ -1831,9 +1851,10 @@ namespace Kernel.UI
             }
 
             spellDescriptionText.text = SpellDescriptionGenerator.GenerateRichText(
-                currentLoadout.CurrentCompiledAttack,
-                currentLoadout.Items,
-                ResolveSpellDescriptionCatalog());
+                currentLoadout.CurrentCompiledProgram,
+                currentLoadout.ExecutionItems,
+                ResolveSpellDescriptionCatalog(),
+                currentLoadout.SpellBook);
         }
 
         private void ClearSpellDescription()

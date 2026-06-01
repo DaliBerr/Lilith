@@ -169,12 +169,15 @@ namespace Kernel.Bullet
     public enum TokenType
     {
         None = 0,
-        Pre = 1,
         Core = 2,
         Behavior = 3,
         Value = 4,
         Result = 5,
-        Post = 6,
+        Modifier = 7,
+        Multicast = 8,
+        Trigger = 9,
+        PayloadStart = 10,
+        PayloadEnd = 11,
     }
 
     /// <summary>
@@ -189,6 +192,10 @@ namespace Kernel.Bullet
         MaxLifetime = 4,
         MaxTravelDistance = 5,
         ImpactRadiusMultiplier = 6,
+        ResultCount = 7,
+        ResultDuration = 8,
+        ResultMultiplier = 9,
+        Damage = 10,
     }
 
     /// <summary>

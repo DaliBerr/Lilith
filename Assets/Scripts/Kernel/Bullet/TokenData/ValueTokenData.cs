@@ -2,6 +2,14 @@ using UnityEngine;
 
 namespace Kernel.Bullet
 {
+    public enum SpellValueParameterKind
+    {
+        None = 0,
+        Count = 1,
+        Radius = 2,
+        Duration = 3,
+    }
+
     /// <summary>
     /// 描述一个数值词元提供的单个数值载荷。
     /// </summary>

@@ -363,21 +363,24 @@ namespace Kernel.MapGrid
         /// param name="selectionLibrary": 初始抽取阶段要展示的 token 库
         /// returns: 协程枚举器
         /// </summary>
-        private IEnumerator HandleInitialCombatSelectionCo(UIManager uiManager, BulletTokenLibrary selectionLibrary)
+        private IEnumerator HandleInitialCombatSelectionCo(
+            UIManager uiManager,
+            BulletTokenLibrary selectionLibrary,
+            SpellBookRewardLibrary spellBookSelectionLibrary)
         {
-            PlaceableTokenData selectedToken = null;
+            RunRewardOption selectedReward = RunRewardOption.None;
             bool hasResolvedSelection = false;
             bool selectionAccepted = false;
 
             try
             {
-                yield return TokenSelectUIUtility.ShowTokenSelectModal(
+                yield return TokenSelectUIUtility.ShowRewardSelectModal(
                     uiManager,
                     nameof(MapRunFlowController),
-                    token =>
+                    reward =>
                     {
-                        selectedToken = token;
-                        selectionAccepted = token != null;
+                        selectedReward = reward;
+                        selectionAccepted = reward.IsValid;
                         hasResolvedSelection = true;
                     },
                     () =>
@@ -392,16 +395,16 @@ namespace Kernel.MapGrid
                 }
                 else
                 {
-                    tokenSelectScreen.SetBulletTokenLibrary(selectionLibrary);
+                    tokenSelectScreen.SetRewardLibraries(selectionLibrary, spellBookSelectionLibrary);
 
                     while (!hasResolvedSelection)
                     {
                         yield return null;
                     }
 
-                    if (selectionAccepted && selectedToken != null && !TryAddSelectedTokenToInventory(selectedToken, out string inventoryError))
+                    if (selectionAccepted && selectedReward.IsValid && !TryApplySelectedReward(selectedReward, out string rewardError))
                     {
-                        GameDebug.LogError($"[MapRunFlowController] {inventoryError}");
+                        GameDebug.LogError($"[MapRunFlowController] {rewardError}");
                     }
                 }
 
@@ -423,21 +426,24 @@ namespace Kernel.MapGrid
         /// param name="selectionLibrary": 本次波后奖励要展示的 token 库
         /// returns: 协程枚举器
         /// </summary>
-        private IEnumerator HandleWaveRewardSelectionCo(UIManager uiManager, BulletTokenLibrary selectionLibrary)
+        private IEnumerator HandleWaveRewardSelectionCo(
+            UIManager uiManager,
+            BulletTokenLibrary selectionLibrary,
+            SpellBookRewardLibrary spellBookSelectionLibrary)
         {
-            PlaceableTokenData selectedToken = null;
+            RunRewardOption selectedReward = RunRewardOption.None;
             bool hasResolvedSelection = false;
             bool selectionAccepted = false;
 
             try
             {
-                yield return TokenSelectUIUtility.ShowTokenSelectModal(
+                yield return TokenSelectUIUtility.ShowRewardSelectModal(
                     uiManager,
                     nameof(MapRunFlowController),
-                    token =>
+                    reward =>
                     {
-                        selectedToken = token;
-                        selectionAccepted = token != null;
+                        selectedReward = reward;
+                        selectionAccepted = reward.IsValid;
                         hasResolvedSelection = true;
                     },
                     () =>
@@ -452,14 +458,14 @@ namespace Kernel.MapGrid
                     yield break;
                 }
 
-                tokenSelectScreen.SetBulletTokenLibrary(selectionLibrary);
+                tokenSelectScreen.SetRewardLibraries(selectionLibrary, spellBookSelectionLibrary);
 
                 while (!hasResolvedSelection)
                 {
                     yield return null;
                 }
 
-                if (selectionAccepted && selectedToken != null && !TryAddSelectedTokenToInventory(selectedToken, out string error))
+                if (selectionAccepted && selectedReward.IsValid && !TryApplySelectedReward(selectedReward, out string error))
                 {
                     GameDebug.LogError($"[MapRunFlowController] {error}");
                 }
@@ -720,8 +726,8 @@ namespace Kernel.MapGrid
             PlayerBulletTokenInventory inventory = targetPlayer.GetComponent<PlayerBulletTokenInventory>() ?? targetPlayer.GetComponentInChildren<PlayerBulletTokenInventory>(true);
             inventory?.ResetToStartingTokens();
 
-            AttackFormulaLoadout loadout = targetPlayer.GetComponent<AttackFormulaLoadout>() ?? targetPlayer.GetComponentInChildren<AttackFormulaLoadout>(true);
-            loadout?.ResetToStartingItems();
+            SpellBookLoadout spellBookLoadout = targetPlayer.GetComponent<SpellBookLoadout>() ?? targetPlayer.GetComponentInChildren<SpellBookLoadout>(true);
+            spellBookLoadout?.ResetToStartingItems();
         }
 
         private void ResetRunTracking()
@@ -826,14 +832,29 @@ namespace Kernel.MapGrid
         /// </summary>
         private bool TryResolveWaveRewardSelectionLibrary(CombatEntryTokenSelectionPlan selectionPlan, out BulletTokenLibrary selectionLibrary)
         {
+            if (TryResolveWaveRewardSelectionLibraries(selectionPlan, out selectionLibrary, out SpellBookRewardLibrary spellBookSelectionLibrary))
+            {
+                return selectionLibrary != null && spellBookSelectionLibrary == null;
+            }
+
             selectionLibrary = null;
+            return false;
+        }
+
+        private bool TryResolveWaveRewardSelectionLibraries(
+            CombatEntryTokenSelectionPlan selectionPlan,
+            out BulletTokenLibrary selectionLibrary,
+            out SpellBookRewardLibrary spellBookSelectionLibrary)
+        {
+            selectionLibrary = null;
+            spellBookSelectionLibrary = null;
             if (selectionPlan == null)
             {
                 return false;
             }
 
             tokenSelectionRandom ??= new Vocalith.Random(unchecked(GetInstanceID() ^ Environment.TickCount));
-            return selectionPlan.TrySampleLibrary(tokenSelectionRandom, out selectionLibrary);
+            return selectionPlan.TrySampleRewardLibrary(tokenSelectionRandom, out selectionLibrary, out spellBookSelectionLibrary);
         }
 
         /// <summary>
@@ -843,14 +864,28 @@ namespace Kernel.MapGrid
         /// </summary>
         private bool TryResolveInitialCombatSelectionLibrary(out BulletTokenLibrary selectionLibrary)
         {
+            if (TryResolveInitialCombatSelectionLibraries(out selectionLibrary, out SpellBookRewardLibrary spellBookSelectionLibrary))
+            {
+                return selectionLibrary != null && spellBookSelectionLibrary == null;
+            }
+
             selectionLibrary = null;
+            return false;
+        }
+
+        private bool TryResolveInitialCombatSelectionLibraries(
+            out BulletTokenLibrary selectionLibrary,
+            out SpellBookRewardLibrary spellBookSelectionLibrary)
+        {
+            selectionLibrary = null;
+            spellBookSelectionLibrary = null;
             if (initialCombatTokenSelectionPlan == null)
             {
                 return false;
             }
 
             tokenSelectionRandom ??= new Vocalith.Random(unchecked(GetInstanceID() ^ Environment.TickCount));
-            return initialCombatTokenSelectionPlan.TrySampleLibrary(tokenSelectionRandom, out selectionLibrary);
+            return initialCombatTokenSelectionPlan.TrySampleRewardLibrary(tokenSelectionRandom, out selectionLibrary, out spellBookSelectionLibrary);
         }
 
         /// <summary>
@@ -868,12 +903,17 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            if (TryResolveInitialCombatSelectionLibrary(out BulletTokenLibrary initialSelectionLibrary))
+            if (TryResolveInitialCombatSelectionLibraries(
+                out BulletTokenLibrary initialSelectionLibrary,
+                out SpellBookRewardLibrary initialSpellBookSelectionLibrary))
             {
                 UIManager uiManager = UIManager.Instance;
                 if (uiManager != null)
                 {
-                    tokenSelectionRoutine = StartCoroutine(HandleInitialCombatSelectionCo(uiManager, initialSelectionLibrary));
+                    tokenSelectionRoutine = StartCoroutine(HandleInitialCombatSelectionCo(
+                        uiManager,
+                        initialSelectionLibrary,
+                        initialSpellBookSelectionLibrary));
                     error = null;
                     return true;
                 }
@@ -888,6 +928,20 @@ namespace Kernel.MapGrid
 
             AbortCombatEntry();
             return false;
+        }
+
+        private bool TryApplySelectedReward(RunRewardOption selectedReward, out string error)
+        {
+            switch (selectedReward.Kind)
+            {
+                case RunRewardOptionKind.Token:
+                    return TryAddSelectedTokenToInventory(selectedReward.Token, out error);
+                case RunRewardOptionKind.SpellBook:
+                    return TryEquipSelectedSpellBook(selectedReward.SpellBook, out error);
+                default:
+                    error = "Selected reward is missing.";
+                    return false;
+            }
         }
 
         /// <summary>
@@ -927,6 +981,31 @@ namespace Kernel.MapGrid
             return true;
         }
 
+        private bool TryEquipSelectedSpellBook(SpellBookData selectedSpellBook, out string error)
+        {
+            error = null;
+            if (!TryResolveReferences(out error))
+            {
+                return false;
+            }
+
+            if (selectedSpellBook == null)
+            {
+                error = "Selected spell book is missing.";
+                return false;
+            }
+
+            SpellBookLoadout spellBookLoadout = targetPlayer.GetComponent<SpellBookLoadout>() ?? targetPlayer.GetComponentInChildren<SpellBookLoadout>(true);
+            if (spellBookLoadout == null)
+            {
+                error = "SpellBookLoadout is missing.";
+                return false;
+            }
+
+            spellBookLoadout.SetSpellBook(selectedSpellBook);
+            return true;
+        }
+
         private void HandleWaveRewardSelectionRequested(int waveIndex, WaveDefinition completedWave, CombatEntryTokenSelectionPlan selectionPlan)
         {
             if (!isActiveAndEnabled || currentState != RunFlowState.InCombat)
@@ -941,7 +1020,10 @@ namespace Kernel.MapGrid
                 return;
             }
 
-            if (!TryResolveWaveRewardSelectionLibrary(selectionPlan, out BulletTokenLibrary selectionLibrary))
+            if (!TryResolveWaveRewardSelectionLibraries(
+                selectionPlan,
+                out BulletTokenLibrary selectionLibrary,
+                out SpellBookRewardLibrary spellBookSelectionLibrary))
             {
                 waveManager?.TryContinueAfterWaveRewardSelection();
                 return;
@@ -955,7 +1037,7 @@ namespace Kernel.MapGrid
                 return;
             }
 
-            tokenSelectionRoutine = StartCoroutine(HandleWaveRewardSelectionCo(uiManager, selectionLibrary));
+            tokenSelectionRoutine = StartCoroutine(HandleWaveRewardSelectionCo(uiManager, selectionLibrary, spellBookSelectionLibrary));
         }
 
         private bool IsTrackedPlayerHealth(PlayerHealth playerHealth)

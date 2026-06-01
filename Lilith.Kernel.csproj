@@ -73,6 +73,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\ObjectiveArrowView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\LinkedTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackTokenLayoutUtility.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\SpellValueParameterUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDelayedGroundBombCaster.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTokenPickup.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
@@ -82,16 +83,19 @@
     <Compile Include="Assets\Scripts\Kernel\UI\LinkedTokenOutlineView.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\UIInputRouter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualLibrary.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\MulticastTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\BossPhaseController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\SpellDescriptionCatalogData.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PopUpUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackProjectileEmitter.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomGraphGenerator.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\TriggerTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyBulletTokenDropper.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\GridPathfinder.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBulletVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\DialogUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ValueTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\SpellProgramCompiler.cs" />
     <Compile Include="Assets\Scripts\Kernel\Upgrade\PermanentUpgradeService.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyRangedTokenAttacker.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarControllerBase.cs" />
@@ -100,9 +104,9 @@
     <Compile Include="Assets\Scripts\Kernel\UI\GameUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\ProceduralRoomMapDebugController.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\SpellProjectileCompiler.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Bullet\CompiledAttack.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomTemplateData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\RuntimeSaveService.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
@@ -118,7 +122,6 @@
     <Compile Include="Assets\Scripts\Kernel\Player\Player2DIsometricCamera.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDiedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyResultVisualFeedback.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PreTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Cell\CellData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackSpec.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\TokenSelectUIUtility.cs" />
@@ -127,14 +130,15 @@
     <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarController.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\TilemapRoomPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewRig.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaCompiler.cs" />
     <Compile Include="Assets\Scripts\Kernel\Display\LilithDisplaySettings.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StorySequenceParser.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\LoadingUIScreen.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\RunRewardOption.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StoryTextPageUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\RunRewardCollectedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterEndedEvent.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ModifierTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyStatusEffectController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenModifierExpressionUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\WorldHeightUtility.cs" />
@@ -142,7 +146,6 @@
     <Compile Include="Assets\Scripts\Kernel\UI\UpdateUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\CoreTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\StatusController.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PostTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealth.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PickupTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerDiedEvent.cs" />
@@ -153,14 +156,15 @@
     <Compile Include="Assets\Scripts\Kernel\Camera\GameplayBillboard.cs" />
     <Compile Include="Assets\Scripts\Kernel\Upgrade\PermanentUpgradeModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\RemnantPickupTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\SpellBookLoadout.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\MapRunFlowController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerRemnantWallet.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\SavePathUtility.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Bullet\AttackFormulaLoadout.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerBulletTokenInventory.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerPlaneMovement.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BookPermanentUpgradeTrigger.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackUIScreen.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\SpellBookData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\CombatEntryTokenSelectionPlan.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\HintModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackGridSlotView.cs" />
@@ -179,6 +183,8 @@
     <Compile Include="Assets\Scripts\Kernel\MapGridAuthoring.cs" />
     <Compile Include="Assets\Scripts\Kernel\Quest\QuestCatalogModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveDefinition.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\AttackCompilation.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\SpellProgram.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharGlyphPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackPreviewDummyEnemy.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BulletTokenSelectionSampler.cs" />
@@ -194,6 +200,8 @@
     <Compile Include="Assets\Scripts\Kernel\Input\InputActionManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PlaceableTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\StatusSaveData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PayloadBoundaryTokenData.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\SpellBookRewardLibrary.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\DelayedExplosionEffectRuntime.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -798,6 +806,22 @@
     </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe">
       <HintPath>Library\PackageCache\com.unity.collections@aea9d3bd5e19\Unity.Collections.Tests\System.Runtime.CompilerServices.Unsafe\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Metadata">
+      <HintPath>Assets\Plugins\Roslyn\System.Reflection.Metadata.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>Assets\Plugins\Roslyn\System.Collections.Immutable.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="netstandard">

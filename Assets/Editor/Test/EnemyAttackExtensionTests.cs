@@ -56,13 +56,117 @@ public sealed class EnemyAttackExtensionTests
 
         bool didFire = (bool)InvokePrivateMethod(attacker, "TryPerformAttack", 0f);
         CharBullet emittedBullet = FindSpawnedBullet(bulletPrefab);
-        createdObjects.Add(emittedBullet.gameObject);
+        if (emittedBullet != null)
+        {
+            createdObjects.Add(emittedBullet.gameObject);
+        }
 
         Assert.That(didFire, Is.True);
         Assert.That(emittedBullet, Is.Not.Null);
         Assert.That(emittedBullet.TargetPolicy, Is.EqualTo(BulletTargetPolicy.PlayerOnly));
-        Assert.That(emittedBullet.CurrentCompiledAttack, Is.Not.Null);
-        Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.damage, Is.EqualTo(3f));
+        Assert.That(emittedBullet.CurrentProjectileNode, Is.Not.Null);
+        Assert.That(emittedBullet.CurrentAttackSpec.damage, Is.EqualTo(3f));
+    }
+
+    [Test]
+    public void TryPerformAttack_RangedTokenAttacker_UsesSpellBookExecutionItems()
+    {
+        GameObject playerObject = CreateGameObject("Player");
+        playerObject.transform.position = new Vector3(0f, 0f, 8f);
+        PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
+        SetPrivateField(playerHealth, "maxHealth", 10f);
+        SetPrivateField(playerHealth, "currentHealth", 10f);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
+
+        GameObject enemyObject = CreateGameObject("Enemy");
+        enemyObject.transform.position = Vector3.zero;
+        BaseCharEnemyNorm1 enemy = enemyObject.AddComponent<BaseCharEnemyNorm1>();
+        EnemyRangedTokenAttacker attacker = enemyObject.AddComponent<EnemyRangedTokenAttacker>();
+        SetEnemyHealth(enemy, 10f);
+
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        CoreTokenData fixedCore = CreateCoreToken("spell_book_fire", "Fire", AttackCoreType.Fire);
+        BehaviorTokenData bounce = CreateBehaviorToken("spell_book_bounce", "Bounce", AttackBehaviorType.Bounce, true, 1, 0f);
+        ValueTokenData valueThree = CreateValueToken("spell_book_three", "Three", 3f);
+        SpellBookData spellBook = CreateSpellBook("enemy_apprentice_book", 2);
+        spellBook.SetFixedCastItems(new PlaceableTokenData[] { fixedCore });
+
+        EnemyDefinition definition = CreateDefinition(EnemyMovementKind.None, EnemyAttackKind.RangedBulletToken, runtimePrefab: null);
+        SetPrivateField(definition, "rangedBulletAttack", new EnemyDefinition.RangedBulletAttackDefinition
+        {
+            bulletPrefab = bulletPrefab,
+            spellBook = spellBook,
+            formulaItems = new List<PlaceableTokenData> { bounce, valueThree },
+            targetPolicy = BulletTargetPolicy.PlayerOnly,
+        });
+
+        enemy.TryBindDefinition(definition);
+        enemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 0f, 16f, 0f, 0f));
+        Assert.That(attacker.TrySetTarget(playerObject.transform), Is.True);
+        InvokePrivateMethod(attacker, "Awake");
+
+        bool didFire = (bool)InvokePrivateMethod(attacker, "TryPerformAttack", 0f);
+        CharBullet emittedBullet = FindSpawnedBullet(bulletPrefab);
+        if (emittedBullet != null)
+        {
+            createdObjects.Add(emittedBullet.gameObject);
+        }
+
+        Assert.That(didFire, Is.True);
+        Assert.That(emittedBullet, Is.Not.Null);
+        Assert.That(emittedBullet.CurrentProjectileNode, Is.Not.Null);
+        Assert.That(emittedBullet.CurrentProjectileNode.CoreType, Is.EqualTo(AttackCoreType.Fire));
+        Assert.That(emittedBullet.CurrentProjectileNode.BehaviorType, Is.EqualTo(AttackBehaviorType.Bounce));
+        Assert.That(emittedBullet.CurrentAttackSpec.bounceCount, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void TryPerformAttack_RangedTokenAttacker_UsesSpellBookActivationTraits()
+    {
+        GameObject playerObject = CreateGameObject("Player");
+        playerObject.transform.position = new Vector3(0f, 0f, 32f);
+        PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
+        SetPrivateField(playerHealth, "maxHealth", 10f);
+        SetPrivateField(playerHealth, "currentHealth", 10f);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
+
+        GameObject enemyObject = CreateGameObject("Enemy");
+        enemyObject.transform.position = Vector3.zero;
+        BaseCharEnemyNorm1 enemy = enemyObject.AddComponent<BaseCharEnemyNorm1>();
+        EnemyRangedTokenAttacker attacker = enemyObject.AddComponent<EnemyRangedTokenAttacker>();
+        SetEnemyHealth(enemy, 10f);
+
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        CoreTokenData fixedCore = CreateCoreToken("spell_book_fire", "Fire", AttackCoreType.Fire);
+        SpellBookData spellBook = CreateSpellBook("enemy_wide_book", 2);
+        spellBook.CastsPerActivation = 2;
+        spellBook.ActivationSpreadAngleStep = 12f;
+        spellBook.SetFixedCastItems(new PlaceableTokenData[] { fixedCore });
+
+        EnemyDefinition definition = CreateDefinition(EnemyMovementKind.None, EnemyAttackKind.RangedBulletToken, runtimePrefab: null);
+        SetPrivateField(definition, "rangedBulletAttack", new EnemyDefinition.RangedBulletAttackDefinition
+        {
+            bulletPrefab = bulletPrefab,
+            spellBook = spellBook,
+            targetPolicy = BulletTargetPolicy.PlayerOnly,
+        });
+
+        enemy.TryBindDefinition(definition);
+        enemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 0f, 64f, 0f, 0f));
+        Assert.That(attacker.TrySetTarget(playerObject.transform), Is.True);
+        InvokePrivateMethod(attacker, "Awake");
+
+        bool didFire = (bool)InvokePrivateMethod(attacker, "TryPerformAttack", 0f);
+        List<CharBullet> emittedBullets = FindSpawnedBullets(bulletPrefab);
+        for (int i = 0; i < emittedBullets.Count; i++)
+        {
+            createdObjects.Add(emittedBullets[i].gameObject);
+        }
+
+        Assert.That(didFire, Is.True);
+        Assert.That(emittedBullets.Count, Is.EqualTo(2));
+        AssertDirection(emittedBullets[0].Direction, Quaternion.AngleAxis(-6f, Vector3.up) * Vector3.forward);
+        AssertDirection(emittedBullets[1].Direction, Quaternion.AngleAxis(6f, Vector3.up) * Vector3.forward);
     }
 
     [Test]
@@ -105,8 +209,9 @@ public sealed class EnemyAttackExtensionTests
 
         Assert.That(didFire, Is.True);
         Assert.That(emittedBullet, Is.Not.Null);
-        Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.maxTravelDistance, Is.GreaterThanOrEqualTo(288f));
-        // Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.maxLifetime, Is.GreaterThanOrEqualTo(2.88f).Within(0.001f));
+        Assert.That(emittedBullet.CurrentProjectileNode, Is.Not.Null);
+        Assert.That(emittedBullet.CurrentAttackSpec.maxTravelDistance, Is.GreaterThanOrEqualTo(288f));
+        // Assert.That(emittedBullet.CurrentAttackSpec.maxLifetime, Is.GreaterThanOrEqualTo(2.88f).Within(0.001f));
     }
 
     [Test]
@@ -151,10 +256,14 @@ public sealed class EnemyAttackExtensionTests
 
         Assert.That(didFire, Is.True);
         Assert.That(emittedBullet, Is.Not.Null);
-        Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.damage, Is.EqualTo(10f));
-        Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.projectileSpeed, Is.EqualTo(180f).Within(0.001f));
-        Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.maxTravelDistance, Is.GreaterThanOrEqualTo(360f));
-        // Assert.That(emittedBullet.CurrentCompiledAttack.AttackSpec.maxLifetime, Is.GreaterThanOrEqualTo(2f).Within(0.001f));
+        Assert.That(emittedBullet.CurrentProjectileNode, Is.Not.Null);
+        Assert.That(emittedBullet.CurrentAttackSpec.damage, Is.EqualTo(10f));
+        Assert.That(emittedBullet.CurrentAttackSpec.projectileSpeed, Is.EqualTo(180f).Within(0.001f));
+        Assert.That(emittedBullet.CurrentAttackSpec.maxTravelDistance, Is.GreaterThanOrEqualTo(360f));
+        // Assert.That(emittedBullet.CurrentAttackSpec.maxLifetime, Is.GreaterThanOrEqualTo(2f).Within(0.001f));
+
+        CompiledSpellProgram cachedProgram = GetPrivateField<CompiledSpellProgram>(attacker, "compiledProgramCache");
+        Assert.That(cachedProgram.PrimaryCastBlock.Projectiles[0].AttackSpec.projectileSpeed, Is.EqualTo(120f).Within(0.001f));
     }
 
     [Test]
@@ -457,6 +566,46 @@ public sealed class EnemyAttackExtensionTests
         return token;
     }
 
+    private BehaviorTokenData CreateBehaviorToken(
+        string tokenId,
+        string displayText,
+        AttackBehaviorType behaviorType,
+        bool acceptsNumericValue,
+        int defaultProjectileCount,
+        float spreadAngleStep)
+    {
+        BehaviorTokenData token = ScriptableObject.CreateInstance<BehaviorTokenData>();
+        token.TokenId = tokenId;
+        token.DisplayText = displayText;
+        token.BehaviorType = behaviorType;
+        token.AcceptsNumericValue = acceptsNumericValue;
+        token.DefaultProjectileCount = defaultProjectileCount;
+        token.SpreadAngleStep = spreadAngleStep;
+        createdObjects.Add(token);
+        return token;
+    }
+
+    private ValueTokenData CreateValueToken(string tokenId, string displayText, float numericValue)
+    {
+        ValueTokenData token = ScriptableObject.CreateInstance<ValueTokenData>();
+        token.TokenId = tokenId;
+        token.DisplayText = displayText;
+        token.NumericValue = numericValue;
+        createdObjects.Add(token);
+        return token;
+    }
+
+    private SpellBookData CreateSpellBook(string spellBookId, int slotCount)
+    {
+        SpellBookData spellBook = ScriptableObject.CreateInstance<SpellBookData>();
+        spellBook.SpellBookId = spellBookId;
+        spellBook.DisplayName = spellBookId;
+        spellBook.SlotCount = slotCount;
+        spellBook.CastsPerActivation = 1;
+        createdObjects.Add(spellBook);
+        return spellBook;
+    }
+
     private EnemyDefinition CreateDefinition(
         EnemyMovementKind movementKind,
         EnemyAttackKind attackKind,
@@ -537,6 +686,29 @@ public sealed class EnemyAttackExtensionTests
         }
 
         return null;
+    }
+
+    private static List<CharBullet> FindSpawnedBullets(CharBullet bulletPrefab)
+    {
+        CharBullet[] bullets = Object.FindObjectsByType<CharBullet>(FindObjectsSortMode.None);
+        List<CharBullet> spawnedBullets = new();
+        foreach (CharBullet bullet in bullets)
+        {
+            if (bullet != null && bullet != bulletPrefab)
+            {
+                spawnedBullets.Add(bullet);
+            }
+        }
+
+        spawnedBullets.Sort((left, right) => left.Direction.x.CompareTo(right.Direction.x));
+        return spawnedBullets;
+    }
+
+    private static void AssertDirection(Vector3 actual, Vector3 expected)
+    {
+        Assert.That(actual.x, Is.EqualTo(expected.x).Within(0.0001f));
+        Assert.That(actual.y, Is.EqualTo(expected.y).Within(0.0001f));
+        Assert.That(actual.z, Is.EqualTo(expected.z).Within(0.0001f));
     }
 
     private static object InvokePrivateMethod(object target, string methodName, params object[] args)

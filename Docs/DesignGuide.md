@@ -503,9 +503,19 @@ Token 地址写法示例：
 | `Accepts Numeric Value` | 是否读取数值词 |
 | `Default Explosion Radius` | 默认爆炸半径 |
 | `Explosion Damage Multiplier` | 爆炸伤害倍率 |
+| `Default Effect Radius` | 非爆炸结果的范围半径，目前用于 Healing 范围治疗 |
 | `Default Trigger Count` | 分裂数量 / 控制触发次数等 |
 | `Effect Duration` | 延迟、控制、状态持续时间 |
 | `Child Damage Multiplier` | 分裂子弹伤害倍率 |
+
+当前常见值词落点：
+
+| 结果词 | 值词含义 |
+| --- | --- |
+| `Explosion` | Radius 或 Duration，取决于资产的 `Value Parameter Kind` |
+| `Split` | Count，控制分裂子弹数量 |
+| `Control` | Count 或 Duration，取决于资产的 `Value Parameter Kind` |
+| `Healing` | Radius，控制治疗范围；半径为 0 时仍是单体治疗 |
 
 ### Linked Token
 
@@ -540,6 +550,27 @@ Token 地址写法示例：
 当前进入起始房间传送门后的初始选择使用：
 
 `Assets/Data/BulletTokens/SelectionPlans/StartRoomCombatEntryTokenSelectionPlan.asset`
+
+### Spell Book
+
+路径：
+
+`Assets/Data/SpellBooks`
+
+法术书是玩家可替换的执行器，不只是背包槽位容器。它决定可装备 token 数量、开火冷却、每次激活轮数、扇形角、可选能量门槛、常驻 token 和不占槽的执行器原生 modifier。
+
+当前可奖励法术书：
+
+| 资产 | 定位 |
+| --- | --- |
+| `ApprenticeSpellBook` | 默认书，5 槽，普通冷却，无常驻 token |
+| `WideSpellBook` | 7 槽慢冷却，固定前置 `BlockAmplifyModifier`，每次 2 轮 10 度扇形 |
+| `QuickSpellBook` | 4 槽快冷却，固定前置 `HasteModifier`，原生伤害 `*=0.85` |
+| `TriggerSpellBook` | 6 槽，固定后置 OnHit Explosion payload，原生结果倍率 `*=1.25` |
+| `SurgeSpellBook` | 5 槽爆发书，每次 3 轮 8 度扇形，使用能量容量 / 消耗 / 恢复门槛，原生伤害 `*=0.8` |
+| `BindingSpellBook` | 5 槽中速控制书，固定后置 OnHit Control payload，原生结果数量 `=1`、结果时长 `*=1.5` |
+
+`SpellBookReward_Lib.asset` 是 Run 内法术书奖励库；`Plan2` 会把它作为后段波后奖励来源之一。新增法术书时，至少要确认它能出现在奖励库、描述能说清槽位 / 冷却 / 常驻 token / executor modifier，且不会和玩家装备槽位形成第二套真源。
 
 ## 战斗地图数值
 
@@ -602,4 +633,3 @@ JSON 最容易出错的地方：
 | 删除已有 ID | 存档、任务、引用可能找不到 |
 | 大幅提高敌人数值 | 可能导致流程无法完成 |
 | 改 prefab 引用 | 可能导致生成失败 |
-

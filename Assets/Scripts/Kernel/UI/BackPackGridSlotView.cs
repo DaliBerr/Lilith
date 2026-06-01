@@ -28,6 +28,12 @@ namespace Kernel.UI
         ChainTail = 4,
     }
 
+    public enum BackPackSlotTypeColorDrawMode
+    {
+        FullBackground = 0,
+        BorderOnly = 1,
+    }
+
     /// <summary>
     /// 背包单槽位视图，负责显示当前格上的视觉 token 并把拖拽事件转发给 BackPackUIScreen。
     /// </summary>
@@ -38,6 +44,8 @@ namespace Kernel.UI
         [SerializeField] private Image background;
         [SerializeField] private TMP_Text tokenText;
         [SerializeField] private CanvasGroup canvasGroup;
+        [SerializeField] private BackPackSlotTypeColorDrawMode typeColorDrawMode = BackPackSlotTypeColorDrawMode.FullBackground;
+        [SerializeField] private Image typeColorBorder;
 
         [Header("State Colors")]
         [SerializeField] private Color inventoryIdleColor = new(1f, 1f, 1f, 0.35f);
@@ -52,6 +60,10 @@ namespace Kernel.UI
         [SerializeField] private Color behaviorTypeTint = new(0.66f, 0.82f, 1f, 1f);
         [SerializeField] private Color resultTypeTint = new(1f, 0.68f, 0.68f, 1f);
         [SerializeField] private Color valueTypeTint = new(0.68f, 0.93f, 0.68f, 1f);
+        [SerializeField] private Color modifierTypeTint = new(0.8f, 0.7f, 1f, 1f);
+        [SerializeField] private Color multicastTypeTint = new(1f, 0.88f, 0.55f, 1f);
+        [SerializeField] private Color triggerTypeTint = new(0.58f, 0.94f, 0.96f, 1f);
+        [SerializeField] private Color payloadTypeTint = new(1f, 0.74f, 0.88f, 1f);
         [SerializeField] private Color fallbackTypeTint = new(1f, 1f, 1f, 1f);
 
         private BackPackUIScreen owner;
@@ -240,6 +252,7 @@ namespace Kernel.UI
         {
             rectTransform ??= transform as RectTransform;
             background ??= transform.Find("Background")?.GetComponent<Image>();
+            typeColorBorder ??= transform.Find("Type Border")?.GetComponent<Image>();
             tokenText ??= transform.Find("Text")?.GetComponent<TMP_Text>();
             if (canvasGroup == null)
             {
@@ -253,6 +266,11 @@ namespace Kernel.UI
             if (tokenText != null)
             {
                 tokenText.raycastTarget = false;
+            }
+
+            if (typeColorBorder != null)
+            {
+                typeColorBorder.raycastTarget = false;
             }
         }
 
@@ -280,7 +298,16 @@ namespace Kernel.UI
         {
             if (background != null)
             {
-                background.color = isDragging ? dragHighlightColor : ResolveIdleColor();
+                background.color = isDragging
+                    ? dragHighlightColor
+                    : typeColorDrawMode == BackPackSlotTypeColorDrawMode.BorderOnly
+                        ? ResolveBaseIdleColor()
+                        : ResolveIdleColor();
+            }
+
+            if (typeColorBorder != null)
+            {
+                typeColorBorder.color = ResolveTypeBorderColor();
             }
 
             if (canvasGroup != null)
@@ -340,16 +367,30 @@ namespace Kernel.UI
 
         private Color ResolveIdleColor()
         {
+            return MultiplyColor(ResolveBaseIdleColor(), ResolveTypeTint(ResolveDisplayTokenType()));
+        }
+
+        private Color ResolveBaseIdleColor()
+        {
             Color baseColor = area == BackPackSlotArea.SpellBook ? spellBookIdleColor : inventoryIdleColor;
-            Color chainColor = ChainRole switch
+            return ChainRole switch
             {
                 BackPackChainCellRole.ChainHead => MultiplyColor(baseColor, chainHeadTint),
                 BackPackChainCellRole.ChainBody => MultiplyColor(baseColor, chainBodyTint),
                 BackPackChainCellRole.ChainTail => MultiplyColor(baseColor, chainTailTint),
                 _ => baseColor,
             };
+        }
 
-            return MultiplyColor(chainColor, ResolveTypeTint(ResolveDisplayTokenType()));
+        private Color ResolveTypeBorderColor()
+        {
+            if (typeColorDrawMode != BackPackSlotTypeColorDrawMode.BorderOnly || isDragging || !occupancy.IsOccupied)
+            {
+                return Color.clear;
+            }
+
+            TokenType tokenType = ResolveDisplayTokenType();
+            return tokenType != TokenType.None ? ResolveTypeTint(tokenType) : Color.clear;
         }
 
         /// <summary>
@@ -408,6 +449,11 @@ namespace Kernel.UI
                 TokenType.Behavior => behaviorTypeTint,
                 TokenType.Result => resultTypeTint,
                 TokenType.Value => valueTypeTint,
+                TokenType.Modifier => modifierTypeTint,
+                TokenType.Multicast => multicastTypeTint,
+                TokenType.Trigger => triggerTypeTint,
+                TokenType.PayloadStart => payloadTypeTint,
+                TokenType.PayloadEnd => payloadTypeTint,
                 _ => fallbackTypeTint,
             };
         }

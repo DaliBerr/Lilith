@@ -55,6 +55,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Log\GameDebug.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizedTMPText.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScreen.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\UI\UIButtonPressScaleFeedback.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Audio\AudioManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\ResponsiveLayoutGroupFitter.cs" />
@@ -70,6 +71,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Log\Log.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\UI\UIButtonPressScaleAutoInstaller.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UI.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\Events.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\SerializedFieldConverter.cs" />
@@ -686,6 +688,22 @@
     </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe">
       <HintPath>Library\PackageCache\com.unity.collections@aea9d3bd5e19\Unity.Collections.Tests\System.Runtime.CompilerServices.Unsafe\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Metadata">
+      <HintPath>Assets\Plugins\Roslyn\System.Reflection.Metadata.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>Assets\Plugins\Roslyn\System.Collections.Immutable.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="netstandard">

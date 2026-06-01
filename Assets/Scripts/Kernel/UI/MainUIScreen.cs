@@ -58,7 +58,7 @@ namespace Kernel.UI
         private readonly Dictionary<string, QuestEntryView> runtimeQuestEntries = new(System.StringComparer.Ordinal);
         private readonly Dictionary<string, Coroutine> questEntryFadeCoroutines = new(System.StringComparer.Ordinal);
         private PlayerPlaneMovement currentPlayer;
-        private AttackFormulaLoadout currentLoadout;
+        private SpellBookLoadout currentLoadout;
         private bool hasLoggedMissingSpellTemplate;
         private RectTransform spellLinkedOutlineLayer;
         private System.IDisposable playerHealthChangedSubscription;
@@ -310,7 +310,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 解析场景中的玩家与 AttackFormulaLoadout，并维护 HUD 订阅的事件绑定。
+        /// summary: 解析场景中的玩家与 SpellBookLoadout，并维护 HUD 订阅的事件绑定。
         /// param: 无
         /// returns: 成功拿到可观察的 loadout 时返回 true
         /// </summary>
@@ -323,7 +323,7 @@ namespace Kernel.UI
                 return false;
             }
 
-            AttackFormulaLoadout resolvedLoadout = resolvedPlayer.GetComponent<AttackFormulaLoadout>();
+            SpellBookLoadout resolvedLoadout = resolvedPlayer.GetComponent<SpellBookLoadout>();
             if (resolvedLoadout == null)
             {
                 ReleaseLoadoutBinding();
@@ -376,7 +376,7 @@ namespace Kernel.UI
                 return;
             }
 
-            IReadOnlyList<PlaceableTokenData> items = currentLoadout.Items;
+            IReadOnlyList<PlaceableTokenData> items = currentLoadout.ExecutionItems;
             if (items == null)
             {
                 return;

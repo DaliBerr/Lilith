@@ -35,7 +35,8 @@ namespace Kernel.UI
         private readonly List<BackPackPreviewDummyEnemy> previewDummies = new();
 
         private PlayerPlaneMovement currentPlayer;
-        private CompiledAttack currentCompiledAttack;
+        private CompiledSpellProgram currentSpellProgram;
+        private SpellProjectileNode currentPrimaryProjectile;
         private CharBullet currentBulletPrefab;
         private RenderTexture previewTexture;
         private BackPackAttackPreviewRig previewRig;
@@ -84,15 +85,16 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 基于当前玩家使用的真实子弹 prefab 与已编译攻击，刷新一次 Left Panel 预览。
+        /// summary: 基于当前玩家使用的真实子弹 prefab 与已编译法术程序，刷新一次 Left Panel 预览。
         /// param: player 当前背包界面绑定的玩家对象
-        /// param: compiledAttack 当前 Spell Book 对应的编译结果
+        /// param: spellProgram 当前 Spell Book 对应的编译程序
         /// returns: 无
         /// </summary>
-        public void RefreshPreview(PlayerPlaneMovement player, CompiledAttack compiledAttack)
+        public void RefreshPreview(PlayerPlaneMovement player, CompiledSpellProgram spellProgram)
         {
             currentPlayer = player;
-            currentCompiledAttack = compiledAttack;
+            currentSpellProgram = spellProgram;
+            currentPrimaryProjectile = ResolvePrimaryProjectile(spellProgram);
             currentBulletPrefab = player != null ? player.BulletPrefab : null;
             nextPreviewLoopTime = float.PositiveInfinity;
 
@@ -143,7 +145,8 @@ namespace Kernel.UI
         {
             nextPreviewLoopTime = float.PositiveInfinity;
             currentPlayer = null;
-            currentCompiledAttack = null;
+            currentSpellProgram = null;
+            currentPrimaryProjectile = null;
             currentBulletPrefab = null;
 
             ClearActivePreviewBullets();
@@ -159,8 +162,8 @@ namespace Kernel.UI
         {
             return currentPlayer != null &&
                    currentBulletPrefab != null &&
-                   currentCompiledAttack != null &&
-                   currentCompiledAttack.CanFire &&
+                   currentSpellProgram != null &&
+                   currentSpellProgram.CanCast &&
                    previewRig != null &&
                    previewCamera != null &&
                     previewDummy != null &&
@@ -210,7 +213,7 @@ namespace Kernel.UI
                 ownerRoot,
                 spawnPosition,
                 shotDirection,
-                currentCompiledAttack,
+                currentSpellProgram,
                 previewRig.ProjectileRoot,
                 activePreviewBullets);
 
@@ -470,11 +473,12 @@ namespace Kernel.UI
 
         private void PreparePreviewSurface()
         {
-            int targetLayer = currentCompiledAttack != null
-                ? ResolvePreviewTargetLayer(currentCompiledAttack.AttackSpec.impactMask)
+            bool hasAttackSpec = TryResolvePreviewAttackSpec(out AttackSpec attackSpec);
+            int targetLayer = hasAttackSpec
+                ? ResolvePreviewTargetLayer(attackSpec.impactMask)
                 : 0;
-            float previewHealth = currentCompiledAttack != null
-                ? Mathf.Max(100f, currentCompiledAttack.AttackSpec.damage * 4f)
+            float previewHealth = hasAttackSpec
+                ? Mathf.Max(100f, attackSpec.damage * 4f)
                 : 100f;
 
             for (int i = 0; i < previewDummies.Count; i++)
@@ -505,12 +509,13 @@ namespace Kernel.UI
 
         private void HandlePreviewDummyDamaged(BackPackPreviewDummyEnemy dummy)
         {
-            if (dummy == null || currentCompiledAttack == null || !currentCompiledAttack.HasExplosion || hasShownExplosionThisCycle)
+            float explosionRadius = ResolvePreviewExplosionRadius(currentSpellProgram);
+            if (dummy == null || explosionRadius <= 0f || hasShownExplosionThisCycle)
             {
                 return;
             }
 
-            ShowExplosionHint(dummy, Mathf.Max(0f, currentCompiledAttack.ExplosionRadius));
+            ShowExplosionHint(dummy, explosionRadius);
             hasShownExplosionThisCycle = true;
         }
 
@@ -603,15 +608,21 @@ namespace Kernel.UI
                 return false;
             }
 
-            if (currentCompiledAttack == null)
+            if (currentSpellProgram == null)
             {
-                statusMessage = "Preview unavailable: no compiled attack.";
+                statusMessage = "Preview unavailable: no compiled spell program.";
                 return false;
             }
 
-            if (!currentCompiledAttack.CanFire)
+            if (!currentSpellProgram.CanCast)
             {
-                statusMessage = BuildCompileMessage(currentCompiledAttack);
+                statusMessage = BuildCompileMessage(currentSpellProgram);
+                return false;
+            }
+
+            if (currentPrimaryProjectile == null || !currentPrimaryProjectile.CanFire)
+            {
+                statusMessage = "Preview unavailable: spell program has no executable primary projectile.";
                 return false;
             }
 
@@ -619,30 +630,93 @@ namespace Kernel.UI
             return true;
         }
 
-        private static string BuildCompileMessage(CompiledAttack compiledAttack)
+        private static SpellProjectileNode ResolvePrimaryProjectile(CompiledSpellProgram spellProgram)
         {
-            if (compiledAttack == null)
+            if (spellProgram == null)
             {
-                return "Preview unavailable: formula failed to compile.";
+                return null;
             }
 
-            for (int i = 0; i < compiledAttack.Messages.Count; i++)
+            if (spellProgram.TryGetPrimaryProjectile(out SpellProjectileNode primaryProjectile))
             {
-                if (compiledAttack.Messages[i].severity == AttackCompileMessageSeverity.Error)
+                return primaryProjectile;
+            }
+
+            SpellCastBlock block = spellProgram.PrimaryCastBlock;
+            if (block == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < block.Projectiles.Count; i++)
+            {
+                SpellProjectileNode projectile = block.Projectiles[i];
+                if (projectile != null && projectile.CanFire)
                 {
-                    return compiledAttack.Messages[i].message;
+                    return projectile;
                 }
             }
 
-            for (int i = 0; i < compiledAttack.Messages.Count; i++)
+            return null;
+        }
+
+        private bool TryResolvePreviewAttackSpec(out AttackSpec attackSpec)
+        {
+            attackSpec = AttackSpec.CreateDefault();
+            if (currentPrimaryProjectile == null)
             {
-                if (compiledAttack.Messages[i].severity == AttackCompileMessageSeverity.Warning)
+                return false;
+            }
+
+            attackSpec = currentPrimaryProjectile.AttackSpec.GetSanitized();
+            return true;
+        }
+
+        private static float ResolvePreviewExplosionRadius(CompiledSpellProgram spellProgram)
+        {
+            SpellCastBlock block = spellProgram != null ? spellProgram.PrimaryCastBlock : null;
+            if (block == null)
+            {
+                return 0f;
+            }
+
+            float radius = 0f;
+            for (int i = 0; i < block.Projectiles.Count; i++)
+            {
+                SpellProjectileNode projectile = block.Projectiles[i];
+                if (projectile != null && projectile.HasExplosion)
                 {
-                    return compiledAttack.Messages[i].message;
+                    radius = Mathf.Max(radius, projectile.ExplosionRadius);
                 }
             }
 
-            return "Preview unavailable: formula cannot fire.";
+            return radius;
+        }
+
+        private static string BuildCompileMessage(CompiledSpellProgram spellProgram)
+        {
+            if (spellProgram == null)
+            {
+                return "Preview unavailable: spell program failed to compile.";
+            }
+
+            for (int i = 0; i < spellProgram.Messages.Count; i++)
+            {
+                if (spellProgram.Messages[i].severity == AttackCompileMessageSeverity.Error)
+                {
+                    return spellProgram.Messages[i].message;
+                }
+            }
+
+            for (int i = 0; i < spellProgram.Messages.Count; i++)
+            {
+                if (spellProgram.Messages[i].severity == AttackCompileMessageSeverity.Warning)
+                {
+                    return spellProgram.Messages[i].message;
+                }
+            }
+
+            return "Preview unavailable: spell program cannot cast.";
         }
 
         private void ApplyStatusMessage(string message)

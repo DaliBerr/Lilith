@@ -33,10 +33,10 @@ public sealed class MainUIScreenTests
     }
 
     [Test]
-    public void AttackFormulaLoadout_ChangedEvent_FiresWhenLoadoutMutates()
+    public void SpellBookLoadout_ChangedEvent_FiresWhenLoadoutMutates()
     {
         GameObject owner = CreateGameObject("Loadout Owner");
-        AttackFormulaLoadout loadout = owner.AddComponent<AttackFormulaLoadout>();
+        SpellBookLoadout loadout = owner.AddComponent<SpellBookLoadout>();
         CoreTokenData fireToken = CreateToken<CoreTokenData>("fire", "Fire");
         int changedCount = 0;
 
@@ -82,7 +82,7 @@ public sealed class MainUIScreenTests
     {
         CoreTokenData fireToken = CreateToken<CoreTokenData>("fire", "Fire");
         BehaviorTokenData spreadToken = CreateToken<BehaviorTokenData>("spread", "Spread");
-        AttackFormulaLoadout loadout = CreatePlayerWithLoadout(new BaseTokenData[]
+        SpellBookLoadout loadout = CreatePlayerWithLoadout(new BaseTokenData[]
         {
             fireToken,
         });
@@ -114,7 +114,7 @@ public sealed class MainUIScreenTests
         LinkedTokenData linked = CreateLinkedToken("linked_fire_hit", 1.5f,
             CreateToken<CoreTokenData>("fire", "Fire"),
             CreateToken<ResultTokenData>("hit", "Hit"));
-        AttackFormulaLoadout loadout = CreatePlayerWithItems(new PlaceableTokenData[]
+        SpellBookLoadout loadout = CreatePlayerWithItems(new PlaceableTokenData[]
         {
             linked,
         });
@@ -134,6 +134,29 @@ public sealed class MainUIScreenTests
         loadout.SetItems(System.Array.Empty<PlaceableTokenData>());
         Assert.That(GetVisibleSpellSlots(spellPanel).Count, Is.EqualTo(0));
         Assert.That(GetActiveLinkedOutlines(screen.gameObject).Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void MainUIScreen_ShowsSpellBookFixedItemsInHud()
+    {
+        GameObject player = CreateGameObject("Player");
+        player.AddComponent<PlayerPlaneMovement>();
+        SpellBookLoadout loadout = player.AddComponent<SpellBookLoadout>();
+        CoreTokenData fixedCore = CreateToken<CoreTokenData>("fixed_fire", "Fire");
+        BehaviorTokenData spread = CreateToken<BehaviorTokenData>("spread", "Spread");
+        SpellBookData spellBook = CreateSpellBook("hud_book", slotCount: 1);
+        spellBook.SetFixedCastItems(new PlaceableTokenData[] { fixedCore });
+        loadout.SetSpellBook(spellBook);
+        loadout.SetItems(new PlaceableTokenData[] { spread });
+
+        MainUIScreen screen = CreateMainUIScreen(out RectTransform spellPanel, out _, out _);
+        InvokeNonPublic(screen, "OnInit");
+
+        List<BackPackGridSlotView> visibleSlots = GetVisibleSpellSlots(spellPanel);
+
+        Assert.That(visibleSlots.Count, Is.EqualTo(2));
+        Assert.That(visibleSlots[0].Token, Is.SameAs(fixedCore));
+        Assert.That(visibleSlots[1].Token, Is.SameAs(spread));
     }
 
     [Test]
@@ -345,20 +368,20 @@ public sealed class MainUIScreenTests
         return questObject.AddComponent<QuestService>();
     }
 
-    private AttackFormulaLoadout CreatePlayerWithLoadout(IEnumerable<BaseTokenData> tokens)
+    private SpellBookLoadout CreatePlayerWithLoadout(IEnumerable<BaseTokenData> tokens)
     {
         GameObject player = CreateGameObject("Player");
         player.AddComponent<PlayerPlaneMovement>();
-        AttackFormulaLoadout loadout = player.AddComponent<AttackFormulaLoadout>();
+        SpellBookLoadout loadout = player.AddComponent<SpellBookLoadout>();
         loadout.SetTokens(tokens);
         return loadout;
     }
 
-    private AttackFormulaLoadout CreatePlayerWithItems(IEnumerable<PlaceableTokenData> items)
+    private SpellBookLoadout CreatePlayerWithItems(IEnumerable<PlaceableTokenData> items)
     {
         GameObject player = CreateGameObject("Player");
         player.AddComponent<PlayerPlaneMovement>();
-        AttackFormulaLoadout loadout = player.AddComponent<AttackFormulaLoadout>();
+        SpellBookLoadout loadout = player.AddComponent<SpellBookLoadout>();
         loadout.SetItems(items);
         return loadout;
     }
@@ -422,6 +445,16 @@ public sealed class MainUIScreenTests
         token.name = itemId;
         createdObjects.Add(token);
         return token;
+    }
+
+    private SpellBookData CreateSpellBook(string spellBookId, int slotCount)
+    {
+        SpellBookData spellBook = ScriptableObject.CreateInstance<SpellBookData>();
+        spellBook.SpellBookId = spellBookId;
+        spellBook.DisplayName = spellBookId;
+        spellBook.SlotCount = slotCount;
+        createdObjects.Add(spellBook);
+        return spellBook;
     }
 
     private static void InvokeNonPublic(object target, string methodName)

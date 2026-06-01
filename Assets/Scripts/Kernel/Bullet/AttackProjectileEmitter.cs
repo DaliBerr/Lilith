@@ -8,58 +8,28 @@ namespace Kernel.Bullet
     /// </summary>
     public static class AttackProjectileEmitter
     {
-        /// <summary>
-        /// summary: 根据编译结果生成一批实际子弹；支持直射和散射两种行为。
-        /// param: bulletPrefab 需要实例化的子弹 prefab
-        /// param: owner 发射者根节点
-        /// param: spawnPosition 子弹出生点
-        /// param: baseDirection 主要发射方向
-        /// param: compiledAttack 本次发射使用的编译结果
-        /// returns: 实际成功生成的子弹数量
-        /// </summary>
-        public static int Emit(CharBullet bulletPrefab, Transform owner, Vector3 spawnPosition, Vector3 baseDirection, CompiledAttack compiledAttack)
+        public static int Emit(CharBullet bulletPrefab, Transform owner, Vector3 spawnPosition, Vector3 baseDirection, CompiledSpellProgram spellProgram)
         {
-            return Emit(bulletPrefab, owner, spawnPosition, baseDirection, compiledAttack, BulletTargetPolicy.EnemiesOnly);
+            return Emit(bulletPrefab, owner, spawnPosition, baseDirection, spellProgram, BulletTargetPolicy.EnemiesOnly);
         }
 
-        /// <summary>
-        /// summary: 根据编译结果生成一批实际子弹，并显式声明这些子弹允许命中的目标阵营。
-        /// param: bulletPrefab 需要实例化的子弹 prefab
-        /// param: owner 发射者根节点
-        /// param: spawnPosition 子弹出生点
-        /// param: baseDirection 主要发射方向
-        /// param: compiledAttack 本次发射使用的编译结果
-        /// param: targetPolicy 当前子弹允许命中的目标策略
-        /// returns: 实际成功生成的子弹数量
-        /// </summary>
         public static int Emit(
             CharBullet bulletPrefab,
             Transform owner,
             Vector3 spawnPosition,
             Vector3 baseDirection,
-            CompiledAttack compiledAttack,
+            CompiledSpellProgram spellProgram,
             BulletTargetPolicy targetPolicy)
         {
-            return Emit(bulletPrefab, owner, spawnPosition, baseDirection, compiledAttack, targetPolicy, null, null);
+            return Emit(bulletPrefab, owner, spawnPosition, baseDirection, spellProgram, targetPolicy, null, null);
         }
 
-        /// <summary>
-        /// summary: 根据编译结果生成一批实际子弹，并可选把实例父节点与生成结果交还给调用方。
-        /// param: bulletPrefab 需要实例化的子弹 prefab
-        /// param: owner 发射者根节点
-        /// param: spawnPosition 子弹出生点
-        /// param: baseDirection 主要发射方向
-        /// param: compiledAttack 本次发射使用的编译结果
-        /// param: parentOverride 可选的实例父节点；为空时保持默认层级
-        /// param: spawnedBullets 可选的生成结果收集器；非空时会写入本次新生成的全部子弹
-        /// returns: 实际成功生成的子弹数量
-        /// </summary>
         public static int Emit(
             CharBullet bulletPrefab,
             Transform owner,
             Vector3 spawnPosition,
             Vector3 baseDirection,
-            CompiledAttack compiledAttack,
+            CompiledSpellProgram spellProgram,
             Transform parentOverride,
             ICollection<CharBullet> spawnedBullets)
         {
@@ -68,35 +38,138 @@ namespace Kernel.Bullet
                 owner,
                 spawnPosition,
                 baseDirection,
-                compiledAttack,
+                spellProgram,
                 BulletTargetPolicy.EnemiesOnly,
                 parentOverride,
                 spawnedBullets);
         }
 
-        /// <summary>
-        /// summary: 根据编译结果生成一批实际子弹，并可选把实例父节点与目标策略交还给调用方。
-        /// param: bulletPrefab 需要实例化的子弹 prefab
-        /// param: owner 发射者根节点
-        /// param: spawnPosition 子弹出生点
-        /// param: baseDirection 主要发射方向
-        /// param: compiledAttack 本次发射使用的编译结果
-        /// param: targetPolicy 当前子弹允许命中的目标策略
-        /// param: parentOverride 可选的实例父节点；为空时保持默认层级
-        /// param: spawnedBullets 可选的生成结果收集器；非空时会写入本次新生成的全部子弹
-        /// returns: 实际成功生成的子弹数量
-        /// </summary>
         public static int Emit(
             CharBullet bulletPrefab,
             Transform owner,
             Vector3 spawnPosition,
             Vector3 baseDirection,
-            CompiledAttack compiledAttack,
+            CompiledSpellProgram spellProgram,
             BulletTargetPolicy targetPolicy,
             Transform parentOverride,
             ICollection<CharBullet> spawnedBullets)
         {
-            if (bulletPrefab == null || owner == null || compiledAttack == null || !compiledAttack.CanFire)
+            return Emit(
+                bulletPrefab,
+                owner,
+                spawnPosition,
+                baseDirection,
+                spellProgram,
+                targetPolicy,
+                parentOverride,
+                spawnedBullets,
+                activationCastCount: 1,
+                activationSpreadAngleStep: 0f);
+        }
+
+        public static int Emit(
+            CharBullet bulletPrefab,
+            Transform owner,
+            Vector3 spawnPosition,
+            Vector3 baseDirection,
+            CompiledSpellProgram spellProgram,
+            BulletTargetPolicy targetPolicy,
+            Transform parentOverride,
+            ICollection<CharBullet> spawnedBullets,
+            int activationCastCount,
+            float activationSpreadAngleStep)
+        {
+            if (spellProgram == null || !spellProgram.CanCast || spellProgram.PrimaryCastBlock == null)
+            {
+                return 0;
+            }
+
+            int emittedCount = 0;
+            IReadOnlyList<SpellProjectileNode> projectiles = spellProgram.PrimaryCastBlock.Projectiles;
+            int castCount = Mathf.Max(1, activationCastCount);
+            for (int castIndex = 0; castIndex < castCount; castIndex++)
+            {
+                Vector3 castDirection = ResolveActivationCastDirection(
+                    baseDirection,
+                    castIndex,
+                    castCount,
+                    activationSpreadAngleStep);
+                for (int i = 0; i < projectiles.Count; i++)
+                {
+                    SpellProjectileNode projectile = projectiles[i];
+                    emittedCount += EmitProjectileNode(
+                        bulletPrefab,
+                        owner,
+                        spawnPosition,
+                        castDirection,
+                        projectile,
+                        targetPolicy,
+                        parentOverride,
+                        spawnedBullets);
+                }
+            }
+
+            return emittedCount;
+        }
+
+        public static int Emit(
+            CharBullet bulletPrefab,
+            Transform owner,
+            Vector3 spawnPosition,
+            Vector3 baseDirection,
+            SpellProjectileNode projectile,
+            BulletTargetPolicy targetPolicy,
+            Transform parentOverride,
+            ICollection<CharBullet> spawnedBullets)
+        {
+            return EmitProjectileNode(
+                bulletPrefab,
+                owner,
+                spawnPosition,
+                baseDirection,
+                projectile,
+                targetPolicy,
+                parentOverride,
+                spawnedBullets);
+        }
+
+        public static Vector3 ResolveActivationCastDirection(
+            Vector3 baseDirection,
+            int castIndex,
+            int castCount,
+            float activationSpreadAngleStep)
+        {
+            Vector3 normalizedDirection = baseDirection.normalized;
+            if (normalizedDirection.sqrMagnitude <= 0f)
+            {
+                return Vector3.zero;
+            }
+
+            int resolvedCastCount = Mathf.Max(1, castCount);
+            float resolvedAngleStep = Mathf.Max(0f, activationSpreadAngleStep);
+            if (resolvedCastCount <= 1 || resolvedAngleStep <= 0f)
+            {
+                return normalizedDirection;
+            }
+
+            int resolvedCastIndex = Mathf.Clamp(castIndex, 0, resolvedCastCount - 1);
+            float totalAngle = resolvedAngleStep * (resolvedCastCount - 1);
+            float startAngle = -totalAngle * 0.5f;
+            float currentAngle = startAngle + (resolvedAngleStep * resolvedCastIndex);
+            return Quaternion.AngleAxis(currentAngle, Vector3.up) * normalizedDirection;
+        }
+
+        private static int EmitProjectileNode(
+            CharBullet bulletPrefab,
+            Transform owner,
+            Vector3 spawnPosition,
+            Vector3 baseDirection,
+            SpellProjectileNode projectile,
+            BulletTargetPolicy targetPolicy,
+            Transform parentOverride,
+            ICollection<CharBullet> spawnedBullets)
+        {
+            if (bulletPrefab == null || owner == null || projectile == null || !projectile.CanFire)
             {
                 return 0;
             }
@@ -108,21 +181,22 @@ namespace Kernel.Bullet
             }
 
             int emittedCount = 0;
-            int projectileCount = compiledAttack.GetProjectileCount();
-            if (compiledAttack.BehaviorType == AttackBehaviorType.Spread && projectileCount > 1)
+            int projectileCount = Mathf.Max(1, projectile.ProjectileCount);
+            if (projectile.BehaviorType == AttackBehaviorType.Spread && projectileCount > 1)
             {
-                float totalAngle = compiledAttack.SpreadAngleStep * (projectileCount - 1);
+                float spreadAngleStep = projectile.SpreadAngleStep;
+                float totalAngle = spreadAngleStep * (projectileCount - 1);
                 float startAngle = -totalAngle * 0.5f;
                 for (int i = 0; i < projectileCount; i++)
                 {
-                    float currentAngle = startAngle + (compiledAttack.SpreadAngleStep * i);
+                    float currentAngle = startAngle + (spreadAngleStep * i);
                     Vector3 shotDirection = Quaternion.AngleAxis(currentAngle, Vector3.up) * normalizedDirection;
-                    emittedCount += EmitSingle(
+                    emittedCount += EmitProjectileNodeSingle(
                         bulletPrefab,
                         owner,
                         spawnPosition,
                         shotDirection,
-                        compiledAttack,
+                        projectile,
                         targetPolicy,
                         parentOverride,
                         spawnedBullets);
@@ -131,23 +205,23 @@ namespace Kernel.Bullet
                 return emittedCount;
             }
 
-            return EmitSingle(
+            return EmitProjectileNodeSingle(
                 bulletPrefab,
                 owner,
                 spawnPosition,
                 normalizedDirection,
-                compiledAttack,
+                projectile,
                 targetPolicy,
                 parentOverride,
                 spawnedBullets);
         }
 
-        private static int EmitSingle(
+        private static int EmitProjectileNodeSingle(
             CharBullet bulletPrefab,
             Transform owner,
             Vector3 spawnPosition,
             Vector3 shotDirection,
-            CompiledAttack compiledAttack,
+            SpellProjectileNode projectile,
             BulletTargetPolicy targetPolicy,
             Transform parentOverride,
             ICollection<CharBullet> spawnedBullets)
@@ -156,9 +230,10 @@ namespace Kernel.Bullet
                 ? Object.Instantiate(bulletPrefab, spawnPosition, Quaternion.identity, parentOverride)
                 : Object.Instantiate(bulletPrefab, spawnPosition, Quaternion.identity);
             bulletInstance.SetSpawnTemplate(bulletPrefab);
-            bulletInstance.InitializeShot(owner, spawnPosition, shotDirection, compiledAttack.AttackSpec, compiledAttack, targetPolicy);
+            bulletInstance.InitializeShot(owner, spawnPosition, shotDirection, projectile.AttackSpec, projectile, targetPolicy);
             spawnedBullets?.Add(bulletInstance);
             return 1;
         }
+
     }
 }

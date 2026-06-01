@@ -44,7 +44,29 @@ namespace Kernel.Bullet
             }
         }
 
+        [Serializable]
+        public sealed class SpellBookLibraryWeightEntry
+        {
+            [SerializeField] private SpellBookRewardLibrary library;
+            [SerializeField, Min(0f)] private float selectionWeight = 1f;
+
+            public SpellBookRewardLibrary Library => library;
+            public float SelectionWeight => selectionWeight;
+
+            public void Set(SpellBookRewardLibrary nextLibrary, float weight)
+            {
+                library = nextLibrary;
+                selectionWeight = NormalizeWeight(weight);
+            }
+
+            internal void Sanitize()
+            {
+                selectionWeight = NormalizeWeight(selectionWeight);
+            }
+        }
+
         [SerializeField] private List<LibraryWeightEntry> libraryEntries = new();
+        [SerializeField] private List<SpellBookLibraryWeightEntry> spellBookLibraryEntries = new();
 
         /// <summary>
         /// 获取当前计划中的全部候选库条目。
@@ -55,6 +77,15 @@ namespace Kernel.Bullet
             {
                 Sanitize();
                 return libraryEntries;
+            }
+        }
+
+        public IReadOnlyList<SpellBookLibraryWeightEntry> SpellBookLibraryEntries
+        {
+            get
+            {
+                Sanitize();
+                return spellBookLibraryEntries;
             }
         }
 
@@ -76,6 +107,14 @@ namespace Kernel.Bullet
             libraryEntries.Add(entry);
         }
 
+        public void AddSpellBookLibrary(SpellBookRewardLibrary library, float weight)
+        {
+            spellBookLibraryEntries ??= new List<SpellBookLibraryWeightEntry>();
+            SpellBookLibraryWeightEntry entry = new();
+            entry.Set(library, weight);
+            spellBookLibraryEntries.Add(entry);
+        }
+
         /// <summary>
         /// 清空并替换当前抽取计划的候选库列表。
         /// </summary>
@@ -83,6 +122,12 @@ namespace Kernel.Bullet
         public void SetLibraries(IEnumerable<LibraryWeightEntry> entries)
         {
             libraryEntries = entries != null ? new List<LibraryWeightEntry>(entries) : new List<LibraryWeightEntry>();
+            Sanitize();
+        }
+
+        public void SetSpellBookLibraries(IEnumerable<SpellBookLibraryWeightEntry> entries)
+        {
+            spellBookLibraryEntries = entries != null ? new List<SpellBookLibraryWeightEntry>(entries) : new List<SpellBookLibraryWeightEntry>();
             Sanitize();
         }
 
@@ -107,12 +152,42 @@ namespace Kernel.Bullet
             return library != null;
         }
 
+        /// <summary>
+        /// 按权重从 token 库和法术书库中抽取一个奖励来源。
+        /// </summary>
+        public bool TrySampleRewardLibrary(
+            VocalithRandom random,
+            out BulletTokenLibrary tokenLibrary,
+            out SpellBookRewardLibrary spellBookLibrary)
+        {
+            tokenLibrary = null;
+            spellBookLibrary = null;
+            Sanitize();
+            List<WeightedLibraryCandidate> candidates = CollectRewardCandidates();
+            if (candidates.Count <= 0)
+            {
+                return false;
+            }
+
+            int selectedIndex = PickWeightedIndex(candidates, random);
+            WeightedLibraryCandidate selectedCandidate = candidates[selectedIndex];
+            tokenLibrary = selectedCandidate.TokenLibrary;
+            spellBookLibrary = selectedCandidate.SpellBookLibrary;
+            return tokenLibrary != null || spellBookLibrary != null;
+        }
+
         private void Sanitize()
         {
             libraryEntries ??= new List<LibraryWeightEntry>();
             for (int i = 0; i < libraryEntries.Count; i++)
             {
                 libraryEntries[i]?.Sanitize();
+            }
+
+            spellBookLibraryEntries ??= new List<SpellBookLibraryWeightEntry>();
+            for (int i = 0; i < spellBookLibraryEntries.Count; i++)
+            {
+                spellBookLibraryEntries[i]?.Sanitize();
             }
         }
 
@@ -124,6 +199,26 @@ namespace Kernel.Bullet
             {
                 LibraryWeightEntry entry = libraryEntries[i];
                 BulletTokenLibrary library = entry != null ? entry.Library : null;
+                float normalizedWeight = entry != null ? NormalizeWeight(entry.SelectionWeight) : 0f;
+                if (library == null || normalizedWeight <= 0f)
+                {
+                    continue;
+                }
+
+                candidates.Add(new WeightedLibraryCandidate(library, normalizedWeight));
+            }
+
+            return candidates;
+        }
+
+        private List<WeightedLibraryCandidate> CollectRewardCandidates()
+        {
+            List<WeightedLibraryCandidate> candidates = CollectCandidates();
+            spellBookLibraryEntries ??= new List<SpellBookLibraryWeightEntry>();
+            for (int i = 0; i < spellBookLibraryEntries.Count; i++)
+            {
+                SpellBookLibraryWeightEntry entry = spellBookLibraryEntries[i];
+                SpellBookRewardLibrary library = entry != null ? entry.Library : null;
                 float normalizedWeight = entry != null ? NormalizeWeight(entry.SelectionWeight) : 0f;
                 if (library == null || normalizedWeight <= 0f)
                 {
@@ -183,11 +278,21 @@ namespace Kernel.Bullet
         {
             public WeightedLibraryCandidate(BulletTokenLibrary library, float weight)
             {
-                Library = library;
+                TokenLibrary = library;
+                SpellBookLibrary = null;
                 Weight = weight;
             }
 
-            public BulletTokenLibrary Library { get; }
+            public WeightedLibraryCandidate(SpellBookRewardLibrary library, float weight)
+            {
+                TokenLibrary = null;
+                SpellBookLibrary = library;
+                Weight = weight;
+            }
+
+            public BulletTokenLibrary TokenLibrary { get; }
+            public SpellBookRewardLibrary SpellBookLibrary { get; }
+            public BulletTokenLibrary Library => TokenLibrary;
             public float Weight { get; }
         }
     }

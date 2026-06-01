@@ -191,8 +191,11 @@ namespace Kernel.MapGrid
             if (target.TryGetComponent(out Rigidbody targetRigidbody))
             {
                 targetRigidbody.position = snappedPosition;
-                targetRigidbody.linearVelocity = Vector3.zero;
-                targetRigidbody.angularVelocity = Vector3.zero;
+                if (!targetRigidbody.isKinematic)
+                {
+                    targetRigidbody.linearVelocity = Vector3.zero;
+                    targetRigidbody.angularVelocity = Vector3.zero;
+                }
             }
 
             return true;

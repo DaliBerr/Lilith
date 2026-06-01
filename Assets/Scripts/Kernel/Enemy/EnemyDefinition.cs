@@ -192,6 +192,7 @@ public sealed class EnemyDefinition : ScriptableObject
     public struct RangedBulletAttackDefinition
     {
         public CharBullet bulletPrefab;
+        public SpellBookData spellBook;
         public List<PlaceableTokenData> formulaItems;
         public BulletTargetPolicy targetPolicy;
         [Min(0f)] public float projectileSpeedMultiplier;
@@ -218,6 +219,35 @@ public sealed class EnemyDefinition : ScriptableObject
             }
 
             return sanitized;
+        }
+
+        /// <summary>
+        /// summary: 将敌人远程攻击配置解析为实际交给编译器的执行序列。
+        /// param: 无
+        /// returns: 当前远程攻击的执行 token 物件序列
+        /// </summary>
+        public List<PlaceableTokenData> BuildExecutionItems()
+        {
+            if (spellBook != null)
+            {
+                return spellBook.BuildExecutionItems(formulaItems);
+            }
+
+            List<PlaceableTokenData> executionItems = new();
+            if (formulaItems == null)
+            {
+                return executionItems;
+            }
+
+            for (int i = 0; i < formulaItems.Count; i++)
+            {
+                if (formulaItems[i] != null)
+                {
+                    executionItems.Add(formulaItems[i]);
+                }
+            }
+
+            return executionItems;
         }
     }
 

@@ -17,3 +17,8 @@ MonoBehaviour:
     selectionWeight: 1.2
   - library: {fileID: 11400000, guid: 9ab5e5cb3f934440a2f3f17f4f90bc62, type: 2}
     selectionWeight: 1
+  - library: {fileID: 11400000, guid: eaed508fc31a4a9d9ffb7387bf6e8f65, type: 2}
+    selectionWeight: 0.45
+  spellBookLibraryEntries:
+  - library: {fileID: 11400000, guid: 5116d259ba994682b746b2bd01f91cb9, type: 2}
+    selectionWeight: 0.35

@@ -10,8 +10,10 @@ namespace Kernel.Bullet
     {
         [SerializeField] private AttackResultType resultType = AttackResultType.DirectDamage;
         [SerializeField] private bool acceptsNumericValue;
+        [SerializeField] private SpellValueParameterKind valueParameterKind = SpellValueParameterKind.None;
         [SerializeField, Min(0f)] private float defaultExplosionRadius;
         [SerializeField, Range(0f, 1f)] private float explosionDamageMultiplier = 1f;
+        [SerializeField, Min(0f)] private float defaultEffectRadius;
         [SerializeField, Min(0)] private int defaultTriggerCount;
         [SerializeField, Min(0f)] private float effectDuration;
         [SerializeField, Range(0f, 1f)] private float childDamageMultiplier = 1f;
@@ -28,6 +30,18 @@ namespace Kernel.Bullet
             set => acceptsNumericValue = value;
         }
 
+        public SpellValueParameterKind ValueParameterKind
+        {
+            get => ResolveValueParameterKind();
+            set => valueParameterKind = value;
+        }
+
+        public SpellValueParameterKind ConfiguredValueParameterKind
+        {
+            get => valueParameterKind;
+            set => valueParameterKind = value;
+        }
+
         public float DefaultExplosionRadius
         {
             get => defaultExplosionRadius;
@@ -38,6 +52,12 @@ namespace Kernel.Bullet
         {
             get => explosionDamageMultiplier;
             set => explosionDamageMultiplier = Mathf.Clamp01(value);
+        }
+
+        public float DefaultEffectRadius
+        {
+            get => defaultEffectRadius;
+            set => defaultEffectRadius = Mathf.Max(0f, value);
         }
 
         public int DefaultTriggerCount
@@ -70,10 +90,12 @@ namespace Kernel.Bullet
                 explosionRadius = defaultExplosionRadius,
                 explosionDamageMultiplier = explosionDamageMultiplier,
                 explosionDelaySeconds = effectDuration,
+                effectRadius = defaultEffectRadius,
                 splitProjectileCount = defaultTriggerCount,
                 splitDamageMultiplier = childDamageMultiplier,
                 controlTriggerCount = defaultTriggerCount,
                 controlDuration = effectDuration,
+                healingMultiplier = 1f,
             }.GetSanitized();
         }
 
@@ -89,9 +111,28 @@ namespace Kernel.Bullet
             SetTokenType(TokenType.Result);
             defaultExplosionRadius = Mathf.Max(0f, defaultExplosionRadius);
             explosionDamageMultiplier = Mathf.Clamp01(explosionDamageMultiplier);
+            defaultEffectRadius = Mathf.Max(0f, defaultEffectRadius);
             defaultTriggerCount = Mathf.Max(0, defaultTriggerCount);
             effectDuration = Mathf.Max(0f, effectDuration);
             childDamageMultiplier = Mathf.Clamp01(childDamageMultiplier);
+        }
+
+        private SpellValueParameterKind ResolveValueParameterKind()
+        {
+            if (!acceptsNumericValue)
+            {
+                return SpellValueParameterKind.None;
+            }
+
+            if (valueParameterKind != SpellValueParameterKind.None)
+            {
+                return valueParameterKind;
+            }
+
+            return resultType == AttackResultType.Split ||
+                   resultType == AttackResultType.StatusEffect
+                ? SpellValueParameterKind.Count
+                : SpellValueParameterKind.None;
         }
     }
 }

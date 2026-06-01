@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Reflection;
 using Kernel.Bullet;
 using Kernel.GameState;
@@ -176,28 +176,16 @@ public sealed class CharBulletImpactTests
         secondaryEnemy.transform.position = new Vector3(7f, 0f, 0f);
         SetEnemyHealth(secondaryEnemy, 6f);
 
-        AttackSpec attackSpec = CreateAttackSpec(projectileLife: 2);
-        attackSpec.damage = 2f;
-        attackSpec.resultType = AttackResultType.Explosion;
-
-        CompiledAttack compiledAttack = new()
+        CoreTokenData coreToken = CreateCoreToken(damage: 2f, projectileLife: 2);
+        ResultTokenData explosionToken = CreateExplosionResultToken(radius: 10f, damageMultiplier: 1f, delaySeconds: 0.5f);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
-            AttackSpec = attackSpec,
-            CoreType = attackSpec.coreType,
-            BehaviorType = attackSpec.behaviorType,
-            ResultType = AttackResultType.Explosion,
-            CanFire = true,
-            ExplosionRadius = 10f,
-            HasExplosion = true,
-            ResultEffects = new ResultEffectPayload
-            {
-                explosionRadius = 10f,
-                explosionDamageMultiplier = 1f,
-                explosionDelaySeconds = 0.5f,
-            }.GetSanitized(),
-        };
+            coreToken,
+            explosionToken,
+        });
 
-        bullet.InitializeShot(owner.transform, bullet.transform.position, Vector3.forward, attackSpec, compiledAttack, BulletTargetPolicy.EnemiesOnly);
+        InitializeShotFromProgram(bullet, owner.transform, bullet.transform.position, Vector3.forward, program, BulletTargetPolicy.EnemiesOnly);
+        Assert.That(bullet.CurrentProjectileNode, Is.Not.Null);
         Physics.SyncTransforms();
 
         InvokePrivateMethod(bullet, "CheckImpactContacts");
@@ -366,6 +354,49 @@ public sealed class CharBulletImpactTests
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
         method.Invoke(target, null);
+    }
+
+    private CoreTokenData CreateCoreToken(float damage, int projectileLife)
+    {
+        CoreTokenData token = ScriptableObject.CreateInstance<CoreTokenData>();
+        createdObjects.Add(token);
+        token.TokenId = "impact_core";
+        token.DisplayText = "I";
+        token.CoreType = AttackCoreType.Fire;
+        token.Damage = damage;
+        token.ProjectileLife = projectileLife;
+        token.ImpactLifeCost = 1;
+        token.ProjectileSpeed = 100f;
+        token.MaxLifetime = 1f;
+        token.MaxTravelDistance = 100f;
+        token.ImpactMask = Physics.DefaultRaycastLayers;
+        return token;
+    }
+
+    private ResultTokenData CreateExplosionResultToken(float radius, float damageMultiplier, float delaySeconds)
+    {
+        ResultTokenData token = ScriptableObject.CreateInstance<ResultTokenData>();
+        createdObjects.Add(token);
+        token.TokenId = "impact_explosion";
+        token.DisplayText = "E";
+        token.ResultType = AttackResultType.Explosion;
+        token.DefaultExplosionRadius = radius;
+        token.ExplosionDamageMultiplier = damageMultiplier;
+        token.EffectDuration = delaySeconds;
+        return token;
+    }
+
+    private static void InitializeShotFromProgram(
+        CharBullet bullet,
+        Transform owner,
+        Vector3 spawnPosition,
+        Vector3 direction,
+        CompiledSpellProgram program,
+        BulletTargetPolicy targetPolicy)
+    {
+        Assert.That(program, Is.Not.Null);
+        Assert.That(program.TryGetPrimaryProjectile(out SpellProjectileNode projectileNode), Is.True);
+        bullet.InitializeShot(owner, spawnPosition, direction, projectileNode.AttackSpec, projectileNode, targetPolicy);
     }
 
     private static void SetPrivateField<T>(object target, string fieldName, T value)
