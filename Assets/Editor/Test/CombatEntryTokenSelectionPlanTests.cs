@@ -22,8 +22,6 @@ public sealed class CombatEntryTokenSelectionPlanTests
     private const string PayloadCountModifierPath = "Assets/Data/BulletTokens/Modifier/PayloadCountModifier.asset";
     private const string PayloadControlFieldModifierPath = "Assets/Data/BulletTokens/Modifier/PayloadControlFieldModifier.asset";
     private const string OnHitTriggerPath = "Assets/Data/BulletTokens/Trigger/OnHitTrigger.asset";
-    private const string PayloadStartPath = "Assets/Data/BulletTokens/Payload/PayloadStart.asset";
-    private const string PayloadEndPath = "Assets/Data/BulletTokens/Payload/PayloadEnd.asset";
     private const string ExplosionPath = "Assets/Data/BulletTokens/Result/Explosion.asset";
     private const string SplitPath = "Assets/Data/BulletTokens/Result/Split.asset";
     private const string ControlPath = "Assets/Data/BulletTokens/Result/Control.asset";
@@ -144,9 +142,7 @@ public sealed class CombatEntryTokenSelectionPlanTests
             TokenType.Value,
             TokenType.Modifier,
             TokenType.Multicast,
-            TokenType.Trigger,
-            TokenType.PayloadStart,
-            TokenType.PayloadEnd);
+            TokenType.Trigger);
 
         List<PlaceableTokenData> sampledTokens = spellProgramLibrary.SampleChoices(
             new VocalithRandom(123),
@@ -157,9 +153,7 @@ public sealed class CombatEntryTokenSelectionPlanTests
             TokenType.Value,
             TokenType.Modifier,
             TokenType.Multicast,
-            TokenType.Trigger,
-            TokenType.PayloadStart,
-            TokenType.PayloadEnd);
+            TokenType.Trigger);
     }
 
     [Test]
@@ -178,8 +172,6 @@ public sealed class CombatEntryTokenSelectionPlanTests
         ModifierTokenData payloadCount = AssetDatabase.LoadAssetAtPath<ModifierTokenData>(PayloadCountModifierPath);
         ModifierTokenData payloadControlField = AssetDatabase.LoadAssetAtPath<ModifierTokenData>(PayloadControlFieldModifierPath);
         TriggerTokenData onHitTrigger = AssetDatabase.LoadAssetAtPath<TriggerTokenData>(OnHitTriggerPath);
-        PayloadBoundaryTokenData payloadStart = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadStartPath);
-        PayloadBoundaryTokenData payloadEnd = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadEndPath);
 
         Assert.That(plan, Is.Not.Null);
         Assert.That(spellProgramLibrary, Is.Not.Null);
@@ -194,8 +186,6 @@ public sealed class CombatEntryTokenSelectionPlanTests
         Assert.That(payloadCount, Is.Not.Null);
         Assert.That(payloadControlField, Is.Not.Null);
         Assert.That(onHitTrigger, Is.Not.Null);
-        Assert.That(payloadStart, Is.Not.Null);
-        Assert.That(payloadEnd, Is.Not.Null);
 
         float spellProgramSourceWeight = FindPlanLibraryWeight(plan, spellProgramLibrary);
         float spellBookSourceWeight = FindPlanSpellBookLibraryWeight(plan, spellBookLibrary);
@@ -212,8 +202,6 @@ public sealed class CombatEntryTokenSelectionPlanTests
         Assert.That(spellProgramLibrary.GetTokenWeight(payloadCount), Is.EqualTo(0.7f).Within(0.0001f));
         Assert.That(spellProgramLibrary.GetTokenWeight(payloadControlField), Is.EqualTo(0.65f).Within(0.0001f));
         Assert.That(spellProgramLibrary.GetTokenWeight(onHitTrigger), Is.EqualTo(0.7f).Within(0.0001f));
-        Assert.That(spellProgramLibrary.GetTokenWeight(payloadStart), Is.EqualTo(0.6f).Within(0.0001f));
-        Assert.That(spellProgramLibrary.GetTokenWeight(payloadEnd), Is.EqualTo(0.6f).Within(0.0001f));
 
         Assert.That(FindSpellBookWeight(spellBookLibrary, quickBook), Is.EqualTo(1f).Within(0.0001f));
         Assert.That(FindSpellBookWeight(spellBookLibrary, wideBook), Is.EqualTo(0.9f).Within(0.0001f));
@@ -233,35 +221,27 @@ public sealed class CombatEntryTokenSelectionPlanTests
     {
         CoreTokenData fireCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(FireCorePath);
         TriggerTokenData onHitTrigger = AssetDatabase.LoadAssetAtPath<TriggerTokenData>(OnHitTriggerPath);
-        PayloadBoundaryTokenData payloadStart = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadStartPath);
         ModifierTokenData payloadAmplify = AssetDatabase.LoadAssetAtPath<ModifierTokenData>(PayloadAmplifyModifierPath);
         ResultTokenData explosion = AssetDatabase.LoadAssetAtPath<ResultTokenData>(ExplosionPath);
-        PayloadBoundaryTokenData payloadEnd = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadEndPath);
 
         Assert.That(fireCore, Is.Not.Null);
         Assert.That(onHitTrigger, Is.Not.Null);
-        Assert.That(payloadStart, Is.Not.Null);
         Assert.That(payloadAmplify, Is.Not.Null);
         Assert.That(explosion, Is.Not.Null);
-        Assert.That(payloadEnd, Is.Not.Null);
         AssertPayloadAmplifyModifier(payloadAmplify);
 
         CompiledSpellProgram baseProgram = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             explosion,
-            payloadEnd
         });
         CompiledSpellProgram amplifiedProgram = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             payloadAmplify,
             explosion,
-            payloadEnd
         });
 
         Assert.That(baseProgram.CanCast, Is.True);
@@ -284,35 +264,27 @@ public sealed class CombatEntryTokenSelectionPlanTests
     {
         CoreTokenData fireCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(FireCorePath);
         TriggerTokenData onHitTrigger = AssetDatabase.LoadAssetAtPath<TriggerTokenData>(OnHitTriggerPath);
-        PayloadBoundaryTokenData payloadStart = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadStartPath);
         ModifierTokenData payloadRadius = AssetDatabase.LoadAssetAtPath<ModifierTokenData>(PayloadRadiusModifierPath);
         ResultTokenData explosion = AssetDatabase.LoadAssetAtPath<ResultTokenData>(ExplosionPath);
-        PayloadBoundaryTokenData payloadEnd = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadEndPath);
 
         Assert.That(fireCore, Is.Not.Null);
         Assert.That(onHitTrigger, Is.Not.Null);
-        Assert.That(payloadStart, Is.Not.Null);
         Assert.That(payloadRadius, Is.Not.Null);
         Assert.That(explosion, Is.Not.Null);
-        Assert.That(payloadEnd, Is.Not.Null);
         AssertPayloadRadiusModifier(payloadRadius);
 
         CompiledSpellProgram baseProgram = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             explosion,
-            payloadEnd
         });
         CompiledSpellProgram expandedProgram = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             payloadRadius,
             explosion,
-            payloadEnd
         });
 
         Assert.That(baseProgram.CanCast, Is.True);
@@ -335,35 +307,27 @@ public sealed class CombatEntryTokenSelectionPlanTests
     {
         CoreTokenData fireCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(FireCorePath);
         TriggerTokenData onHitTrigger = AssetDatabase.LoadAssetAtPath<TriggerTokenData>(OnHitTriggerPath);
-        PayloadBoundaryTokenData payloadStart = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadStartPath);
         ModifierTokenData payloadCount = AssetDatabase.LoadAssetAtPath<ModifierTokenData>(PayloadCountModifierPath);
         ResultTokenData split = AssetDatabase.LoadAssetAtPath<ResultTokenData>(SplitPath);
-        PayloadBoundaryTokenData payloadEnd = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadEndPath);
 
         Assert.That(fireCore, Is.Not.Null);
         Assert.That(onHitTrigger, Is.Not.Null);
-        Assert.That(payloadStart, Is.Not.Null);
         Assert.That(payloadCount, Is.Not.Null);
         Assert.That(split, Is.Not.Null);
-        Assert.That(payloadEnd, Is.Not.Null);
         AssertPayloadCountModifier(payloadCount);
 
         CompiledSpellProgram baseProgram = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             split,
-            payloadEnd
         });
         CompiledSpellProgram countedProgram = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             payloadCount,
             split,
-            payloadEnd
         });
 
         Assert.That(baseProgram.CanCast, Is.True);
@@ -386,35 +350,27 @@ public sealed class CombatEntryTokenSelectionPlanTests
     {
         CoreTokenData fireCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(FireCorePath);
         TriggerTokenData onHitTrigger = AssetDatabase.LoadAssetAtPath<TriggerTokenData>(OnHitTriggerPath);
-        PayloadBoundaryTokenData payloadStart = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadStartPath);
         ModifierTokenData payloadControlField = AssetDatabase.LoadAssetAtPath<ModifierTokenData>(PayloadControlFieldModifierPath);
         ResultTokenData control = AssetDatabase.LoadAssetAtPath<ResultTokenData>(ControlPath);
-        PayloadBoundaryTokenData payloadEnd = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadEndPath);
 
         Assert.That(fireCore, Is.Not.Null);
         Assert.That(onHitTrigger, Is.Not.Null);
-        Assert.That(payloadStart, Is.Not.Null);
         Assert.That(payloadControlField, Is.Not.Null);
         Assert.That(control, Is.Not.Null);
-        Assert.That(payloadEnd, Is.Not.Null);
         AssertPayloadControlFieldModifier(payloadControlField);
 
         CompiledSpellProgram baseProgram = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             control,
-            payloadEnd
         });
         CompiledSpellProgram fieldProgram = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             payloadControlField,
             control,
-            payloadEnd
         });
 
         Assert.That(baseProgram.CanCast, Is.True);
@@ -437,17 +393,13 @@ public sealed class CombatEntryTokenSelectionPlanTests
     {
         CoreTokenData fireCore = AssetDatabase.LoadAssetAtPath<CoreTokenData>(FireCorePath);
         TriggerTokenData onHitTrigger = AssetDatabase.LoadAssetAtPath<TriggerTokenData>(OnHitTriggerPath);
-        PayloadBoundaryTokenData payloadStart = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadStartPath);
         ResultTokenData healing = AssetDatabase.LoadAssetAtPath<ResultTokenData>(HealingPath);
         ValueTokenData valueThree = AssetDatabase.LoadAssetAtPath<ValueTokenData>(Value3Path);
-        PayloadBoundaryTokenData payloadEnd = AssetDatabase.LoadAssetAtPath<PayloadBoundaryTokenData>(PayloadEndPath);
 
         Assert.That(fireCore, Is.Not.Null);
         Assert.That(onHitTrigger, Is.Not.Null);
-        Assert.That(payloadStart, Is.Not.Null);
         Assert.That(healing, Is.Not.Null);
         Assert.That(valueThree, Is.Not.Null);
-        Assert.That(payloadEnd, Is.Not.Null);
         Assert.That(healing.AcceptsNumericValue, Is.True);
         Assert.That(healing.ValueParameterKind, Is.EqualTo(SpellValueParameterKind.Radius));
 
@@ -455,10 +407,8 @@ public sealed class CombatEntryTokenSelectionPlanTests
         {
             fireCore,
             onHitTrigger,
-            payloadStart,
             healing,
             valueThree,
-            payloadEnd,
         });
 
         SpellPayloadEffectNode effect = program.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock.PayloadEffects[0];
@@ -602,11 +552,9 @@ public sealed class CombatEntryTokenSelectionPlanTests
         Assert.That(surgeBook.ExecutorModifiers[0].expression, Is.EqualTo("*=0.8"));
 
         Assert.That(triggerBook.FixedItemPlacement, Is.EqualTo(SpellBookFixedItemPlacement.AfterEquipped));
-        Assert.That(triggerBook.FixedCastItems.Count, Is.EqualTo(4));
+        Assert.That(triggerBook.FixedCastItems.Count, Is.EqualTo(2));
         Assert.That(triggerBook.FixedCastItems[0], Is.TypeOf<TriggerTokenData>());
-        Assert.That(triggerBook.FixedCastItems[1], Is.TypeOf<PayloadBoundaryTokenData>());
-        Assert.That(triggerBook.FixedCastItems[2], Is.TypeOf<ResultTokenData>());
-        Assert.That(triggerBook.FixedCastItems[3], Is.TypeOf<PayloadBoundaryTokenData>());
+        Assert.That(triggerBook.FixedCastItems[1], Is.TypeOf<ResultTokenData>());
         Assert.That(triggerBook.ExecutorModifiers.Count, Is.EqualTo(1));
         Assert.That(triggerBook.ExecutorModifiers[0].target, Is.EqualTo(TokenModifierTarget.ResultMultiplier));
         Assert.That(triggerBook.ExecutorModifiers[0].expression, Is.EqualTo("*=1.25"));
@@ -652,12 +600,10 @@ public sealed class CombatEntryTokenSelectionPlanTests
             Is.EqualTo(surgeBaseProjectile.AttackSpec.damage * 0.8f).Within(0.0001f));
 
         Assert.That(bindingBook.FixedItemPlacement, Is.EqualTo(SpellBookFixedItemPlacement.AfterEquipped));
-        Assert.That(bindingBook.FixedCastItems.Count, Is.EqualTo(4));
+        Assert.That(bindingBook.FixedCastItems.Count, Is.EqualTo(2));
         Assert.That(bindingBook.FixedCastItems[0], Is.TypeOf<TriggerTokenData>());
-        Assert.That(bindingBook.FixedCastItems[1], Is.TypeOf<PayloadBoundaryTokenData>());
-        Assert.That(bindingBook.FixedCastItems[2], Is.TypeOf<ResultTokenData>());
-        Assert.That(((ResultTokenData)bindingBook.FixedCastItems[2]).ResultType, Is.EqualTo(AttackResultType.StatusEffect));
-        Assert.That(bindingBook.FixedCastItems[3], Is.TypeOf<PayloadBoundaryTokenData>());
+        Assert.That(bindingBook.FixedCastItems[1], Is.TypeOf<ResultTokenData>());
+        Assert.That(((ResultTokenData)bindingBook.FixedCastItems[1]).ResultType, Is.EqualTo(AttackResultType.StatusEffect));
         Assert.That(bindingBook.ExecutorModifiers.Count, Is.EqualTo(2));
         Assert.That(bindingBook.ExecutorModifiers[0].target, Is.EqualTo(TokenModifierTarget.ResultCount));
         Assert.That(bindingBook.ExecutorModifiers[0].expression, Is.EqualTo("=1"));

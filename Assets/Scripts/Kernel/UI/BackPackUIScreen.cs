@@ -19,6 +19,8 @@ namespace Kernel.UI
     public sealed class BackPackUIScreen : GameUIScreen
     {
         private const int InventorySlotCount = PlayerBulletTokenInventory.Capacity;
+        private const int AuxiliaryGridSlotCount = 10;
+        private const int AuxiliaryGridColumnCount = 2;
         private const int DefaultSpellBookSlotCount = 5;
 
         [Header("Layout")]
@@ -29,6 +31,10 @@ namespace Kernel.UI
         [SerializeField] private RectTransform previewAnimation;
         [SerializeField] private RectTransform backPackGridPanel;
         [SerializeField] private RectTransform backPackGrid;
+        [SerializeField] private RectTransform bookGridPanel;
+        [SerializeField] private RectTransform bookGrid;
+        [SerializeField] private RectTransform specialItemGridPanel;
+        [SerializeField] private RectTransform specialItemGrid;
         [SerializeField] private Button hintButton;
         [SerializeField] private BackPackGridSlotView slotPrefab;
         [SerializeField] private BackPackAttackPreviewController attackPreviewController;
@@ -46,6 +52,8 @@ namespace Kernel.UI
         [SerializeField] private Vector2 linkedOutlinePadding = new(6f, 6f);
 
         private readonly List<BackPackGridSlotView> inventorySlots = new(InventorySlotCount);
+        private readonly List<BackPackGridSlotView> bookSlots = new(AuxiliaryGridSlotCount);
+        private readonly List<BackPackGridSlotView> specialItemSlots = new(AuxiliaryGridSlotCount);
         private readonly List<BackPackGridSlotView> spellBookSlots = new(DefaultSpellBookSlotCount);
         private readonly List<TokenCellOccupancy> spellBookCells = new(DefaultSpellBookSlotCount);
         private readonly List<LinkedTokenOutlineView> inventoryLinkedOutlines = new();
@@ -82,6 +90,7 @@ namespace Kernel.UI
             EnsureSpellBookCellsInitialized();
             BindStaticSpellBookSlots();
             EnsureInventorySlotsBuilt();
+            EnsureAuxiliarySlotsBuilt();
             EnsureDragPreviewLayer();
             EnsureLinkedOutlineLayers();
             ApplyBackPackGridLayoutDefaults();
@@ -134,6 +143,7 @@ namespace Kernel.UI
             EnsureSpellBookCellsInitialized();
             BindStaticSpellBookSlots();
             EnsureInventorySlotsBuilt();
+            EnsureAuxiliarySlotsBuilt();
 
             if (!TryResolvePlayerBindings())
             {
@@ -282,14 +292,31 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 响应槽位悬停进入事件，显示当前槽位承载 token 的效果预览。
-        /// param: source 当前悬停进入的槽位
+        /// summary: 响应槽位点击事件，切换当前槽位承载 token 的详细预览。
+        /// param: source 当前被点击的槽位
         /// param: eventData 当前指针事件数据
         /// returns: 无
         /// </summary>
-        public void NotifySlotHoverEnter(BackPackGridSlotView source, PointerEventData eventData)
+        public void NotifySlotClick(BackPackGridSlotView source, PointerEventData eventData)
         {
             if (activeDragSource != null)
+            {
+                HideHoverPreview();
+                return;
+            }
+
+            if (source == null)
+            {
+                return;
+            }
+
+            if (source == activeHoverSlot && hoverPreviewView != null && hoverPreviewView.gameObject.activeSelf)
+            {
+                HideHoverPreview();
+                return;
+            }
+
+            if (source.Item == null)
             {
                 HideHoverPreview();
                 return;
@@ -299,7 +326,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 响应槽位悬停移动事件，驱动预览卡片跟随当前鼠标位置。
+        /// summary: 响应槽位悬停移动事件；当前详细卡片锁定在槽位中心，只在这里做存活校验与内容刷新。
         /// param: source 当前悬停中的槽位
         /// param: eventData 当前指针事件数据
         /// returns: 无
@@ -319,7 +346,6 @@ namespace Kernel.UI
 
             if (hoverPreviewView == null || !hoverPreviewView.gameObject.activeSelf)
             {
-                ShowHoverPreview(source, eventData);
                 return;
             }
 
@@ -327,23 +353,15 @@ namespace Kernel.UI
             {
                 BindHoverPreviewToken(source.Item);
             }
-
-            MoveHoverPreview(ResolveHoverScreenPosition(source, eventData), ResolvePointerEventCamera(eventData));
         }
 
         /// <summary>
-        /// summary: 响应槽位悬停离开事件，隐藏当前预览卡片。
+        /// summary: 保留给旧调用方的悬停离开入口；详细预览现由点击控制，不再因移出槽位自动关闭。
         /// param: source 当前离开的槽位
         /// returns: 无
         /// </summary>
         public void NotifySlotHoverExit(BackPackGridSlotView source)
         {
-            if (source == null || source != activeHoverSlot)
-            {
-                return;
-            }
-
-            HideHoverPreview();
         }
 
         private bool TryMoveInventoryItem(int targetAnchorIndex)
@@ -1100,22 +1118,19 @@ namespace Kernel.UI
             {
                 BindHoverPreviewToken(currentItem);
             }
+
+            MoveHoverPreview(ResolveHoverScreenPosition(activeHoverSlot, null), null);
         }
 
         private Vector2 ResolveHoverScreenPosition(BackPackGridSlotView source, PointerEventData eventData)
         {
-            if (eventData != null)
-            {
-                return eventData.position;
-            }
-
             RectTransform slotRect = source != null ? source.SlotRectTransform : null;
             if (slotRect == null)
             {
                 return Vector2.zero;
             }
 
-            return LinkedTokenOutlineView.GetScreenCenter(slotRect, null);
+            return LinkedTokenOutlineView.GetScreenCenter(slotRect, ResolvePointerEventCamera(eventData));
         }
 
         private static Camera ResolvePointerEventCamera(PointerEventData eventData)
@@ -1273,11 +1288,52 @@ namespace Kernel.UI
             leftPanel ??= FindRectTransform(mainContent, "Left Panel");
             previewAnimation ??= FindRectTransform(leftPanel, "Preview Animation");
             backPackGridPanel ??= FindRectTransform(mainContent, "BackPack Grid Panel");
-            backPackGrid ??= FindRectTransform(backPackGridPanel, "Grid");
+            backPackGrid = ResolveBackPackGridContainer(backPackGridPanel, backPackGrid);
+            bookGridPanel ??= FindRectTransform(mainContent, "Book Grid");
+            bookGrid = ResolveBackPackGridContainer(bookGridPanel, bookGrid);
+            specialItemGridPanel ??= FindRectTransform(mainContent, "Special_Item Grid");
+            specialItemGrid = ResolveBackPackGridContainer(specialItemGridPanel, specialItemGrid);
             hintButton ??= FindComponent<Button>(topPanel, "Hint Button");
             slotPrefab ??= ResolveTemplateSlot();
             attackPreviewController ??= GetComponent<BackPackAttackPreviewController>();
             spellDescriptionText ??= FindDescriptionText(mainContent);
+        }
+
+        private static RectTransform ResolveBackPackGridContainer(RectTransform gridPanel, RectTransform currentGrid)
+        {
+            RectTransform resolvedGrid = TryResolveScrollContentGrid(gridPanel);
+            resolvedGrid ??= TryResolveGridLayoutRect(gridPanel, "Grid Content");
+            resolvedGrid ??= TryResolveGridLayoutRect(gridPanel, "Grid");
+            resolvedGrid ??= currentGrid;
+            return resolvedGrid;
+        }
+
+        private static RectTransform TryResolveScrollContentGrid(RectTransform gridPanel)
+        {
+            if (gridPanel == null)
+            {
+                return null;
+            }
+
+            ScrollRect scrollRect = gridPanel.GetComponentInChildren<ScrollRect>(includeInactive: true);
+            if (scrollRect == null)
+            {
+                return null;
+            }
+
+            RectTransform content = scrollRect.content;
+            if (content == null)
+            {
+                return null;
+            }
+
+            return content.GetComponent<GridLayoutGroup>() != null ? content : null;
+        }
+
+        private static RectTransform TryResolveGridLayoutRect(Transform root, string targetName)
+        {
+            RectTransform rectTransform = FindRectTransform(root, targetName);
+            return rectTransform != null && rectTransform.GetComponent<GridLayoutGroup>() != null ? rectTransform : null;
         }
 
         private static TMP_Text FindDescriptionText(Transform root)
@@ -1293,15 +1349,20 @@ namespace Kernel.UI
                 return null;
             }
 
-            Transform directChild = root.Find(targetName);
-            if (directChild != null)
+            if (root is RectTransform rootRectTransform && root.name == targetName)
             {
-                return directChild as RectTransform;
+                return rootRectTransform;
             }
 
             for (int i = 0; i < root.childCount; i++)
             {
-                RectTransform match = FindRectTransform(root.GetChild(i), targetName);
+                Transform child = root.GetChild(i);
+                if (child.name == targetName)
+                {
+                    return child as RectTransform;
+                }
+
+                RectTransform match = FindRectTransform(child, targetName);
                 if (match != null)
                 {
                     return match;
@@ -1420,47 +1481,42 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 运行时确保背包区域存在准确的 48 个槽位；数量不对时会整组重建。
+        /// summary: 运行时确保背包区域存在准确的 48 个槽位；数量不对时会整组重建，并优先使用 ScrollRect content 作为容器。
         /// param: 无
         /// returns: 无
         /// </summary>
         private void EnsureInventorySlotsBuilt()
         {
-            inventorySlots.Clear();
-            if (backPackGrid == null || slotPrefab == null)
-            {
-                return;
-            }
+            EnsureRuntimeSlotGridBuilt(
+                backPackGrid,
+                inventorySlots,
+                InventorySlotCount,
+                "BackPack Slot",
+                BackPackSlotArea.Inventory,
+                initializeDisplayOnly: false);
+        }
 
-            bool needRebuild = backPackGrid.childCount != InventorySlotCount;
-            if (!needRebuild)
-            {
-                for (int i = 0; i < backPackGrid.childCount; i++)
-                {
-                    if (backPackGrid.GetChild(i).GetComponent<BackPackGridSlotView>() == null)
-                    {
-                        needRebuild = true;
-                        break;
-                    }
-                }
-            }
-
-            if (needRebuild)
-            {
-                RebuildInventorySlots();
-            }
-
-            for (int i = 0; i < backPackGrid.childCount; i++)
-            {
-                BackPackGridSlotView slotView = backPackGrid.GetChild(i).GetComponent<BackPackGridSlotView>();
-                if (slotView == null)
-                {
-                    continue;
-                }
-
-                slotView.Initialize(this, BackPackSlotArea.Inventory, inventorySlots.Count);
-                inventorySlots.Add(slotView);
-            }
+        /// <summary>
+        /// summary: 运行时确保 Book 与 Special Item 两个滚动区都存在准确的 2x5 展示槽位，并复用背包格 prefab。
+        /// param: 无
+        /// returns: 无
+        /// </summary>
+        private void EnsureAuxiliarySlotsBuilt()
+        {
+            EnsureRuntimeSlotGridBuilt(
+                bookGrid,
+                bookSlots,
+                AuxiliaryGridSlotCount,
+                "Book Slot",
+                BackPackSlotArea.Inventory,
+                initializeDisplayOnly: true);
+            EnsureRuntimeSlotGridBuilt(
+                specialItemGrid,
+                specialItemSlots,
+                AuxiliaryGridSlotCount,
+                "Special Item Slot",
+                BackPackSlotArea.Inventory,
+                initializeDisplayOnly: true);
         }
 
         /// <summary>
@@ -1613,19 +1669,94 @@ namespace Kernel.UI
             return null;
         }
 
-        private void RebuildInventorySlots()
+        private void EnsureRuntimeSlotGridBuilt(
+            RectTransform slotContainer,
+            List<BackPackGridSlotView> slotViews,
+            int expectedSlotCount,
+            string slotNamePrefix,
+            BackPackSlotArea slotArea,
+            bool initializeDisplayOnly)
         {
-            CancelActiveDragSession();
-            for (int i = backPackGrid.childCount - 1; i >= 0; i--)
+            slotViews.Clear();
+            if (slotContainer == null || slotPrefab == null)
             {
-                DestroyChild(backPackGrid.GetChild(i).gameObject);
+                return;
             }
 
-            for (int i = 0; i < InventorySlotCount; i++)
+            bool needRebuild = slotContainer.childCount != expectedSlotCount;
+            if (!needRebuild)
             {
-                BackPackGridSlotView slotView = Instantiate(slotPrefab, backPackGrid);
-                slotView.name = $"BackPack Slot {i + 1:D2}";
-                slotView.Initialize(this, BackPackSlotArea.Inventory, i);
+                for (int i = 0; i < slotContainer.childCount; i++)
+                {
+                    if (slotContainer.GetChild(i).GetComponent<BackPackGridSlotView>() == null)
+                    {
+                        needRebuild = true;
+                        break;
+                    }
+                }
+            }
+
+            if (needRebuild)
+            {
+                RebuildRuntimeSlotGrid(slotContainer, expectedSlotCount, slotNamePrefix, slotArea, initializeDisplayOnly);
+            }
+
+            BindRuntimeSlotGrid(slotContainer, slotViews, slotArea, initializeDisplayOnly);
+        }
+
+        private void RebuildRuntimeSlotGrid(
+            RectTransform slotContainer,
+            int slotCount,
+            string slotNamePrefix,
+            BackPackSlotArea slotArea,
+            bool initializeDisplayOnly)
+        {
+            CancelActiveDragSession();
+            for (int i = slotContainer.childCount - 1; i >= 0; i--)
+            {
+                DestroyChild(slotContainer.GetChild(i).gameObject);
+            }
+
+            for (int i = 0; i < slotCount; i++)
+            {
+                BackPackGridSlotView slotView = Instantiate(slotPrefab, slotContainer);
+                slotView.name = $"{slotNamePrefix} {i + 1:D2}";
+                if (initializeDisplayOnly)
+                {
+                    slotView.InitializeDisplayOnly(slotArea);
+                    slotView.SetOccupancy(TokenCellOccupancy.Empty);
+                    continue;
+                }
+
+                slotView.Initialize(this, slotArea, i);
+            }
+        }
+
+        private void BindRuntimeSlotGrid(
+            RectTransform slotContainer,
+            List<BackPackGridSlotView> slotViews,
+            BackPackSlotArea slotArea,
+            bool initializeDisplayOnly)
+        {
+            for (int i = 0; i < slotContainer.childCount; i++)
+            {
+                BackPackGridSlotView slotView = slotContainer.GetChild(i).GetComponent<BackPackGridSlotView>();
+                if (slotView == null)
+                {
+                    continue;
+                }
+
+                if (initializeDisplayOnly)
+                {
+                    slotView.InitializeDisplayOnly(slotArea);
+                    slotView.SetOccupancy(TokenCellOccupancy.Empty);
+                }
+                else
+                {
+                    slotView.Initialize(this, slotArea, slotViews.Count);
+                }
+
+                slotViews.Add(slotView);
             }
         }
 
@@ -1673,19 +1804,26 @@ namespace Kernel.UI
 
         private void ApplyBackPackGridLayoutDefaults()
         {
-            if (backPackGrid == null)
+            ApplyGridLayoutDefaults(backPackGrid, PlayerBulletTokenInventory.Columns);
+            ApplyGridLayoutDefaults(bookGrid, AuxiliaryGridColumnCount);
+            ApplyGridLayoutDefaults(specialItemGrid, AuxiliaryGridColumnCount);
+        }
+
+        private static void ApplyGridLayoutDefaults(RectTransform gridRoot, int columnCount)
+        {
+            if (gridRoot == null)
             {
                 return;
             }
 
-            GridLayoutGroup gridLayout = backPackGrid.GetComponent<GridLayoutGroup>();
+            GridLayoutGroup gridLayout = gridRoot.GetComponent<GridLayoutGroup>();
             if (gridLayout == null)
             {
                 return;
             }
 
             gridLayout.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            gridLayout.constraintCount = PlayerBulletTokenInventory.Columns;
+            gridLayout.constraintCount = columnCount;
         }
 
         private void RefreshLinkedOutlines()

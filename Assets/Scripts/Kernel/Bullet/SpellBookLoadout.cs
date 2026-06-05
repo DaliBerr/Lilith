@@ -224,11 +224,21 @@ namespace Kernel.Bullet
 
         public bool HasActivationEnergy(float currentTime)
         {
+            return HasActivationEnergy(currentTime, 1f);
+        }
+
+        public bool HasActivationEnergy(float currentTime, float costMultiplier)
+        {
             RefreshActivationEnergy(currentTime);
-            return !UsesEnergy || currentEnergy + 0.0001f >= EnergyCostPerActivation;
+            return !UsesEnergy || currentEnergy + 0.0001f >= ResolveActivationEnergyCost(costMultiplier);
         }
 
         public bool TryConsumeActivationEnergy(float currentTime)
+        {
+            return TryConsumeActivationEnergy(currentTime, 1f);
+        }
+
+        public bool TryConsumeActivationEnergy(float currentTime, float costMultiplier)
         {
             RefreshActivationEnergy(currentTime);
             if (!UsesEnergy)
@@ -236,7 +246,7 @@ namespace Kernel.Bullet
                 return true;
             }
 
-            float cost = EnergyCostPerActivation;
+            float cost = ResolveActivationEnergyCost(costMultiplier);
             if (currentEnergy + 0.0001f < cost)
             {
                 return false;
@@ -245,6 +255,11 @@ namespace Kernel.Bullet
             currentEnergy = Mathf.Max(0f, currentEnergy - cost);
             Changed?.Invoke();
             return true;
+        }
+
+        public float ResolveActivationEnergyCost(float costMultiplier)
+        {
+            return Mathf.Max(0f, EnergyCostPerActivation * Mathf.Max(0f, costMultiplier));
         }
 
         private CompiledSpellProgram EnsureCompiledProgram()

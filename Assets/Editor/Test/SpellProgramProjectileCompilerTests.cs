@@ -14,6 +14,8 @@ public sealed class SpellProgramProjectileCompilerTests
     [TearDown]
     public void TearDown()
     {
+        AttackProjectileEmitter.RiddleCandidateIndexResolver = count => UnityEngine.Random.Range(0, count);
+
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {
             if (createdObjects[i] != null)
@@ -233,6 +235,82 @@ public sealed class SpellProgramProjectileCompilerTests
         Assert.That(projectile.ResultEffects.controlTriggerCount, Is.EqualTo(2));
         Assert.That(projectile.ResultEffects.controlDuration, Is.EqualTo(2.5f).Within(0.0001f));
         Assert.That(CountMessages(program, AttackCompileMessageSeverity.Warning), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Compile_NewMovementBehaviorValues_WriteBehaviorParameter()
+    {
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        ValueTokenData three = CreateValueToken("three", "3", 3f);
+
+        AssertBehaviorParameter(coreToken, CreateBehaviorToken("stasis", "Stasis", AttackBehaviorType.Stasis, true, 1, 0f, 1.5f), three, 3f);
+        AssertBehaviorParameter(coreToken, CreateBehaviorToken("rush", "Rush", AttackBehaviorType.Rush, true, 1, 0f, 1f), three, 3f);
+        AssertBehaviorParameter(coreToken, CreateBehaviorToken("slow", "Slow", AttackBehaviorType.Slow, true, 1, 0f, 1f), three, 3f);
+        AssertBehaviorParameter(coreToken, CreateBehaviorToken("snake", "Snake", AttackBehaviorType.Snake, true, 1, 0f, 1f), three, 3f);
+        AssertBehaviorParameter(coreToken, CreateBehaviorToken("wander", "Wander", AttackBehaviorType.Wander, true, 1, 0f, 1f), three, 3f);
+        AssertBehaviorParameter(coreToken, CreateBehaviorToken("split", "Split", AttackBehaviorType.Split, true, 1, 0f, 1f), three, 3f);
+        AssertBehaviorParameter(coreToken, CreateBehaviorToken("spin", "Spin", AttackBehaviorType.Spin, true, 1, 0f, 3f), three, 3f);
+    }
+
+    [Test]
+    public void Compile_NewSplitAndSpinDefaults_WriteBehaviorParameter()
+    {
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        BehaviorTokenData split = CreateBehaviorToken("split", "Split", AttackBehaviorType.Split, true, 1, 0f, 1f);
+        BehaviorTokenData spin = CreateBehaviorToken("spin", "Spin", AttackBehaviorType.Spin, true, 1, 0f, 3f);
+
+        SpellProjectileNode splitProjectile = GetPrimaryProjectile(SpellProgramCompiler.Compile(new BaseTokenData[] { coreToken, split }));
+        SpellProjectileNode spinProjectile = GetPrimaryProjectile(SpellProgramCompiler.Compile(new BaseTokenData[] { coreToken, spin }));
+
+        Assert.That(splitProjectile.BehaviorType, Is.EqualTo(AttackBehaviorType.Split));
+        Assert.That(splitProjectile.AttackSpec.behaviorParameter, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(spinProjectile.BehaviorType, Is.EqualTo(AttackBehaviorType.Spin));
+        Assert.That(spinProjectile.AttackSpec.behaviorParameter, Is.EqualTo(3f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Compile_NewCoreTokens_WriteRuntimePayloads()
+    {
+        CoreTokenData water = CreateCoreToken("water_core", "水", AttackCoreType.Water);
+        water.Damage = 5f;
+        water.SetStatusApplications(new SpellStatusApplication(SpellStatusSlot.Wet, 1f, duration: 3f, strength: 1f));
+
+        CoreTokenData wind = CreateCoreToken("wind_core", "风", AttackCoreType.Wind);
+        wind.Damage = 4.5f;
+        wind.WindPressureRadius = 3f;
+        wind.WindPressureDistance = 1.5f;
+        wind.WindDisplacementWeightLimit = 1f;
+
+        CoreTokenData light = CreateCoreToken("light_core", "光", AttackCoreType.Light);
+        light.Damage = 10f;
+        light.PiercesActorsAndEnvironment = true;
+        light.PenetrationDamageMultiplier = 0.7f;
+        light.SuppressImpactEffects = true;
+
+        CoreTokenData sheep = CreateCoreToken("sheep_core", "羊", AttackCoreType.Sheep);
+        sheep.SetStatusApplications(new SpellStatusApplication(SpellStatusSlot.Polymorph, 1f, threshold: 3f, duration: 4f, strength: 1f));
+
+        CoreTokenData riddle = CreateCoreToken("riddle_core", "谜", AttackCoreType.Riddle);
+
+        SpellProjectileNode waterProjectile = GetPrimaryProjectile(SpellProgramCompiler.Compile(new BaseTokenData[] { water }));
+        SpellProjectileNode windProjectile = GetPrimaryProjectile(SpellProgramCompiler.Compile(new BaseTokenData[] { wind }));
+        SpellProjectileNode lightProjectile = GetPrimaryProjectile(SpellProgramCompiler.Compile(new BaseTokenData[] { light }));
+        SpellProjectileNode sheepProjectile = GetPrimaryProjectile(SpellProgramCompiler.Compile(new BaseTokenData[] { sheep }));
+        SpellProjectileNode riddleProjectile = GetPrimaryProjectile(SpellProgramCompiler.Compile(new BaseTokenData[] { riddle }));
+
+        Assert.That(waterProjectile.CoreType, Is.EqualTo(AttackCoreType.Water));
+        Assert.That(waterProjectile.CoreEffects.statusApplications[0].slot, Is.EqualTo(SpellStatusSlot.Wet));
+        Assert.That(windProjectile.CoreType, Is.EqualTo(AttackCoreType.Wind));
+        Assert.That(windProjectile.CoreEffects.windPressureRadius, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(windProjectile.CoreEffects.windPressureDistance, Is.EqualTo(1.5f).Within(0.0001f));
+        Assert.That(lightProjectile.CoreType, Is.EqualTo(AttackCoreType.Light));
+        Assert.That(lightProjectile.CoreEffects.HasPiercingSuppression, Is.True);
+        Assert.That(lightProjectile.CoreEffects.penetrationDamageMultiplier, Is.EqualTo(0.7f).Within(0.0001f));
+        Assert.That(sheepProjectile.CoreType, Is.EqualTo(AttackCoreType.Sheep));
+        Assert.That(sheepProjectile.CoreEffects.statusApplications[0].slot, Is.EqualTo(SpellStatusSlot.Polymorph));
+        Assert.That(sheepProjectile.CoreEffects.statusApplications[0].threshold, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(riddleProjectile.CoreType, Is.EqualTo(AttackCoreType.Riddle));
+        Assert.That(SpellCoreRuntimeCatalog.RiddleCandidateCount, Is.EqualTo(8));
     }
 
     [Test]
@@ -803,6 +881,46 @@ public sealed class SpellProgramProjectileCompilerTests
     }
 
     [Test]
+    public void RegisterImpact_WithChainBehavior_DamagesSecondaryWithoutTriggeringPayload()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBulletPrefab();
+        TestEnemy primaryEnemy = CreateEnemy("PrimaryEnemy", new Vector3(0f, 0f, 2f), 20f);
+        TestEnemy secondaryEnemy = CreateEnemy("SecondaryEnemy", new Vector3(1f, 0f, 2f), 1f);
+        TestEnemy payloadProbeEnemy = CreateEnemy("PayloadProbeEnemy", new Vector3(1.5f, 0f, 2f), 20f);
+
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        coreToken.Damage = 4f;
+        BehaviorTokenData chainToken = CreateBehaviorToken(
+            "chain",
+            "Chain",
+            AttackBehaviorType.Chain,
+            acceptsNumericValue: true,
+            defaultProjectileCount: 1,
+            spreadAngleStep: 0f);
+        ValueTokenData one = CreateValueToken("one", "1", 1f);
+        TriggerTokenData onKill = CreateTriggerToken("on_kill", "Kill", SpellTriggerType.OnKill);
+        ResultTokenData explosion = CreateResultToken("explosion", "Boom", AttackResultType.Explosion, acceptsNumericValue: false, defaultExplosionRadius: 3f);
+        explosion.ExplosionDamageMultiplier = 1f;
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            chainToken,
+            one,
+            onKill,
+            explosion,
+        });
+
+        InitializeShotFromProgram(bullet, owner.transform, Vector3.zero, Vector3.forward, program);
+        bool handled = InvokeTryRegisterImpact(bullet, primaryEnemy.GetComponent<BoxCollider>());
+
+        Assert.That(handled, Is.True);
+        Assert.That(primaryEnemy.CurrentHealth, Is.EqualTo(16f).Within(0.0001f));
+        Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(0f).Within(0.0001f));
+        Assert.That(payloadProbeEnemy.CurrentHealth, Is.EqualTo(20f).Within(0.0001f));
+    }
+
+    [Test]
     public void RegisterImpact_WithSplitResult_SpawnedChildrenLoseSplitResult()
     {
         GameObject owner = CreateGameObject("Owner");
@@ -873,6 +991,117 @@ public sealed class SpellProgramProjectileCompilerTests
         Assert.That(secondEnemy.CurrentHealth, Is.EqualTo(15f).Within(0.0001f));
     }
 
+    [Test]
+    public void RegisterImpact_WithLightCore_PiercesWallAndEnemiesWithDecayWithoutResultOrPayload()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBulletPrefab();
+        BoxCollider wall = CreateGameObject("Wall").AddComponent<BoxCollider>();
+        TestEnemy firstEnemy = CreateEnemy("FirstEnemy", new Vector3(0f, 0f, 2f), 20f);
+        TestEnemy secondEnemy = CreateEnemy("SecondEnemy", new Vector3(0f, 0f, 4f), 20f);
+        TestEnemy explosionProbe = CreateEnemy("ExplosionProbe", new Vector3(1f, 0f, 2f), 20f);
+
+        CoreTokenData light = CreateCoreToken("light_core", "光", AttackCoreType.Light);
+        light.Damage = 10f;
+        light.PiercesActorsAndEnvironment = true;
+        light.PenetrationDamageMultiplier = 0.7f;
+        light.SuppressImpactEffects = true;
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, acceptsNumericValue: false, defaultExplosionRadius: 3f);
+        explosion.ExplosionDamageMultiplier = 1f;
+        TriggerTokenData onHit = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
+        ResultTokenData payloadExplosion = CreateResultToken("payload_explosion", "爆", AttackResultType.Explosion, acceptsNumericValue: false, defaultExplosionRadius: 3f);
+        payloadExplosion.ExplosionDamageMultiplier = 1f;
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            light,
+            explosion,
+            onHit,
+            payloadExplosion,
+        });
+
+        InitializeShotFromProgram(bullet, owner.transform, Vector3.zero, Vector3.forward, program);
+        bool wallHandled = InvokeTryRegisterImpact(bullet, wall);
+        bool firstHandled = InvokeTryRegisterImpact(bullet, firstEnemy.GetComponent<BoxCollider>());
+        bool secondHandled = InvokeTryRegisterImpact(bullet, secondEnemy.GetComponent<BoxCollider>());
+
+        Assert.That(wallHandled, Is.True);
+        Assert.That(firstHandled, Is.True);
+        Assert.That(secondHandled, Is.True);
+        Assert.That(bullet.IsActiveShot, Is.True);
+        Assert.That(bullet.RemainingLife, Is.EqualTo(1));
+        Assert.That(firstEnemy.CurrentHealth, Is.EqualTo(13f).Within(0.0001f));
+        Assert.That(secondEnemy.CurrentHealth, Is.EqualTo(15.1f).Within(0.0001f));
+        Assert.That(explosionProbe.CurrentHealth, Is.EqualTo(20f).Within(0.0001f));
+    }
+
+    [Test]
+    public void RegisterImpact_WithWindCore_PushesOnlyLowWeightEnemies()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bullet = CreateBulletPrefab();
+        TestEnemy primaryEnemy = CreateEnemy("PrimaryEnemy", new Vector3(0f, 0f, 2f), 20f);
+        TestEnemy lightEnemy = CreateEnemy("LightEnemy", new Vector3(1f, 0f, 2f), 20f);
+        TestEnemy heavyEnemy = CreateEnemy("HeavyEnemy", new Vector3(2f, 0f, 2f), 20f);
+        heavyEnemy.SetDisplacementWeight(2f);
+
+        CoreTokenData wind = CreateCoreToken("wind_core", "风", AttackCoreType.Wind);
+        wind.Damage = 1f;
+        wind.WindPressureRadius = 3f;
+        wind.WindPressureDistance = 1.5f;
+        wind.WindDisplacementWeightLimit = 1f;
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { wind });
+
+        InitializeShotFromProgram(bullet, owner.transform, Vector3.zero, Vector3.forward, program);
+        Physics.SyncTransforms();
+        bool handled = InvokeTryRegisterImpact(bullet, primaryEnemy.GetComponent<BoxCollider>());
+
+        Assert.That(handled, Is.True);
+        Assert.That(lightEnemy.transform.position.x, Is.GreaterThan(1f));
+        Assert.That(heavyEnemy.transform.position.x, Is.EqualTo(2f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Emit_WithRiddleCore_ResolvesCandidatePerProjectile()
+    {
+        GameObject owner = CreateGameObject("Owner");
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        CoreTokenData riddle = CreateCoreToken("riddle_core", "谜", AttackCoreType.Riddle);
+        riddle.Damage = 1f;
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { riddle });
+        SpellProjectileNode riddleProjectile = GetPrimaryProjectile(program);
+
+        int[] candidateIndexes = { 1, 2 };
+        int callIndex = 0;
+        AttackProjectileEmitter.RiddleCandidateIndexResolver = count => candidateIndexes[Mathf.Min(callIndex++, candidateIndexes.Length - 1)];
+        List<CharBullet> spawned = new();
+
+        int firstCount = AttackProjectileEmitter.Emit(
+            bulletPrefab,
+            owner.transform,
+            Vector3.zero,
+            Vector3.forward,
+            riddleProjectile,
+            BulletTargetPolicy.EnemiesOnly,
+            null,
+            spawned);
+        int secondCount = AttackProjectileEmitter.Emit(
+            bulletPrefab,
+            owner.transform,
+            Vector3.zero,
+            Vector3.forward,
+            riddleProjectile,
+            BulletTargetPolicy.EnemiesOnly,
+            null,
+            spawned);
+
+        Assert.That(firstCount, Is.EqualTo(1));
+        Assert.That(secondCount, Is.EqualTo(1));
+        Assert.That(spawned[0].CurrentProjectileNode.CoreType, Is.EqualTo(AttackCoreType.Fire));
+        Assert.That(spawned[0].CurrentAttackSpec.damage, Is.EqualTo(7f).Within(0.0001f));
+        Assert.That(spawned[1].CurrentProjectileNode.CoreType, Is.EqualTo(AttackCoreType.Ice));
+        Assert.That(spawned[1].CurrentAttackSpec.damage, Is.EqualTo(6f).Within(0.0001f));
+    }
+
     private CoreTokenData CreateCoreToken(string tokenId, string displayText, AttackCoreType coreType)
     {
         CoreTokenData token = CreateAssetInstance<CoreTokenData>($"{tokenId}_asset");
@@ -899,7 +1128,14 @@ public sealed class SpellProgramProjectileCompilerTests
         return token;
     }
 
-    private BehaviorTokenData CreateBehaviorToken(string tokenId, string displayText, AttackBehaviorType behaviorType, bool acceptsNumericValue, int defaultProjectileCount, float spreadAngleStep)
+    private BehaviorTokenData CreateBehaviorToken(
+        string tokenId,
+        string displayText,
+        AttackBehaviorType behaviorType,
+        bool acceptsNumericValue,
+        int defaultProjectileCount,
+        float spreadAngleStep,
+        float defaultBehaviorParameter = 0f)
     {
         BehaviorTokenData token = CreateAssetInstance<BehaviorTokenData>($"{tokenId}_asset");
         token.TokenId = tokenId;
@@ -910,6 +1146,16 @@ public sealed class SpellProgramProjectileCompilerTests
         token.SpreadAngleStep = spreadAngleStep;
         token.ProjectileDamageMultiplier = 1f;
         token.PierceLifetimeDistanceScalePerCount = 0.2f;
+        token.DefaultBehaviorParameter = defaultBehaviorParameter;
+        return token;
+    }
+
+    private TriggerTokenData CreateTriggerToken(string tokenId, string displayText, SpellTriggerType triggerType)
+    {
+        TriggerTokenData token = CreateAssetInstance<TriggerTokenData>($"{tokenId}_asset");
+        token.TokenId = tokenId;
+        token.DisplayText = displayText;
+        token.TriggerType = triggerType;
         return token;
     }
 
@@ -1037,6 +1283,29 @@ public sealed class SpellProgramProjectileCompilerTests
         Assert.That(actual.z, Is.EqualTo(expected.z).Within(0.0001f));
     }
 
+    private static void AssertBehaviorParameter(
+        CoreTokenData coreToken,
+        BehaviorTokenData behaviorToken,
+        ValueTokenData valueToken,
+        float expectedParameter)
+    {
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            behaviorToken,
+            valueToken,
+        });
+        SpellProjectileNode projectile = GetPrimaryProjectile(program);
+
+        Assert.That(program.CanCast, Is.True, behaviorToken.TokenId);
+        Assert.That(projectile.BehaviorType, Is.EqualTo(behaviorToken.BehaviorType), behaviorToken.TokenId);
+        Assert.That(projectile.AttackSpec.behaviorParameter, Is.EqualTo(expectedParameter).Within(0.0001f), behaviorToken.TokenId);
+        if (behaviorToken.BehaviorType == AttackBehaviorType.Stasis)
+        {
+            Assert.That(projectile.AttackSpec.maxLifetime, Is.EqualTo(expectedParameter).Within(0.0001f), behaviorToken.TokenId);
+        }
+    }
+
     private static bool HasErrors(CompiledSpellProgram program)
     {
         return CountMessages(program, AttackCompileMessageSeverity.Error) > 0;
@@ -1140,12 +1409,14 @@ public sealed class SpellProgramProjectileCompilerTests
     {
         private float maxHealth = 1f;
         private float currentHealth = 1f;
+        private float displacementWeight = 1f;
 
         public override float MoveSpeed => 0f;
         public override float RotationSpeed => 0f;
         public override float StoppingDistance => 0f;
         public override float MaxHealth => maxHealth;
         public override float CurrentHealth => currentHealth;
+        public override float DisplacementWeight => displacementWeight;
 
         public override float AttackRange => throw new System.NotImplementedException();
 
@@ -1157,6 +1428,11 @@ public sealed class SpellProgramProjectileCompilerTests
         {
             maxHealth = Mathf.Max(0f, health);
             currentHealth = maxHealth;
+        }
+
+        public void SetDisplacementWeight(float weight)
+        {
+            displacementWeight = Mathf.Max(0f, weight);
         }
 
         public override bool TryApplyDamage(float damage, out float remainingHealth, out bool isDead)

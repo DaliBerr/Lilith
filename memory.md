@@ -12,6 +12,31 @@ Obsidian vault is now the primary cross-session memory layer for agent workflow,
 
 Keep this file as a repo-local compatibility mirror for high-value Lilith troubleshooting patterns. When adding new durable memory, prefer Obsidian first, then update this file only if the knowledge must remain available without Obsidian.
 
+## Trigger Payload Is Implicit After Trigger Token
+
+- Problem: 显式 `PayloadStart/PayloadEnd` token 让构筑语法和 UI 都显得违和，并且奖励池需要额外暴露没有独立玩法价值的边界 token。
+- Cause: 新法术系统已经有 Trigger 作为稳定结构入口；payload 边界可以由结构层级决定，而不需要玩家摆放 `[` / `]`。
+- Fix: `TriggerTokenData` 后续 token 自动构成 payload。非 Multicast 公式中消费到整式末尾；Multicast 中 Trigger 只作用当前 projectile segment，一旦进入 payload 会吞掉该 segment 后续 token，不再回到兄弟 outer projectile，兄弟段不足会 warning。普通 Modifier 仍只向后解析，`NextToken` / `NextN` 不跨 trigger/payload 边界；payload 内 modifier 只在 payload 局部向后绑定。显式 `PayloadBoundaryTokenData`、`TokenType.PayloadStart/PayloadEnd`、边界资产、奖励库入口和 UI 类型展示已删除。
+- Verify: 2026-06-02 Kernel 与 EditMode csproj `dotnet build --no-restore` 均 0 warning / 0 error；Unity EditMode 定向 `SpellProgramCompilerTests` + `SpellDescriptionGeneratorTests` + `CombatEntryTokenSelectionPlanTests` 为 64/64，通过背包 UI / 预览 / 法术书回归 44/44，Token Select / 背包库存回归 32/32；Console 无 error。
+- Scope: 后续书写 Trigger 构筑时使用 `火 + 触 + 冰`、`火 + 触 + 爆 + 三`、`OnHitTrigger + Explosion` 这类隐式 payload 形态；不要恢复显式 payload boundary token 或把它重新放回 `SpellProgram_Token_Lib`。
+
+## Spell Token Mechanism Skeleton Now Covers Advanced Trigger, Value, Multicast, Status Slots
+
+- Problem: `Docs/SpellTokenSystemDesign.md` 中规划的 `时/程/近/终/灭`、Value 模式、Multicast pattern、状态槽与元素反应会影响系统表达能力，不能只停留在资产计划里。
+- Cause: 新系统已经以 `CompiledSpellProgram` / `SpellProjectileNode` / `SpellPayloadBlock` 作为运行时真源；若 Trigger 参数、payload 触发点、派生安全、状态槽和描述仍分散实现，后续正式 Token 资产会出现 UI/描述/运行时语义不一致。
+- Fix: 2026-06-03 已补齐机制骨架：`SpellTriggerType` 覆盖 `OnHit`、`OnTimer`、`OnExpire`、`OnKill`、`OnDistance`、`OnProximity`；`时/程/近` 优先消费紧随 Value 作为 Trigger 参数；`SpellPayloadBlock` 保存触发类型、参数和触发点语义；`CharBullet` 统一执行命中、计时、距离、接近、消失和击杀 payload，非 OnHit payload 对同一 block 默认只触发一次；`ValueTokenData` 支持数值、倍率、规模预设；`MulticastTokenData` / `SpellCastBlock` 支持同时、顺序、分叉、环绕 pattern 骨架；派生 projectile 只复制 Core 状态倾向，不继承 Trigger / Payload / 继续派生能力；敌人状态改为通用状态槽并通过 `SpellStatusApplication` 统一写入，反应默认消耗相关槽 50%。
+- Verify: `dotnet build Lilith.Kernel.csproj --no-restore` 0 warning / 0 error；`dotnet build Lilith.Tests.EditMode.csproj --no-restore` 0 warning / 0 error；Unity EditMode 定向 `SpellProgramCompilerTests` + `SpellDescriptionGeneratorTests` + `EnemyStatusEffectControllerTests` + `CombatEntryTokenSelectionPlanTests` 为 83/83 passed；Unity Console error 0。
+- Scope: 这只是机制骨架，不表示正式 Token 资产和数值已配置完成。`Docs/SpellTokenSystemDesign.md`、`Docs/SpellConstructionSystemDesign.md`、`Docs/SpellConstructionUseCases.md` 与 `README.md` 已同步当前边界；后续重点是正式资产接入普通奖励池、平衡表、视觉表现、多环绕/可配置环绕扩展、镜像/召唤/傀儡实体和手动 Play smoke。
+
+## Formal Spell Token Staging Libraries Are Asset-Ready But Not In Rewards
+
+- Problem: `Docs/SpellTokenSystemDesign.md` 的完整 Token 清单需要先接到资产层，但不能把高风险机制伪装成可玩内容，也不能在未平衡前扩大普通奖励池。
+- Cause: 新系统已经有 Trigger / Value / Multicast / 状态槽机制骨架，但正式玩法资产和隐藏复杂机制需要分层落地：可运行可描述的内容才能进 playable staging，镜像、召唤、傀儡等复杂内容仍应先作为隐藏索引占位。
+- Fix: 2026-06-03 已新增 `PrototypeTokenData`，它继承 `PlaceableTokenData` 但不追加编译 token；2026-06-05 已把 `滞 / 驰 / 缓 / 蛇 / 游 / 分 / 旋` 晋升为正式 Behaviour，并移除两个已取消的复杂 Behaviour 计划项；同日 `绕` 晋升为正式 Multicast，固定收集 2 段，第二段以第一段主弹为 movement anchor 环绕，主弹失效时同步过期；随后 `汲 / 护 / 留 / 斥 / 吸` 晋升为正式 Result，`稳 / 狂 / 贪 / 急 / 源` 晋升为正式 cast-level Modifier，`水 / 风 / 光 / 羊 / 谜` 晋升为正式 Core。`AttackTokenAssetGenerator.GenerateFormalSpellTokenAssets()` 会生成两个独立库：`Assets/Data/BulletTokens/TokenLib/SpellToken_Playable_Staging_Lib.asset`（78 个 playable Token）和 `Assets/Data/BulletTokens/TokenLib/SpellToken_Hidden_Prototype_Lib.asset`（7 个 hidden prototype Token，权重 0）。两者均不在 `Plan2` 中，也不扩展 `SpellProgram_Token_Lib.asset`。隐藏 prototype 现在只保留 `镜 / 召 / 幻 / 替 / 混 / 傀 / 乱`，都写入计划语义和未实装原因，供构筑调试、隐藏库索引和后续迁移使用。`箭 / 岩 / 水 / 风 / 光 / 羊 / 谜` 已接入正式 `AttackCoreType`；`水` 写入潮湿槽，`风` 命中点小范围推开低重量敌人，`光` 穿过敌人和墙体且只造成每次穿透后 `*=0.7` 的衰减直伤、不触发 Result/Core 状态/OnHit/OnKill payload，`羊` 写入变形槽并在普通低重量敌人满 3 层后强控/变色 4 秒，`谜` 每发 projectile 随机解析为 `箭/火/冰/雷/岩/刃/毒/影` 之一；`链` Behavior 已有最小运行时，命中主目标后向附近未命中过的敌人传导 50% 直伤，且链跳伤害不触发 payload、不递归派生；`滞` 停在发射点且只做一次出生点直击检测，`驰 / 缓` 改变速度，`蛇 / 游` 改变飞行方向，`分` 飞行期均匀派生安全小弹，`旋` 围绕施法者环绕；`汲` 按直伤比例治疗 owner，`护` 添加临时吸收盾，`留` 生成 tick 伤害/核心状态场，`斥 / 吸` 按敌人位移重量阈值做一次水平推拉；`稳` 降低角度扩散与蛇/游扰动并略降伤害，`狂` 发射自损换伤害并增加能量消耗，`贪` 发射自损并在击败时提升所有掉落概率，`急` 减少玩家法术书发射间隔，`源` 减少玩家法术书能量消耗；状态类 Result 通过 `SpellStatusApplication` 写入统一槽，描述会显示具体状态名。
+- Modifier design update: 2026-06-05 `乱` 仍是唯一未实现 Modifier hidden prototype，计划语义为随机实现任意一种合法 Modifier；`卫` 已取消并从游戏侧 hidden prototype 移除，仅文档留档。
+- Verify: `dotnet build Lilith.Kernel.csproj --no-restore` 与 `dotnet build Lilith.Tests.EditMode.csproj --no-restore` 均 0 warning / 0 error；Unity asset 读回确认 playable staging 78、hidden prototype 7，playable Core 包含 `core_water/core_wind/core_light/core_sheep/core_riddle`，hidden Core 只剩 `prototype_core_mirror/prototype_core_summon`。本轮尝试通过 Unity MCP 跑目标 EditMode 时误触全量 EditMode，MCP filter 未收窄且 TestRunner 卡在既有 `StorySequenceParserTests` timeout；已记录工具卡滞，未把该全量结果作为本轮通过条件。此前 `汲/护/留/斥/吸` 补跑 Unity MCP EditMode `FormalSpellTokenAssetTests`、`SpellProgramCompilerTests`、`SpellProgramProjectileCompilerTests`、`SpellDescriptionGeneratorTests`、`CharBulletImpactTests` 为 137/137 passed；Console error-only 查询仅返回 Test Runner 写 `TestResults.xml` 的状态记录，warning 查询还包含 MCP WebSocket、PerformanceTesting setup/cleanup、RuntimeSaveService 无 profile slot 与测试内 CharBullet 诊断日志。`git diff --check` 仍只报告既有 Unity YAML / 字体尾随空白。
+- Scope: 后续若要让正式新 Token 进入玩家自然流程，必须单独把 staging library 接入 `Plan2` 或迁移 token 到现有奖励库，并重新做权重 / Token Select / 背包预览 / Play smoke 验证；hidden prototype 不能加入普通奖励或普通 Token Select。
+
 ## SpellProgram Migration Removed Legacy Attack Adapters After Runtime Migration
 
 - Problem: 法术系统 M8 清理若直接删除 `AttackFormulaCompiler` / `CompiledAttack`，会同时打断 `CharBullet` 命中特效、视觉 presenter、旧描述入口和大量 baseline 测试；正确顺序是先把运行时入口迁到 `CompiledSpellProgram` / `SpellProjectileNode`，再删除旧 adapter。

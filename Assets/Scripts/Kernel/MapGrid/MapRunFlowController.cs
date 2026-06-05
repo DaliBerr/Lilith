@@ -978,6 +978,7 @@ namespace Kernel.MapGrid
                 return false;
             }
 
+            EventManager.eventBus.Publish(RewardNotificationEvent.FromToken(selectedToken));
             return true;
         }
 
@@ -1003,6 +1004,7 @@ namespace Kernel.MapGrid
             }
 
             spellBookLoadout.SetSpellBook(selectedSpellBook);
+            EventManager.eventBus.Publish(RewardNotificationEvent.FromSpellBook(selectedSpellBook));
             return true;
         }
 

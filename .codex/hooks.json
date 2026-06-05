@@ -5,6 +5,17 @@
         "hooks": [
           {
             "type": "command",
+            "command": "pwsh -NoProfile -File \"$(git rev-parse --show-toplevel)/.codex/hooks/subagent_delegation_prompt.ps1\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File \"G:\\Unity Project\\Lilith\\.codex\\hooks\\subagent_delegation_prompt.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Injecting subagent delegation preference"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "pwsh -NoProfile -File \"$(git rev-parse --show-toplevel)/.codex/hooks/plan_mode_decision_prompt.ps1\"",
             "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File \"G:\\Unity Project\\Lilith\\.codex\\hooks\\plan_mode_decision_prompt.ps1\"",
             "timeout": 10,

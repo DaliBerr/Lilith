@@ -31,6 +31,36 @@ namespace Kernel.Bullet
     {
         None = 0,
         OnHit = 1,
+        OnTimer = 2,
+        OnExpire = 3,
+        OnKill = 4,
+        OnDistance = 5,
+        OnProximity = 6,
+    }
+
+    public enum SpellTriggerParameterKind
+    {
+        None = 0,
+        TimeSeconds = 1,
+        Distance = 2,
+        Radius = 3,
+    }
+
+    public enum SpellTriggerPointKind
+    {
+        ImpactPoint = 0,
+        ProjectilePosition = 1,
+        ExpirePoint = 2,
+        DeathTargetPosition = 3,
+        NearestTargetPoint = 4,
+    }
+
+    public enum SpellCastPattern
+    {
+        Simultaneous = 0,
+        Sequential = 1,
+        Fork = 2,
+        Orbit = 3,
     }
 
     [Serializable]
@@ -93,6 +123,7 @@ namespace Kernel.Bullet
                 TextColor = Color.white;
                 HasFontSizeOverride = false;
                 FontSize = 0f;
+                RuntimeModifiers = SpellCastRuntimeModifiers.Identity;
                 return;
             }
 
@@ -114,6 +145,7 @@ namespace Kernel.Bullet
             TextColor = projectileResult.TextColor;
             HasFontSizeOverride = projectileResult.HasFontSizeOverride;
             FontSize = Mathf.Max(0f, projectileResult.FontSize);
+            RuntimeModifiers = projectileResult.RuntimeModifiers.GetSanitized();
             for (int i = 0; i < projectileResult.FontSizeModifiers.Count; i++)
             {
                 fontSizeModifiers.Add(projectileResult.FontSizeModifiers[i]);
@@ -127,18 +159,21 @@ namespace Kernel.Bullet
             ResultEffectPayload resultEffects,
             bool hasExplosion,
             float explosionRadius,
-            bool copyPayloads)
+            bool copyPayloads,
+            AttackCoreType? coreTypeOverride = null,
+            CoreEffectPayload? coreEffectsOverride = null,
+            string displayTextOverride = null)
             : base(SpellNodeKind.Projectile, source != null ? source.NodeId : string.Empty)
         {
             AttackSpec = attackSpec.GetSanitized();
-            CoreType = source.CoreType;
-            BehaviorType = source.BehaviorType;
+            CoreType = coreTypeOverride ?? source.CoreType;
+            BehaviorType = AttackSpec.behaviorType;
             ResultType = resultType;
-            DisplayText = source.DisplayText ?? string.Empty;
-            ProjectileCount = source.ProjectileCount;
-            SpreadAngleStep = source.SpreadAngleStep;
+            DisplayText = displayTextOverride ?? source.DisplayText ?? string.Empty;
+            ProjectileCount = BehaviorType == AttackBehaviorType.Spread ? Mathf.Max(1, AttackSpec.projectileCount) : 1;
+            SpreadAngleStep = BehaviorType == source.BehaviorType ? source.SpreadAngleStep : 0f;
             CanFire = source.CanFire;
-            CoreEffects = source.CoreEffects.GetSanitized();
+            CoreEffects = (coreEffectsOverride ?? source.CoreEffects).GetSanitized();
             ResultEffects = resultEffects.GetSanitized();
             HasExplosion = hasExplosion && ResultEffects.HasExplosion;
             ExplosionRadius = Mathf.Max(0f, explosionRadius);
@@ -148,6 +183,7 @@ namespace Kernel.Bullet
             TextColor = source.TextColor;
             HasFontSizeOverride = source.HasFontSizeOverride;
             FontSize = Mathf.Max(0f, source.FontSize);
+            RuntimeModifiers = source.RuntimeModifiers.GetSanitized();
             for (int i = 0; i < source.FontSizeModifiers.Count; i++)
             {
                 fontSizeModifiers.Add(source.FontSizeModifiers[i]);
@@ -185,6 +221,7 @@ namespace Kernel.Bullet
         public Color TextColor { get; }
         public bool HasFontSizeOverride { get; }
         public float FontSize { get; }
+        public SpellCastRuntimeModifiers RuntimeModifiers { get; }
         public IReadOnlyList<SpellPayloadBlock> Payloads => payloads;
         public IReadOnlyList<RuntimeNumericModifier> FontSizeModifiers => fontSizeModifiers;
 
@@ -203,6 +240,33 @@ namespace Kernel.Bullet
             AttackSpec childSpec = source.AttackSpec;
             childSpec.damage = Mathf.Max(0f, damage);
             childSpec.resultType = AttackResultType.DirectDamage;
+            return new SpellProjectileNode(
+                source,
+                childSpec,
+                AttackResultType.DirectDamage,
+                default,
+                hasExplosion: false,
+                explosionRadius: 0f,
+                copyPayloads: false);
+        }
+
+        public static SpellProjectileNode CreateDerivedCoreStatusChild(SpellProjectileNode source, float damage)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            AttackSpec childSpec = source.AttackSpec;
+            childSpec.damage = Mathf.Max(0f, damage);
+            childSpec.behaviorType = AttackBehaviorType.Straight;
+            childSpec.resultType = AttackResultType.DirectDamage;
+            childSpec.projectileCount = 1;
+            childSpec.bounceCount = 0;
+            childSpec.chainCount = 0;
+            childSpec.pierceCount = 0;
+            childSpec.projectileLife = 1;
+            childSpec.behaviorParameter = 0f;
             return new SpellProjectileNode(
                 source,
                 childSpec,
@@ -232,6 +296,55 @@ namespace Kernel.Bullet
                 source.HasExplosion,
                 source.ExplosionRadius,
                 copyPayloads: true);
+        }
+
+        public static SpellProjectileNode CreateWithRuntimeMovementOverride(SpellProjectileNode source, AttackSpec attackSpec)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            AttackSpec overriddenSpec = attackSpec.GetSanitized();
+            overriddenSpec.coreType = source.CoreType;
+            overriddenSpec.resultType = source.ResultType;
+            return new SpellProjectileNode(
+                source,
+                overriddenSpec,
+                source.ResultType,
+                source.ResultEffects,
+                source.HasExplosion,
+                source.ExplosionRadius,
+                copyPayloads: true);
+        }
+
+        public static SpellProjectileNode CreateWithRuntimeCoreOverride(
+            SpellProjectileNode source,
+            AttackSpec attackSpec,
+            AttackCoreType coreType,
+            CoreEffectPayload coreEffects,
+            string displayText)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            AttackSpec overriddenSpec = attackSpec.GetSanitized();
+            overriddenSpec.coreType = coreType;
+            overriddenSpec.behaviorType = source.BehaviorType;
+            overriddenSpec.resultType = source.ResultType;
+            return new SpellProjectileNode(
+                source,
+                overriddenSpec,
+                source.ResultType,
+                source.ResultEffects,
+                source.HasExplosion,
+                source.ExplosionRadius,
+                copyPayloads: true,
+                coreTypeOverride: coreType,
+                coreEffectsOverride: coreEffects,
+                displayTextOverride: displayText);
         }
 
         internal void AddPayload(SpellPayloadBlock payload)
@@ -284,14 +397,50 @@ namespace Kernel.Bullet
     public sealed class SpellPayloadBlock : SpellNode
     {
         public SpellPayloadBlock(string payloadId, SpellTriggerType triggerType, SpellCastBlock innerBlock)
+            : this(
+                payloadId,
+                triggerType,
+                SpellTriggerParameterKind.None,
+                0f,
+                ResolveDefaultTriggerPoint(triggerType),
+                innerBlock)
+        {
+        }
+
+        public SpellPayloadBlock(
+            string payloadId,
+            SpellTriggerType triggerType,
+            SpellTriggerParameterKind parameterKind,
+            float parameterValue,
+            SpellTriggerPointKind triggerPointKind,
+            SpellCastBlock innerBlock)
             : base(SpellNodeKind.Payload, payloadId)
         {
-            TriggerType = triggerType;
+            TriggerType = triggerType == SpellTriggerType.None ? SpellTriggerType.OnHit : triggerType;
+            ParameterKind = parameterKind;
+            ParameterValue = Mathf.Max(0f, parameterValue);
+            TriggerPointKind = triggerPointKind;
             InnerBlock = innerBlock;
         }
 
         public SpellTriggerType TriggerType { get; }
+        public SpellTriggerParameterKind ParameterKind { get; }
+        public float ParameterValue { get; }
+        public SpellTriggerPointKind TriggerPointKind { get; }
         public SpellCastBlock InnerBlock { get; }
+
+        private static SpellTriggerPointKind ResolveDefaultTriggerPoint(SpellTriggerType triggerType)
+        {
+            return triggerType switch
+            {
+                SpellTriggerType.OnTimer => SpellTriggerPointKind.ProjectilePosition,
+                SpellTriggerType.OnExpire => SpellTriggerPointKind.ExpirePoint,
+                SpellTriggerType.OnKill => SpellTriggerPointKind.DeathTargetPosition,
+                SpellTriggerType.OnDistance => SpellTriggerPointKind.ProjectilePosition,
+                SpellTriggerType.OnProximity => SpellTriggerPointKind.ProjectilePosition,
+                _ => SpellTriggerPointKind.ImpactPoint,
+            };
+        }
     }
 
     [Serializable]
@@ -321,13 +470,29 @@ namespace Kernel.Bullet
         private readonly List<SpellPayloadEffectNode> payloadEffects = new();
 
         public SpellCastBlock(string blockId, int depth)
+            : this(blockId, depth, SpellCastPattern.Simultaneous, 0.12f, 15f)
+        {
+        }
+
+        public SpellCastBlock(
+            string blockId,
+            int depth,
+            SpellCastPattern castPattern,
+            float sequentialIntervalSeconds,
+            float patternAngleStep)
         {
             BlockId = blockId ?? string.Empty;
             Depth = Mathf.Max(0, depth);
+            CastPattern = castPattern;
+            SequentialIntervalSeconds = Mathf.Max(0f, sequentialIntervalSeconds);
+            PatternAngleStep = Mathf.Max(0f, patternAngleStep);
         }
 
         public string BlockId { get; }
         public int Depth { get; }
+        public SpellCastPattern CastPattern { get; }
+        public float SequentialIntervalSeconds { get; }
+        public float PatternAngleStep { get; }
         public IReadOnlyList<SpellModifierNode> Modifiers => modifiers;
         public IReadOnlyList<SpellProjectileNode> Projectiles => projectiles;
         public IReadOnlyList<SpellPayloadBlock> Payloads => payloads;
@@ -376,6 +541,7 @@ namespace Kernel.Bullet
         public IReadOnlyList<AttackCompileMessage> Messages => messages;
         public SpellCastBlock PrimaryCastBlock => castBlocks.Count > 0 ? castBlocks[0] : null;
         public bool CanCast { get; private set; }
+        public SpellCastRuntimeModifiers RuntimeModifiers { get; private set; } = SpellCastRuntimeModifiers.Identity;
         public int MaxPayloadDepth { get; private set; } = 4;
         public int MaxPayloadNodeCount { get; private set; } = 32;
         public int MaxDerivedProjectileCount { get; private set; } = 64;
@@ -385,6 +551,9 @@ namespace Kernel.Bullet
             CompiledSpellProgram program = new()
             {
                 CanCast = projectileResult != null && projectileResult.CanFire,
+                RuntimeModifiers = projectileResult != null
+                    ? projectileResult.RuntimeModifiers.GetSanitized()
+                    : SpellCastRuntimeModifiers.Identity,
             };
             program.CopyMessages(projectileResult);
 
@@ -440,6 +609,26 @@ namespace Kernel.Bullet
 
             program.CanCast = block.Projectiles.Count > 0;
             return program;
+        }
+
+        internal static CompiledSpellProgram CreateFromCastBlock(SpellCastBlock block, IReadOnlyList<AttackCompileMessage> extraMessages)
+        {
+            CompiledSpellProgram program = new();
+            program.CopyMessages(extraMessages);
+            if (block == null || block.Projectiles.Count <= 0)
+            {
+                program.CanCast = false;
+                return program;
+            }
+
+            program.castBlocks.Add(block);
+            program.CanCast = true;
+            return program;
+        }
+
+        internal void SetRuntimeModifiers(SpellCastRuntimeModifiers modifiers)
+        {
+            RuntimeModifiers = modifiers.GetSanitized();
         }
 
         internal void AttachPayloadToPrimaryBlockProjectiles(SpellPayloadBlock payload)

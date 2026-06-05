@@ -48,6 +48,15 @@ namespace Kernel.UI
         [Header("Objective Arrow")]
         [SerializeField] private ObjectiveArrowView objectiveArrowView;
 
+        [Header("Reward Notification")]
+        [SerializeField] private RectTransform notificationPanel;
+        [SerializeField] private CanvasGroup notificationCanvasGroup;
+        [SerializeField] private TMP_Text notificationTitleText;
+        [SerializeField] private TMP_Text notificationDescriptionText;
+        [SerializeField] private Image notificationImage;
+        [SerializeField, Min(0f)] private float notificationDisplaySeconds = 2f;
+        [SerializeField, Min(0f)] private float notificationFadeSeconds = 0.18f;
+
         [Header("Linked Outline")]
         [SerializeField] private Color linkedOutlineColor = new(1f, 0.84f, 0.35f, 0.95f);
         [SerializeField, Min(1f)] private float linkedOutlineThickness = 4f;
@@ -62,8 +71,10 @@ namespace Kernel.UI
         private bool hasLoggedMissingSpellTemplate;
         private RectTransform spellLinkedOutlineLayer;
         private System.IDisposable playerHealthChangedSubscription;
+        private System.IDisposable rewardNotificationSubscription;
         private PlayerHealth currentPlayerHealth;
         private Coroutine dangerEdgeFlashCoroutine;
+        private Coroutine notificationCoroutine;
         private bool isDangerEdgeVisible;
         private QuestService currentQuestService;
 
@@ -85,15 +96,30 @@ namespace Kernel.UI
         public RectTransform DangerEdge => dangerEdge;
         public Image DangerEdgeImage => dangerEdgeImage;
         public ObjectiveArrowView ObjectiveArrowView => objectiveArrowView;
+        public RectTransform NotificationPanel => notificationPanel;
+        public CanvasGroup NotificationCanvasGroup => notificationCanvasGroup != null
+            ? notificationCanvasGroup
+            : notificationPanel != null ? notificationPanel.GetComponent<CanvasGroup>() : null;
+        public TMP_Text NotificationTitleText => notificationTitleText != null
+            ? notificationTitleText
+            : notificationPanel != null ? notificationPanel.Find("Tittle/Text (TMP)")?.GetComponent<TMP_Text>() : null;
+        public TMP_Text NotificationDescriptionText => notificationDescriptionText != null
+            ? notificationDescriptionText
+            : notificationPanel != null ? notificationPanel.Find("Description/Text (TMP)")?.GetComponent<TMP_Text>() : null;
+        public Image NotificationImage => notificationImage != null
+            ? notificationImage
+            : notificationPanel != null ? notificationPanel.Find("Image")?.GetComponent<Image>() : null;
 
         protected override void OnInit()
         {
             TryAutoBindReferences();
             SanitizeDangerEdgeConfiguration();
+            SanitizeNotificationConfiguration();
             BindButtonCallbacks();
             RefreshSpellPanel();
             RefreshQuestEntries();
             ResetDangerEdgeDisplay();
+            ResetNotificationDisplay();
             ui?.EnsureOverlay<BossInfoUIScreen>();
         }
 
@@ -104,6 +130,7 @@ namespace Kernel.UI
             RefreshQuestEntries();
             SubscribeToPlayerHealthEvents();
             SyncDangerEdgeToCurrentHealth();
+            SubscribeToRewardNotifications();
         }
 
         protected override void OnAfterHide()
@@ -114,8 +141,10 @@ namespace Kernel.UI
             ClearRuntimeSpellSlots();
             currentPlayerHealth = null;
             DisposePlayerHealthSubscription();
+            DisposeRewardNotificationSubscription();
             objectiveArrowView?.ClearTarget();
             ResetDangerEdgeDisplay();
+            ResetNotificationDisplay();
         }
 
         private void OnDestroy()
@@ -127,14 +156,17 @@ namespace Kernel.UI
             ClearRuntimeSpellSlots();
             currentPlayerHealth = null;
             DisposePlayerHealthSubscription();
+            DisposeRewardNotificationSubscription();
             objectiveArrowView?.ClearTarget();
             ResetDangerEdgeDisplay();
+            ResetNotificationDisplay();
         }
 
         private void OnValidate()
         {
             TryAutoBindReferences();
             SanitizeDangerEdgeConfiguration();
+            SanitizeNotificationConfiguration();
         }
 
         [ContextMenu("Auto Bind Main UI Template")]
@@ -158,6 +190,16 @@ namespace Kernel.UI
             if (dangerEdge != null)
             {
                 dangerEdgeImage ??= dangerEdge.GetComponent<Image>();
+            }
+
+            notificationPanel ??= transform.Find("Notification Panel") as RectTransform;
+            if (notificationPanel != null)
+            {
+                notificationCanvasGroup ??= notificationPanel.GetComponent<CanvasGroup>();
+                notificationTitleText ??= notificationPanel.Find("Tittle/Text (TMP)")?.GetComponent<TMP_Text>();
+                notificationTitleText ??= notificationPanel.Find("Title/Text (TMP)")?.GetComponent<TMP_Text>();
+                notificationDescriptionText ??= notificationPanel.Find("Description/Text (TMP)")?.GetComponent<TMP_Text>();
+                notificationImage ??= notificationPanel.Find("Image")?.GetComponent<Image>();
             }
 
             if (objectiveArrowView == null)
@@ -681,6 +723,131 @@ namespace Kernel.UI
             playerHealthChangedSubscription = null;
         }
 
+        private void SubscribeToRewardNotifications()
+        {
+            rewardNotificationSubscription ??= EventManager.eventBus.Subscribe<RewardNotificationEvent>(HandleRewardNotification);
+        }
+
+        private void DisposeRewardNotificationSubscription()
+        {
+            rewardNotificationSubscription?.Dispose();
+            rewardNotificationSubscription = null;
+        }
+
+        private void HandleRewardNotification(RewardNotificationEvent evt)
+        {
+            ShowRewardNotification(evt.title, evt.description);
+        }
+
+        private void ShowRewardNotification(string title, string description)
+        {
+            TryAutoBindReferences();
+            if (notificationPanel == null)
+            {
+                return;
+            }
+
+            if (notificationTitleText != null)
+            {
+                notificationTitleText.text = string.IsNullOrWhiteSpace(title) ? "获得奖励" : title;
+            }
+
+            if (notificationDescriptionText != null)
+            {
+                notificationDescriptionText.richText = true;
+                notificationDescriptionText.text = description ?? string.Empty;
+            }
+
+            if (notificationImage != null)
+            {
+                notificationImage.sprite = null;
+                notificationImage.enabled = false;
+                notificationImage.gameObject.SetActive(false);
+            }
+
+            StopNotificationCoroutine();
+            SetNotificationVisible(true);
+            if (isActiveAndEnabled)
+            {
+                notificationCoroutine = StartCoroutine(PlayNotificationAutoHideCo());
+            }
+        }
+
+        private IEnumerator PlayNotificationAutoHideCo()
+        {
+            if (notificationDisplaySeconds > 0f)
+            {
+                float displayElapsed = 0f;
+                while (displayElapsed < notificationDisplaySeconds)
+                {
+                    displayElapsed += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+            }
+
+            if (notificationCanvasGroup == null || notificationFadeSeconds <= 0f)
+            {
+                SetNotificationAlpha(0f);
+                SetNotificationVisible(false);
+                notificationCoroutine = null;
+                yield break;
+            }
+
+            float startAlpha = notificationCanvasGroup.alpha;
+            float fadeElapsed = 0f;
+            while (fadeElapsed < notificationFadeSeconds)
+            {
+                fadeElapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(fadeElapsed / notificationFadeSeconds);
+                SetNotificationAlpha(Mathf.Lerp(startAlpha, 0f, t));
+                yield return null;
+            }
+
+            SetNotificationAlpha(0f);
+            SetNotificationVisible(false);
+            notificationCoroutine = null;
+        }
+
+        private void ResetNotificationDisplay()
+        {
+            StopNotificationCoroutine();
+            SetNotificationAlpha(0f);
+            SetNotificationVisible(false);
+        }
+
+        private void StopNotificationCoroutine()
+        {
+            if (notificationCoroutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(notificationCoroutine);
+            notificationCoroutine = null;
+        }
+
+        private void SetNotificationVisible(bool visible)
+        {
+            if (notificationPanel != null)
+            {
+                notificationPanel.gameObject.SetActive(visible);
+            }
+
+            SetNotificationAlpha(visible ? 1f : 0f);
+        }
+
+        private void SetNotificationAlpha(float alpha)
+        {
+            if (notificationCanvasGroup == null)
+            {
+                return;
+            }
+
+            notificationCanvasGroup.alpha = Mathf.Clamp01(alpha);
+            notificationCanvasGroup.blocksRaycasts = false;
+            notificationCanvasGroup.interactable = false;
+        }
+
         /// <summary>
         /// summary: 在界面显示时按当前生命值立即刷新 Danger Edge 的可见状态。
         /// param: 无
@@ -912,6 +1079,12 @@ namespace Kernel.UI
             {
                 dangerFlashAlpha = dangerVisibleAlpha;
             }
+        }
+
+        private void SanitizeNotificationConfiguration()
+        {
+            notificationDisplaySeconds = Mathf.Max(0f, notificationDisplaySeconds);
+            notificationFadeSeconds = Mathf.Max(0f, notificationFadeSeconds);
         }
 
         /// <summary>

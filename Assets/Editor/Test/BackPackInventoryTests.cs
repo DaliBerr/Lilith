@@ -156,15 +156,22 @@ public sealed class BackPackInventoryTests
     }
 
     [Test]
-    public void Prefab_BackPackGridUsesFixedEightColumns()
+    public void Prefab_BackPackGridUsesFixedSixColumnsInScrollContent()
     {
         GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Backpack/BackPackUI.prefab");
 
         try
         {
-            GridLayoutGroup grid = prefabRoot.transform.Find("Grids Preview Panel/BackPack Grid Panel/Grid")?.GetComponent<GridLayoutGroup>();
+            BackPackUIScreen screen = prefabRoot.GetComponent<BackPackUIScreen>();
+            Assert.That(screen, Is.Not.Null);
+
+            RectTransform backPackGrid = GetPrivateField<RectTransform>(screen, "backPackGrid");
+            ScrollRect scrollRect = prefabRoot.transform.Find("Grids Preview Panel/BackPack Grid Panel/Scroll View")?.GetComponent<ScrollRect>();
+            GridLayoutGroup grid = backPackGrid != null ? backPackGrid.GetComponent<GridLayoutGroup>() : null;
 
             Assert.That(grid, Is.Not.Null);
+            Assert.That(scrollRect, Is.Not.Null);
+            Assert.That(backPackGrid, Is.EqualTo(scrollRect.content));
             Assert.That(grid.constraint, Is.EqualTo(GridLayoutGroup.Constraint.FixedColumnCount));
             Assert.That(grid.constraintCount, Is.EqualTo(PlayerBulletTokenInventory.Columns));
         }
@@ -300,9 +307,6 @@ public sealed class BackPackInventoryTests
         slot.SetOccupancy(new TokenCellOccupancy(CreateToken<TriggerTokenData>("trigger", "Hit"), 0, 0, true));
         Color triggerColor = GetSlotBackgroundColor(slot);
 
-        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<PayloadBoundaryTokenData>("payload", "Start"), 0, 0, true));
-        Color payloadColor = GetSlotBackgroundColor(slot);
-
         AssertColorApproximately(coreColor, new Color(1f, 0.82f, 0.62f, 0.35f));
         AssertColorApproximately(behaviorColor, new Color(0.66f, 0.82f, 1f, 0.35f));
         AssertColorApproximately(resultColor, new Color(1f, 0.68f, 0.68f, 0.35f));
@@ -310,7 +314,6 @@ public sealed class BackPackInventoryTests
         AssertColorApproximately(modifierColor, new Color(0.8f, 0.7f, 1f, 0.35f));
         AssertColorApproximately(multicastColor, new Color(1f, 0.88f, 0.55f, 0.35f));
         AssertColorApproximately(triggerColor, new Color(0.58f, 0.94f, 0.96f, 0.35f));
-        AssertColorApproximately(payloadColor, new Color(1f, 0.74f, 0.88f, 0.35f));
     }
 
     [Test]

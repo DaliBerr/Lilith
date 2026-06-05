@@ -176,8 +176,6 @@ namespace Kernel.Bullet
         Modifier = 7,
         Multicast = 8,
         Trigger = 9,
-        PayloadStart = 10,
-        PayloadEnd = 11,
     }
 
     /// <summary>
@@ -196,6 +194,12 @@ namespace Kernel.Bullet
         ResultDuration = 8,
         ResultMultiplier = 9,
         Damage = 10,
+        CastCooldownMultiplier = 11,
+        EnergyCostMultiplier = 12,
+        CasterHealthCost = 13,
+        DropChanceMultiplierOnKill = 14,
+        AngleSpreadMultiplier = 15,
+        MovementVarianceMultiplier = 16,
     }
 
     /// <summary>

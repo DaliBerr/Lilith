@@ -35,6 +35,26 @@ namespace Kernel.Bullet
             public string SourceLabel => SpellBook != null ? SpellBook.SpellBookId : "spell book";
         }
 
+        private readonly struct ResolvedTriggerParameter
+        {
+            public ResolvedTriggerParameter(
+                SpellTriggerParameterKind kind,
+                float value,
+                SpellTriggerPointKind triggerPointKind,
+                int consumedTokenCount)
+            {
+                Kind = kind;
+                Value = value;
+                TriggerPointKind = triggerPointKind;
+                ConsumedTokenCount = consumedTokenCount;
+            }
+
+            public SpellTriggerParameterKind Kind { get; }
+            public float Value { get; }
+            public SpellTriggerPointKind TriggerPointKind { get; }
+            public int ConsumedTokenCount { get; }
+        }
+
         public static CompiledSpellProgram Compile(IReadOnlyList<BaseTokenData> tokens)
         {
             if (tokens == null)
@@ -65,28 +85,16 @@ namespace Kernel.Bullet
         {
             List<AttackCompileMessage> messages = new();
             List<BaseTokenData> tokens = ExpandItems(items, messages);
-            int triggerIndex = FindFirstTriggerIndex(tokens);
-            if (triggerIndex >= 0)
-            {
-                return CompileTriggeredProgram(tokens, triggerIndex, messages, executorModifiers);
-            }
-
-            int multicastIndex = FindFirstMulticastIndex(tokens);
-            if (multicastIndex >= 0)
-            {
-                return CompileMulticast(tokens, multicastIndex, messages, executorModifiers);
-            }
-
-            SpellProjectileCompileResult projectileResult = SpellProjectileCompiler.Compile(items);
-            ApplyExecutorModifiers(projectileResult, executorModifiers);
-            return CompiledSpellProgram.CreateFromProjectileResult(projectileResult);
+            return CompileProgramFromTokens(tokens, messages, executorModifiers, null, SpellCastRuntimeModifiers.Identity, items);
         }
 
         private static CompiledSpellProgram CompileTriggeredProgram(
             IReadOnlyList<BaseTokenData> tokens,
             int triggerIndex,
             IReadOnlyList<AttackCompileMessage> initialMessages,
-            ExecutorModifierContext executorModifiers)
+            ExecutorModifierContext executorModifiers,
+            IReadOnlyList<ResolvedModifierTokenData> inheritedProjectileModifiers,
+            SpellCastRuntimeModifiers inheritedRuntimeModifiers)
         {
             List<AttackCompileMessage> messages = new();
             CopyMessages(initialMessages, messages);
@@ -98,28 +106,25 @@ namespace Kernel.Bullet
                 triggerType = SpellTriggerType.OnHit;
             }
 
+            ResolvedTriggerParameter triggerParameter = ResolveTriggerParameter(tokens, triggerIndex, triggerToken, messages);
             List<BaseTokenData> outerTokens = CopyRange(tokens, 0, triggerIndex);
-            CompiledSpellProgram program = CompileProgramFromTokens(outerTokens, executorModifiers);
-            int payloadStartIndex = FindPayloadStartIndex(tokens, triggerIndex + 1);
-            if (payloadStartIndex < 0)
-            {
-                AddMessage(messages, AttackCompileMessageSeverity.Warning, "Ignored trigger token because it is not followed by a payload start token.", triggerToken);
-                CopyMessages(messages, program);
-                return program;
-            }
-
-            WarnIgnoredTokens(tokens, triggerIndex + 1, payloadStartIndex, messages, "Ignored token between trigger and payload start.");
-
-            int payloadEndIndex = FindPayloadEndIndex(tokens, payloadStartIndex + 1);
-            if (payloadEndIndex < 0)
-            {
-                payloadEndIndex = tokens.Count;
-                AddMessage(messages, AttackCompileMessageSeverity.Warning, "Payload start token did not find a matching payload end token; consuming tokens to the end of the formula.", tokens[payloadStartIndex]);
-            }
-
-            List<BaseTokenData> payloadTokens = CopyRange(tokens, payloadStartIndex + 1, payloadEndIndex);
+            CompiledSpellProgram program = CompileProgramFromTokens(
+                outerTokens,
+                null,
+                executorModifiers,
+                inheritedProjectileModifiers,
+                inheritedRuntimeModifiers);
+            int payloadStartIndex = triggerIndex + 1 + triggerParameter.ConsumedTokenCount;
+            List<BaseTokenData> payloadTokens = CopyRange(tokens, payloadStartIndex, tokens.Count);
             List<ResolvedModifierTokenData> inheritedPayloadModifiers = CollectGlobalProgramModifiers(outerTokens);
-            SpellPayloadBlock payload = CompilePayloadBlock(payloadTokens, triggerType, messages, inheritedPayloadModifiers, executorModifiers);
+            SpellPayloadBlock payload = CompilePayloadBlock(
+                payloadTokens,
+                triggerType,
+                triggerParameter,
+                messages,
+                inheritedPayloadModifiers,
+                executorModifiers,
+                program.RuntimeModifiers);
             if (payload != null && program.CanCast)
             {
                 program.AttachPayloadToPrimaryBlockProjectiles(payload);
@@ -129,23 +134,106 @@ namespace Kernel.Bullet
                 AddMessage(messages, AttackCompileMessageSeverity.Warning, "Compiled payload was not attached because the outer trigger formula cannot cast.", triggerToken);
             }
 
-            if (payloadEndIndex < tokens.Count)
-            {
-                WarnIgnoredTokens(tokens, payloadEndIndex + 1, tokens.Count, messages, "Ignored token after payload end.");
-            }
-
             CopyMessages(messages, program);
             return program;
+        }
+
+        private static ResolvedTriggerParameter ResolveTriggerParameter(
+            IReadOnlyList<BaseTokenData> tokens,
+            int triggerIndex,
+            TriggerTokenData triggerToken,
+            ICollection<AttackCompileMessage> messages)
+        {
+            SpellTriggerType triggerType = triggerToken != null ? triggerToken.TriggerType : SpellTriggerType.OnHit;
+            SpellTriggerParameterKind parameterKind = triggerToken != null
+                ? triggerToken.ParameterKind
+                : ResolveDefaultTriggerParameterKind(triggerType);
+            SpellTriggerPointKind triggerPointKind = triggerToken != null
+                ? triggerToken.TriggerPointKind
+                : ResolveDefaultTriggerPointKind(triggerType);
+
+            if (parameterKind == SpellTriggerParameterKind.None)
+            {
+                return new ResolvedTriggerParameter(parameterKind, 0f, triggerPointKind, 0);
+            }
+
+            float defaultValue = triggerToken != null ? triggerToken.DefaultParameterValue : 1f;
+            int valueIndex = triggerIndex + 1;
+            if (tokens != null &&
+                valueIndex < tokens.Count &&
+                tokens[valueIndex] is ValueTokenData valueToken)
+            {
+                float resolvedValue = valueToken.ResolveNumericValue(
+                    SpellValueParameterKind.TriggerParameter,
+                    defaultValue,
+                    allowZero: false);
+                return new ResolvedTriggerParameter(parameterKind, MathfMax(0.01f, resolvedValue), triggerPointKind, 1);
+            }
+
+            AddMessage(
+                messages,
+                AttackCompileMessageSeverity.Warning,
+                $"Trigger '{ResolveTriggerLabel(triggerType)}' expected a value parameter but none was provided; using default {defaultValue:0.##}.",
+                triggerToken);
+            return new ResolvedTriggerParameter(parameterKind, MathfMax(0.01f, defaultValue), triggerPointKind, 0);
+        }
+
+        private static SpellTriggerParameterKind ResolveDefaultTriggerParameterKind(SpellTriggerType triggerType)
+        {
+            return triggerType switch
+            {
+                SpellTriggerType.OnTimer => SpellTriggerParameterKind.TimeSeconds,
+                SpellTriggerType.OnDistance => SpellTriggerParameterKind.Distance,
+                SpellTriggerType.OnProximity => SpellTriggerParameterKind.Radius,
+                _ => SpellTriggerParameterKind.None,
+            };
+        }
+
+        private static SpellTriggerPointKind ResolveDefaultTriggerPointKind(SpellTriggerType triggerType)
+        {
+            return triggerType switch
+            {
+                SpellTriggerType.OnTimer => SpellTriggerPointKind.ProjectilePosition,
+                SpellTriggerType.OnExpire => SpellTriggerPointKind.ExpirePoint,
+                SpellTriggerType.OnKill => SpellTriggerPointKind.DeathTargetPosition,
+                SpellTriggerType.OnDistance => SpellTriggerPointKind.ProjectilePosition,
+                SpellTriggerType.OnProximity => SpellTriggerPointKind.ProjectilePosition,
+                _ => SpellTriggerPointKind.ImpactPoint,
+            };
+        }
+
+        private static string ResolveTriggerLabel(SpellTriggerType triggerType)
+        {
+            return triggerType switch
+            {
+                SpellTriggerType.OnTimer => "OnTimer",
+                SpellTriggerType.OnExpire => "OnExpire",
+                SpellTriggerType.OnKill => "OnKill",
+                SpellTriggerType.OnDistance => "OnDistance",
+                SpellTriggerType.OnProximity => "OnProximity",
+                _ => "OnHit",
+            };
         }
 
         private static CompiledSpellProgram CompileMulticast(
             IReadOnlyList<BaseTokenData> tokens,
             int multicastIndex,
             IReadOnlyList<AttackCompileMessage> initialMessages,
-            ExecutorModifierContext executorModifiers)
+            ExecutorModifierContext executorModifiers,
+            IReadOnlyList<ResolvedModifierTokenData> inheritedBlockModifierTokens,
+            SpellCastRuntimeModifiers inheritedRuntimeModifiers)
         {
             MulticastCompileState state = new();
             CopyMessages(initialMessages, state.messages);
+            ExtractCastRuntimeModifierTokens(
+                tokens,
+                state.messages,
+                inheritedRuntimeModifiers,
+                out List<BaseTokenData> filteredTokens,
+                out SpellCastRuntimeModifiers runtimeModifiers,
+                state.blockModifiers);
+            tokens = filteredTokens;
+            AddInheritedBlockModifiers(inheritedBlockModifierTokens, state);
 
             MulticastTokenData multicastToken = tokens[multicastIndex] as MulticastTokenData;
             int requestedCount = multicastToken != null ? multicastToken.CastCount : 2;
@@ -170,37 +258,89 @@ namespace Kernel.Bullet
 
             WarnIgnoredTrailingTokens(tokens, index, state);
 
-            List<SpellProjectileCompileResult> projectileResults = new(segments.Count);
+            SpellCastBlock block = new(
+                "outer",
+                0,
+                multicastToken != null ? multicastToken.CastPattern : SpellCastPattern.Simultaneous,
+                multicastToken != null ? multicastToken.SequentialIntervalSeconds : 0.12f,
+                (multicastToken != null ? multicastToken.PatternAngleStep : 18f) * runtimeModifiers.GetSanitized().angleSpreadMultiplier);
+            AddBlockModifiersToCastBlock(block, state.blockModifiers);
             for (int i = 0; i < segments.Count; i++)
             {
-                SpellProjectileCompileResult projectileResult = SpellProjectileCompiler.Compile(segments[i]);
-                ApplyResolvedProjectileModifiers(projectileResult, state.blockModifierTokens, state.messages, "multicast block modifier");
-                ApplyExecutorModifiers(projectileResult, executorModifiers);
-                projectileResults.Add(projectileResult);
+                CompiledSpellProgram segmentProgram = CompileProgramFromTokens(
+                    segments[i],
+                    null,
+                    executorModifiers,
+                    state.blockModifierTokens,
+                    runtimeModifiers);
+                CopyMessages(segmentProgram.Messages, state.messages);
+                CopyOuterBlockContents(segmentProgram.PrimaryCastBlock, block);
             }
 
-            return CompiledSpellProgram.CreateFromProjectileResults(projectileResults, state.blockModifiers, state.messages);
+            CompiledSpellProgram program = CompiledSpellProgram.CreateFromCastBlock(block, state.messages);
+            program.SetRuntimeModifiers(runtimeModifiers);
+            return program;
         }
 
-        private static CompiledSpellProgram CompileProgramFromTokens(IReadOnlyList<BaseTokenData> tokens, ExecutorModifierContext executorModifiers)
+        private static CompiledSpellProgram CompileProgramFromTokens(
+            IReadOnlyList<BaseTokenData> tokens,
+            IReadOnlyList<AttackCompileMessage> initialMessages,
+            ExecutorModifierContext executorModifiers,
+            IReadOnlyList<ResolvedModifierTokenData> inheritedProjectileModifiers,
+            SpellCastRuntimeModifiers inheritedRuntimeModifiers,
+            IReadOnlyList<PlaceableTokenData> sourceItems = null)
         {
+            List<AttackCompileMessage> messages = new();
+            CopyMessages(initialMessages, messages);
+            int originalTokenCount = tokens != null ? tokens.Count : 0;
+            List<SpellModifierNode> runtimeModifierNodes = new();
+            ExtractCastRuntimeModifierTokens(
+                tokens,
+                messages,
+                inheritedRuntimeModifiers,
+                out List<BaseTokenData> filteredTokens,
+                out SpellCastRuntimeModifiers runtimeModifiers,
+                runtimeModifierNodes);
+            tokens = filteredTokens;
+
+            int triggerIndex = FindFirstTriggerIndex(tokens);
             int multicastIndex = FindFirstMulticastIndex(tokens);
-            if (multicastIndex >= 0)
+            if (triggerIndex >= 0 && (multicastIndex < 0 || triggerIndex < multicastIndex))
             {
-                return CompileMulticast(tokens, multicastIndex, null, executorModifiers);
+                CompiledSpellProgram triggeredProgram = CompileTriggeredProgram(tokens, triggerIndex, messages, executorModifiers, inheritedProjectileModifiers, runtimeModifiers);
+                AddBlockModifiersToCastBlock(triggeredProgram.PrimaryCastBlock, runtimeModifierNodes);
+                return triggeredProgram;
             }
 
-            SpellProjectileCompileResult projectileResult = SpellProjectileCompiler.Compile(tokens);
+            if (multicastIndex >= 0)
+            {
+                CompiledSpellProgram multicastProgram = CompileMulticast(tokens, multicastIndex, messages, executorModifiers, inheritedProjectileModifiers, runtimeModifiers);
+                AddBlockModifiersToCastBlock(multicastProgram.PrimaryCastBlock, runtimeModifierNodes);
+                return multicastProgram;
+            }
+
+            bool removedRuntimeModifierTokens = filteredTokens != null && originalTokenCount != filteredTokens.Count;
+            SpellProjectileCompileResult projectileResult = sourceItems != null && !removedRuntimeModifierTokens
+                ? SpellProjectileCompiler.Compile(sourceItems)
+                : SpellProjectileCompiler.Compile(tokens);
+            ApplyResolvedProjectileModifiers(projectileResult, inheritedProjectileModifiers, messages, "inherited modifier");
             ApplyExecutorModifiers(projectileResult, executorModifiers);
-            return CompiledSpellProgram.CreateFromProjectileResult(projectileResult);
+            ApplyCastRuntimeModifiers(projectileResult, runtimeModifiers);
+            CompiledSpellProgram program = CompiledSpellProgram.CreateFromProjectileResult(projectileResult);
+            program.SetRuntimeModifiers(runtimeModifiers);
+            AddBlockModifiersToCastBlock(program.PrimaryCastBlock, runtimeModifierNodes);
+            CopyMessages(messages, program);
+            return program;
         }
 
         private static SpellPayloadBlock CompilePayloadBlock(
             IReadOnlyList<BaseTokenData> payloadTokens,
             SpellTriggerType triggerType,
+            ResolvedTriggerParameter triggerParameter,
             ICollection<AttackCompileMessage> messages,
             IReadOnlyList<ResolvedModifierTokenData> inheritedPayloadModifiers,
-            ExecutorModifierContext executorModifiers)
+            ExecutorModifierContext executorModifiers,
+            SpellCastRuntimeModifiers runtimeModifiers)
         {
             SpellCastBlock innerBlock = new("payload_0", 1);
             if (payloadTokens == null || payloadTokens.Count <= 0)
@@ -232,7 +372,12 @@ namespace Kernel.Bullet
 
             if (hasProjectileCore)
             {
-                CompiledSpellProgram payloadProgram = CompileProgramFromTokens(projectileTokens, executorModifiers);
+                CompiledSpellProgram payloadProgram = CompileProgramFromTokens(
+                    projectileTokens,
+                    null,
+                    executorModifiers,
+                    null,
+                    runtimeModifiers);
                 CopyMessages(payloadProgram.Messages, messages);
                 if (payloadProgram.PrimaryCastBlock != null)
                 {
@@ -250,7 +395,13 @@ namespace Kernel.Bullet
                 return null;
             }
 
-            return new SpellPayloadBlock("payload_0", triggerType, innerBlock);
+            return new SpellPayloadBlock(
+                "payload_0",
+                triggerType,
+                triggerParameter.Kind,
+                triggerParameter.Value,
+                triggerParameter.TriggerPointKind,
+                innerBlock);
         }
 
         private static ExecutorModifierContext CreateExecutorModifierContext(SpellBookData spellBook)
@@ -344,7 +495,7 @@ namespace Kernel.Bullet
                     ValueTokenData consumedCountValue = null;
                     if (TryConsumeModifierTargetCount(payloadTokens, i, out consumedCountValue))
                     {
-                        targetCount = MathfMax(1, MathfRoundToInt(consumedCountValue.NumericValue));
+                        targetCount = consumedCountValue.ResolveCountValue();
                         i++;
                     }
 
@@ -382,11 +533,9 @@ namespace Kernel.Bullet
                     continue;
                 }
 
-                if (token.TokenType == TokenType.Trigger ||
-                    token.TokenType == TokenType.PayloadStart ||
-                    token.TokenType == TokenType.PayloadEnd)
+                if (token.TokenType == TokenType.Trigger)
                 {
-                    AddMessage(messages, AttackCompileMessageSeverity.Warning, "Ignored nested trigger or payload boundary token; nested payloads are not enabled yet.", token);
+                    AddMessage(messages, AttackCompileMessageSeverity.Warning, "Ignored nested trigger token; nested payloads are not enabled yet.", token);
                     continue;
                 }
 
@@ -399,6 +548,164 @@ namespace Kernel.Bullet
         private static List<ResolvedModifierTokenData> CollectGlobalProgramModifiers(IReadOnlyList<BaseTokenData> tokens)
         {
             return new List<ResolvedModifierTokenData>();
+        }
+
+        private static void ExtractCastRuntimeModifierTokens(
+            IReadOnlyList<BaseTokenData> tokens,
+            ICollection<AttackCompileMessage> messages,
+            SpellCastRuntimeModifiers inheritedRuntimeModifiers,
+            out List<BaseTokenData> filteredTokens,
+            out SpellCastRuntimeModifiers runtimeModifiers,
+            ICollection<SpellModifierNode> modifierNodes = null)
+        {
+            runtimeModifiers = inheritedRuntimeModifiers.GetSanitized();
+            filteredTokens = new List<BaseTokenData>();
+            if (tokens == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                BaseTokenData token = tokens[i];
+                if (token is ModifierTokenData modifierToken && IsCastRuntimeModifierToken(modifierToken))
+                {
+                    ApplyCastRuntimeModifierToken(modifierToken, ref runtimeModifiers, messages);
+                    modifierNodes?.Add(new SpellModifierNode(
+                        modifierToken,
+                        SpellModifierScope.GlobalProgram,
+                        SpellModifierOrigin.ModifierToken));
+                    continue;
+                }
+
+                filteredTokens.Add(token);
+            }
+        }
+
+        private static bool IsCastRuntimeModifierToken(ModifierTokenData modifierToken)
+        {
+            if (modifierToken == null || modifierToken.Modifiers == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < modifierToken.Modifiers.Count; i++)
+            {
+                if (IsCastRuntimeModifierTarget(modifierToken.Modifiers[i].target))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsCastRuntimeModifierTarget(TokenModifierTarget target)
+        {
+            switch (target)
+            {
+                case TokenModifierTarget.CastCooldownMultiplier:
+                case TokenModifierTarget.EnergyCostMultiplier:
+                case TokenModifierTarget.CasterHealthCost:
+                case TokenModifierTarget.DropChanceMultiplierOnKill:
+                case TokenModifierTarget.AngleSpreadMultiplier:
+                case TokenModifierTarget.MovementVarianceMultiplier:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static void ApplyCastRuntimeModifierToken(
+            ModifierTokenData modifierToken,
+            ref SpellCastRuntimeModifiers runtimeModifiers,
+            ICollection<AttackCompileMessage> messages)
+        {
+            if (modifierToken == null || modifierToken.Modifiers == null)
+            {
+                return;
+            }
+
+            runtimeModifiers = runtimeModifiers.GetSanitized();
+            runtimeModifiers.hasValues = true;
+            for (int i = 0; i < modifierToken.Modifiers.Count; i++)
+            {
+                TokenModifierDefinition modifier = modifierToken.Modifiers[i].GetSanitized();
+                switch (modifier.target)
+                {
+                    case TokenModifierTarget.Damage:
+                        TryApplyRuntimeModifier(modifierToken, modifier, runtimeModifiers.damageMultiplier, "damage multiplier", messages, out runtimeModifiers.damageMultiplier);
+                        break;
+                    case TokenModifierTarget.CastCooldownMultiplier:
+                        TryApplyRuntimeModifier(modifierToken, modifier, runtimeModifiers.castCooldownMultiplier, "cast cooldown multiplier", messages, out runtimeModifiers.castCooldownMultiplier);
+                        break;
+                    case TokenModifierTarget.EnergyCostMultiplier:
+                        TryApplyRuntimeModifier(modifierToken, modifier, runtimeModifiers.energyCostMultiplier, "energy cost multiplier", messages, out runtimeModifiers.energyCostMultiplier);
+                        break;
+                    case TokenModifierTarget.CasterHealthCost:
+                        TryApplyRuntimeModifier(modifierToken, modifier, runtimeModifiers.casterHealthCost, "caster health cost", messages, out runtimeModifiers.casterHealthCost);
+                        break;
+                    case TokenModifierTarget.DropChanceMultiplierOnKill:
+                        TryApplyRuntimeModifier(modifierToken, modifier, runtimeModifiers.dropChanceMultiplierOnKill, "drop chance multiplier", messages, out runtimeModifiers.dropChanceMultiplierOnKill);
+                        break;
+                    case TokenModifierTarget.AngleSpreadMultiplier:
+                        TryApplyRuntimeModifier(modifierToken, modifier, runtimeModifiers.angleSpreadMultiplier, "angle spread multiplier", messages, out runtimeModifiers.angleSpreadMultiplier);
+                        break;
+                    case TokenModifierTarget.MovementVarianceMultiplier:
+                        TryApplyRuntimeModifier(modifierToken, modifier, runtimeModifiers.movementVarianceMultiplier, "movement variance multiplier", messages, out runtimeModifiers.movementVarianceMultiplier);
+                        break;
+                }
+            }
+
+            runtimeModifiers = runtimeModifiers.GetSanitized();
+        }
+
+        private static bool TryApplyRuntimeModifier(
+            BaseTokenData sourceToken,
+            TokenModifierDefinition modifier,
+            float currentValue,
+            string targetLabel,
+            ICollection<AttackCompileMessage> messages,
+            out float result)
+        {
+            if (TokenModifierExpressionUtility.TryApplyNumericExpression(
+                    currentValue,
+                    modifier.expression,
+                    out result,
+                    out string errorMessage))
+            {
+                return true;
+            }
+
+            AddMessage(
+                messages,
+                AttackCompileMessageSeverity.Warning,
+                $"Ignored cast runtime modifier '{modifier.expression}' on {targetLabel}: {errorMessage}",
+                sourceToken);
+            return false;
+        }
+
+        private static void ApplyCastRuntimeModifiers(
+            SpellProjectileCompileResult projectileResult,
+            SpellCastRuntimeModifiers runtimeModifiers)
+        {
+            if (projectileResult == null)
+            {
+                return;
+            }
+
+            SpellCastRuntimeModifiers sanitizedModifiers = runtimeModifiers.GetSanitized();
+            AttackSpec spec = projectileResult.AttackSpec;
+            spec.damage *= sanitizedModifiers.damageMultiplier;
+            if (spec.behaviorType == AttackBehaviorType.Snake ||
+                spec.behaviorType == AttackBehaviorType.Wander)
+            {
+                spec.behaviorParameter *= sanitizedModifiers.movementVarianceMultiplier;
+            }
+
+            projectileResult.AttackSpec = spec.GetSanitized();
+            projectileResult.SpreadAngleStep = MathfMax(0f, projectileResult.SpreadAngleStep * sanitizedModifiers.angleSpreadMultiplier);
+            projectileResult.RuntimeModifiers = sanitizedModifiers;
         }
 
         private static void AddInheritedPayloadModifiers(
@@ -458,6 +765,72 @@ namespace Kernel.Bullet
             }
 
             block.AddModifier(modifier);
+        }
+
+        private static void AddInheritedBlockModifiers(
+            IReadOnlyList<ResolvedModifierTokenData> inheritedModifiers,
+            MulticastCompileState state)
+        {
+            if (inheritedModifiers == null || state == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < inheritedModifiers.Count; i++)
+            {
+                ResolvedModifierTokenData modifier = inheritedModifiers[i];
+                if (modifier.SourceToken == null)
+                {
+                    continue;
+                }
+
+                state.blockModifierTokens.Add(modifier);
+                AddBlockModifierNode(
+                    state,
+                    modifier.SourceToken,
+                    modifier.Scope,
+                    SpellModifierOrigin.ModifierToken,
+                    modifier.TargetCount);
+            }
+        }
+
+        private static void AddBlockModifiersToCastBlock(
+            SpellCastBlock block,
+            IReadOnlyList<SpellModifierNode> modifiers)
+        {
+            if (block == null || modifiers == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < modifiers.Count; i++)
+            {
+                AddModifierNodeIfMissing(block, modifiers[i]);
+            }
+        }
+
+        private static void CopyOuterBlockContents(SpellCastBlock sourceBlock, SpellCastBlock targetBlock)
+        {
+            if (sourceBlock == null || targetBlock == null)
+            {
+                return;
+            }
+
+            AddBlockModifiersToCastBlock(targetBlock, sourceBlock.Modifiers);
+            for (int i = 0; i < sourceBlock.Projectiles.Count; i++)
+            {
+                targetBlock.AddProjectile(sourceBlock.Projectiles[i]);
+            }
+
+            for (int i = 0; i < sourceBlock.Payloads.Count; i++)
+            {
+                targetBlock.AddPayload(sourceBlock.Payloads[i]);
+            }
+
+            for (int i = 0; i < sourceBlock.PayloadEffects.Count; i++)
+            {
+                targetBlock.AddPayloadEffect(sourceBlock.PayloadEffects[i]);
+            }
         }
 
         private static void ApplyResolvedProjectileModifiers(
@@ -608,6 +981,20 @@ namespace Kernel.Bullet
                 {
                     effects.effectRadius = controlRadius > 0f ? controlRadius : 0f;
                 }
+                else if ((resultToken.ResultType == AttackResultType.Leave ||
+                          resultToken.ResultType == AttackResultType.Push ||
+                          resultToken.ResultType == AttackResultType.Pull) &&
+                         TryApplyPayloadEffectModifier(
+                             sourceToken,
+                             modifier,
+                             effects.effectRadius,
+                             "result radius",
+                             sourceLabel,
+                             messages,
+                             out float resultRadius))
+                {
+                    effects.effectRadius = resultRadius > 0f ? resultRadius : 0f;
+                }
 
                 return;
             }
@@ -668,6 +1055,18 @@ namespace Kernel.Bullet
                 {
                     effects.controlDuration = MathfMax(0f, controlDuration);
                 }
+                else if (resultToken.ResultType == AttackResultType.Leave &&
+                         TryApplyPayloadEffectModifier(
+                             sourceToken,
+                             modifier,
+                             effects.effectDuration,
+                             "linger duration",
+                             sourceLabel,
+                             messages,
+                             out float lingerDuration))
+                {
+                    effects.effectDuration = MathfMax(0f, lingerDuration);
+                }
 
                 return;
             }
@@ -709,6 +1108,21 @@ namespace Kernel.Bullet
                              out float healingMultiplier))
                 {
                     effects.healingMultiplier = MathfMax(0f, healingMultiplier);
+                }
+                else if ((resultToken.ResultType == AttackResultType.Drain ||
+                          resultToken.ResultType == AttackResultType.Shield ||
+                          resultToken.ResultType == AttackResultType.Push ||
+                          resultToken.ResultType == AttackResultType.Pull) &&
+                         TryApplyPayloadEffectModifier(
+                             sourceToken,
+                             modifier,
+                             effects.effectStrength,
+                             "result strength",
+                             sourceLabel,
+                             messages,
+                             out float resultStrength))
+                {
+                    effects.effectStrength = MathfMax(0f, resultStrength);
                 }
             }
         }
@@ -803,54 +1217,6 @@ namespace Kernel.Bullet
             return -1;
         }
 
-        private static int FindPayloadStartIndex(IReadOnlyList<BaseTokenData> tokens, int startIndex)
-        {
-            if (tokens == null)
-            {
-                return -1;
-            }
-
-            for (int i = MathfMax(0, startIndex); i < tokens.Count; i++)
-            {
-                if (tokens[i] is PayloadBoundaryTokenData boundaryToken &&
-                    boundaryToken.BoundaryKind == PayloadBoundaryKind.Start)
-                {
-                    return i;
-                }
-
-                if (tokens[i]?.TokenType == TokenType.PayloadStart)
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
-
-        private static int FindPayloadEndIndex(IReadOnlyList<BaseTokenData> tokens, int startIndex)
-        {
-            if (tokens == null)
-            {
-                return -1;
-            }
-
-            for (int i = MathfMax(0, startIndex); i < tokens.Count; i++)
-            {
-                if (tokens[i] is PayloadBoundaryTokenData boundaryToken &&
-                    boundaryToken.BoundaryKind == PayloadBoundaryKind.End)
-                {
-                    return i;
-                }
-
-                if (tokens[i]?.TokenType == TokenType.PayloadEnd)
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
-
         private static void CollectBlockPrefix(IReadOnlyList<BaseTokenData> tokens, int multicastIndex, MulticastCompileState state)
         {
             for (int i = 0; i < multicastIndex; i++)
@@ -880,6 +1246,7 @@ namespace Kernel.Bullet
             segmentTokens = new List<BaseTokenData>();
             List<BaseTokenData> pendingPrefixTokens = new();
             bool hasStarted = false;
+            bool hasEnteredPayload = false;
 
             while (tokens != null && index < tokens.Count)
             {
@@ -915,9 +1282,20 @@ namespace Kernel.Bullet
                     continue;
                 }
 
+                if (token.TokenType == TokenType.Trigger)
+                {
+                    segmentTokens.AddRange(pendingPrefixTokens);
+                    pendingPrefixTokens.Clear();
+                    segmentTokens.Add(token);
+                    hasStarted = true;
+                    hasEnteredPayload = true;
+                    index++;
+                    continue;
+                }
+
                 if (token.TokenType == TokenType.Core)
                 {
-                    if (hasStarted)
+                    if (hasStarted && !hasEnteredPayload)
                     {
                         return segmentTokens.Count > 0;
                     }
@@ -1028,29 +1406,6 @@ namespace Kernel.Bullet
             return range;
         }
 
-        private static void WarnIgnoredTokens(
-            IReadOnlyList<BaseTokenData> tokens,
-            int startIndex,
-            int endExclusive,
-            ICollection<AttackCompileMessage> messages,
-            string warning)
-        {
-            if (tokens == null)
-            {
-                return;
-            }
-
-            int start = MathfMax(0, startIndex);
-            int end = MathfMin(tokens.Count, MathfMax(start, endExclusive));
-            for (int i = start; i < end; i++)
-            {
-                if (tokens[i] != null)
-                {
-                    AddMessage(messages, AttackCompileMessageSeverity.Warning, warning, tokens[i]);
-                }
-            }
-        }
-
         private static void ApplyPayloadResultValue(ResultTokenData resultToken, ValueTokenData valueToken, ref ResultEffectPayload resultEffects)
         {
             SpellValueParameterUtility.ApplyResultValue(resultToken, valueToken, ref resultEffects);
@@ -1088,7 +1443,7 @@ namespace Kernel.Bullet
                 return false;
             }
 
-            if (candidateValue.NumericValue < 1f)
+            if (candidateValue.ResolveCountValue() < 1)
             {
                 return false;
             }
@@ -1167,16 +1522,27 @@ namespace Kernel.Bullet
 
             foreach (PendingPayloadModifierEntry pendingModifier in pendingModifiers)
             {
-                if (pendingModifier?.modifierToken == null || pendingModifier.hasResolvedTarget)
+                if (pendingModifier?.modifierToken == null)
                 {
                     continue;
                 }
 
-                AddMessage(
-                    messages,
-                    AttackCompileMessageSeverity.Warning,
-                    "Ignored payload modifier token because it did not find a valid payload result token.",
-                    pendingModifier.modifierToken);
+                if (!pendingModifier.hasResolvedTarget)
+                {
+                    AddMessage(
+                        messages,
+                        AttackCompileMessageSeverity.Warning,
+                        "Ignored payload modifier token because it did not find a valid payload result token.",
+                        pendingModifier.modifierToken);
+                }
+                else if (pendingModifier.remainingTargetCount > 0)
+                {
+                    AddMessage(
+                        messages,
+                        AttackCompileMessageSeverity.Warning,
+                        $"Payload modifier target count ended with {pendingModifier.remainingTargetCount} unresolved payload result token(s).",
+                        pendingModifier.modifierToken);
+                }
             }
         }
 

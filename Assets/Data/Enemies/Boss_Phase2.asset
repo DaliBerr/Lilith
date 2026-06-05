@@ -59,6 +59,7 @@ MonoBehaviour:
     attackDamage: 0
     damageReductionPercent: 0.18
     visualScaleMultiplier: 1.9
+    displacementWeight: 999
   rangedBulletAttack:
     bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
     formulaItems:

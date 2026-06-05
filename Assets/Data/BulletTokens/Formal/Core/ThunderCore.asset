@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc6feaa7c15873440ad3a0aac4d60c3f, type: 3}
+  m_Name: ThunderCore
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.CoreTokenData
+  tokenId: core_thunder
+  displayText: "\u96F7"
+  displayTextKey: 
+  description: "\u96F7\u5143\u7D20\u6838\u5FC3\u3002\u547D\u4E2D\u540E\u5199\u5165\u5931\u80FD\u72B6\u6001\u69FD\u3002"
+  descriptionKey: 
+  tokenType: 2
+  hasBulletTextOverride: 1
+  bulletTextOverride: "\u96F7"
+  modifiers: []
+  coreType: 3
+  defaultValueType: 1
+  damage: 7
+  projectileLife: 1
+  impactLifeCost: 1
+  projectileSpeed: 140
+  maxLifetime: 1.8071429
+  maxTravelDistance: 232
+  impactMask:
+    serializedVersion: 2
+    m_Bits: 4294967291
+  armoredEnemyId: 
+  armoredDamageMultiplier: 1
+  burnTriggerCount: 0
+  burnDamagePerSecond: 0
+  burnDuration: 0
+  slowPercent: 0
+  slowDuration: 0
+  thunderChainTargetCount: 0
+  thunderChainRadius: 0
+  thunderChainDamage: 0
+  piercesActorsAndEnvironment: 0
+  penetrationDamageMultiplier: 1
+  suppressImpactEffects: 0
+  windPressureRadius: 0
+  windPressureDistance: 0
+  windDisplacementWeightLimit: 1
+  statusApplications:
+  - slot: 5
+    amount: 1
+    threshold: 1
+    duration: 0.6
+    strength: 1

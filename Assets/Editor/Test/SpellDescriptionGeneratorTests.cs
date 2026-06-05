@@ -343,22 +343,18 @@ public sealed class SpellDescriptionGeneratorTests
     {
         CoreTokenData fire = CreateCoreToken("trigger_fire", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触");
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData explosion = CreateResultToken("payload_explosion", "爆", AttackResultType.Explosion, true);
         explosion.ValueParameterKind = SpellValueParameterKind.Radius;
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             explosion,
-            payloadEnd,
         });
 
         string richText = SpellDescriptionGenerator.GenerateRichText(
             program,
-            new PlaceableTokenData[] { fire, trigger, payloadStart, explosion, payloadEnd },
+            new PlaceableTokenData[] { fire, trigger, explosion },
             null,
             null,
             new VocalithRandom(2));
@@ -368,6 +364,70 @@ public sealed class SpellDescriptionGeneratorTests
         Assert.That(visibleText, Does.Contain("Trigger/Payload"));
         Assert.That(visibleText, Does.Contain("命中后"));
         Assert.That(visibleText, Does.Contain("爆炸"));
+    }
+
+    [Test]
+    public void GenerateRichText_WithTriggerProjectilePayload_DescribesInnerProjectile()
+    {
+        CoreTokenData fire = CreateCoreToken("outer_fire", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_hit_projectile", "触");
+        CoreTokenData thunder = CreateCoreToken("inner_thunder", "雷", AttackCoreType.Thunder);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new PlaceableTokenData[]
+        {
+            fire,
+            trigger,
+            thunder,
+        });
+
+        string richText = SpellDescriptionGenerator.GenerateRichText(
+            program,
+            new PlaceableTokenData[] { fire, trigger, thunder },
+            null,
+            null,
+            new VocalithRandom(2));
+        string visibleText = StripRichText(richText);
+
+        Assert.That(program.PrimaryCastBlock.Payloads.Count, Is.EqualTo(1));
+        Assert.That(program.PrimaryCastBlock.Payloads[0].InnerBlock.Projectiles.Count, Is.EqualTo(1));
+        Assert.That(visibleText, Does.Contain("Trigger/Payload"));
+        Assert.That(visibleText, Does.Contain("命中后"));
+        Assert.That(visibleText, Does.Contain("一枚内层法术"));
+        Assert.That(visibleText, Does.Contain("雷"));
+        Assert.That(visibleText, Does.Match("直线|笔直|贯出|射出"));
+        Assert.That(visibleText, Does.Match("直击|直接伤害"));
+    }
+
+    [Test]
+    public void GenerateRichText_WithParameterizedTriggerPayload_DescribesTriggerParameterAndPayload()
+    {
+        CoreTokenData fire = CreateCoreToken("timer_fire", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_timer_payload", "时", SpellTriggerType.OnTimer);
+        ValueTokenData delay = CreateValueToken("timer_delay", "三", 3f);
+        ResultTokenData explosion = CreateResultToken("timer_explosion", "爆", AttackResultType.Explosion, false);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new PlaceableTokenData[]
+        {
+            fire,
+            trigger,
+            delay,
+            explosion,
+        });
+
+        string richText = SpellDescriptionGenerator.GenerateRichText(
+            program,
+            new PlaceableTokenData[] { fire, trigger, delay, explosion },
+            null,
+            null,
+            new VocalithRandom(2));
+        string visibleText = StripRichText(richText);
+
+        Assert.That(program.PrimaryCastBlock.Payloads.Count, Is.EqualTo(1));
+        Assert.That(program.PrimaryCastBlock.Payloads[0].ParameterValue, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(program.PrimaryCastBlock.Payloads[0].InnerBlock.PayloadEffects.Count, Is.EqualTo(1));
+        Assert.That(visibleText, Does.Contain("Trigger/Payload"));
+        Assert.That(visibleText, Does.Contain("计时"));
+        Assert.That(visibleText, Does.Contain("3秒"));
+        Assert.That(visibleText, Does.Contain("爆炸"));
+        Assert.That(visibleText, Does.Contain("归入计时参数"));
     }
 
     [Test]
@@ -500,10 +560,10 @@ public sealed class SpellDescriptionGeneratorTests
         return token;
     }
 
-    private PayloadBoundaryTokenData CreatePayloadBoundaryToken(string tokenId, string displayText, PayloadBoundaryKind boundaryKind)
+    private TriggerTokenData CreateTriggerToken(string tokenId, string displayText, SpellTriggerType triggerType)
     {
-        PayloadBoundaryTokenData token = CreateToken<PayloadBoundaryTokenData>(tokenId, displayText);
-        token.BoundaryKind = boundaryKind;
+        TriggerTokenData token = CreateToken<TriggerTokenData>(tokenId, displayText);
+        token.TriggerType = triggerType;
         return token;
     }
 

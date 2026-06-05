@@ -2,6 +2,7 @@ using Kernel.GameState;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Vocalith.Localization;
 using Vocalith.UI;
 
 namespace Kernel.UI
@@ -13,6 +14,13 @@ namespace Kernel.UI
     [UIPrefab("Assets/Prefabs/UI/PauseUI")]
     public class PauseUIScreen : GameUIScreen
     {
+        private const string ReturnConfirmMessageKey = "ui.pause.return_start.confirm_message";
+        private const string ReturnConfirmLabelKey = "ui.pause.return_start.confirm";
+        private const string CancelLabelKey = "ui.common.cancel";
+        private const string DefaultReturnConfirmMessage = "确定要返回主菜单吗？本轮未保存的进度会丢失。";
+        private const string DefaultReturnConfirmLabel = "返回主菜单";
+        private const string DefaultCancelLabel = "取消";
+
         [Header("Layout")]
         [SerializeField] private Image backgroundMask;
         [SerializeField] private RectTransform mainPanel;
@@ -22,6 +30,12 @@ namespace Kernel.UI
         [SerializeField] private TMP_Text optionsButtonText;
         [SerializeField] private Button backButton;
         [SerializeField] private TMP_Text backButtonText;
+        [SerializeField] private GameObject settingPanel;
+        [SerializeField] private OptionsUIScreen embeddedOptionsScreen;
+        [SerializeField] private Button settingCloseButton;
+        [SerializeField] private Button settingMenuButton;
+        [SerializeField] private TMP_Text settingMenuButtonText;
+        private bool isOpeningReturnToStartUpConfirmation;
 
         public override Status currentStatus { get; } = StatusList.InPauseMenuStatus;
 
@@ -33,11 +47,28 @@ namespace Kernel.UI
         public TMP_Text OptionsButtonText => optionsButtonText;
         public Button BackButton => backButton;
         public TMP_Text BackButtonText => backButtonText;
+        public GameObject SettingPanel => settingPanel;
+        public OptionsUIScreen EmbeddedOptionsScreen => embeddedOptionsScreen;
+        public Button SettingCloseButton => settingCloseButton;
+        public Button SettingMenuButton => settingMenuButton;
+        public TMP_Text SettingMenuButtonText => settingMenuButtonText;
 
         protected override void OnInit()
         {
             TryAutoBindReferences();
             BindButtonCallbacks();
+            isOpeningReturnToStartUpConfirmation = false;
+            InitializeEmbeddedOptions();
+        }
+
+        public override System.Collections.IEnumerator Show(float fade = 0.15f)
+        {
+            if (settingPanel != null)
+            {
+                settingPanel.SetActive(true);
+            }
+
+            yield return base.Show(fade);
         }
 
         protected override void OnAfterHide()
@@ -48,6 +79,7 @@ namespace Kernel.UI
         private void OnDestroy()
         {
             UnbindButtonCallbacks();
+            isOpeningReturnToStartUpConfirmation = false;
             RemoveCurrentStatus();
         }
 
@@ -70,27 +102,38 @@ namespace Kernel.UI
         {
             backgroundMask ??= GetComponent<Image>();
             mainPanel ??= transform.Find("Main Panel") as RectTransform;
-            if (mainPanel == null)
+
+            if (mainPanel != null)
             {
-                return;
+                resumeButton ??= ResolveButton(mainPanel, "Resume Button", 0);
+                if (resumeButton != null)
+                {
+                    resumeButtonText ??= resumeButton.GetComponentInChildren<TMP_Text>(true);
+                }
+
+                optionsButton ??= ResolveButton(mainPanel, "Option Button", 1);
+                if (optionsButton != null)
+                {
+                    optionsButtonText ??= optionsButton.GetComponentInChildren<TMP_Text>(true);
+                }
+
+                backButton ??= ResolveButton(mainPanel, "Quit Button", 2);
+                if (backButton != null)
+                {
+                    backButtonText ??= backButton.GetComponentInChildren<TMP_Text>(true);
+                }
             }
 
-            resumeButton ??= ResolveButton(mainPanel, "Resume Button", 0);
-            if (resumeButton != null)
+            settingPanel ??= transform.Find("Setting Panel")?.gameObject;
+            if (settingPanel != null)
             {
-                resumeButtonText ??= resumeButton.GetComponentInChildren<TMP_Text>(true);
-            }
-
-            optionsButton ??= ResolveButton(mainPanel, "Option Button", 1);
-            if (optionsButton != null)
-            {
-                optionsButtonText ??= optionsButton.GetComponentInChildren<TMP_Text>(true);
-            }
-
-            backButton ??= ResolveButton(mainPanel, "Quit Button", 2);
-            if (backButton != null)
-            {
-                backButtonText ??= backButton.GetComponentInChildren<TMP_Text>(true);
+                embeddedOptionsScreen ??= settingPanel.GetComponent<OptionsUIScreen>();
+                settingCloseButton ??= ResolveButton(settingPanel.transform, "Settings /Close Button", 0);
+                settingMenuButton ??= ResolveButton(settingPanel.transform, "Settings /Menu Button", 1);
+                if (settingMenuButton != null)
+                {
+                    settingMenuButtonText ??= settingMenuButton.GetComponentInChildren<TMP_Text>(true);
+                }
             }
         }
 
@@ -104,6 +147,8 @@ namespace Kernel.UI
             BindButton(resumeButton, HandleResumeButtonClicked);
             BindButton(optionsButton, HandleOptionsButtonClicked);
             BindButton(backButton, HandleBackButtonClicked);
+            BindButton(settingCloseButton, HandleSettingCloseButtonClicked);
+            BindButton(settingMenuButton, HandleSettingMenuButtonClicked);
         }
 
         /// <summary>
@@ -116,6 +161,8 @@ namespace Kernel.UI
             UnbindButton(resumeButton, HandleResumeButtonClicked);
             UnbindButton(optionsButton, HandleOptionsButtonClicked);
             UnbindButton(backButton, HandleBackButtonClicked);
+            UnbindButton(settingCloseButton, HandleSettingCloseButtonClicked);
+            UnbindButton(settingMenuButton, HandleSettingMenuButtonClicked);
         }
 
         /// <summary>
@@ -135,7 +182,10 @@ namespace Kernel.UI
         /// </summary>
         private void HandleOptionsButtonClicked()
         {
-            UIInputRouter.Instance?.RequestOpenPauseOptions();
+            if (settingPanel != null)
+            {
+                settingPanel.SetActive(true);
+            }
         }
 
         /// <summary>
@@ -145,7 +195,95 @@ namespace Kernel.UI
         /// </summary>
         private void HandleBackButtonClicked()
         {
+            ShowReturnToStartUpConfirmation();
+        }
+
+        private void HandleSettingCloseButtonClicked()
+        {
+            UIInputRouter.Instance?.RequestClosePauseMenu();
+        }
+
+        private void HandleSettingMenuButtonClicked()
+        {
+            ShowReturnToStartUpConfirmation();
+        }
+
+        private void ShowReturnToStartUpConfirmation()
+        {
+            if (ui == null || ui.IsNavigating() || isOpeningReturnToStartUpConfirmation)
+            {
+                return;
+            }
+
+            StartCoroutine(ShowReturnToStartUpConfirmationCo());
+        }
+
+        private System.Collections.IEnumerator ShowReturnToStartUpConfirmationCo()
+        {
+            isOpeningReturnToStartUpConfirmation = true;
+            try
+            {
+                if (ui.GetTopModal() is PopUpUIScreen existingPopup)
+                {
+                    ConfigureReturnToStartUpConfirmation(existingPopup);
+                    yield break;
+                }
+
+                if (ui.GetTopModal() != null)
+                {
+                    yield break;
+                }
+
+                yield return ui.ShowModalAndWait<PopUpUIScreen>();
+                if (ui.GetTopModal() is PopUpUIScreen popup)
+                {
+                    ConfigureReturnToStartUpConfirmation(popup);
+                }
+            }
+            finally
+            {
+                isOpeningReturnToStartUpConfirmation = false;
+            }
+        }
+
+        private void ConfigureReturnToStartUpConfirmation(PopUpUIScreen popup)
+        {
+            if (popup == null)
+            {
+                return;
+            }
+
+            popup.Configure(
+                LocalizationManager.TranslateOrDefault(ReturnConfirmMessageKey, DefaultReturnConfirmMessage),
+                onConfirm: ConfirmReturnToStartUpScene,
+                confirmLabel: LocalizationManager.TranslateOrDefault(ReturnConfirmLabelKey, DefaultReturnConfirmLabel),
+                closeLabel: LocalizationManager.TranslateOrDefault(CancelLabelKey, DefaultCancelLabel),
+                shouldCloseAfterConfirm: true);
+        }
+
+        private void ConfirmReturnToStartUpScene()
+        {
+            StartCoroutine(ConfirmReturnToStartUpSceneCo());
+        }
+
+        private System.Collections.IEnumerator ConfirmReturnToStartUpSceneCo()
+        {
+            while (ui != null && (ui.IsNavigating() || ui.GetTopModal() != null))
+            {
+                yield return null;
+            }
+
             UIInputRouter.Instance?.RequestReturnToStartUpScene();
+        }
+
+        private void InitializeEmbeddedOptions()
+        {
+            if (embeddedOptionsScreen == null)
+            {
+                return;
+            }
+
+            StartCoroutine(embeddedOptionsScreen.InitializeEmbeddedCo(ui, HandleSettingCloseButtonClicked));
         }
 
         /// <summary>

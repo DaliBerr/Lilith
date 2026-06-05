@@ -544,7 +544,8 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         }
 
         float currentTime = Time.time;
-        if (!HasActivationEnergyForFiring(currentTime))
+        SpellCastRuntimeModifiers runtimeModifiers = spellProgram.RuntimeModifiers.GetSanitized();
+        if (!HasActivationEnergyForFiring(currentTime, runtimeModifiers))
         {
             return false;
         }
@@ -559,13 +560,14 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             null,
             null,
             ResolveCurrentActivationCastCount(),
-            ResolveCurrentActivationSpreadAngleStep());
+            ResolveCurrentActivationSpreadAngleStep(spellProgram));
         if (emittedCount <= 0)
         {
             return false;
         }
 
-        return TryConsumeActivationEnergyForFiring(currentTime);
+        TryApplyCasterHealthCost(runtimeModifiers.casterHealthCost);
+        return TryConsumeActivationEnergyForFiring(currentTime, runtimeModifiers);
     }
 
     /// <summary>
@@ -1058,7 +1060,8 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         float resolvedInterval = spellBookLoadout != null && spellBookLoadout.SpellBook != null
             ? spellBookLoadout.CastCooldownSeconds
             : fireInterval;
-        return Mathf.Max(MinimumFireInterval, resolvedInterval);
+        SpellCastRuntimeModifiers runtimeModifiers = ResolveCurrentRuntimeModifiers();
+        return Mathf.Max(MinimumFireInterval, resolvedInterval * runtimeModifiers.castCooldownMultiplier);
     }
 
     private int ResolveCurrentActivationCastCount()
@@ -1071,22 +1074,68 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
 
     private float ResolveCurrentActivationSpreadAngleStep()
     {
+        return ResolveCurrentActivationSpreadAngleStep(null);
+    }
+
+    private float ResolveCurrentActivationSpreadAngleStep(CompiledSpellProgram spellProgram)
+    {
         TryAutoAssignLoadout();
-        return spellBookLoadout != null && spellBookLoadout.SpellBook != null
+        float spreadAngle = spellBookLoadout != null && spellBookLoadout.SpellBook != null
             ? Mathf.Max(0f, spellBookLoadout.ActivationSpreadAngleStep)
             : 0f;
+        SpellCastRuntimeModifiers runtimeModifiers = spellProgram != null
+            ? spellProgram.RuntimeModifiers.GetSanitized()
+            : ResolveCurrentRuntimeModifiers();
+        return Mathf.Max(0f, spreadAngle * runtimeModifiers.angleSpreadMultiplier);
     }
 
     private bool HasActivationEnergyForFiring(float currentTime)
     {
+        return HasActivationEnergyForFiring(currentTime, ResolveCurrentRuntimeModifiers());
+    }
+
+    private bool HasActivationEnergyForFiring(float currentTime, SpellCastRuntimeModifiers runtimeModifiers)
+    {
         TryAutoAssignLoadout();
-        return spellBookLoadout == null || spellBookLoadout.HasActivationEnergy(currentTime);
+        return spellBookLoadout == null || spellBookLoadout.HasActivationEnergy(currentTime, runtimeModifiers.GetSanitized().energyCostMultiplier);
     }
 
     private bool TryConsumeActivationEnergyForFiring(float currentTime)
     {
+        return TryConsumeActivationEnergyForFiring(currentTime, ResolveCurrentRuntimeModifiers());
+    }
+
+    private bool TryConsumeActivationEnergyForFiring(float currentTime, SpellCastRuntimeModifiers runtimeModifiers)
+    {
         TryAutoAssignLoadout();
-        return spellBookLoadout == null || spellBookLoadout.TryConsumeActivationEnergy(currentTime);
+        return spellBookLoadout == null || spellBookLoadout.TryConsumeActivationEnergy(currentTime, runtimeModifiers.GetSanitized().energyCostMultiplier);
+    }
+
+    private void TryApplyCasterHealthCost(float healthCost)
+    {
+        if (healthCost <= 0f)
+        {
+            return;
+        }
+
+        PlayerHealth playerHealth = GetComponentInParent<PlayerHealth>();
+        playerHealth ??= GetComponentInChildren<PlayerHealth>();
+        playerHealth?.TryApplyHealthCost(healthCost, out _, out _);
+    }
+
+    private SpellCastRuntimeModifiers ResolveCurrentRuntimeModifiers()
+    {
+        if (compiledSpellProgramCache != null && compiledProgramSource == spellBookLoadout)
+        {
+            return compiledSpellProgramCache.RuntimeModifiers.GetSanitized();
+        }
+
+        if (spellBookLoadout != null && spellBookLoadout.TryGetCompiledProgram(out CompiledSpellProgram spellProgram))
+        {
+            return spellProgram.RuntimeModifiers.GetSanitized();
+        }
+
+        return SpellCastRuntimeModifiers.Identity;
     }
 
     private bool TryResolveSpellBookProgramForFiring(out CompiledSpellProgram spellProgram)

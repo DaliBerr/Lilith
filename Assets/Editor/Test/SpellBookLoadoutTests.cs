@@ -238,6 +238,50 @@ public sealed class SpellBookLoadoutTests
     }
 
     [Test]
+    public void PlayerPlaneMovement_CastRuntimeModifiers_AdjustFirePacingEnergyAndHealthCost()
+    {
+        GameObject player = CreateGameObject("Player");
+        PlayerHealth health = player.AddComponent<PlayerHealth>();
+        PlayerPlaneMovement movement = player.AddComponent<PlayerPlaneMovement>();
+        SpellBookLoadout loadout = player.AddComponent<SpellBookLoadout>();
+        SpellBookData spellBook = CreateSpellBook("surge", slotCount: 5, castCooldownSeconds: 0.5f);
+        spellBook.EnergyCapacity = 2f;
+        spellBook.EnergyCostPerActivation = 1f;
+        spellBook.EnergyRegenPerSecond = 0f;
+        CoreTokenData fire = CreateCoreToken("fire", "火", AttackCoreType.Fire);
+        ModifierTokenData urgent = CreateModifierToken("urgent", "急");
+        urgent.SetModifiers(new[] { new TokenModifierDefinition(TokenModifierTarget.CastCooldownMultiplier, "*=0.8") });
+        ModifierTokenData source = CreateModifierToken("source", "源");
+        source.SetModifiers(new[] { new TokenModifierDefinition(TokenModifierTarget.EnergyCostMultiplier, "*=0.5") });
+        ModifierTokenData wild = CreateModifierToken("wild", "狂");
+        wild.SetModifiers(new[]
+        {
+            new TokenModifierDefinition(TokenModifierTarget.CasterHealthCost, "+=5"),
+            new TokenModifierDefinition(TokenModifierTarget.EnergyCostMultiplier, "*=1.5"),
+        });
+
+        loadout.SetSpellBook(spellBook);
+        loadout.SetTokens(new BaseTokenData[] { fire, urgent, source, wild });
+        loadout.RefillActivationEnergy(0f);
+
+        MethodInfo resolveMethod = FindInstanceMethod(typeof(PlayerPlaneMovement), "TryResolveSpellProgramForFiring");
+        MethodInfo intervalMethod = FindInstanceMethod(typeof(PlayerPlaneMovement), "ResolveCurrentFireInterval");
+        MethodInfo hasEnergyMethod = FindInstanceMethod(typeof(PlayerPlaneMovement), "HasActivationEnergyForFiring");
+        MethodInfo consumeEnergyMethod = FindInstanceMethod(typeof(PlayerPlaneMovement), "TryConsumeActivationEnergyForFiring");
+        MethodInfo healthCostMethod = FindInstanceMethod(typeof(PlayerPlaneMovement), "TryApplyCasterHealthCost");
+
+        object[] args = { null };
+        Assert.That((bool)resolveMethod.Invoke(movement, args), Is.True);
+        Assert.That((float)intervalMethod.Invoke(movement, null), Is.EqualTo(0.4f).Within(0.0001f));
+        Assert.That((bool)hasEnergyMethod.Invoke(movement, new object[] { 0f }), Is.True);
+        Assert.That((bool)consumeEnergyMethod.Invoke(movement, new object[] { 0f }), Is.True);
+        Assert.That(loadout.CurrentEnergy, Is.EqualTo(1.25f).Within(0.0001f));
+
+        healthCostMethod.Invoke(movement, new object[] { 5f });
+        Assert.That(health.CurrentHealth, Is.EqualTo(95f).Within(0.0001f));
+    }
+
+    [Test]
     public void SpellBookLoadout_ExecutorModifiers_ApplyWithoutConsumingSlots()
     {
         GameObject owner = CreateGameObject("SpellBookOwner");
@@ -329,6 +373,11 @@ public sealed class SpellBookLoadoutTests
         return token;
     }
 
+    private ModifierTokenData CreateModifierToken(string tokenId, string displayText)
+    {
+        return CreateToken<ModifierTokenData>(tokenId, displayText);
+    }
+
     private T CreateToken<T>(string tokenId, string displayText) where T : BaseTokenData
     {
         T token = ScriptableObject.CreateInstance<T>();
@@ -360,10 +409,38 @@ public sealed class SpellBookLoadoutTests
     {
         while (type != null)
         {
-            MethodInfo method = type.GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
-            if (method != null)
+            MethodInfo[] methods = type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            MethodInfo fallback = null;
+            MethodInfo oneParameterFallback = null;
+            for (int i = 0; i < methods.Length; i++)
             {
-                return method;
+                MethodInfo method = methods[i];
+                if (!string.Equals(method.Name, methodName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                fallback ??= method;
+                int parameterCount = method.GetParameters().Length;
+                if (parameterCount == 0)
+                {
+                    return method;
+                }
+
+                if (parameterCount == 1)
+                {
+                    oneParameterFallback ??= method;
+                }
+            }
+
+            if (oneParameterFallback != null)
+            {
+                return oneParameterFallback;
+            }
+
+            if (fallback != null)
+            {
+                return fallback;
             }
 
             type = type.BaseType;

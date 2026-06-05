@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6eb4f6da9ada026439a04d760aff5580, type: 3}
+  m_Name: BehaviorSplit
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.BehaviorTokenData
+  tokenId: behavior_split
+  displayText: "\u5206"
+  displayTextKey: 
+  description: "\u98DE\u884C\u671F\u95F4\u5747\u5300\u5206\u88C2\uFF1B\u9ED8\u8BA4
+    1 \u6B21\uFF0C\u53EF\u7531\u503C\u8BCD\u6539\u5206\u88C2\u6B21\u6570\u3002"
+  descriptionKey: 
+  tokenType: 3
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
+  behaviorType: 13
+  acceptsNumericValue: 1
+  valueParameterKind: 1
+  defaultProjectileCount: 1
+  spreadAngleStep: 0
+  projectileDamageMultiplier: 1
+  pierceLifetimeDistanceScalePerCount: 0.2
+  defaultBehaviorParameter: 1

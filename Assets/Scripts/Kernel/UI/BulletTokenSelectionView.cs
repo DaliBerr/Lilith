@@ -36,7 +36,6 @@ namespace Kernel.UI
         [SerializeField] private Color modifierTypeColor = new(0.74f, 0.62f, 1f, 1f);
         [SerializeField] private Color multicastTypeColor = new(1f, 0.84f, 0.42f, 1f);
         [SerializeField] private Color triggerTypeColor = new(0.42f, 0.92f, 0.95f, 1f);
-        [SerializeField] private Color payloadTypeColor = new(1f, 0.62f, 0.84f, 1f);
         [SerializeField] private Color spellBookTypeColor = new(0.48f, 0.86f, 0.68f, 1f);
         [SerializeField] private Color fallbackTypeColor = new(0.85f, 0.85f, 0.85f, 1f);
 
@@ -298,8 +297,6 @@ namespace Kernel.UI
                 TokenType.Modifier => LocalizationManager.TranslateOrDefault("ui.token_type.modifier", "修饰"),
                 TokenType.Multicast => LocalizationManager.TranslateOrDefault("ui.token_type.multicast", "多重"),
                 TokenType.Trigger => LocalizationManager.TranslateOrDefault("ui.token_type.trigger", "触发"),
-                TokenType.PayloadStart => LocalizationManager.TranslateOrDefault("ui.token_type.payload", "载荷"),
-                TokenType.PayloadEnd => LocalizationManager.TranslateOrDefault("ui.token_type.payload", "载荷"),
                 _ => string.Empty,
             };
         }
@@ -325,8 +322,6 @@ namespace Kernel.UI
                 TokenType.Modifier => modifierTypeColor,
                 TokenType.Multicast => multicastTypeColor,
                 TokenType.Trigger => triggerTypeColor,
-                TokenType.PayloadStart => payloadTypeColor,
-                TokenType.PayloadEnd => payloadTypeColor,
                 _ => fallbackTypeColor,
             };
         }

@@ -1,3 +1,4 @@
+using Kernel.Bullet;
 using UnityEngine;
 
 /// <summary>
@@ -6,8 +7,12 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public sealed class EnemyStatusEffectController : MonoBehaviour
 {
+    private const float DefaultReactionConsumeRatio = 0.5f;
+    private const int StatusSlotCount = (int)SpellStatusSlot.PuppetMark + 1;
+
     [SerializeField] private Enemy enemyData;
 
+    private readonly float[] statusSlotValues = new float[StatusSlotCount];
     private int fireHitCount;
     private int controlHitCount;
     private float burnDamagePerSecond;
@@ -16,6 +21,7 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
     private float slowRemainingDuration;
     private float stunRemainingDuration;
     private float skillActionLockRemainingDuration;
+    private float polymorphRemainingDuration;
 
     public int FireHitCount => fireHitCount;
     public int ControlHitCount => controlHitCount;
@@ -23,9 +29,11 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
     public bool IsSlowed => slowRemainingDuration > 0f && slowPercent > 0f;
     public bool IsStunned => stunRemainingDuration > 0f;
     public bool IsSkillActionLocked => skillActionLockRemainingDuration > 0f;
-    public bool CanMove => !IsStunned;
-    public bool CanAct => !IsStunned && !IsSkillActionLocked;
-    public float MovementSpeedMultiplier => IsStunned ? 0f : Mathf.Clamp01(1f - GetActiveSlowPercent());
+    public bool IsPolymorphed => polymorphRemainingDuration > 0f;
+    public SpellElementReactionResult LastReaction { get; private set; }
+    public bool CanMove => !IsStunned && !IsPolymorphed;
+    public bool CanAct => !IsStunned && !IsSkillActionLocked && !IsPolymorphed;
+    public float MovementSpeedMultiplier => IsStunned || IsPolymorphed ? 0f : Mathf.Clamp01(1f - GetActiveSlowPercent());
 
     private void Awake()
     {
@@ -41,6 +49,7 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         slowRemainingDuration = Mathf.Max(0f, slowRemainingDuration);
         stunRemainingDuration = Mathf.Max(0f, stunRemainingDuration);
         skillActionLockRemainingDuration = Mathf.Max(0f, skillActionLockRemainingDuration);
+        polymorphRemainingDuration = Mathf.Max(0f, polymorphRemainingDuration);
         fireHitCount = Mathf.Max(0, fireHitCount);
         controlHitCount = Mathf.Max(0, controlHitCount);
     }
@@ -60,6 +69,7 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         }
 
         fireHitCount = Mathf.Max(0, fireHitCount) + 1;
+        AddStatusValue(SpellStatusSlot.Ignite, 1f);
         if (fireHitCount < triggerCount)
         {
             return false;
@@ -69,6 +79,64 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         burnDamagePerSecond = Mathf.Max(0f, damagePerSecond);
         burnRemainingDuration = Mathf.Max(0f, duration);
         return true;
+    }
+
+    public float GetStatusValue(SpellStatusSlot slot)
+    {
+        int index = (int)slot;
+        return index > 0 && index < statusSlotValues.Length ? statusSlotValues[index] : 0f;
+    }
+
+    public bool TryApplyStatusApplication(
+        SpellStatusApplication application,
+        out SpellElementReactionResult reactionResult)
+    {
+        reactionResult = default;
+        LastReaction = default;
+        SpellStatusApplication sanitized = application.GetSanitized();
+        if (sanitized.slot == SpellStatusSlot.None || sanitized.amount <= 0f)
+        {
+            return false;
+        }
+
+        AddStatusValue(sanitized.slot, sanitized.amount);
+        ApplyStatusThresholdEffect(sanitized);
+        reactionResult = ResolveAndApplyReaction(sanitized.slot);
+        LastReaction = reactionResult;
+        return true;
+    }
+
+    public int TryApplyStatusApplications(SpellStatusApplication[] applications)
+    {
+        if (applications == null || applications.Length <= 0)
+        {
+            return 0;
+        }
+
+        int appliedCount = 0;
+        for (int i = 0; i < applications.Length; i++)
+        {
+            if (TryApplyStatusApplication(applications[i], out _))
+            {
+                appliedCount++;
+            }
+        }
+
+        return appliedCount;
+    }
+
+    public float ConsumeStatus(SpellStatusSlot slot, float ratio)
+    {
+        int index = (int)slot;
+        if (index <= 0 || index >= statusSlotValues.Length)
+        {
+            return 0f;
+        }
+
+        float clampedRatio = Mathf.Clamp01(ratio);
+        float consumedAmount = statusSlotValues[index] * clampedRatio;
+        statusSlotValues[index] = Mathf.Max(0f, statusSlotValues[index] - consumedAmount);
+        return consumedAmount;
     }
 
     /// <summary>
@@ -103,6 +171,7 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         }
 
         controlHitCount = Mathf.Max(0, controlHitCount) + 1;
+        AddStatusValue(SpellStatusSlot.Disable, 1f);
         if (controlHitCount < triggerCount)
         {
             return false;
@@ -146,6 +215,7 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         TickSlow(deltaTime);
         TickStun(deltaTime);
         TickSkillActionLock(deltaTime);
+        TickPolymorph(deltaTime);
     }
 
     private void TickBurn(float deltaTime)
@@ -201,6 +271,127 @@ public sealed class EnemyStatusEffectController : MonoBehaviour
         }
 
         skillActionLockRemainingDuration = Mathf.Max(0f, skillActionLockRemainingDuration - deltaTime);
+    }
+
+    private void TickPolymorph(float deltaTime)
+    {
+        if (!IsPolymorphed)
+        {
+            return;
+        }
+
+        polymorphRemainingDuration = Mathf.Max(0f, polymorphRemainingDuration - deltaTime);
+    }
+
+    private void AddStatusValue(SpellStatusSlot slot, float amount)
+    {
+        int index = (int)slot;
+        if (index <= 0 || index >= statusSlotValues.Length || amount <= 0f)
+        {
+            return;
+        }
+
+        statusSlotValues[index] = Mathf.Max(0f, statusSlotValues[index] + amount);
+    }
+
+    private void ApplyStatusThresholdEffect(SpellStatusApplication application)
+    {
+        float threshold = Mathf.Max(0f, application.threshold);
+        if (threshold <= 0f || GetStatusValue(application.slot) < threshold)
+        {
+            return;
+        }
+
+        switch (application.slot)
+        {
+            case SpellStatusSlot.Ignite:
+                if (application.strength > 0f && application.duration > 0f)
+                {
+                    burnDamagePerSecond = Mathf.Max(burnDamagePerSecond, application.strength);
+                    burnRemainingDuration = Mathf.Max(burnRemainingDuration, application.duration);
+                }
+                break;
+            case SpellStatusSlot.Freeze:
+                stunRemainingDuration = Mathf.Max(stunRemainingDuration, application.duration);
+                break;
+            case SpellStatusSlot.Disable:
+                skillActionLockRemainingDuration = Mathf.Max(skillActionLockRemainingDuration, application.duration);
+                break;
+            case SpellStatusSlot.Bind:
+                stunRemainingDuration = Mathf.Max(stunRemainingDuration, application.duration);
+                break;
+            case SpellStatusSlot.Polymorph:
+                if (CanApplyPolymorph(application.duration))
+                {
+                    polymorphRemainingDuration = Mathf.Max(polymorphRemainingDuration, application.duration);
+                }
+                break;
+        }
+    }
+
+    private bool CanApplyPolymorph(float duration)
+    {
+        if (duration <= 0f || !TryResolveEnemyData() || enemyData == null || enemyData.Equals(null))
+        {
+            return false;
+        }
+
+        return enemyData.DisplacementWeight <= 1f;
+    }
+
+    private SpellElementReactionResult ResolveAndApplyReaction(SpellStatusSlot changedSlot)
+    {
+        SpellElementReactionResult reaction = ResolveReaction(changedSlot);
+        if (!reaction.HasReaction)
+        {
+            return reaction;
+        }
+
+        ConsumeStatus(reaction.FirstSlot, DefaultReactionConsumeRatio);
+        ConsumeStatus(reaction.SecondSlot, DefaultReactionConsumeRatio);
+        return reaction;
+    }
+
+    private SpellElementReactionResult ResolveReaction(SpellStatusSlot changedSlot)
+    {
+        if ((changedSlot == SpellStatusSlot.Ignite && GetStatusValue(SpellStatusSlot.Freeze) > 0f) ||
+            (changedSlot == SpellStatusSlot.Freeze && GetStatusValue(SpellStatusSlot.Ignite) > 0f))
+        {
+            return new SpellElementReactionResult(
+                SpellElementReactionType.ThermalCrack,
+                SpellStatusSlot.Ignite,
+                SpellStatusSlot.Freeze);
+        }
+
+        if (changedSlot == SpellStatusSlot.Disable && GetStatusValue(SpellStatusSlot.Wet) > 0f)
+        {
+            return new SpellElementReactionResult(
+                SpellElementReactionType.ElectroCharged,
+                SpellStatusSlot.Wet,
+                SpellStatusSlot.Disable);
+        }
+
+        if (changedSlot == SpellStatusSlot.Disable &&
+            (GetStatusValue(SpellStatusSlot.Freeze) > 0f || GetStatusValue(SpellStatusSlot.Bind) > 0f))
+        {
+            SpellStatusSlot conductor = GetStatusValue(SpellStatusSlot.Freeze) > 0f
+                ? SpellStatusSlot.Freeze
+                : SpellStatusSlot.Bind;
+            return new SpellElementReactionResult(
+                SpellElementReactionType.ConductiveThunder,
+                conductor,
+                SpellStatusSlot.Disable);
+        }
+
+        if (changedSlot == SpellStatusSlot.Ignite && GetStatusValue(SpellStatusSlot.Corrosion) > 0f)
+        {
+            return new SpellElementReactionResult(
+                SpellElementReactionType.ToxicBurst,
+                SpellStatusSlot.Ignite,
+                SpellStatusSlot.Corrosion);
+        }
+
+        return default;
     }
 
     private float GetActiveSlowPercent()

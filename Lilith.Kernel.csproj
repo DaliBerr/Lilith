@@ -60,12 +60,15 @@
     <Compile Include="Assets\Scripts\Kernel\UI\TokenSelectUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenCellOccupancy.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\ScreenShakeState.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\DamageShieldController.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PlayerHealthBarController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BulletTokenLibrary.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealthChangedEvent.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\RewardNotificationEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\ProfileManagementUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyMeleeAttacker.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDefinitionBinder.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PrototypeTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\PermanentProfileData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTargetPolicy.cs" />
     <Compile Include="Assets\Scripts\Kernel\Quest\QuestService.cs" />
@@ -76,6 +79,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\SpellValueParameterUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDelayedGroundBombCaster.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\BulletTokenPickup.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Bullet\LingeringResultAreaRuntime.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGridCoordinateBinding.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\CameraOcclusionFader.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\HealingPickupTokenData.cs" />
@@ -153,6 +157,7 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\BaseCharEnemyNorm1.cs" />
     <Compile Include="Assets\Scripts\Kernel\StartupFlowBridge.cs" />
     <Compile Include="Assets\Scripts\Kernel\Quest\TutorialQuestConstants.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDropBonusController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\GameplayBillboard.cs" />
     <Compile Include="Assets\Scripts\Kernel\Upgrade\PermanentUpgradeModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\RemnantPickupTokenData.cs" />
@@ -200,7 +205,6 @@
     <Compile Include="Assets\Scripts\Kernel\Input\InputActionManager.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PlaceableTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\StatusSaveData.cs" />
-    <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PayloadBoundaryTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\SpellBookRewardLibrary.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\DelayedExplosionEffectRuntime.cs" />
   </ItemGroup>
@@ -756,6 +760,10 @@
       <HintPath>Library\PackageCache\com.unity.visualscripting@191c0d7e3b69\Editor\VisualScripting.Core\Dependencies\YamlDotNet\Unity.VisualScripting.YamlDotNet.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.Collections.LowLevel.ILSupport">
       <HintPath>Library\PackageCache\com.unity.collections@aea9d3bd5e19\Unity.Collections.LowLevel.ILSupport\Unity.Collections.LowLevel.ILSupport.dll</HintPath>
       <Private>False</Private>
@@ -770,6 +778,10 @@
     </Reference>
     <Reference Include="Unity.Plastic.Newtonsoft.Json">
       <HintPath>Library\PackageCache\com.unity.collab-proxy@e566cd3e7623\Lib\Editor\Unity.Plastic.Newtonsoft.Json.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Metadata">
+      <HintPath>Assets\Plugins\Roslyn\System.Reflection.Metadata.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="log4netPlastic">
@@ -792,6 +804,10 @@
       <HintPath>Library\PackageCache\com.unity.visualscripting@191c0d7e3b69\Runtime\VisualScripting.Flow\Dependencies\NCalc\Unity.VisualScripting.Antlr3.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>Assets\Plugins\Roslyn\System.Collections.Immutable.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>Library\PackageCache\com.unity.nuget.newtonsoft-json@4dfd81071c64\Runtime\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
@@ -804,24 +820,12 @@
       <HintPath>Library\PackageCache\com.unity.nuget.mono-cecil@ecb9724e46ff\Mono.Cecil.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="System.Runtime.CompilerServices.Unsafe">
-      <HintPath>Library\PackageCache\com.unity.collections@aea9d3bd5e19\Unity.Collections.Tests\System.Runtime.CompilerServices.Unsafe\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="Microsoft.CodeAnalysis.CSharp">
       <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="System.Reflection.Metadata">
-      <HintPath>Assets\Plugins\Roslyn\System.Reflection.Metadata.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Microsoft.CodeAnalysis">
-      <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="System.Collections.Immutable">
-      <HintPath>Assets\Plugins\Roslyn\System.Collections.Immutable.dll</HintPath>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>Library\PackageCache\com.unity.collections@aea9d3bd5e19\Unity.Collections.Tests\System.Runtime.CompilerServices.Unsafe\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="netstandard">

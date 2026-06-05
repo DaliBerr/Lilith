@@ -73,6 +73,7 @@
     <Compile Include="Assets\Editor\Test\ObjectiveArrowViewTests.cs" />
     <Compile Include="Assets\Editor\Test\GlobalStartupTests.cs" />
     <Compile Include="Assets\Editor\Test\CameraOcclusionFaderTests.cs" />
+    <Compile Include="Assets\Editor\Test\PauseUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\LilithDisplaySettingsTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyBulletTokenDropperTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyAttackExtensionTests.cs" />
@@ -98,6 +99,7 @@
     <Compile Include="Assets\Editor\Test\HintCatalogTests.cs" />
     <Compile Include="Assets\Editor\Test\CharBulletVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\TokenSelectModalTests.cs" />
+    <Compile Include="Assets\Editor\Test\FormalSpellTokenAssetTests.cs" />
     <Compile Include="Assets\Editor\Test\WorldHeightUtilityTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerVisualPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\DialogUIScreenTests.cs" />

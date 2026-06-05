@@ -5,13 +5,13 @@ using UnityEngine;
 using Vocalith.Logging;
 
 /// <summary>
-/// 维护玩家当前持有的可放置 token 库存，固定为 48 格并按 8 列连续占位。
+/// 维护玩家当前持有的可放置 token 库存，固定为 48 格并按 6 列连续占位。
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class PlayerBulletTokenInventory : MonoBehaviour
 {
     public const int Capacity = 48;
-    public const int Columns = 8;
+    public const int Columns = 6;
 
     [SerializeField] private List<PlaceableTokenData> startingTokens = new();
 
@@ -28,7 +28,7 @@ public sealed class PlayerBulletTokenInventory : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 确保运行时格子已按固定 48 格初始化，并按顺序放入 Inspector 预置物件。
+    /// summary: 确保运行时格子已按固定 48 格初始化，并按当前列数规则顺序放入 Inspector 预置物件。
     /// param: 无
     /// returns: 无
     /// </summary>

@@ -30,6 +30,4 @@ MonoBehaviour:
   fixedItemPlacement: 1
   fixedCastItems:
   - {fileID: 11400000, guid: 51e87198f6a34444953d769c38fcee9a, type: 2}
-  - {fileID: 11400000, guid: 42ca3c1c731f40f5bb4a41e9bb427a70, type: 2}
   - {fileID: 11400000, guid: 75ab13e681202c044b784abc69d81992, type: 2}
-  - {fileID: 11400000, guid: 62f28c7d2d294e32b966eac493332f11, type: 2}

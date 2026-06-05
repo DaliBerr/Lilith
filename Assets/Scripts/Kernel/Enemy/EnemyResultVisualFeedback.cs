@@ -16,6 +16,7 @@ public sealed class EnemyResultVisualFeedback : MonoBehaviour
     [SerializeField] private Color controlHitPulseColor = new(1f, 0.92f, 0.18f, 1f);
     [SerializeField] private Color healingHitPulseColor = new(0.32f, 0.95f, 0.45f, 1f);
     [SerializeField] private Color fullyControlledColor = new(1f, 0.8f, 0.12f, 1f);
+    [SerializeField] private Color polymorphedColor = new(0.92f, 0.96f, 1f, 1f);
 
     [Header("Timing")]
     [SerializeField, Min(0.01f)] private float controlHitPulseDuration = 0.16f;
@@ -55,13 +56,14 @@ public sealed class EnemyResultVisualFeedback : MonoBehaviour
         }
 
         bool isStunned = statusEffects != null && statusEffects.IsStunned;
+        bool isPolymorphed = statusEffects != null && statusEffects.IsPolymorphed;
 
-        if (!isStunned && pulseRemainingDuration > 0f)
+        if (!isStunned && !isPolymorphed && pulseRemainingDuration > 0f)
         {
             pulseRemainingDuration = Mathf.Max(0f, pulseRemainingDuration - Time.deltaTime);
         }
 
-        Color targetColor = ResolveCurrentColor(isStunned);
+        Color targetColor = ResolveCurrentColor(isStunned, isPolymorphed);
         ApplyColorToAll(targetColor);
     }
 
@@ -120,8 +122,13 @@ public sealed class EnemyResultVisualFeedback : MonoBehaviour
         pulseRemainingDuration = pulseTotalDuration;
     }
 
-    private Color ResolveCurrentColor(bool isStunned)
+    private Color ResolveCurrentColor(bool isStunned, bool isPolymorphed)
     {
+        if (isPolymorphed)
+        {
+            return polymorphedColor;
+        }
+
         if (isStunned)
         {
             return fullyControlledColor;

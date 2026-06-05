@@ -22,7 +22,7 @@ namespace Kernel.UI
     /// Options prefab 的运行时脚本：从 JSON 读取设置目录，并按配置动态生成设置项。
     /// </summary>
     [DisallowMultipleComponent]
-    [UIPrefab("Assets/Prefabs/UI/Options")]
+    [UIPrefab("Assets/Prefabs/UI/Options/Setting Panel")]
     public sealed class OptionsUIScreen : GameUIScreen
     {
         private const string DefaultCatalogAddress = "Assets/Data/UI/OptionsCatalog";
@@ -51,6 +51,7 @@ namespace Kernel.UI
         [SerializeField] private RectTransform contentRoot;
         [SerializeField] private Button closeButton;
         [SerializeField] private GameObject catalogButtonTemplate;
+        [SerializeField] private GameObject entryTemplate;
         [SerializeField] private ScrollRect scrollRect;
         [SerializeField] private GameObject buttonPanel;
         [SerializeField] private Button cancelButton;
@@ -84,15 +85,47 @@ namespace Kernel.UI
         private bool isClosingBindingPrompt;
         private bool isClosingSelf;
         private bool isApplyingPendingChanges;
+        private bool hasQueuedApplyRequest;
+        private bool isEmbeddedInHost;
+        private Action embeddedCloseCallback;
         private PopUpUIScreen activeBindingPrompt;
 
         public override Status currentStatus { get; } = StatusList.PopUpStatus;
+        public override bool PreservePrefabRootRectTransform => true;
 
         protected override void OnInit()
         {
             TryAutoBindReferences();
             HideTemplates();
             BindButtons();
+        }
+
+        public IEnumerator InitializeEmbeddedCo(UIManager hostUI, Action closeCallback)
+        {
+            ui = hostUI;
+            isEmbeddedInHost = true;
+            embeddedCloseCallback = closeCallback;
+            isClosingSelf = false;
+            isResolvingUnsavedChangesPrompt = false;
+
+            if (!canvasGroup)
+            {
+                canvasGroup = GetComponent<CanvasGroup>();
+            }
+
+            if (canvasGroup != null)
+            {
+                canvasGroup.alpha = 1f;
+                canvasGroup.interactable = true;
+                canvasGroup.blocksRaycasts = true;
+            }
+
+            TryAutoBindReferences();
+            HideTemplates();
+            BindButtons();
+            yield return EnsureAssetsLoadedCo();
+            RebuildView();
+            gameObject.SetActive(true);
         }
 
         public override IEnumerator Show(float fade = 0.15f)
@@ -108,7 +141,10 @@ namespace Kernel.UI
             isClosingSelf = false;
             isResolvingUnsavedChangesPrompt = false;
             ClearRuntimeView();
-            RemoveCurrentStatus();
+            if (!isEmbeddedInHost)
+            {
+                RemoveCurrentStatus();
+            }
         }
 
         protected override void OnBeforeHide()
@@ -124,7 +160,10 @@ namespace Kernel.UI
             ReleaseEntryPrefabHandle();
             isClosingSelf = false;
             isResolvingUnsavedChangesPrompt = false;
-            RemoveCurrentStatus();
+            if (!isEmbeddedInHost)
+            {
+                RemoveCurrentStatus();
+            }
         }
 
         private void OnValidate()
@@ -134,6 +173,17 @@ namespace Kernel.UI
 
         public void RequestClose()
         {
+            if (isEmbeddedInHost)
+            {
+                if (isClosingSelf)
+                {
+                    return;
+                }
+
+                StartCoroutine(CloseEmbeddedCo());
+                return;
+            }
+
             if (ui == null)
             {
                 return;
@@ -151,6 +201,29 @@ namespace Kernel.UI
             }
 
             StartCoroutine(CloseSelfCo());
+        }
+
+        private IEnumerator CloseEmbeddedCo()
+        {
+            if (isClosingSelf)
+            {
+                yield break;
+            }
+
+            isClosingSelf = true;
+            try
+            {
+                if (HasPendingChanges())
+                {
+                    yield return ApplyPendingChangesCo();
+                }
+
+                embeddedCloseCallback?.Invoke();
+            }
+            finally
+            {
+                isClosingSelf = false;
+            }
         }
 
         private IEnumerator CloseSelfCo()
@@ -290,7 +363,11 @@ namespace Kernel.UI
 
         private IEnumerator EnsureAssetsLoadedCo()
         {
-            if (!hasEntryPrefabHandle)
+            if (entryTemplate != null)
+            {
+                entryPrefab = entryTemplate;
+            }
+            else if (!hasEntryPrefabHandle)
             {
                 string address = string.IsNullOrWhiteSpace(entryPrefabAddress)
                     ? DefaultEntryPrefabAddress
@@ -536,6 +613,7 @@ namespace Kernel.UI
                 state.CurrentValue = FormatStoredFloat(clampedValue);
                 SetSettingLabel(label, entry.Title, FormatSliderValue(entry, clampedValue, min, max));
                 RefreshActionButtons();
+                RequestApplyPendingChangesAfterValueChange();
             });
         }
 
@@ -582,6 +660,7 @@ namespace Kernel.UI
                 int clampedIndex = Mathf.Clamp(nextIndex, 0, choices.Count - 1);
                 state.CurrentValue = choices[clampedIndex].Value;
                 RefreshActionButtons();
+                RequestApplyPendingChangesAfterValueChange();
             });
         }
 
@@ -606,6 +685,7 @@ namespace Kernel.UI
 
                 state.CurrentValue = nextValue ? bool.TrueString : bool.FalseString;
                 RefreshActionButtons();
+                RequestApplyPendingChangesAfterValueChange();
             });
         }
 
@@ -1220,6 +1300,7 @@ namespace Kernel.UI
                 state.CurrentValue = bindingPath.Trim();
                 RefreshCurrentEntryControls();
                 RefreshActionButtons();
+                RequestApplyPendingChangesAfterValueChange();
             }
             else if (!string.IsNullOrWhiteSpace(error) && !string.Equals(error, BindingCancelledMessage, StringComparison.Ordinal))
             {
@@ -1293,10 +1374,46 @@ namespace Kernel.UI
 
             RefreshCurrentEntryControls();
             RefreshActionButtons();
+            RequestApplyPendingChangesAfterValueChange();
         }
 
         private void HandleApplyButtonClicked()
         {
+            RequestApplyPendingChanges();
+        }
+
+        private void RequestApplyPendingChangesAfterValueChange()
+        {
+            if (ShouldApplyImmediately())
+            {
+                RequestApplyPendingChanges();
+            }
+        }
+
+        private bool ShouldApplyImmediately()
+        {
+            return applyButton == null;
+        }
+
+        private void RequestApplyPendingChanges()
+        {
+            if (isRefreshingControls)
+            {
+                return;
+            }
+
+            if (isApplyingPendingChanges)
+            {
+                hasQueuedApplyRequest = true;
+                return;
+            }
+
+            if (!HasPendingChanges())
+            {
+                RefreshActionButtons();
+                return;
+            }
+
             StartCoroutine(ApplyPendingChangesCo());
         }
 
@@ -1304,10 +1421,12 @@ namespace Kernel.UI
         {
             if (isApplyingPendingChanges)
             {
+                hasQueuedApplyRequest = true;
                 yield break;
             }
 
             isApplyingPendingChanges = true;
+            hasQueuedApplyRequest = false;
             RefreshActionButtons();
 
             bool shouldApplyLanguage = TryGetPendingLanguageTag(out string languageTag);
@@ -1351,6 +1470,11 @@ namespace Kernel.UI
             {
                 isApplyingPendingChanges = false;
                 RefreshActionButtons();
+            }
+
+            if (hasQueuedApplyRequest && HasPendingChanges())
+            {
+                StartCoroutine(ApplyPendingChangesCo());
             }
         }
 
@@ -1656,20 +1780,39 @@ namespace Kernel.UI
         private void TryAutoBindReferences()
         {
             catalogRoot ??= transform.Find("Top Panel/Catalog") as RectTransform;
+            catalogRoot ??= transform.Find("Setting Button Panel") as RectTransform;
             contentRoot ??= transform.Find("Body/Scroll View/Viewport/Content") as RectTransform;
+            contentRoot ??= transform.Find("Settings /Setting Panel") as RectTransform;
+            contentRoot ??= transform.Find("Settings /Scroll View/Viewport/Content") as RectTransform;
             if (closeButton == null)
             {
                 closeButton = FindButton("Top Panel/Close Button");
+                closeButton ??= FindButton("Settings /Close Button");
             }
 
             scrollRect ??= transform.Find("Body/Scroll View")?.GetComponent<ScrollRect>();
+            scrollRect ??= transform.Find("Settings /Scroll View")?.GetComponent<ScrollRect>();
             buttonPanel ??= transform.Find("Body/Button Panel")?.gameObject;
+            buttonPanel ??= transform.Find("Settings /Button Panel")?.gameObject;
             cancelButton ??= transform.Find("Body/Button Panel/Cancel")?.GetComponent<Button>();
             resetButton ??= transform.Find("Body/Button Panel/Reset")?.GetComponent<Button>();
+            resetButton ??= transform.Find("Settings /Button Panel/Reset")?.GetComponent<Button>();
             applyButton ??= transform.Find("Body/Button Panel/Apply")?.GetComponent<Button>();
+            applyButton ??= transform.Find("Settings /Button Panel/Apply")?.GetComponent<Button>();
             if (catalogRoot != null)
             {
                 catalogButtonTemplate ??= catalogRoot.Find("Setting Catalog Button Prefab")?.gameObject;
+                catalogButtonTemplate ??= catalogRoot.Find("Pause Panel Setting Button")?.gameObject;
+            }
+
+            if (contentRoot != null)
+            {
+                entryTemplate ??= contentRoot.Find("Option Entry Entry")?.gameObject;
+            }
+
+            if (entryPrefab == null && entryTemplate != null)
+            {
+                entryPrefab = entryTemplate;
             }
         }
 
@@ -1690,6 +1833,11 @@ namespace Kernel.UI
             if (catalogButtonTemplate != null && catalogButtonTemplate.activeSelf)
             {
                 catalogButtonTemplate.SetActive(false);
+            }
+
+            if (entryTemplate != null && entryTemplate.activeSelf)
+            {
+                entryTemplate.SetActive(false);
             }
         }
 
@@ -1797,7 +1945,14 @@ namespace Kernel.UI
             {
                 if (objects[i] != null)
                 {
-                    Destroy(objects[i]);
+                    if (Application.isPlaying)
+                    {
+                        Destroy(objects[i]);
+                    }
+                    else
+                    {
+                        DestroyImmediate(objects[i]);
+                    }
                 }
             }
 

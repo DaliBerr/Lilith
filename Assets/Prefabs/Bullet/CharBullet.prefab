@@ -617,19 +617,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.8811196
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0.36497164
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.27781588
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.11507509
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 2858060222930140859, guid: e19e371526e657f47a119f1f95594d76, type: 3}
       propertyPath: m_AnchoredPosition.x
@@ -801,6 +801,7 @@ MonoBehaviour:
     projectileSpeed: 320
     maxLifetime: 2
     maxTravelDistance: 512
+    behaviorParameter: 0
     impactMask:
       serializedVersion: 2
       m_Bits: 2035

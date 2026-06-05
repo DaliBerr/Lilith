@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 69cd710bca0d1bc4fb6db36097744ee1, type: 3}
+  m_Name: OnKill
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.TriggerTokenData
+  tokenId: trigger_kill
+  displayText: "\u706D"
+  displayTextKey: 
+  description: "\u672C projectile \u9020\u6210\u51FB\u6740\u65F6\u5728\u6B7B\u4EA1\u76EE\u6807\u4F4D\u7F6E\u91CA\u653E
+    payload\u3002"
+  descriptionKey: 
+  tokenType: 9
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
+  triggerType: 4
+  parameterKind: 0
+  defaultParameterValue: 0

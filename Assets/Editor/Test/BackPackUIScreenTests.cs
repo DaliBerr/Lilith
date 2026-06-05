@@ -19,7 +19,7 @@ public sealed class BackPackUIScreenTests
     public void ResponsiveLayoutGroupFitter_ShrinksInventorySlotsToFitGridRect()
     {
         BackPackUIScreen screen = CreateBackPackUIScreen();
-        RectTransform grid = screen.transform.Find("MainContent/BackPack Grid Panel/Grid") as RectTransform;
+        RectTransform grid = screen.transform.Find("MainContent/BackPack Grid Panel/Scroll View/Viewport/Grid Content") as RectTransform;
         Assert.That(grid, Is.Not.Null);
         grid.anchorMin = new Vector2(0.5f, 0.5f);
         grid.anchorMax = new Vector2(0.5f, 0.5f);
@@ -37,6 +37,34 @@ public sealed class BackPackUIScreenTests
         Assert.That(layout.cellSize.x, Is.LessThan(100f));
         Assert.That(ResolveGridRequiredWidth(layout), Is.LessThanOrEqualTo(grid.rect.width + 0.01f));
         Assert.That(ResolveGridRequiredHeight(layout), Is.LessThanOrEqualTo(grid.rect.height + 0.01f));
+    }
+
+    [Test]
+    public void OnInit_BuildsBookAndSpecialItemDisplayGridsWithTenSlots()
+    {
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+
+        InvokeNonPublic(screen, "OnInit");
+
+        RectTransform bookGrid = GetPrivateField<RectTransform>(screen, "bookGrid");
+        RectTransform specialItemGrid = GetPrivateField<RectTransform>(screen, "specialItemGrid");
+        List<BackPackGridSlotView> bookSlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "bookSlots");
+        List<BackPackGridSlotView> specialItemSlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "specialItemSlots");
+        Assert.That(bookGrid, Is.Not.Null);
+        Assert.That(specialItemGrid, Is.Not.Null);
+        Assert.That(bookGrid.childCount, Is.EqualTo(10));
+        Assert.That(specialItemGrid.childCount, Is.EqualTo(10));
+        Assert.That(bookSlots.Count, Is.EqualTo(10));
+        Assert.That(specialItemSlots.Count, Is.EqualTo(10));
+
+        GridLayoutGroup bookLayout = bookGrid.GetComponent<GridLayoutGroup>();
+        GridLayoutGroup specialItemLayout = specialItemGrid.GetComponent<GridLayoutGroup>();
+        Assert.That(bookLayout, Is.Not.Null);
+        Assert.That(specialItemLayout, Is.Not.Null);
+        Assert.That(bookLayout.constraint, Is.EqualTo(GridLayoutGroup.Constraint.FixedColumnCount));
+        Assert.That(specialItemLayout.constraint, Is.EqualTo(GridLayoutGroup.Constraint.FixedColumnCount));
+        Assert.That(bookLayout.constraintCount, Is.EqualTo(2));
+        Assert.That(specialItemLayout.constraintCount, Is.EqualTo(2));
     }
 
     [TearDown]
@@ -133,7 +161,7 @@ public sealed class BackPackUIScreenTests
     }
 
     [Test]
-    public void NotifySlotHoverEnter_WithOccupiedSlot_ShowsHoverPreviewAndBindsToken()
+    public void NotifySlotClick_WithOccupiedSlot_ShowsHoverPreviewAndBindsToken()
     {
         CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_fire", "Fire");
         CreatePlayerWithState(inventoryToken, null);
@@ -144,7 +172,7 @@ public sealed class BackPackUIScreenTests
 
         List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
         PointerEventData hoverEventData = CreatePointerEventData(new Vector2(320f, 240f));
-        screen.NotifySlotHoverEnter(inventorySlots[0], hoverEventData);
+        screen.NotifySlotClick(inventorySlots[0], hoverEventData);
 
         BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
         Assert.That(hoverPreview, Is.Not.Null);
@@ -162,6 +190,184 @@ public sealed class BackPackUIScreenTests
     }
 
     [Test]
+    public void NotifySlotClick_SameSlotTwice_HidesHoverPreview()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("click_toggle", "Toggle");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        PointerEventData clickEventData = CreatePointerEventData(new Vector2(240f, 200f));
+        screen.NotifySlotClick(inventorySlots[0], clickEventData);
+
+        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.True);
+
+        screen.NotifySlotClick(inventorySlots[0], clickEventData);
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.False);
+    }
+
+    [Test]
+    public void NotifySlotClick_DifferentOccupiedSlot_RebindsHoverPreview()
+    {
+        CoreTokenData firstToken = CreateToken<CoreTokenData>("click_switch_a", "SwitchA");
+        CoreTokenData secondToken = CreateToken<CoreTokenData>("click_switch_b", "SwitchB");
+        CreatePlayer(out PlayerBulletTokenInventory inventory, out _);
+        Assert.That(inventory.TryPlaceItem(0, firstToken), Is.True);
+        Assert.That(inventory.TryPlaceItem(1, secondToken), Is.True);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        screen.NotifySlotClick(inventorySlots[0], CreatePointerEventData(new Vector2(120f, 120f)));
+
+        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
+        Assert.That(hoverPreview.BoundToken, Is.SameAs(firstToken));
+
+        screen.NotifySlotClick(inventorySlots[1], CreatePointerEventData(new Vector2(360f, 220f)));
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.True);
+        Assert.That(hoverPreview.BoundToken, Is.SameAs(secondToken));
+    }
+
+    [Test]
+    public void InventorySlotPointerClick_WithScrollRectStillOpensHoverPreview()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("slot_click", "SlotClick");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        BackPackGridSlotView slot = inventorySlots[0];
+        PointerEventData clickEventData = CreatePointerEventData(new Vector2(220f, 180f));
+        clickEventData.button = PointerEventData.InputButton.Left;
+
+        slot.OnPointerClick(clickEventData);
+
+        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
+        Assert.That(hoverPreview, Is.Not.Null);
+        Assert.That(hoverPreview.gameObject.activeSelf, Is.True);
+        Assert.That(hoverPreview.BoundToken, Is.SameAs(inventoryToken));
+    }
+
+    [Test]
+    public void InventorySlotQuickDrag_RoutesToScrollRectInsteadOfItemDrag()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("slot_scroll", "SlotScroll");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TrackingScrollRect scrollRect = screen.transform.Find("MainContent/BackPack Grid Panel/Scroll View")?.GetComponent<TrackingScrollRect>();
+        Assert.That(scrollRect, Is.Not.Null);
+        ConfigureInventoryScrollArea(scrollRect);
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        BackPackGridSlotView slot = inventorySlots[0];
+        PointerEventData dragEventData = CreatePointerEventData(new Vector2(120f, 120f));
+        dragEventData.button = PointerEventData.InputButton.Left;
+        dragEventData.pressPosition = dragEventData.position;
+        dragEventData.delta = new Vector2(0f, -80f);
+        dragEventData.position += dragEventData.delta;
+
+        slot.OnPointerDown(dragEventData);
+        slot.OnInitializePotentialDrag(dragEventData);
+        slot.OnBeginDrag(dragEventData);
+        slot.OnDrag(dragEventData);
+        slot.OnEndDrag(dragEventData);
+
+        BackPackDragPreviewView dragPreview = GetPrivateField<BackPackDragPreviewView>(screen, "dragPreviewView");
+        Assert.That(scrollRect.InitializePotentialDragCallCount, Is.EqualTo(1));
+        Assert.That(scrollRect.BeginDragCallCount, Is.EqualTo(1));
+        Assert.That(scrollRect.DragCallCount, Is.EqualTo(1));
+        Assert.That(scrollRect.EndDragCallCount, Is.EqualTo(1));
+        Assert.That(GetPrivateField<BackPackGridSlotView>(screen, "activeDragSource"), Is.Null);
+        Assert.That(dragPreview.gameObject.activeSelf, Is.False);
+    }
+
+    [Test]
+    public void InventorySlotLongPressDrag_PrefersItemDragOverScrollRect()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("slot_long_press_drag", "SlotLongPress");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TrackingScrollRect scrollRect = screen.transform.Find("MainContent/BackPack Grid Panel/Scroll View")?.GetComponent<TrackingScrollRect>();
+        Assert.That(scrollRect, Is.Not.Null);
+        ConfigureInventoryScrollArea(scrollRect);
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        BackPackGridSlotView slot = inventorySlots[0];
+        PointerEventData dragEventData = CreatePointerEventData(new Vector2(180f, 160f));
+        dragEventData.button = PointerEventData.InputButton.Left;
+
+        slot.OnPointerDown(dragEventData);
+        SetPrivateField(slot, "pointerDownTime", Time.unscaledTime - 1f);
+        slot.OnInitializePotentialDrag(dragEventData);
+        slot.OnBeginDrag(dragEventData);
+
+        BackPackDragPreviewView dragPreview = GetPrivateField<BackPackDragPreviewView>(screen, "dragPreviewView");
+        Assert.That(GetPrivateField<BackPackGridSlotView>(screen, "activeDragSource"), Is.SameAs(slot));
+        Assert.That(dragPreview.gameObject.activeSelf, Is.True);
+        Assert.That(scrollRect.BeginDragCallCount, Is.EqualTo(0));
+        Assert.That(scrollRect.DragCallCount, Is.EqualTo(0));
+        Assert.That(scrollRect.EndDragCallCount, Is.EqualTo(0));
+
+        slot.OnEndDrag(dragEventData);
+    }
+
+    [Test]
+    public void InventorySlotLongPressDrag_CanDropIntoSpellBook()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("slot_drag_to_spellbook", "DragToSpellBook");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TrackingScrollRect scrollRect = screen.transform.Find("MainContent/BackPack Grid Panel/Scroll View")?.GetComponent<TrackingScrollRect>();
+        Assert.That(scrollRect, Is.Not.Null);
+        ConfigureInventoryScrollArea(scrollRect);
+
+        PlayerBulletTokenInventory inventory = Object.FindFirstObjectByType<PlayerBulletTokenInventory>();
+        SpellBookLoadout loadout = Object.FindFirstObjectByType<SpellBookLoadout>();
+        Assert.That(inventory, Is.Not.Null);
+        Assert.That(loadout, Is.Not.Null);
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        List<BackPackGridSlotView> spellBookSlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "spellBookSlots");
+        BackPackGridSlotView sourceSlot = inventorySlots[0];
+        BackPackGridSlotView targetSlot = spellBookSlots[0];
+        PointerEventData dragEventData = CreatePointerEventData(new Vector2(180f, 160f));
+        dragEventData.button = PointerEventData.InputButton.Left;
+
+        sourceSlot.OnPointerDown(dragEventData);
+        SetPrivateField(sourceSlot, "pointerDownTime", Time.unscaledTime - 1f);
+        sourceSlot.OnInitializePotentialDrag(dragEventData);
+        sourceSlot.OnBeginDrag(dragEventData);
+        targetSlot.OnDrop(dragEventData);
+        sourceSlot.OnEndDrag(dragEventData);
+
+        Assert.That(scrollRect.BeginDragCallCount, Is.EqualTo(0));
+        Assert.That(inventory.GetCell(0).IsOccupied, Is.False);
+        Assert.That(loadout.EquippedItems.Count, Is.EqualTo(1));
+        Assert.That(loadout.EquippedItems[0], Is.SameAs(inventoryToken));
+    }
+
+    [Test]
     public void NotifySlotHoverMove_UpdatesHoverPreviewPosition()
     {
         CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_move", "Move");
@@ -172,26 +378,33 @@ public sealed class BackPackUIScreenTests
         screen.RefreshFromCurrentPlayer();
 
         List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
-        screen.NotifySlotHoverEnter(inventorySlots[0], CreatePointerEventData(new Vector2(120f, 120f)));
+        screen.NotifySlotClick(inventorySlots[0], CreatePointerEventData(new Vector2(120f, 120f)));
 
         BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
         RectTransform hoverRect = hoverPreview.transform as RectTransform;
-        Assert.That(hoverRect, Is.Not.Null);
-        Vector2 before = hoverRect.anchoredPosition;
-
-        Vector2 pointerPosition = new(0f, 100f);
-        screen.NotifySlotHoverMove(inventorySlots[0], CreatePointerEventData(pointerPosition));
-        Vector2 after = hoverRect.anchoredPosition;
-        Assert.That(after, Is.Not.EqualTo(before));
-
         RectTransform dragPreviewLayer = GetPrivateField<RectTransform>(screen, "dragPreviewLayer");
-        Assert.That(RectTransformUtility.ScreenPointToLocalPointInRectangle(dragPreviewLayer, pointerPosition, null, out Vector2 expectedLocalPoint), Is.True);
-        Assert.That(after.x, Is.EqualTo(expectedLocalPoint.x).Within(0.01f));
-        Assert.That(after.y, Is.EqualTo(expectedLocalPoint.y).Within(0.01f));
+        RectTransform slotRect = inventorySlots[0].SlotRectTransform;
+        Assert.That(hoverRect, Is.Not.Null);
+        Assert.That(dragPreviewLayer, Is.Not.Null);
+        Assert.That(slotRect, Is.Not.Null);
+
+        Vector2 before = hoverRect.anchoredPosition;
+        Assert.That(RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            dragPreviewLayer,
+            LinkedTokenOutlineView.GetScreenCenter(slotRect, null),
+            null,
+            out Vector2 expectedLocalPoint), Is.True);
+        Assert.That(before.x, Is.EqualTo(expectedLocalPoint.x).Within(0.01f));
+        Assert.That(before.y, Is.EqualTo(expectedLocalPoint.y).Within(0.01f));
+
+        screen.NotifySlotHoverMove(inventorySlots[0], CreatePointerEventData(new Vector2(0f, 100f)));
+        Vector2 after = hoverRect.anchoredPosition;
+        Assert.That(after.x, Is.EqualTo(before.x).Within(0.01f));
+        Assert.That(after.y, Is.EqualTo(before.y).Within(0.01f));
     }
 
     [Test]
-    public void NotifySlotHoverMove_ClampsScaledTopLeftPreviewWithinLayer()
+    public void NotifySlotClick_PositionsHoverPreviewAtSlotCenterInsteadOfPointer()
     {
         CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_clamp", "Clamp");
         CreatePlayerWithState(inventoryToken, null);
@@ -201,49 +414,23 @@ public sealed class BackPackUIScreenTests
         screen.RefreshFromCurrentPlayer();
 
         List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
-        screen.NotifySlotHoverEnter(inventorySlots[0], CreatePointerEventData(new Vector2(400f, 300f)));
+        screen.NotifySlotClick(inventorySlots[0], CreatePointerEventData(new Vector2(10000f, 10000f)));
 
         BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
         RectTransform hoverRect = hoverPreview.transform as RectTransform;
         RectTransform dragPreviewLayer = GetPrivateField<RectTransform>(screen, "dragPreviewLayer");
+        RectTransform slotRect = inventorySlots[0].SlotRectTransform;
         Assert.That(hoverRect, Is.Not.Null);
         Assert.That(dragPreviewLayer, Is.Not.Null);
+        Assert.That(slotRect, Is.Not.Null);
 
-        screen.NotifySlotHoverMove(inventorySlots[0], CreatePointerEventData(new Vector2(10000f, 10000f)));
-
-        Rect layerRect = dragPreviewLayer.rect;
-        Vector2 scaledSize = new(
-            hoverRect.rect.width * Mathf.Abs(hoverRect.localScale.x),
-            hoverRect.rect.height * Mathf.Abs(hoverRect.localScale.y));
-        float minX = layerRect.xMin + scaledSize.x * hoverRect.pivot.x;
-        float maxX = layerRect.xMax - scaledSize.x * (1f - hoverRect.pivot.x);
-        float minY = layerRect.yMin + scaledSize.y * hoverRect.pivot.y;
-        float maxY = layerRect.yMax - scaledSize.y * (1f - hoverRect.pivot.y);
-
-        Assert.That(hoverRect.anchoredPosition.x, Is.GreaterThanOrEqualTo(minX - 0.01f));
-        Assert.That(hoverRect.anchoredPosition.x, Is.LessThanOrEqualTo(maxX + 0.01f));
-        Assert.That(hoverRect.anchoredPosition.y, Is.GreaterThanOrEqualTo(minY - 0.01f));
-        Assert.That(hoverRect.anchoredPosition.y, Is.LessThanOrEqualTo(maxY + 0.01f));
-    }
-
-    [Test]
-    public void NotifySlotHoverExit_HidesHoverPreview()
-    {
-        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_exit", "Exit");
-        CreatePlayerWithState(inventoryToken, null);
-
-        BackPackUIScreen screen = CreateBackPackUIScreen();
-        InvokeNonPublic(screen, "OnInit");
-        screen.RefreshFromCurrentPlayer();
-
-        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
-        screen.NotifySlotHoverEnter(inventorySlots[0], CreatePointerEventData(new Vector2(220f, 180f)));
-
-        BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
-        Assert.That(hoverPreview.gameObject.activeSelf, Is.True);
-
-        screen.NotifySlotHoverExit(inventorySlots[0]);
-        Assert.That(hoverPreview.gameObject.activeSelf, Is.False);
+        Assert.That(RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            dragPreviewLayer,
+            LinkedTokenOutlineView.GetScreenCenter(slotRect, null),
+            null,
+            out Vector2 expectedLocalPoint), Is.True);
+        Assert.That(hoverRect.anchoredPosition.x, Is.EqualTo(expectedLocalPoint.x).Within(0.01f));
+        Assert.That(hoverRect.anchoredPosition.y, Is.EqualTo(expectedLocalPoint.y).Within(0.01f));
     }
 
     [Test]
@@ -259,7 +446,7 @@ public sealed class BackPackUIScreenTests
         screen.RefreshFromCurrentPlayer();
 
         List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
-        screen.NotifySlotHoverEnter(inventorySlots[0], CreatePointerEventData(new Vector2(200f, 200f)));
+        screen.NotifySlotClick(inventorySlots[0], CreatePointerEventData(new Vector2(200f, 200f)));
 
         BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
         Assert.That(hoverPreview.gameObject.activeSelf, Is.True);
@@ -566,12 +753,45 @@ public sealed class BackPackUIScreenTests
         CreateUiObject("Preview Animation", leftPanel);
 
         RectTransform backPackGridPanel = CreateUiObject("BackPack Grid Panel", mainContent).GetComponent<RectTransform>();
-        GameObject backPackGridObject = CreateUiObject("Grid", backPackGridPanel);
-        backPackGridObject.AddComponent<GridLayoutGroup>();
+        GameObject scrollViewObject = CreateUiObject("Scroll View", backPackGridPanel);
+        scrollViewObject.AddComponent<Image>();
+        TrackingScrollRect scrollRect = scrollViewObject.AddComponent<TrackingScrollRect>();
+        GameObject viewportObject = CreateUiObject("Viewport", scrollViewObject.transform);
+        viewportObject.AddComponent<Image>();
+        viewportObject.AddComponent<Mask>().showMaskGraphic = false;
+        GameObject gridContentObject = CreateUiObject("Grid Content", viewportObject.transform);
+        gridContentObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        gridContentObject.AddComponent<GridLayoutGroup>();
+        scrollRect.viewport = viewportObject.transform as RectTransform;
+        scrollRect.content = gridContentObject.transform as RectTransform;
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+
+        RectTransform bookSpecialGridPanel = CreateUiObject("Book/Special_Item Grid Panel", mainContent).GetComponent<RectTransform>();
+        CreateAuxiliaryScrollGrid("Book Grid", bookSpecialGridPanel);
+        CreateAuxiliaryScrollGrid("Special_Item Grid", bookSpecialGridPanel);
 
         SetPrivateField(screen, "hoverPreviewPrefab", CreateHoverPreviewTemplate());
 
         return screen;
+    }
+
+    private void CreateAuxiliaryScrollGrid(string rootName, Transform parent)
+    {
+        GameObject gridRoot = CreateUiObject(rootName, parent);
+        GameObject scrollViewObject = CreateUiObject("Scroll View", gridRoot.transform);
+        scrollViewObject.AddComponent<Image>();
+        ScrollRect scrollRect = scrollViewObject.AddComponent<ScrollRect>();
+        GameObject viewportObject = CreateUiObject("Viewport", scrollViewObject.transform);
+        viewportObject.AddComponent<Image>();
+        viewportObject.AddComponent<Mask>().showMaskGraphic = false;
+        GameObject contentObject = CreateUiObject("Content", viewportObject.transform);
+        contentObject.AddComponent<GridLayoutGroup>();
+        contentObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        scrollRect.viewport = viewportObject.transform as RectTransform;
+        scrollRect.content = contentObject.transform as RectTransform;
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
     }
 
     private BulletTokenSelectionView CreateHoverPreviewTemplate()
@@ -614,6 +834,17 @@ public sealed class BackPackUIScreenTests
         };
 
         return eventData;
+    }
+
+    private static void ConfigureInventoryScrollArea(ScrollRect scrollRect)
+    {
+        Assert.That(scrollRect, Is.Not.Null);
+        RectTransform viewport = scrollRect.viewport;
+        RectTransform content = scrollRect.content;
+        Assert.That(viewport, Is.Not.Null);
+        Assert.That(content, Is.Not.Null);
+        viewport.sizeDelta = new Vector2(320f, 240f);
+        content.sizeDelta = new Vector2(320f, 960f);
     }
 
     private void CreatePlayerWithState(PlaceableTokenData inventoryItem, PlaceableTokenData spellBookItem)
@@ -822,6 +1053,38 @@ public sealed class BackPackUIScreenTests
         if (existingService != null)
         {
             Object.DestroyImmediate(existingService.gameObject);
+        }
+    }
+
+    private sealed class TrackingScrollRect : ScrollRect
+    {
+        public int InitializePotentialDragCallCount { get; private set; }
+        public int BeginDragCallCount { get; private set; }
+        public int DragCallCount { get; private set; }
+        public int EndDragCallCount { get; private set; }
+
+        public override void OnInitializePotentialDrag(PointerEventData eventData)
+        {
+            InitializePotentialDragCallCount++;
+            base.OnInitializePotentialDrag(eventData);
+        }
+
+        public override void OnBeginDrag(PointerEventData eventData)
+        {
+            BeginDragCallCount++;
+            base.OnBeginDrag(eventData);
+        }
+
+        public override void OnDrag(PointerEventData eventData)
+        {
+            DragCallCount++;
+            base.OnDrag(eventData);
+        }
+
+        public override void OnEndDrag(PointerEventData eventData)
+        {
+            EndDragCallCount++;
+            base.OnEndDrag(eventData);
         }
     }
 }

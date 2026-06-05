@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0443682c09f53a34a8ac6389751dbd18, type: 3}
+  m_Name: Drain
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.ResultTokenData
+  tokenId: result_drain
+  displayText: "\u6C72"
+  displayTextKey: 
+  description: "\u547D\u4E2D\u540E\u6309\u76F4\u51FB\u4F24\u5BB3\u6BD4\u4F8B\u6CBB\u7597\u65BD\u6CD5\u8005\uFF1B\u503C\u8BCD\u8C03\u6574\u6C72\u53D6\u5F3A\u5EA6\u3002"
+  descriptionKey: 
+  tokenType: 5
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
+  resultType: 7
+  acceptsNumericValue: 1
+  valueParameterKind: 4
+  defaultExplosionRadius: 0
+  explosionDamageMultiplier: 0
+  defaultEffectRadius: 0
+  defaultTriggerCount: 0
+  effectDuration: 0
+  childDamageMultiplier: 0
+  defaultEffectStrength: 1
+  areaTickSeconds: 0.5
+  areaDamageMultiplier: 0.25
+  shieldDuration: 6
+  statusApplications: []

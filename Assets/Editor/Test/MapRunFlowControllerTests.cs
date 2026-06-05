@@ -189,13 +189,26 @@ public sealed class MapRunFlowControllerTests
             out _,
             out _,
             startingToken);
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        bool success = InvokeMethodWithOutArgument(controller, "TryAddSelectedTokenToInventory", selectedToken, out string error);
+        try
+        {
+            bool success = InvokeMethodWithOutArgument(controller, "TryAddSelectedTokenToInventory", selectedToken, out string error);
 
-        Assert.That(success, Is.True, error);
-        Assert.That(error, Is.Null.Or.Empty);
-        Assert.That(ContainsItem(inventory, startingToken), Is.True);
-        Assert.That(ContainsItem(inventory, selectedToken), Is.True);
+            Assert.That(success, Is.True, error);
+            Assert.That(error, Is.Null.Or.Empty);
+            Assert.That(ContainsItem(inventory, startingToken), Is.True);
+            Assert.That(ContainsItem(inventory, selectedToken), Is.True);
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("Selected"));
+            Assert.That(notifications[0].description, Is.EqualTo("已收入背包"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.Token));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
     }
 
     [Test]
@@ -212,14 +225,27 @@ public sealed class MapRunFlowControllerTests
             out _,
             out _,
             out _);
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        bool success = InvokeMethodWithOutArgument(controller, "TryEquipSelectedSpellBook", quickBook, out string error);
+        try
+        {
+            bool success = InvokeMethodWithOutArgument(controller, "TryEquipSelectedSpellBook", quickBook, out string error);
 
-        Assert.That(success, Is.True, error);
-        Assert.That(error, Is.Null.Or.Empty);
-        Assert.That(spellBookLoadout.SpellBook, Is.SameAs(quickBook));
-        Assert.That(spellBookLoadout.SlotCount, Is.EqualTo(4));
-        Assert.That(spellBookLoadout.CastCooldownSeconds, Is.EqualTo(0.12f).Within(0.0001f));
+            Assert.That(success, Is.True, error);
+            Assert.That(error, Is.Null.Or.Empty);
+            Assert.That(spellBookLoadout.SpellBook, Is.SameAs(quickBook));
+            Assert.That(spellBookLoadout.SlotCount, Is.EqualTo(4));
+            Assert.That(spellBookLoadout.CastCooldownSeconds, Is.EqualTo(0.12f).Within(0.0001f));
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("Quick Spellbook"));
+            Assert.That(notifications[0].description, Does.Contain("4 槽"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.SpellBook));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
     }
 
     [Test]
@@ -304,11 +330,23 @@ public sealed class MapRunFlowControllerTests
             startingToken);
 
         SetPrivateField(controller, "tutorialReturnTokenOverride", tutorialReturnToken);
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        controller.TryGrantTutorialEntryTokenAfterTeleporterTriggered();
+        try
+        {
+            controller.TryGrantTutorialEntryTokenAfterTeleporterTriggered();
 
-        Assert.That(ContainsItem(inventory, startingToken), Is.True);
-        Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.True);
+            Assert.That(ContainsItem(inventory, startingToken), Is.True);
+            Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.True);
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("InitReturn"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.Token));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
     }
 
     [Test]

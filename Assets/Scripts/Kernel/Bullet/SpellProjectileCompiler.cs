@@ -89,8 +89,10 @@ namespace Kernel.Bullet
 
             int spreadProjectileCount = 1;
             int bounceCount = 0;
+            int chainCount = 0;
             int pierceCount = 0;
             float spreadAngleStep = 0f;
+            float behaviorParameter = 0f;
             CoreEffectPayload coreEffects = default;
             ResultEffectPayload resultEffects = default;
 
@@ -156,8 +158,10 @@ namespace Kernel.Bullet
                             : PendingValueTarget.None;
                         spreadProjectileCount = Mathf.Max(1, candidateBehavior.DefaultProjectileCount);
                         bounceCount = Mathf.Max(0, candidateBehavior.DefaultProjectileCount);
+                        chainCount = Mathf.Max(0, candidateBehavior.DefaultProjectileCount);
                         pierceCount = Mathf.Max(0, candidateBehavior.DefaultProjectileCount);
                         spreadAngleStep = Mathf.Max(0f, candidateBehavior.SpreadAngleStep);
+                        behaviorParameter = ResolveDefaultBehaviorParameter(candidateBehavior);
                         AcceptPendingNextModifiers(pendingNextModifiers, compiledAttack, acceptedDisplays, acceptedTokens);
                         AcceptToken(entry, acceptedDisplays, acceptedTokens);
                         break;
@@ -171,7 +175,14 @@ namespace Kernel.Bullet
 
                         if (pendingValueTarget == PendingValueTarget.Behavior && behaviorToken != null)
                         {
-                            ApplyBehaviorValue(behaviorToken, valueToken, ref spreadProjectileCount, ref bounceCount, ref pierceCount);
+                            ApplyBehaviorValue(
+                                behaviorToken,
+                                valueToken,
+                                ref spreadProjectileCount,
+                                ref bounceCount,
+                                ref chainCount,
+                                ref pierceCount,
+                                ref behaviorParameter);
                             pendingValueTarget = PendingValueTarget.None;
                             AcceptToken(entry, acceptedDisplays, acceptedTokens);
                             break;
@@ -226,7 +237,7 @@ namespace Kernel.Bullet
 
                         CompileTokenEntry? countEntry = null;
                         int modifierTargetCount = TryConsumeModifierTargetCount(tokens, i, out CompileTokenEntry consumedCountEntry)
-                            ? Mathf.Max(1, Mathf.RoundToInt(((ValueTokenData)consumedCountEntry.Token).NumericValue))
+                            ? ((ValueTokenData)consumedCountEntry.Token).ResolveCountValue()
                             : 1;
                         if (consumedCountEntry.Token != null)
                         {
@@ -249,9 +260,7 @@ namespace Kernel.Bullet
                         break;
 
                     case TokenType.Trigger:
-                    case TokenType.PayloadStart:
-                    case TokenType.PayloadEnd:
-                        compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored trigger or payload token because the legacy attack adapter cannot compile payload blocks.", token);
+                        compiledAttack.AddMessage(AttackCompileMessageSeverity.Warning, "Ignored trigger token because the legacy attack adapter cannot compile payload blocks.", token);
                         break;
 
                     default:
@@ -281,6 +290,7 @@ namespace Kernel.Bullet
                 compiledAttack.ClearFontSizeModifiers();
                 compiledAttack.CoreEffects = default;
                 compiledAttack.ResultEffects = default;
+                compiledAttack.RuntimeModifiers = SpellCastRuntimeModifiers.Identity;
                 compiledAttack.AddMessage(AttackCompileMessageSeverity.Error, "Formula cannot fire because it does not contain a core token.");
                 return compiledAttack;
             }
@@ -306,12 +316,20 @@ namespace Kernel.Bullet
             if (behaviorType == AttackBehaviorType.Bounce)
             {
                 attackSpec.bounceCount = Mathf.Max(0, bounceCount);
+                attackSpec.chainCount = 0;
+                attackSpec.pierceCount = 0;
+            }
+            else if (behaviorType == AttackBehaviorType.Chain)
+            {
+                attackSpec.bounceCount = 0;
+                attackSpec.chainCount = Mathf.Max(0, chainCount);
                 attackSpec.pierceCount = 0;
             }
             else if (behaviorType == AttackBehaviorType.Pierce)
             {
                 pierceCount = Mathf.Max(0, pierceCount);
                 attackSpec.bounceCount = 0;
+                attackSpec.chainCount = 0;
                 attackSpec.pierceCount = pierceCount;
 
                 if (behaviorToken != null && pierceCount > 0)
@@ -324,9 +342,18 @@ namespace Kernel.Bullet
             else
             {
                 attackSpec.bounceCount = 0;
+                attackSpec.chainCount = 0;
                 attackSpec.pierceCount = 0;
             }
 
+            if (behaviorType == AttackBehaviorType.Stasis)
+            {
+                behaviorParameter = Mathf.Max(0f, behaviorParameter);
+                attackSpec.maxLifetime = behaviorParameter;
+                attackSpec.maxTravelDistance = 0f;
+            }
+
+            attackSpec.behaviorParameter = Mathf.Max(0f, behaviorParameter);
             attackSpec.behaviorType = behaviorType;
             attackSpec.resultType = resultType;
             attackSpec.projectileCount = 1;
@@ -416,14 +443,43 @@ namespace Kernel.Bullet
             ValueTokenData valueToken,
             ref int spreadProjectileCount,
             ref int bounceCount,
-            ref int pierceCount)
+            ref int chainCount,
+            ref int pierceCount,
+            ref float behaviorParameter)
         {
             SpellValueParameterUtility.ApplyBehaviorValue(
                 behaviorToken,
                 valueToken,
                 ref spreadProjectileCount,
                 ref bounceCount,
-                ref pierceCount);
+                ref chainCount,
+                ref pierceCount,
+                ref behaviorParameter);
+        }
+
+        private static float ResolveDefaultBehaviorParameter(BehaviorTokenData behaviorToken)
+        {
+            if (behaviorToken == null)
+            {
+                return 0f;
+            }
+
+            if (behaviorToken.DefaultBehaviorParameter > 0f)
+            {
+                return behaviorToken.DefaultBehaviorParameter;
+            }
+
+            return behaviorToken.BehaviorType switch
+            {
+                AttackBehaviorType.Stasis => 1.5f,
+                AttackBehaviorType.Rush => 1f,
+                AttackBehaviorType.Slow => 1f,
+                AttackBehaviorType.Snake => 1f,
+                AttackBehaviorType.Wander => 1f,
+                AttackBehaviorType.Split => 1f,
+                AttackBehaviorType.Spin => 3f,
+                _ => 0f,
+            };
         }
 
         private static void ApplyResultValue(ResultTokenData resultToken, ValueTokenData valueToken, ref ResultEffectPayload resultEffects)
@@ -535,6 +591,13 @@ namespace Kernel.Bullet
                             "Ignored modifier token because it did not find a valid target token.",
                             pendingModifier.modifierToken);
                     }
+                    else if (pendingModifier.remainingTargetCount > 0)
+                    {
+                        compiledAttack.AddMessage(
+                            AttackCompileMessageSeverity.Warning,
+                            $"Modifier target count ended with {pendingModifier.remainingTargetCount} unresolved target token(s).",
+                            pendingModifier.modifierToken);
+                    }
                 }
             }
         }
@@ -571,7 +634,7 @@ namespace Kernel.Bullet
                 return false;
             }
 
-            if (candidateValue.NumericValue < 1f)
+            if (candidateValue.ResolveCountValue() < 1)
             {
                 return false;
             }

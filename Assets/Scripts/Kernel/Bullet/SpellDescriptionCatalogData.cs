@@ -112,6 +112,12 @@ namespace Kernel.Bullet
                     new() { coreType = "Light", label = "光" },
                     new() { coreType = "Shadow", label = "影" },
                     new() { coreType = "Toxin", label = "毒" },
+                    new() { coreType = "Arrow", label = "箭" },
+                    new() { coreType = "Rock", label = "岩" },
+                    new() { coreType = "Water", label = "水" },
+                    new() { coreType = "Wind", label = "风" },
+                    new() { coreType = "Sheep", label = "羊" },
+                    new() { coreType = "Riddle", label = "谜" },
                 },
                 behaviorPhrases = new List<SpellDescriptionBehaviorEntry>
                 {
@@ -151,7 +157,13 @@ namespace Kernel.Bullet
                     new()
                     {
                         behaviorType = "Chain",
+                        countUnit = "跳",
                         phraseTemplates = new List<string>
+                        {
+                            "<behavior>链接</behavior><value>{count}</value>",
+                            "传导成<value>{count}</value><behavior>链接</behavior>",
+                        },
+                        fallbackPhraseTemplates = new List<string>
                         {
                             "<behavior>链式牵引</behavior>",
                         },
@@ -185,6 +197,25 @@ namespace Kernel.Bullet
                         {
                             "<behavior>追踪目标</behavior>",
                             "带着<behavior>追踪</behavior>弧线逼近",
+                        },
+                    },
+                    new()
+                    {
+                        behaviorType = "Split",
+                        countUnit = "次",
+                        phraseTemplates = new List<string>
+                        {
+                            "飞行中<behavior>分裂</behavior><value>{count}</value>",
+                            "沿途触发<value>{count}</value><behavior>分裂</behavior>",
+                        },
+                    },
+                    new()
+                    {
+                        behaviorType = "Spin",
+                        phraseTemplates = new List<string>
+                        {
+                            "<behavior>绕施法者环行</behavior>",
+                            "按<behavior>环绕轨迹</behavior>盘旋",
                         },
                     },
                 },
@@ -243,6 +274,51 @@ namespace Kernel.Bullet
                             "返还<result>治疗</result>光屑",
                         },
                     },
+                    new()
+                    {
+                        resultType = "Drain",
+                        phraseTemplates = new List<string>
+                        {
+                            "抽回<result>汲取</result>生命",
+                            "把伤势化成<result>汲取</result>回流",
+                        },
+                    },
+                    new()
+                    {
+                        resultType = "Shield",
+                        phraseTemplates = new List<string>
+                        {
+                            "凝成<result>护盾</result>",
+                            "回铸为<result>护盾</result>",
+                        },
+                    },
+                    new()
+                    {
+                        resultType = "Leave",
+                        phraseTemplates = new List<string>
+                        {
+                            "留下<result>持续场</result>",
+                            "在命中点铺开<result>残留场</result>",
+                        },
+                    },
+                    new()
+                    {
+                        resultType = "Push",
+                        phraseTemplates = new List<string>
+                        {
+                            "激起<result>排斥</result>",
+                            "向外爆出<result>斥力</result>",
+                        },
+                    },
+                    new()
+                    {
+                        resultType = "Pull",
+                        phraseTemplates = new List<string>
+                        {
+                            "卷起<result>牵引</result>",
+                            "把周围目标拖入<result>吸力</result>",
+                        },
+                    },
                 },
                 specialEffects = new List<SpellDescriptionSpecialEffectEntry>
                 {
@@ -250,20 +326,34 @@ namespace Kernel.Bullet
                     new() { effect = "Slow", phrase = "<special>减速</special>" },
                     new() { effect = "ThunderChain", phrase = "<special>雷链</special>" },
                     new() { effect = "ArmoredBonus", phrase = "<special>破甲</special>" },
+                    new() { effect = "LightPierce", phrase = "<special>穿墙衰减直伤</special>" },
+                    new() { effect = "WindPressure", phrase = "<special>风压推开</special>" },
+                    new() { effect = "StatusSlot", phrase = "<special>状态槽/反应</special>" },
                     new() { effect = "Split", phrase = "<special>分裂余弹</special>" },
                     new() { effect = "Control", phrase = "<special>压制</special>" },
+                    new() { effect = "Drain", phrase = "<special>吸血</special>" },
+                    new() { effect = "Shield", phrase = "<special>护盾</special>" },
+                    new() { effect = "Leave", phrase = "<special>残留场</special>" },
+                    new() { effect = "Displacement", phrase = "<special>位移</special>" },
                 },
                 valueBindings = new List<SpellDescriptionValueBindingEntry>
                 {
                     new() { tokenType = "Spread", parameterKind = SpellValueParameterKind.Count, phrase = "<value>{value}</value>归入<behavior>{consumer}</behavior>数量" },
                     new() { tokenType = "Bounce", parameterKind = SpellValueParameterKind.Count, phrase = "<value>{value}</value>归入<behavior>{consumer}</behavior>次数" },
+                    new() { tokenType = "Chain", parameterKind = SpellValueParameterKind.Count, phrase = "<value>{value}</value>归入<behavior>{consumer}</behavior>跳数" },
                     new() { tokenType = "Pierce", parameterKind = SpellValueParameterKind.Count, phrase = "<value>{value}</value>归入<behavior>{consumer}</behavior>次数" },
+                    new() { tokenType = "Spin", parameterKind = SpellValueParameterKind.Radius, phrase = "<value>{value}</value>定出<behavior>{consumer}</behavior>半径" },
                     new() { tokenType = "Explosion", parameterKind = SpellValueParameterKind.Radius, phrase = "<value>{value}</value>定出<result>{consumer}</result>范围" },
                     new() { tokenType = "Explosion", parameterKind = SpellValueParameterKind.Duration, phrase = "<value>{value}</value>延后<result>{consumer}</result>爆发" },
                     new() { tokenType = "Split", parameterKind = SpellValueParameterKind.Count, phrase = "<value>{value}</value>归入<result>{consumer}</result>数量" },
                     new() { tokenType = "StatusEffect", parameterKind = SpellValueParameterKind.Count, phrase = "<value>{value}</value>归入<result>{consumer}</result>阈值" },
                     new() { tokenType = "StatusEffect", parameterKind = SpellValueParameterKind.Duration, phrase = "<value>{value}</value>拉长<result>{consumer}</result>持续" },
                     new() { tokenType = "Healing", parameterKind = SpellValueParameterKind.Radius, phrase = "<value>{value}</value>铺开<result>{consumer}</result>范围" },
+                    new() { tokenType = "Drain", parameterKind = SpellValueParameterKind.Strength, phrase = "<value>{value}</value>提高<result>{consumer}</result>强度" },
+                    new() { tokenType = "Shield", parameterKind = SpellValueParameterKind.Strength, phrase = "<value>{value}</value>提高<result>{consumer}</result>强度" },
+                    new() { tokenType = "Leave", parameterKind = SpellValueParameterKind.Duration, phrase = "<value>{value}</value>拉长<result>{consumer}</result>持续" },
+                    new() { tokenType = "Push", parameterKind = SpellValueParameterKind.Strength, phrase = "<value>{value}</value>提高<result>{consumer}</result>强度" },
+                    new() { tokenType = "Pull", parameterKind = SpellValueParameterKind.Strength, phrase = "<value>{value}</value>提高<result>{consumer}</result>强度" },
                 },
                 effectSeparator = "、",
                 specialSentenceTemplates = new List<string>

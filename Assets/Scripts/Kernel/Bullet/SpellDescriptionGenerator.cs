@@ -137,7 +137,9 @@ namespace Kernel.Bullet
             {
                 AttackBehaviorType.Spread => Mathf.Max(1, projectile.ProjectileCount),
                 AttackBehaviorType.Bounce => Mathf.Max(0, projectile.AttackSpec.bounceCount),
+                AttackBehaviorType.Chain => Mathf.Max(0, projectile.AttackSpec.chainCount),
                 AttackBehaviorType.Pierce => Mathf.Max(0, projectile.AttackSpec.pierceCount),
+                AttackBehaviorType.Split => Mathf.Max(1, Mathf.RoundToInt(projectile.AttackSpec.behaviorParameter)),
                 _ => 0,
             };
         }
@@ -164,6 +166,17 @@ namespace Kernel.Bullet
 
         private static string ResolveResultPhrase(SpellProjectileNode projectile, SpellDescriptionCatalogData catalog, VocalithRandom random)
         {
+            if (projectile.ResultType == AttackResultType.StatusEffect &&
+                projectile.ResultEffects.HasStatusApplications &&
+                !projectile.ResultEffects.HasControl)
+            {
+                string statusLabel = ResolveStatusApplicationsLabel(projectile.ResultEffects.statusApplications);
+                if (!string.IsNullOrEmpty(statusLabel))
+                {
+                    return $"施加<result>{statusLabel}</result>";
+                }
+            }
+
             SpellDescriptionResultEntry entry = FindResultEntry(projectile.ResultType, catalog)
                 ?? FindResultEntry(AttackResultType.DirectDamage, catalog);
             if (entry == null)
@@ -224,7 +237,7 @@ namespace Kernel.Bullet
             List<string> structures = new();
             AddMulticastStructure(structures, block);
             AddModifierStructure(structures, block);
-            AddTriggerPayloadStructure(structures, block);
+            AddTriggerPayloadStructure(structures, block, catalog, random);
             if (structures.Count <= 0)
             {
                 return string.Empty;
@@ -332,6 +345,12 @@ namespace Kernel.Bullet
                 TokenModifierTarget.ResultDuration => "结果时长",
                 TokenModifierTarget.ResultMultiplier => "结果倍率",
                 TokenModifierTarget.Damage => "伤害",
+                TokenModifierTarget.CastCooldownMultiplier => "施法间隔",
+                TokenModifierTarget.EnergyCostMultiplier => "能量消耗",
+                TokenModifierTarget.CasterHealthCost => "生命代价",
+                TokenModifierTarget.DropChanceMultiplierOnKill => "击败掉率",
+                TokenModifierTarget.AngleSpreadMultiplier => "角度扩散",
+                TokenModifierTarget.MovementVarianceMultiplier => "运动扰动",
                 _ => target.ToString(),
             };
         }
@@ -361,7 +380,8 @@ namespace Kernel.Bullet
                 return;
             }
 
-            structures.Add($"<special>CastBlock</special>同轮释放<value>{ToChineseNumber(block.Projectiles.Count)}</value>枚外层法术");
+            string pattern = ResolveCastPatternLabel(block.CastPattern);
+            structures.Add($"<special>CastBlock</special>{pattern}释放<value>{ToChineseNumber(block.Projectiles.Count)}</value>枚外层法术");
         }
 
         private static void AddModifierStructure(List<string> structures, SpellCastBlock block)
@@ -384,7 +404,11 @@ namespace Kernel.Bullet
             structures.Add($"<special>Modifier</special>{JoinLimited(modifiers, "、", 3)}");
         }
 
-        private static void AddTriggerPayloadStructure(List<string> structures, SpellCastBlock block)
+        private static void AddTriggerPayloadStructure(
+            List<string> structures,
+            SpellCastBlock block,
+            SpellDescriptionCatalogData catalog,
+            VocalithRandom random)
         {
             if (block?.Payloads == null || block.Payloads.Count <= 0)
             {
@@ -401,8 +425,9 @@ namespace Kernel.Bullet
                 }
 
                 string trigger = ResolveTriggerLabel(payload.TriggerType);
-                string content = ResolvePayloadContent(payload.InnerBlock);
-                payloads.Add($"{trigger}后{content}");
+                string parameter = ResolveTriggerParameterLabel(payload);
+                string content = ResolvePayloadContent(payload.InnerBlock, catalog, random);
+                payloads.Add($"{trigger}{parameter}后{content}");
             }
 
             if (payloads.Count > 0)
@@ -436,7 +461,10 @@ namespace Kernel.Bullet
             }
         }
 
-        private static string ResolvePayloadContent(SpellCastBlock innerBlock)
+        private static string ResolvePayloadContent(
+            SpellCastBlock innerBlock,
+            SpellDescriptionCatalogData catalog,
+            VocalithRandom random)
         {
             if (innerBlock == null)
             {
@@ -446,7 +474,14 @@ namespace Kernel.Bullet
             List<string> content = new();
             if (innerBlock.Projectiles.Count > 0)
             {
-                content.Add($"释放<value>{ToChineseNumber(innerBlock.Projectiles.Count)}</value>枚内层法术");
+                string projectileDetails = ResolvePayloadProjectileDetails(innerBlock.Projectiles, catalog, random);
+                string projectileContent = $"释放<value>{ToChineseNumber(innerBlock.Projectiles.Count)}</value>枚内层法术";
+                if (!string.IsNullOrEmpty(projectileDetails))
+                {
+                    projectileContent += $"：{projectileDetails}";
+                }
+
+                content.Add(projectileContent);
             }
 
             if (innerBlock.PayloadEffects.Count > 0)
@@ -470,6 +505,58 @@ namespace Kernel.Bullet
             return content.Count > 0 ? JoinEffects(content, "并") : "执行载荷";
         }
 
+        private static string ResolvePayloadProjectileDetails(
+            IReadOnlyList<SpellProjectileNode> projectiles,
+            SpellDescriptionCatalogData catalog,
+            VocalithRandom random)
+        {
+            if (projectiles == null || projectiles.Count <= 0)
+            {
+                return string.Empty;
+            }
+
+            List<string> details = new();
+            for (int i = 0; i < projectiles.Count; i++)
+            {
+                SpellProjectileNode projectile = projectiles[i];
+                if (projectile == null || !projectile.CanFire || projectile.CoreType == AttackCoreType.None)
+                {
+                    continue;
+                }
+
+                string detail = ResolveProjectileDetail(projectile, catalog, random);
+                if (!string.IsNullOrEmpty(detail))
+                {
+                    details.Add(detail);
+                }
+            }
+
+            return details.Count > 0 ? JoinLimited(details, "；", 3) : string.Empty;
+        }
+
+        private static string ResolveProjectileDetail(
+            SpellProjectileNode projectile,
+            SpellDescriptionCatalogData catalog,
+            VocalithRandom random)
+        {
+            string core = Highlight(ResolveCoreLabel(projectile.CoreType, catalog), catalog.colors.core);
+            string behavior = ResolveBehaviorPhrase(projectile, catalog, random);
+            string result = ResolveResultPhrase(projectile, catalog, random);
+            return TrimSentenceTerminator(PickMainSentence(core, behavior, result, catalog, random));
+        }
+
+        private static string TrimSentenceTerminator(string sentence)
+        {
+            string trimmed = sentence?.Trim() ?? string.Empty;
+            while (trimmed.EndsWith("。", StringComparison.Ordinal) ||
+                   trimmed.EndsWith(".", StringComparison.Ordinal))
+            {
+                trimmed = trimmed.Substring(0, trimmed.Length - 1).TrimEnd();
+            }
+
+            return trimmed;
+        }
+
         private static string ResolvePayloadEffectLabel(SpellPayloadEffectNode effect)
         {
             if (effect == null)
@@ -480,18 +567,126 @@ namespace Kernel.Bullet
             string label = effect.ResultType switch
             {
                 AttackResultType.Explosion => "爆炸",
-                AttackResultType.StatusEffect => "控制",
+                AttackResultType.StatusEffect => ResolvePayloadStatusEffectLabel(effect),
                 AttackResultType.Split => "分裂",
                 AttackResultType.Healing => "治疗",
+                AttackResultType.Drain => "汲取",
+                AttackResultType.Shield => "护盾",
+                AttackResultType.Leave => "残留",
+                AttackResultType.Push => "排斥",
+                AttackResultType.Pull => "牵引",
                 AttackResultType.DirectDamage => "直击",
                 _ => !string.IsNullOrWhiteSpace(effect.DisplayText) ? effect.DisplayText : effect.ResultType.ToString(),
             };
             return $"<result>{label}</result>";
         }
 
+        private static string ResolvePayloadStatusEffectLabel(SpellPayloadEffectNode effect)
+        {
+            if (effect == null)
+            {
+                return string.Empty;
+            }
+
+            if (effect.ResultEffects.HasStatusApplications && !effect.ResultEffects.HasControl)
+            {
+                if (!string.IsNullOrWhiteSpace(effect.DisplayText))
+                {
+                    return effect.DisplayText;
+                }
+
+                string statusLabel = ResolveStatusApplicationsLabel(effect.ResultEffects.statusApplications);
+                if (!string.IsNullOrEmpty(statusLabel))
+                {
+                    return statusLabel;
+                }
+            }
+
+            return !string.IsNullOrWhiteSpace(effect.DisplayText) ? effect.DisplayText : "控制";
+        }
+
+        private static string ResolveStatusApplicationsLabel(IReadOnlyList<SpellStatusApplication> applications)
+        {
+            if (applications == null || applications.Count <= 0)
+            {
+                return string.Empty;
+            }
+
+            List<string> labels = new();
+            for (int i = 0; i < applications.Count; i++)
+            {
+                SpellStatusSlot slot = applications[i].slot;
+                if (slot == SpellStatusSlot.None)
+                {
+                    continue;
+                }
+
+                string label = ResolveStatusSlotLabel(slot);
+                if (!string.IsNullOrEmpty(label) && !labels.Contains(label))
+                {
+                    labels.Add(label);
+                }
+            }
+
+            return JoinEffects(labels, "、");
+        }
+
+        private static string ResolveStatusSlotLabel(SpellStatusSlot slot)
+        {
+            return slot switch
+            {
+                SpellStatusSlot.Ignite => "点燃",
+                SpellStatusSlot.Freeze => "冻结",
+                SpellStatusSlot.Wet => "潮湿",
+                SpellStatusSlot.Corrosion => "腐蚀",
+                SpellStatusSlot.Disable => "失能",
+                SpellStatusSlot.Bind => "绑缚",
+                SpellStatusSlot.Mark => "标记",
+                SpellStatusSlot.Polymorph => "变形",
+                SpellStatusSlot.PuppetMark => "傀儡标记",
+                _ => string.Empty,
+            };
+        }
+
         private static string ResolveTriggerLabel(SpellTriggerType triggerType)
         {
-            return triggerType == SpellTriggerType.OnHit ? "命中" : "触发";
+            return triggerType switch
+            {
+                SpellTriggerType.OnTimer => "计时",
+                SpellTriggerType.OnExpire => "消失",
+                SpellTriggerType.OnKill => "击杀",
+                SpellTriggerType.OnDistance => "飞行距离",
+                SpellTriggerType.OnProximity => "接近目标",
+                _ => "命中",
+            };
+        }
+
+        private static string ResolveTriggerParameterLabel(SpellPayloadBlock payload)
+        {
+            if (payload == null || payload.ParameterKind == SpellTriggerParameterKind.None)
+            {
+                return string.Empty;
+            }
+
+            string value = $"<value>{FormatSeconds(payload.ParameterValue)}</value>";
+            return payload.ParameterKind switch
+            {
+                SpellTriggerParameterKind.TimeSeconds => $"{value}秒",
+                SpellTriggerParameterKind.Distance => $"{value}距离",
+                SpellTriggerParameterKind.Radius => $"{value}范围内",
+                _ => value,
+            };
+        }
+
+        private static string ResolveCastPatternLabel(SpellCastPattern castPattern)
+        {
+            return castPattern switch
+            {
+                SpellCastPattern.Sequential => "顺序",
+                SpellCastPattern.Fork => "分叉",
+                SpellCastPattern.Orbit => "环绕",
+                _ => "同轮",
+            };
         }
 
         private static string ResolveModifierScopeLabel(SpellModifierScope scope, int targetCount)
@@ -622,8 +817,15 @@ namespace Kernel.Bullet
             AddEffectIf(effects, coreEffects.HasSlow, "Slow", catalog);
             AddEffectIf(effects, coreEffects.HasThunderChain, "ThunderChain", catalog);
             AddEffectIf(effects, coreEffects.HasArmoredBonus, "ArmoredBonus", catalog);
+            AddEffectIf(effects, coreEffects.HasPiercingSuppression, "LightPierce", catalog);
+            AddEffectIf(effects, coreEffects.HasWindPressure, "WindPressure", catalog);
+            AddEffectIf(effects, coreEffects.HasStatusApplications || resultEffects.HasStatusApplications, "StatusSlot", catalog);
             AddEffectIf(effects, projectile.ResultType == AttackResultType.Split && resultEffects.HasSplit, "Split", catalog);
             AddEffectIf(effects, projectile.ResultType == AttackResultType.StatusEffect && resultEffects.HasControl, "Control", catalog);
+            AddEffectIf(effects, projectile.ResultType == AttackResultType.Drain, "Drain", catalog);
+            AddEffectIf(effects, projectile.ResultType == AttackResultType.Shield, "Shield", catalog);
+            AddEffectIf(effects, projectile.ResultType == AttackResultType.Leave && resultEffects.HasLingeringArea, "Leave", catalog);
+            AddEffectIf(effects, (projectile.ResultType == AttackResultType.Push || projectile.ResultType == AttackResultType.Pull) && resultEffects.HasDisplacement, "Displacement", catalog);
 
             if (effects.Count <= 0)
             {
@@ -717,6 +919,14 @@ namespace Kernel.Bullet
 
                         break;
 
+                    case TokenType.Trigger:
+                        if (token is TriggerTokenData triggerToken && triggerToken.ConsumesValueAsTriggerParameter)
+                        {
+                            pendingConsumer = triggerToken;
+                        }
+
+                        break;
+
                     case TokenType.Value:
                         if (pendingConsumer != null && token is ValueTokenData valueToken)
                         {
@@ -792,6 +1002,13 @@ namespace Kernel.Bullet
                     : SpellValueParameterKind.None;
             }
 
+            if (consumer is TriggerTokenData triggerToken)
+            {
+                return triggerToken.ConsumesValueAsTriggerParameter
+                    ? SpellValueParameterKind.TriggerParameter
+                    : SpellValueParameterKind.None;
+            }
+
             return SpellValueParameterKind.None;
         }
 
@@ -807,6 +1024,11 @@ namespace Kernel.Bullet
                 return resultToken.ResultType.ToString();
             }
 
+            if (consumer is TriggerTokenData triggerToken)
+            {
+                return triggerToken.TriggerType.ToString();
+            }
+
             return string.Empty;
         }
 
@@ -818,8 +1040,16 @@ namespace Kernel.Bullet
                 {
                     AttackBehaviorType.Spread => "散射",
                     AttackBehaviorType.Bounce => "弹射",
+                    AttackBehaviorType.Chain => "链接",
                     AttackBehaviorType.Pierce => "穿透",
                     AttackBehaviorType.Homing => "追踪",
+                    AttackBehaviorType.Stasis => "停滞",
+                    AttackBehaviorType.Rush => "加速",
+                    AttackBehaviorType.Slow => "减速",
+                    AttackBehaviorType.Snake => "蛇形",
+                    AttackBehaviorType.Wander => "游移",
+                    AttackBehaviorType.Split => "飞行分裂",
+                    AttackBehaviorType.Spin => "环绕",
                     _ => consumer.GetResolvedDisplayText(),
                 };
             }
@@ -832,9 +1062,19 @@ namespace Kernel.Bullet
                     AttackResultType.StatusEffect => "控制",
                     AttackResultType.Split => "分裂",
                     AttackResultType.Healing => "治疗",
+                    AttackResultType.Drain => "汲取",
+                    AttackResultType.Shield => "护盾",
+                    AttackResultType.Leave => "残留",
+                    AttackResultType.Push => "排斥",
+                    AttackResultType.Pull => "牵引",
                     AttackResultType.DirectDamage => "直击",
                     _ => consumer.GetResolvedDisplayText(),
                 };
+            }
+
+            if (consumer is TriggerTokenData triggerToken)
+            {
+                return ResolveTriggerLabel(triggerToken.TriggerType);
             }
 
             return consumer != null ? consumer.GetResolvedDisplayText() : string.Empty;
@@ -884,6 +1124,11 @@ namespace Kernel.Bullet
 
         private static string BuildFallbackValueBindingTemplate(BaseTokenData consumer)
         {
+            if (consumer is TriggerTokenData)
+            {
+                return "<value>{value}</value>归入<special>{consumer}</special>参数";
+            }
+
             return consumer is BehaviorTokenData
                 ? "<value>{value}</value>归入<behavior>{consumer}</behavior>"
                 : "<value>{value}</value>归入<result>{consumer}</result>";

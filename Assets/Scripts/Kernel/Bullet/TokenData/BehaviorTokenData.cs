@@ -15,6 +15,7 @@ namespace Kernel.Bullet
         [SerializeField, Min(0f)] private float spreadAngleStep = 10f;
         [SerializeField, Min(0f)] private float projectileDamageMultiplier = 1f;
         [SerializeField, Min(0f)] private float pierceLifetimeDistanceScalePerCount = 0.2f;
+        [SerializeField, Min(0f)] private float defaultBehaviorParameter;
 
         public AttackBehaviorType BehaviorType
         {
@@ -64,6 +65,12 @@ namespace Kernel.Bullet
             set => pierceLifetimeDistanceScalePerCount = Mathf.Max(0f, value);
         }
 
+        public float DefaultBehaviorParameter
+        {
+            get => defaultBehaviorParameter;
+            set => defaultBehaviorParameter = Mathf.Max(0f, value);
+        }
+
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -78,6 +85,7 @@ namespace Kernel.Bullet
             spreadAngleStep = Mathf.Max(0f, spreadAngleStep);
             projectileDamageMultiplier = Mathf.Max(0f, projectileDamageMultiplier);
             pierceLifetimeDistanceScalePerCount = Mathf.Max(0f, pierceLifetimeDistanceScalePerCount);
+            defaultBehaviorParameter = Mathf.Max(0f, defaultBehaviorParameter);
         }
 
         private SpellValueParameterKind ResolveValueParameterKind()
@@ -92,11 +100,21 @@ namespace Kernel.Bullet
                 return valueParameterKind;
             }
 
-            return behaviorType == AttackBehaviorType.Spread ||
-                   behaviorType == AttackBehaviorType.Bounce ||
-                   behaviorType == AttackBehaviorType.Pierce
-                ? SpellValueParameterKind.Count
-                : SpellValueParameterKind.None;
+            return behaviorType switch
+            {
+                AttackBehaviorType.Spread => SpellValueParameterKind.Count,
+                AttackBehaviorType.Bounce => SpellValueParameterKind.Count,
+                AttackBehaviorType.Pierce => SpellValueParameterKind.Count,
+                AttackBehaviorType.Chain => SpellValueParameterKind.Count,
+                AttackBehaviorType.Stasis => SpellValueParameterKind.Duration,
+                AttackBehaviorType.Rush => SpellValueParameterKind.Strength,
+                AttackBehaviorType.Slow => SpellValueParameterKind.Strength,
+                AttackBehaviorType.Snake => SpellValueParameterKind.Strength,
+                AttackBehaviorType.Wander => SpellValueParameterKind.Strength,
+                AttackBehaviorType.Split => SpellValueParameterKind.Count,
+                AttackBehaviorType.Spin => SpellValueParameterKind.Radius,
+                _ => SpellValueParameterKind.None,
+            };
         }
     }
 }

@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5046c3dd600418e4193cb82013c4850a, type: 3}
+  m_Name: Result_Puppet
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.PrototypeTokenData
+  tokenId: prototype_result_puppet
+  displayText: "\u5080"
+  prototypeCategory: Result
+  description: "\u8BA1\u5212\u8BED\u4E49\uFF1A\u51FB\u6740\u76EE\u6807\u540E\u590D\u6D3B\u4E3A\u77ED\u6682\u5080\u5121\uFF0C\u901A\u5E38\u4E0E
+    `\u706D` Trigger \u642D\u914D\u3002"
+  unimplementedReason: "\u9700\u8981\u5080\u5121\u5B9E\u4F53\u3001\u9635\u8425\u8F6C\u6362\u3001\u5BFF\u547D\u548C\u5F3A\u5EA6\u6765\u6E90\u89C4\u5219\u3002"

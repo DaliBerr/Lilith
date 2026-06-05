@@ -5,6 +5,7 @@ using NUnit.Framework;
 using TMPro;
 using UnityEditor;
 using UnityEngine;
+using Vocalith.EventSystem;
 
 public sealed class BulletTokenPickupTests
 {
@@ -33,13 +34,26 @@ public sealed class BulletTokenPickupTests
         BoxCollider playerCollider = inventory.gameObject.AddComponent<BoxCollider>();
         BulletTokenPickup pickup = CreatePickup();
         CoreTokenData token = CreateToken<CoreTokenData>("pickup_fire", "Pickup Fire");
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        Assert.That(pickup.TrySetToken(token), Is.True);
+        try
+        {
+            Assert.That(pickup.TrySetToken(token), Is.True);
 
-        InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
+            InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
 
-        Assert.That(inventory.GetToken(0), Is.SameAs(token));
-        Assert.That(pickup == null, Is.True);
+            Assert.That(inventory.GetToken(0), Is.SameAs(token));
+            Assert.That(pickup == null, Is.True);
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("Pickup Fire"));
+            Assert.That(notifications[0].description, Is.EqualTo("已收入背包"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.Token));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
     }
 
     [Test]
@@ -52,24 +66,34 @@ public sealed class BulletTokenPickupTests
             CreateToken<CoreTokenData>("fire", "Fire"),
             CreateToken<ResultTokenData>("hit", "Hit"));
         CoreTokenData filler = CreateToken<CoreTokenData>("filler", "Fill");
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        for (int i = 0; i < PlayerBulletTokenInventory.Capacity; i++)
+        try
         {
-            if ((i % PlayerBulletTokenInventory.Columns) == PlayerBulletTokenInventory.Columns - 1)
+            for (int i = 0; i < PlayerBulletTokenInventory.Capacity; i++)
             {
-                continue;
+                if ((i % PlayerBulletTokenInventory.Columns) == PlayerBulletTokenInventory.Columns - 1)
+                {
+                    continue;
+                }
+
+                Assert.That(inventory.SetToken(i, filler), Is.True);
             }
 
-            Assert.That(inventory.SetToken(i, filler), Is.True);
+            Assert.That(pickup.TrySetToken(linked), Is.True);
+
+            InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
+
+            Assert.That(pickup != null, Is.True);
+            Assert.That(pickup.IsCollected, Is.False);
+            Assert.That(inventory.FindFirstEmptySlot(), Is.EqualTo(PlayerBulletTokenInventory.Columns - 1));
+            Assert.That(notifications.Count, Is.EqualTo(0));
         }
-
-        Assert.That(pickup.TrySetToken(linked), Is.True);
-
-        InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
-
-        Assert.That(pickup != null, Is.True);
-        Assert.That(pickup.IsCollected, Is.False);
-        Assert.That(inventory.FindFirstEmptySlot(), Is.EqualTo(PlayerBulletTokenInventory.Columns - 1));
+        finally
+        {
+            subscription.Dispose();
+        }
     }
 
     [Test]
@@ -101,13 +125,26 @@ public sealed class BulletTokenPickupTests
         BoxCollider playerCollider = inventory.gameObject.AddComponent<BoxCollider>();
         BulletTokenPickup pickup = CreatePickup();
         RemnantPickupTokenData token = CreateRemnantToken("pickup_remnant", "Remnant", 3);
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        Assert.That(pickup.TrySetToken(token), Is.True);
+        try
+        {
+            Assert.That(pickup.TrySetToken(token), Is.True);
 
-        InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
+            InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
 
-        Assert.That(wallet.CurrentRemnants, Is.EqualTo(3));
-        Assert.That(pickup == null, Is.True);
+            Assert.That(wallet.CurrentRemnants, Is.EqualTo(3));
+            Assert.That(pickup == null, Is.True);
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("Remnant"));
+            Assert.That(notifications[0].description, Is.EqualTo("已获得 3 个残卷"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.Item));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
     }
 
     [Test]
@@ -122,13 +159,26 @@ public sealed class BulletTokenPickupTests
 
         BulletTokenPickup pickup = CreatePickup();
         HealingPickupTokenData token = CreateHealingToken("pickup_heal", "Heal", 25f);
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        Assert.That(pickup.TrySetToken(token), Is.True);
+        try
+        {
+            Assert.That(pickup.TrySetToken(token), Is.True);
 
-        InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
+            InvokePrivateMethod(pickup, "OnTriggerEnter", playerCollider);
 
-        Assert.That(playerHealth.CurrentHealth, Is.EqualTo(100f).Within(0.0001f));
-        Assert.That(pickup == null, Is.True);
+            Assert.That(playerHealth.CurrentHealth, Is.EqualTo(100f).Within(0.0001f));
+            Assert.That(pickup == null, Is.True);
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("Heal"));
+            Assert.That(notifications[0].description, Is.EqualTo("已获得"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.Item));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
     }
 
     [Test]

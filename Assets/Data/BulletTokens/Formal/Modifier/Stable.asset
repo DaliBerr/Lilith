@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d235e5ecf423bc4aa6fc456eb710361, type: 3}
+  m_Name: Stable
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.ModifierTokenData
+  tokenId: modifier_stable
+  displayText: "\u7A33"
+  displayTextKey: 
+  description: "\u7A33\u5B9A\u65BD\u6CD5\uFF1A\u964D\u4F4E\u6563\u5C04/\u5206\u53C9/\u6FC0\u6D3B\u6247\u5F62\u548C\u86C7/\u6E38\u6270\u52A8\uFF0C\u4F46\u7565\u964D\u4F24\u5BB3\u3002"
+  descriptionKey: 
+  tokenType: 7
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers:
+  - target: 15
+    expression: '*=0.5'
+  - target: 16
+    expression: '*=0.5'
+  - target: 10
+    expression: '*=0.9'

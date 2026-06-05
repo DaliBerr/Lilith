@@ -162,16 +162,12 @@ public sealed class BackPackAttackPreviewControllerTests
         PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
         CoreTokenData fireToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "Trigger", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData explosion = CreateResultToken("explosion", "Boom", AttackResultType.Explosion, acceptsNumericValue: false, defaultExplosionRadius: 2f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fireToken,
             trigger,
-            payloadStart,
             explosion,
-            payloadEnd,
         });
 
         controller.RefreshPreview(player, program);
@@ -623,13 +619,6 @@ public sealed class BackPackAttackPreviewControllerTests
     {
         TriggerTokenData token = CreateToken<TriggerTokenData>(tokenId, displayText);
         token.TriggerType = triggerType;
-        return token;
-    }
-
-    private PayloadBoundaryTokenData CreatePayloadBoundaryToken(string tokenId, string displayText, PayloadBoundaryKind boundaryKind)
-    {
-        PayloadBoundaryTokenData token = CreateToken<PayloadBoundaryTokenData>(tokenId, displayText);
-        token.BoundaryKind = boundaryKind;
         return token;
     }
 

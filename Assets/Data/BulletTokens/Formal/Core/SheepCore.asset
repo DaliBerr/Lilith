@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc6feaa7c15873440ad3a0aac4d60c3f, type: 3}
+  m_Name: SheepCore
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.CoreTokenData
+  tokenId: core_sheep
+  displayText: "\u7F8A"
+  displayTextKey: 
+  description: "\u53D8\u5F62\u6838\u5FC3\u3002\u547D\u4E2D\u79EF\u7D2F\u53D8\u5F62\u69FD\uFF0C\u666E\u901A\u654C\u4EBA\u6EE1
+    3 \u5C42\u540E\u88AB\u5F3A\u63A7\u5E76\u53D8\u8272 4 \u79D2\u3002"
+  descriptionKey: 
+  tokenType: 2
+  hasBulletTextOverride: 1
+  bulletTextOverride: "\u7F8A"
+  modifiers: []
+  coreType: 12
+  defaultValueType: 1
+  damage: 3
+  projectileLife: 1
+  impactLifeCost: 1
+  projectileSpeed: 120
+  maxLifetime: 2.0166667
+  maxTravelDistance: 224
+  impactMask:
+    serializedVersion: 2
+    m_Bits: 4294967291
+  armoredEnemyId: 
+  armoredDamageMultiplier: 1
+  burnTriggerCount: 0
+  burnDamagePerSecond: 0
+  burnDuration: 0
+  slowPercent: 0
+  slowDuration: 0
+  thunderChainTargetCount: 0
+  thunderChainRadius: 0
+  thunderChainDamage: 0
+  piercesActorsAndEnvironment: 0
+  penetrationDamageMultiplier: 1
+  suppressImpactEffects: 0
+  windPressureRadius: 0
+  windPressureDistance: 0
+  windDisplacementWeightLimit: 1
+  statusApplications:
+  - slot: 8
+    amount: 1
+    threshold: 3
+    duration: 4
+    strength: 1

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Kernel.Bullet
@@ -17,6 +19,11 @@ namespace Kernel.Bullet
         [SerializeField, Min(0)] private int defaultTriggerCount;
         [SerializeField, Min(0f)] private float effectDuration;
         [SerializeField, Range(0f, 1f)] private float childDamageMultiplier = 1f;
+        [SerializeField, Min(0f)] private float defaultEffectStrength = 1f;
+        [SerializeField, Min(0f)] private float areaTickSeconds = 0.5f;
+        [SerializeField, Min(0f)] private float areaDamageMultiplier = 0.25f;
+        [SerializeField, Min(0f)] private float shieldDuration = 6f;
+        [SerializeField] private SpellStatusApplication[] statusApplications = Array.Empty<SpellStatusApplication>();
 
         public AttackResultType ResultType
         {
@@ -78,6 +85,37 @@ namespace Kernel.Bullet
             set => childDamageMultiplier = Mathf.Clamp01(value);
         }
 
+        public float DefaultEffectStrength
+        {
+            get => defaultEffectStrength;
+            set => defaultEffectStrength = Mathf.Max(0f, value);
+        }
+
+        public float AreaTickSeconds
+        {
+            get => areaTickSeconds;
+            set => areaTickSeconds = Mathf.Max(0f, value);
+        }
+
+        public float AreaDamageMultiplier
+        {
+            get => areaDamageMultiplier;
+            set => areaDamageMultiplier = Mathf.Max(0f, value);
+        }
+
+        public float ShieldDuration
+        {
+            get => shieldDuration;
+            set => shieldDuration = Mathf.Max(0f, value);
+        }
+
+        public IReadOnlyList<SpellStatusApplication> StatusApplications => statusApplications;
+
+        public void SetStatusApplications(params SpellStatusApplication[] applications)
+        {
+            statusApplications = SpellStatusApplicationUtility.Sanitize(applications);
+        }
+
         /// <summary>
         /// summary: 依据当前结果词元配置创建一份命中后二级效果载荷。
         /// param: 无
@@ -96,6 +134,12 @@ namespace Kernel.Bullet
                 controlTriggerCount = defaultTriggerCount,
                 controlDuration = effectDuration,
                 healingMultiplier = 1f,
+                effectDuration = effectDuration,
+                effectStrength = defaultEffectStrength,
+                areaTickSeconds = areaTickSeconds,
+                areaDamageMultiplier = areaDamageMultiplier,
+                shieldDuration = shieldDuration,
+                statusApplications = SpellStatusApplicationUtility.Sanitize(statusApplications),
             }.GetSanitized();
         }
 
@@ -115,6 +159,11 @@ namespace Kernel.Bullet
             defaultTriggerCount = Mathf.Max(0, defaultTriggerCount);
             effectDuration = Mathf.Max(0f, effectDuration);
             childDamageMultiplier = Mathf.Clamp01(childDamageMultiplier);
+            defaultEffectStrength = Mathf.Max(0f, defaultEffectStrength);
+            areaTickSeconds = Mathf.Max(0f, areaTickSeconds);
+            areaDamageMultiplier = Mathf.Max(0f, areaDamageMultiplier);
+            shieldDuration = Mathf.Max(0f, shieldDuration);
+            statusApplications = SpellStatusApplicationUtility.Sanitize(statusApplications);
         }
 
         private SpellValueParameterKind ResolveValueParameterKind()
@@ -129,10 +178,17 @@ namespace Kernel.Bullet
                 return valueParameterKind;
             }
 
-            return resultType == AttackResultType.Split ||
-                   resultType == AttackResultType.StatusEffect
-                ? SpellValueParameterKind.Count
-                : SpellValueParameterKind.None;
+            return resultType switch
+            {
+                AttackResultType.Split => SpellValueParameterKind.Count,
+                AttackResultType.StatusEffect => SpellValueParameterKind.Count,
+                AttackResultType.Drain => SpellValueParameterKind.Strength,
+                AttackResultType.Shield => SpellValueParameterKind.Strength,
+                AttackResultType.Push => SpellValueParameterKind.Strength,
+                AttackResultType.Pull => SpellValueParameterKind.Strength,
+                AttackResultType.Leave => SpellValueParameterKind.Duration,
+                _ => SpellValueParameterKind.None,
+            };
         }
     }
 }

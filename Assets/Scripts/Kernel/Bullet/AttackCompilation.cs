@@ -40,6 +40,127 @@ namespace Kernel.Bullet
     }
 
     [Serializable]
+    public struct SpellCastRuntimeModifiers
+    {
+        public bool hasValues;
+        public float damageMultiplier;
+        public float castCooldownMultiplier;
+        public float energyCostMultiplier;
+        public float casterHealthCost;
+        public float dropChanceMultiplierOnKill;
+        public float angleSpreadMultiplier;
+        public float movementVarianceMultiplier;
+
+        public static SpellCastRuntimeModifiers Identity => new()
+        {
+            hasValues = true,
+            damageMultiplier = 1f,
+            castCooldownMultiplier = 1f,
+            energyCostMultiplier = 1f,
+            casterHealthCost = 0f,
+            dropChanceMultiplierOnKill = 1f,
+            angleSpreadMultiplier = 1f,
+            movementVarianceMultiplier = 1f,
+        };
+
+        public SpellCastRuntimeModifiers GetSanitized()
+        {
+            if (!hasValues)
+            {
+                return Identity;
+            }
+
+            SpellCastRuntimeModifiers sanitized = this;
+            sanitized.hasValues = true;
+            sanitized.damageMultiplier = Mathf.Max(0f, sanitized.damageMultiplier);
+            sanitized.castCooldownMultiplier = Mathf.Max(0f, sanitized.castCooldownMultiplier);
+            sanitized.energyCostMultiplier = Mathf.Max(0f, sanitized.energyCostMultiplier);
+            sanitized.casterHealthCost = Mathf.Max(0f, sanitized.casterHealthCost);
+            sanitized.dropChanceMultiplierOnKill = Mathf.Max(0f, sanitized.dropChanceMultiplierOnKill);
+            sanitized.angleSpreadMultiplier = Mathf.Max(0f, sanitized.angleSpreadMultiplier);
+            sanitized.movementVarianceMultiplier = Mathf.Max(0f, sanitized.movementVarianceMultiplier);
+            return sanitized;
+        }
+    }
+
+    public enum SpellStatusSlot
+    {
+        None = 0,
+        Ignite = 1,
+        Freeze = 2,
+        Wet = 3,
+        Corrosion = 4,
+        Disable = 5,
+        Bind = 6,
+        Mark = 7,
+        Polymorph = 8,
+        PuppetMark = 9,
+    }
+
+    public enum SpellElementReactionType
+    {
+        None = 0,
+        ThermalCrack = 1,
+        ElectroCharged = 2,
+        ConductiveThunder = 3,
+        ToxicBurst = 4,
+        ToxicSpread = 5,
+        Shatter = 6,
+        LightCorrosion = 7,
+        ShadowDevour = 8,
+        MirrorReturn = 9,
+    }
+
+    [Serializable]
+    public struct SpellStatusApplication
+    {
+        public SpellStatusSlot slot;
+        public float amount;
+        public float threshold;
+        public float duration;
+        public float strength;
+
+        public SpellStatusApplication(
+            SpellStatusSlot slot,
+            float amount,
+            float threshold = 1f,
+            float duration = 0f,
+            float strength = 0f)
+        {
+            this.slot = slot;
+            this.amount = amount;
+            this.threshold = threshold;
+            this.duration = duration;
+            this.strength = strength;
+        }
+
+        public SpellStatusApplication GetSanitized()
+        {
+            SpellStatusApplication sanitized = this;
+            sanitized.amount = Mathf.Max(0f, sanitized.amount);
+            sanitized.threshold = Mathf.Max(0f, sanitized.threshold);
+            sanitized.duration = Mathf.Max(0f, sanitized.duration);
+            sanitized.strength = Mathf.Max(0f, sanitized.strength);
+            return sanitized;
+        }
+    }
+
+    public readonly struct SpellElementReactionResult
+    {
+        public SpellElementReactionResult(SpellElementReactionType reactionType, SpellStatusSlot firstSlot, SpellStatusSlot secondSlot)
+        {
+            ReactionType = reactionType;
+            FirstSlot = firstSlot;
+            SecondSlot = secondSlot;
+        }
+
+        public SpellElementReactionType ReactionType { get; }
+        public SpellStatusSlot FirstSlot { get; }
+        public SpellStatusSlot SecondSlot { get; }
+        public bool HasReaction => ReactionType != SpellElementReactionType.None;
+    }
+
+    [Serializable]
     public struct CoreEffectPayload
     {
         public string armoredEnemyId;
@@ -52,6 +173,13 @@ namespace Kernel.Bullet
         public int thunderChainTargetCount;
         public float thunderChainRadius;
         public float thunderChainDamage;
+        public bool piercesActorsAndEnvironment;
+        public float penetrationDamageMultiplier;
+        public bool suppressImpactEffects;
+        public float windPressureRadius;
+        public float windPressureDistance;
+        public float windDisplacementWeightLimit;
+        public SpellStatusApplication[] statusApplications;
 
         public CoreEffectPayload GetSanitized()
         {
@@ -66,6 +194,11 @@ namespace Kernel.Bullet
             sanitized.thunderChainTargetCount = Mathf.Max(0, sanitized.thunderChainTargetCount);
             sanitized.thunderChainRadius = Mathf.Max(0f, sanitized.thunderChainRadius);
             sanitized.thunderChainDamage = Mathf.Max(0f, sanitized.thunderChainDamage);
+            sanitized.penetrationDamageMultiplier = Mathf.Clamp01(sanitized.penetrationDamageMultiplier);
+            sanitized.windPressureRadius = Mathf.Max(0f, sanitized.windPressureRadius);
+            sanitized.windPressureDistance = Mathf.Max(0f, sanitized.windPressureDistance);
+            sanitized.windDisplacementWeightLimit = Mathf.Max(0f, sanitized.windDisplacementWeightLimit);
+            sanitized.statusApplications = SpellStatusApplicationUtility.Sanitize(sanitized.statusApplications);
             return sanitized;
         }
 
@@ -86,6 +219,16 @@ namespace Kernel.Bullet
             thunderChainTargetCount > 0 &&
             thunderChainRadius > 0f &&
             thunderChainDamage > 0f;
+
+        public bool HasPiercingSuppression =>
+            piercesActorsAndEnvironment &&
+            penetrationDamageMultiplier > 0f;
+
+        public bool HasWindPressure =>
+            windPressureRadius > 0f &&
+            windPressureDistance > 0f;
+
+        public bool HasStatusApplications => statusApplications != null && statusApplications.Length > 0;
     }
 
     [Serializable]
@@ -100,6 +243,12 @@ namespace Kernel.Bullet
         public int controlTriggerCount;
         public float controlDuration;
         public float healingMultiplier;
+        public float effectDuration;
+        public float effectStrength;
+        public float areaTickSeconds;
+        public float areaDamageMultiplier;
+        public float shieldDuration;
+        public SpellStatusApplication[] statusApplications;
 
         public ResultEffectPayload GetSanitized()
         {
@@ -113,6 +262,12 @@ namespace Kernel.Bullet
             sanitized.controlTriggerCount = Mathf.Max(0, sanitized.controlTriggerCount);
             sanitized.controlDuration = Mathf.Max(0f, sanitized.controlDuration);
             sanitized.healingMultiplier = Mathf.Max(0f, sanitized.healingMultiplier);
+            sanitized.effectDuration = Mathf.Max(0f, sanitized.effectDuration);
+            sanitized.effectStrength = Mathf.Max(0f, sanitized.effectStrength);
+            sanitized.areaTickSeconds = Mathf.Max(0f, sanitized.areaTickSeconds);
+            sanitized.areaDamageMultiplier = Mathf.Max(0f, sanitized.areaDamageMultiplier);
+            sanitized.shieldDuration = Mathf.Max(0f, sanitized.shieldDuration);
+            sanitized.statusApplications = SpellStatusApplicationUtility.Sanitize(sanitized.statusApplications);
             return sanitized;
         }
 
@@ -131,6 +286,43 @@ namespace Kernel.Bullet
         public bool HasHealingArea =>
             effectRadius > 0f &&
             healingMultiplier > 0f;
+
+        public bool HasLingeringArea =>
+            effectRadius > 0f &&
+            effectDuration > 0f &&
+            areaTickSeconds > 0f &&
+            areaDamageMultiplier > 0f;
+
+        public bool HasDisplacement =>
+            effectRadius > 0f &&
+            effectStrength > 0f;
+
+        public bool HasStatusApplications => statusApplications != null && statusApplications.Length > 0;
+    }
+
+    internal static class SpellStatusApplicationUtility
+    {
+        public static SpellStatusApplication[] Sanitize(SpellStatusApplication[] applications)
+        {
+            if (applications == null || applications.Length <= 0)
+            {
+                return Array.Empty<SpellStatusApplication>();
+            }
+
+            List<SpellStatusApplication> sanitizedApplications = new(applications.Length);
+            for (int i = 0; i < applications.Length; i++)
+            {
+                SpellStatusApplication application = applications[i].GetSanitized();
+                if (application.slot == SpellStatusSlot.None || application.amount <= 0f)
+                {
+                    continue;
+                }
+
+                sanitizedApplications.Add(application);
+            }
+
+            return sanitizedApplications.ToArray();
+        }
     }
 
     /// <summary>
@@ -176,6 +368,7 @@ namespace Kernel.Bullet
         public float FontSize { get; set; }
         public CoreEffectPayload CoreEffects { get; set; }
         public ResultEffectPayload ResultEffects { get; set; }
+        public SpellCastRuntimeModifiers RuntimeModifiers { get; set; } = SpellCastRuntimeModifiers.Identity;
 
         public IReadOnlyList<AttackCompileMessage> Messages => messages;
         public IReadOnlyList<ResolvedModifierTokenData> ModifierTokens => modifierTokens;

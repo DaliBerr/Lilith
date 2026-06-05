@@ -197,6 +197,83 @@ public sealed class SpellProgramCompilerTests
     }
 
     [Test]
+    public void Compile_CastRuntimeModifiers_WriteProgramAndProjectileRuntimeValues()
+    {
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        coreToken.Damage = 10f;
+        BehaviorTokenData spread = CreateBehaviorToken("spread", "散", AttackBehaviorType.Spread, true, 3, 20f);
+        ModifierTokenData stable = CreateModifierToken("stable", "稳", SpellModifierScope.GlobalProgram);
+        stable.SetModifiers(new[]
+        {
+            new TokenModifierDefinition(TokenModifierTarget.AngleSpreadMultiplier, "*=0.5"),
+            new TokenModifierDefinition(TokenModifierTarget.MovementVarianceMultiplier, "*=0.5"),
+            new TokenModifierDefinition(TokenModifierTarget.Damage, "*=0.9"),
+        });
+        ModifierTokenData wild = CreateModifierToken("wild", "狂", SpellModifierScope.GlobalProgram);
+        wild.SetModifiers(new[]
+        {
+            new TokenModifierDefinition(TokenModifierTarget.CasterHealthCost, "+=5"),
+            new TokenModifierDefinition(TokenModifierTarget.Damage, "*=1.35"),
+            new TokenModifierDefinition(TokenModifierTarget.EnergyCostMultiplier, "*=1.5"),
+        });
+        ModifierTokenData greedy = CreateModifierToken("greedy", "贪", SpellModifierScope.GlobalProgram);
+        greedy.SetModifiers(new[]
+        {
+            new TokenModifierDefinition(TokenModifierTarget.CasterHealthCost, "+=5"),
+            new TokenModifierDefinition(TokenModifierTarget.DropChanceMultiplierOnKill, "*=2"),
+        });
+        ModifierTokenData urgent = CreateModifierToken("urgent", "急", SpellModifierScope.GlobalProgram);
+        urgent.SetModifiers(new[] { new TokenModifierDefinition(TokenModifierTarget.CastCooldownMultiplier, "*=0.8") });
+        ModifierTokenData source = CreateModifierToken("source", "源", SpellModifierScope.GlobalProgram);
+        source.SetModifiers(new[] { new TokenModifierDefinition(TokenModifierTarget.EnergyCostMultiplier, "*=0.5") });
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            coreToken,
+            spread,
+            stable,
+            wild,
+            greedy,
+            urgent,
+            source,
+        });
+
+        SpellProjectileNode projectile = program.PrimaryCastBlock.Projectiles[0];
+        SpellCastRuntimeModifiers runtime = program.RuntimeModifiers.GetSanitized();
+        Assert.That(program.CanCast, Is.True);
+        Assert.That(CountMessages(program, AttackCompileMessageSeverity.Warning), Is.EqualTo(0));
+        Assert.That(projectile.AttackSpec.damage, Is.EqualTo(12.15f).Within(0.0001f));
+        Assert.That(projectile.SpreadAngleStep, Is.EqualTo(10f).Within(0.0001f));
+        Assert.That(runtime.casterHealthCost, Is.EqualTo(10f).Within(0.0001f));
+        Assert.That(runtime.dropChanceMultiplierOnKill, Is.EqualTo(2f).Within(0.0001f));
+        Assert.That(runtime.castCooldownMultiplier, Is.EqualTo(0.8f).Within(0.0001f));
+        Assert.That(runtime.energyCostMultiplier, Is.EqualTo(0.75f).Within(0.0001f));
+        Assert.That(program.PrimaryCastBlock.Modifiers.Count, Is.EqualTo(5));
+        Assert.That(program.PrimaryCastBlock.Modifiers[0].Scope, Is.EqualTo(SpellModifierScope.GlobalProgram));
+    }
+
+    [Test]
+    public void Compile_StableModifier_ReducesSnakeAndWanderVariance()
+    {
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        ModifierTokenData stable = CreateModifierToken("stable", "稳", SpellModifierScope.GlobalProgram);
+        stable.SetModifiers(new[]
+        {
+            new TokenModifierDefinition(TokenModifierTarget.MovementVarianceMultiplier, "*=0.5"),
+        });
+        BehaviorTokenData snake = CreateBehaviorToken("snake", "蛇", AttackBehaviorType.Snake, true, 1, 0f);
+        snake.DefaultBehaviorParameter = 2f;
+        BehaviorTokenData wander = CreateBehaviorToken("wander", "游", AttackBehaviorType.Wander, true, 1, 0f);
+        wander.DefaultBehaviorParameter = 2f;
+
+        SpellProjectileNode snakeProjectile = SpellProgramCompiler.Compile(new BaseTokenData[] { stable, coreToken, snake }).PrimaryCastBlock.Projectiles[0];
+        SpellProjectileNode wanderProjectile = SpellProgramCompiler.Compile(new BaseTokenData[] { stable, coreToken, wander }).PrimaryCastBlock.Projectiles[0];
+
+        Assert.That(snakeProjectile.AttackSpec.behaviorParameter, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(wanderProjectile.AttackSpec.behaviorParameter, Is.EqualTo(1f).Within(0.0001f));
+    }
+
+    [Test]
     public void Compile_UnboundNextTokenModifier_WarnsWithoutRecordingModifierNode()
     {
         ModifierTokenData haste = CreateModifierToken("haste", "疾", SpellModifierScope.NextToken);
@@ -238,6 +315,50 @@ public sealed class SpellProgramCompilerTests
     }
 
     [Test]
+    public void Compile_MulticastPattern_WritesPatternToCastBlock()
+    {
+        MulticastTokenData sequenceCast = CreateMulticastToken("sequence", "序", 2);
+        sequenceCast.CastPattern = SpellCastPattern.Sequential;
+        sequenceCast.SequentialIntervalSeconds = 0.25f;
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        CoreTokenData ice = CreateCoreToken("ice_core", "冰", AttackCoreType.Ice);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            sequenceCast,
+            fire,
+            ice,
+        });
+
+        Assert.That(program.CanCast, Is.True);
+        Assert.That(program.PrimaryCastBlock.CastPattern, Is.EqualTo(SpellCastPattern.Sequential));
+        Assert.That(program.PrimaryCastBlock.SequentialIntervalSeconds, Is.EqualTo(0.25f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Compile_MulticastOrbit_BuildsPrimaryAndOrbitProjectileNodes()
+    {
+        MulticastTokenData orbitCast = CreateMulticastToken("orbit", "绕", 2);
+        orbitCast.CastPattern = SpellCastPattern.Orbit;
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        CoreTokenData ice = CreateCoreToken("ice_core", "冰", AttackCoreType.Ice);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            orbitCast,
+            fire,
+            ice,
+        });
+
+        Assert.That(program.CanCast, Is.True);
+        Assert.That(program.CastBlocks.Count, Is.EqualTo(1));
+        Assert.That(program.PrimaryCastBlock.CastPattern, Is.EqualTo(SpellCastPattern.Orbit));
+        Assert.That(program.PrimaryCastBlock.Projectiles.Count, Is.EqualTo(2));
+        Assert.That(program.PrimaryCastBlock.Projectiles[0].CoreType, Is.EqualTo(AttackCoreType.Fire));
+        Assert.That(program.PrimaryCastBlock.Projectiles[1].CoreType, Is.EqualTo(AttackCoreType.Ice));
+    }
+
+    [Test]
     public void Compile_MulticastInsufficientRightSide_WarnsAndKeepsValidProjectile()
     {
         MulticastTokenData doubleCast = CreateMulticastToken("double", "双", 2);
@@ -255,6 +376,27 @@ public sealed class SpellProgramCompilerTests
         Assert.That(program.PrimaryCastBlock.Projectiles.Count, Is.EqualTo(1));
         Assert.That(program.PrimaryCastBlock.Projectiles[0].CoreType, Is.EqualTo(AttackCoreType.Fire));
         Assert.That(program.PrimaryCastBlock.Projectiles[0].ResultType, Is.EqualTo(AttackResultType.Explosion));
+        Assert.That(CountMessages(program, AttackCompileMessageSeverity.Warning), Is.EqualTo(1));
+        Assert.That(program.Messages[0].message, Does.Contain("Multicast requested 2 projectile nodes"));
+    }
+
+    [Test]
+    public void Compile_MulticastOrbitInsufficientRightSide_WarnsAndKeepsPrimaryProjectile()
+    {
+        MulticastTokenData orbitCast = CreateMulticastToken("orbit", "绕", 2);
+        orbitCast.CastPattern = SpellCastPattern.Orbit;
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            orbitCast,
+            fire,
+        });
+
+        Assert.That(program.CanCast, Is.True);
+        Assert.That(program.PrimaryCastBlock.CastPattern, Is.EqualTo(SpellCastPattern.Orbit));
+        Assert.That(program.PrimaryCastBlock.Projectiles.Count, Is.EqualTo(1));
+        Assert.That(program.PrimaryCastBlock.Projectiles[0].CoreType, Is.EqualTo(AttackCoreType.Fire));
         Assert.That(CountMessages(program, AttackCompileMessageSeverity.Warning), Is.EqualTo(1));
         Assert.That(program.Messages[0].message, Does.Contain("Multicast requested 2 projectile nodes"));
     }
@@ -288,6 +430,38 @@ public sealed class SpellProgramCompilerTests
     }
 
     [Test]
+    public void Compile_MulticastCurrentBlockModifierWithValue_IgnoresValueInsteadOfNextN()
+    {
+        ModifierTokenData amplify = CreateModifierToken("amplify", "放", SpellModifierScope.CurrentBlock);
+        amplify.SetModifiers(new[]
+        {
+            new TokenModifierDefinition(TokenModifierTarget.ScaleMultiplier, "*=2"),
+        });
+        ValueTokenData valueThree = CreateValueToken("three", "三", 3f);
+        MulticastTokenData doubleCast = CreateMulticastToken("double", "双", 2);
+        CoreTokenData ice = CreateCoreToken("ice_core", "冰", AttackCoreType.Ice);
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            amplify,
+            valueThree,
+            doubleCast,
+            ice,
+            fire,
+        });
+
+        Assert.That(program.CanCast, Is.True);
+        Assert.That(program.PrimaryCastBlock.Modifiers.Count, Is.EqualTo(1));
+        Assert.That(program.PrimaryCastBlock.Modifiers[0].Scope, Is.EqualTo(SpellModifierScope.CurrentBlock));
+        Assert.That(program.PrimaryCastBlock.Projectiles.Count, Is.EqualTo(2));
+        Assert.That(program.PrimaryCastBlock.Projectiles[0].ScaleMultiplier, Is.EqualTo(2f).Within(0.0001f));
+        Assert.That(program.PrimaryCastBlock.Projectiles[1].ScaleMultiplier, Is.EqualTo(2f).Within(0.0001f));
+        Assert.That(CountMessages(program, AttackCompileMessageSeverity.Warning), Is.EqualTo(1));
+        Assert.That(program.Messages[0].message, Does.Contain("only block modifiers can prefix"));
+    }
+
+    [Test]
     public void Compile_NestedMulticast_IgnoresNestedTokenWithoutWrapping()
     {
         MulticastTokenData outerCast = CreateMulticastToken("double_outer", "双", 2);
@@ -312,21 +486,17 @@ public sealed class SpellProgramCompilerTests
     }
 
     [Test]
-    public void Compile_TriggerOnHitExplicitPayload_BuildsPayloadBlockWithResultEffect()
+    public void Compile_TriggerOnHitImplicitPayload_BuildsPayloadBlockWithResultEffect()
     {
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 2f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             explosion,
-            payloadEnd,
         });
 
         Assert.That(program.CanCast, Is.True);
@@ -341,25 +511,176 @@ public sealed class SpellProgramCompilerTests
     }
 
     [Test]
+    public void Compile_TriggerOnTimer_ConsumesValueBeforePayload()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_timer", "时", SpellTriggerType.OnTimer);
+        ValueTokenData delay = CreateValueToken("three", "三", 3f);
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 2f);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            trigger,
+            delay,
+            explosion,
+        });
+
+        SpellPayloadBlock payload = program.PrimaryCastBlock.Projectiles[0].Payloads[0];
+        Assert.That(payload.TriggerType, Is.EqualTo(SpellTriggerType.OnTimer));
+        Assert.That(payload.ParameterKind, Is.EqualTo(SpellTriggerParameterKind.TimeSeconds));
+        Assert.That(payload.ParameterValue, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(payload.InnerBlock.PayloadEffects.Count, Is.EqualTo(1));
+        Assert.That(payload.InnerBlock.PayloadEffects[0].ResultType, Is.EqualTo(AttackResultType.Explosion));
+        Assert.That(CountMessages(program, AttackCompileMessageSeverity.Warning), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Compile_TriggerOnDistance_BuildsProjectilePayloadAfterParameterValue()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_distance", "程", SpellTriggerType.OnDistance);
+        ValueTokenData distance = CreateValueToken("five", "五", 5f);
+        CoreTokenData thunder = CreateCoreToken("thunder_core", "雷", AttackCoreType.Thunder);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            trigger,
+            distance,
+            thunder,
+        });
+
+        SpellPayloadBlock payload = program.PrimaryCastBlock.Projectiles[0].Payloads[0];
+        Assert.That(payload.TriggerType, Is.EqualTo(SpellTriggerType.OnDistance));
+        Assert.That(payload.ParameterKind, Is.EqualTo(SpellTriggerParameterKind.Distance));
+        Assert.That(payload.ParameterValue, Is.EqualTo(5f).Within(0.0001f));
+        Assert.That(payload.InnerBlock.Projectiles.Count, Is.EqualTo(1));
+        Assert.That(payload.InnerBlock.Projectiles[0].CoreType, Is.EqualTo(AttackCoreType.Thunder));
+    }
+
+    [Test]
+    public void Compile_TriggerOnProximity_ConsumesRadiusValueForResultOnlyPayload()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_proximity", "近", SpellTriggerType.OnProximity);
+        ValueTokenData radius = CreateValueToken("three", "三", 3f);
+        ResultTokenData control = CreateResultToken("control", "定", AttackResultType.StatusEffect, false, 0f);
+        control.DefaultTriggerCount = 1;
+        control.EffectDuration = 1f;
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            trigger,
+            radius,
+            control,
+        });
+
+        SpellPayloadBlock payload = program.PrimaryCastBlock.Projectiles[0].Payloads[0];
+        Assert.That(payload.TriggerType, Is.EqualTo(SpellTriggerType.OnProximity));
+        Assert.That(payload.ParameterKind, Is.EqualTo(SpellTriggerParameterKind.Radius));
+        Assert.That(payload.ParameterValue, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(payload.TriggerPointKind, Is.EqualTo(SpellTriggerPointKind.ProjectilePosition));
+        Assert.That(payload.InnerBlock.PayloadEffects.Count, Is.EqualTo(1));
+        Assert.That(payload.InnerBlock.PayloadEffects[0].ResultType, Is.EqualTo(AttackResultType.StatusEffect));
+    }
+
+    [Test]
+    public void Compile_TriggerParameterMissing_UsesDefaultAndWarns()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_timer", "时", SpellTriggerType.OnTimer);
+        trigger.DefaultParameterValue = 1.5f;
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 2f);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            trigger,
+            explosion,
+        });
+
+        SpellPayloadBlock payload = program.PrimaryCastBlock.Projectiles[0].Payloads[0];
+        Assert.That(payload.ParameterValue, Is.EqualTo(1.5f).Within(0.0001f));
+        Assert.That(CountMessagesContaining(program, AttackCompileMessageSeverity.Warning, "expected a value parameter"), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Compile_TriggerOnExpireAndOnKill_DoNotRequireParameterValues()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData expire = CreateTriggerToken("on_expire", "终", SpellTriggerType.OnExpire);
+        TriggerTokenData kill = CreateTriggerToken("on_kill", "灭", SpellTriggerType.OnKill);
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 2f);
+
+        CompiledSpellProgram expireProgram = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, expire, explosion });
+        CompiledSpellProgram killProgram = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, kill, explosion });
+
+        Assert.That(expireProgram.PrimaryCastBlock.Projectiles[0].Payloads[0].TriggerType, Is.EqualTo(SpellTriggerType.OnExpire));
+        Assert.That(killProgram.PrimaryCastBlock.Projectiles[0].Payloads[0].TriggerType, Is.EqualTo(SpellTriggerType.OnKill));
+        Assert.That(CountMessages(expireProgram, AttackCompileMessageSeverity.Warning), Is.EqualTo(0));
+        Assert.That(CountMessages(killProgram, AttackCompileMessageSeverity.Warning), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Compile_TriggerOnHitImplicitPayload_BuildsPayloadProjectile()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
+        CoreTokenData ice = CreateCoreToken("ice_core", "冰", AttackCoreType.Ice);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            trigger,
+            ice,
+        });
+
+        Assert.That(program.CanCast, Is.True);
+        SpellProjectileNode outerProjectile = program.PrimaryCastBlock.Projectiles[0];
+        Assert.That(outerProjectile.CoreType, Is.EqualTo(AttackCoreType.Fire));
+        Assert.That(outerProjectile.Payloads.Count, Is.EqualTo(1));
+        SpellCastBlock innerBlock = outerProjectile.Payloads[0].InnerBlock;
+        Assert.That(innerBlock.Projectiles.Count, Is.EqualTo(1));
+        Assert.That(innerBlock.Projectiles[0].CoreType, Is.EqualTo(AttackCoreType.Ice));
+        Assert.That(innerBlock.PayloadEffects, Is.Empty);
+    }
+
+    [Test]
+    public void Compile_TriggerWithoutPayload_WarnsAndLeavesProjectileUnattached()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            trigger,
+        });
+
+        Assert.That(program.CanCast, Is.True);
+        Assert.That(program.PrimaryCastBlock.Projectiles[0].Payloads, Is.Empty);
+        Assert.That(CountMessages(program, AttackCompileMessageSeverity.Warning), Is.EqualTo(1));
+        Assert.That(program.Messages[0].message, Does.Contain("empty trigger payload"));
+    }
+
+    [Test]
     public void Compile_TriggerPayloadStatusValue_ConsumesValueAsControlCount()
     {
         CoreTokenData ice = CreateCoreToken("ice_core", "冰", AttackCoreType.Ice);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData control = CreateResultToken("control", "定", AttackResultType.StatusEffect, true, 0f);
         control.DefaultTriggerCount = 1;
         control.EffectDuration = 1.5f;
         ValueTokenData valueThree = CreateValueToken("three", "三", 3f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             ice,
             trigger,
-            payloadStart,
             control,
             valueThree,
-            payloadEnd,
         });
 
         SpellPayloadEffectNode effect = program.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock.PayloadEffects[0];
@@ -373,20 +694,16 @@ public sealed class SpellProgramCompilerTests
     {
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, true, 1f);
         explosion.ValueParameterKind = SpellValueParameterKind.Radius;
         ValueTokenData radiusValue = CreateValueToken("three", "三", 3f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             explosion,
             radiusValue,
-            payloadEnd,
         });
 
         SpellPayloadEffectNode effect = program.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock.PayloadEffects[0];
@@ -400,20 +717,16 @@ public sealed class SpellProgramCompilerTests
     {
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData healing = CreateResultToken("healing", "愈", AttackResultType.Healing, true, 0f);
         healing.ValueParameterKind = SpellValueParameterKind.Radius;
         ValueTokenData radiusValue = CreateValueToken("three", "三", 3f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             healing,
             radiusValue,
-            payloadEnd,
         });
 
         SpellPayloadEffectNode effect = program.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock.PayloadEffects[0];
@@ -428,21 +741,17 @@ public sealed class SpellProgramCompilerTests
     {
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData split = CreateResultToken("split", "裂", AttackResultType.Split, true, 0f);
         split.DefaultTriggerCount = 1;
         split.ChildDamageMultiplier = 0.5f;
         ValueTokenData valueThree = CreateValueToken("three", "三", 3f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             split,
             valueThree,
-            payloadEnd,
         });
 
         SpellPayloadEffectNode effect = program.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock.PayloadEffects[0];
@@ -453,27 +762,79 @@ public sealed class SpellProgramCompilerTests
     }
 
     [Test]
+    public void Compile_NewResultValues_ConsumeStrengthOrDuration()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        ValueTokenData three = CreateValueToken("three", "三", 3f);
+
+        AssertStrengthResult(fire, three, AttackResultType.Drain);
+        AssertStrengthResult(fire, three, AttackResultType.Shield);
+        AssertStrengthResult(fire, three, AttackResultType.Push);
+        AssertStrengthResult(fire, three, AttackResultType.Pull);
+
+        ResultTokenData leave = CreateResultToken("leave", "留", AttackResultType.Leave, true, 0f);
+        leave.DefaultEffectRadius = 3f;
+        leave.EffectDuration = 3f;
+        CompiledSpellProgram leaveProgram = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            leave,
+            three,
+        });
+
+        SpellProjectileNode leaveProjectile = leaveProgram.PrimaryCastBlock.Projectiles[0];
+        Assert.That(leaveProjectile.ResultType, Is.EqualTo(AttackResultType.Leave));
+        Assert.That(leaveProjectile.ResultEffects.effectDuration, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(leaveProjectile.ResultEffects.effectRadius, Is.EqualTo(3f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Compile_TriggerPayloadNewResultValues_ConsumeStrengthOrDuration()
+    {
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
+        ValueTokenData three = CreateValueToken("three", "三", 3f);
+
+        AssertPayloadStrengthResult(fire, trigger, three, AttackResultType.Drain);
+        AssertPayloadStrengthResult(fire, trigger, three, AttackResultType.Shield);
+        AssertPayloadStrengthResult(fire, trigger, three, AttackResultType.Push);
+        AssertPayloadStrengthResult(fire, trigger, three, AttackResultType.Pull);
+
+        ResultTokenData leave = CreateResultToken("leave", "留", AttackResultType.Leave, true, 0f);
+        leave.DefaultEffectRadius = 3f;
+        leave.EffectDuration = 3f;
+        CompiledSpellProgram leaveProgram = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            trigger,
+            leave,
+            three,
+        });
+
+        SpellPayloadEffectNode leaveEffect = leaveProgram.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock.PayloadEffects[0];
+        Assert.That(leaveEffect.ResultType, Is.EqualTo(AttackResultType.Leave));
+        Assert.That(leaveEffect.ResultEffects.effectDuration, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(leaveEffect.ResultEffects.effectRadius, Is.EqualTo(3f).Within(0.0001f));
+    }
+
+    [Test]
     public void Compile_TriggerPayloadProjectileCurrentPayloadModifier_AppliesOnlyInsidePayload()
     {
         CoreTokenData outerFire = CreateCoreToken("outer_fire", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ModifierTokenData payloadHaste = CreateModifierToken("payload_haste", "疾", SpellModifierScope.CurrentPayload);
         payloadHaste.SetModifiers(new[]
         {
             new TokenModifierDefinition(TokenModifierTarget.ProjectileSpeed, "+=80"),
         });
         CoreTokenData payloadIce = CreateCoreToken("payload_ice", "冰", AttackCoreType.Ice);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             outerFire,
             trigger,
-            payloadStart,
             payloadHaste,
             payloadIce,
-            payloadEnd,
         });
 
         Assert.That(program.PrimaryCastBlock.Projectiles[0].AttackSpec.projectileSpeed, Is.EqualTo(320f).Within(0.0001f));
@@ -486,6 +847,64 @@ public sealed class SpellProgramCompilerTests
     }
 
     [Test]
+    public void Compile_NextNModifierBeforeTrigger_DoesNotCrossIntoImplicitPayload()
+    {
+        ModifierTokenData haste = CreateModifierToken("haste", "疾", SpellModifierScope.NextN);
+        haste.SetModifiers(new[]
+        {
+            new TokenModifierDefinition(TokenModifierTarget.ProjectileSpeed, "+=80"),
+        });
+        ValueTokenData targetCount = CreateValueToken("three", "三", 3f);
+        CoreTokenData outerFire = CreateCoreToken("outer_fire", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
+        CoreTokenData payloadIce = CreateCoreToken("payload_ice", "冰", AttackCoreType.Ice);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            haste,
+            targetCount,
+            outerFire,
+            trigger,
+            payloadIce,
+        });
+
+        SpellProjectileNode outerProjectile = program.PrimaryCastBlock.Projectiles[0];
+        SpellCastBlock innerBlock = outerProjectile.Payloads[0].InnerBlock;
+        Assert.That(outerProjectile.AttackSpec.projectileSpeed, Is.EqualTo(400f).Within(0.0001f));
+        Assert.That(innerBlock.Projectiles[0].AttackSpec.projectileSpeed, Is.EqualTo(320f).Within(0.0001f));
+        Assert.That(CountMessages(program, AttackCompileMessageSeverity.Warning), Is.EqualTo(1));
+        Assert.That(program.Messages[0].message, Does.Contain("unresolved target"));
+    }
+
+    [Test]
+    public void Compile_MulticastTriggerSegment_ConsumesRemainingTokensAsPayloadAndWarnsInsufficientOuterSegments()
+    {
+        MulticastTokenData doubleCast = CreateMulticastToken("double", "双", 2);
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
+        CoreTokenData ice = CreateCoreToken("ice_core", "冰", AttackCoreType.Ice);
+        CoreTokenData thunder = CreateCoreToken("thunder_core", "雷", AttackCoreType.Thunder);
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            doubleCast,
+            fire,
+            trigger,
+            ice,
+            thunder,
+        });
+
+        Assert.That(program.CanCast, Is.True);
+        Assert.That(program.PrimaryCastBlock.Projectiles.Count, Is.EqualTo(1));
+        SpellProjectileNode outerProjectile = program.PrimaryCastBlock.Projectiles[0];
+        Assert.That(outerProjectile.CoreType, Is.EqualTo(AttackCoreType.Fire));
+        Assert.That(outerProjectile.Payloads.Count, Is.EqualTo(1));
+        Assert.That(outerProjectile.Payloads[0].InnerBlock.Projectiles.Count, Is.EqualTo(1));
+        Assert.That(outerProjectile.Payloads[0].InnerBlock.Projectiles[0].CoreType, Is.EqualTo(AttackCoreType.Ice));
+        Assert.That(CountMessagesContaining(program, AttackCompileMessageSeverity.Warning, "Multicast requested 2 projectile nodes"), Is.EqualTo(1));
+    }
+
+    [Test]
     public void Compile_GlobalProgramModifierBeforeTrigger_AppliesToOuterAndPayloadProjectile()
     {
         ModifierTokenData globalExtend = CreateModifierToken("global_extend", "长", SpellModifierScope.GlobalProgram);
@@ -495,18 +914,14 @@ public sealed class SpellProgramCompilerTests
         });
         CoreTokenData outerFire = CreateCoreToken("outer_fire", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         CoreTokenData payloadIce = CreateCoreToken("payload_ice", "冰", AttackCoreType.Ice);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             globalExtend,
             outerFire,
             trigger,
-            payloadStart,
             payloadIce,
-            payloadEnd,
         });
 
         Assert.That(program.PrimaryCastBlock.Projectiles[0].AttackSpec.maxLifetime, Is.EqualTo(4f).Within(0.0001f));
@@ -520,7 +935,6 @@ public sealed class SpellProgramCompilerTests
     {
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ModifierTokenData payloadRadius = CreateModifierToken("payload_radius", "域", SpellModifierScope.CurrentPayload);
         payloadRadius.SetModifiers(new[]
         {
@@ -534,19 +948,16 @@ public sealed class SpellProgramCompilerTests
         control.DefaultEffectRadius = 1f;
         control.DefaultTriggerCount = 2;
         control.EffectDuration = 1f;
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             payloadRadius,
             payloadCount,
             explosion,
             healing,
             control,
-            payloadEnd,
         });
 
         SpellCastBlock innerBlock = program.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock;
@@ -572,7 +983,6 @@ public sealed class SpellProgramCompilerTests
     {
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ModifierTokenData payloadModifier = CreateModifierToken("payload_result_mod", "变", SpellModifierScope.CurrentPayload);
         payloadModifier.SetModifiers(new[]
         {
@@ -588,19 +998,16 @@ public sealed class SpellProgramCompilerTests
         control.DefaultTriggerCount = 1;
         control.EffectDuration = 2f;
         ResultTokenData healing = CreateResultToken("healing", "愈", AttackResultType.Healing, false, 0f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             payloadModifier,
             payloadCount,
             split,
             control,
             healing,
-            payloadEnd,
         });
 
         SpellCastBlock innerBlock = program.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock;
@@ -634,7 +1041,6 @@ public sealed class SpellProgramCompilerTests
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         fire.Damage = 10f;
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 2f);
         explosion.ExplosionDamageMultiplier = 0.5f;
         explosion.EffectDuration = 1f;
@@ -645,18 +1051,15 @@ public sealed class SpellProgramCompilerTests
         control.DefaultTriggerCount = 1;
         control.EffectDuration = 2f;
         ResultTokenData healing = CreateResultToken("healing", "愈", AttackResultType.Healing, false, 0f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new PlaceableTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             explosion,
             split,
             control,
             healing,
-            payloadEnd,
         }, spellBook);
 
         SpellProjectileNode outerProjectile = program.PrimaryCastBlock.Projectiles[0];
@@ -784,6 +1187,58 @@ public sealed class SpellProgramCompilerTests
     }
 
     [Test]
+    public void Emit_WithOrbitMulticastProgram_SpawnsOrbiterAnchoredToPrimaryProjectile()
+    {
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        GameObject owner = CreateGameObject("Owner");
+        MulticastTokenData orbitCast = CreateMulticastToken("orbit", "绕", 2);
+        orbitCast.CastPattern = SpellCastPattern.Orbit;
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        CoreTokenData ice = CreateCoreToken("ice_core", "冰", AttackCoreType.Ice);
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 2f);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            orbitCast,
+            fire,
+            ice,
+            explosion,
+        });
+        List<CharBullet> spawnedBullets = new();
+
+        int emittedCount = AttackProjectileEmitter.Emit(
+            bulletPrefab,
+            owner.transform,
+            Vector3.zero,
+            Vector3.forward,
+            program,
+            null,
+            spawnedBullets);
+
+        Assert.That(emittedCount, Is.EqualTo(2));
+        Assert.That(spawnedBullets.Count, Is.EqualTo(2));
+        CharBullet primaryBullet = spawnedBullets[0];
+        CharBullet orbitBullet = spawnedBullets[1];
+        Assert.That(primaryBullet.CurrentProjectileNode, Is.SameAs(program.PrimaryCastBlock.Projectiles[0]));
+        Assert.That(orbitBullet.CurrentProjectileNode, Is.Not.SameAs(program.PrimaryCastBlock.Projectiles[1]));
+        Assert.That(orbitBullet.CurrentProjectileNode.CoreType, Is.EqualTo(AttackCoreType.Ice));
+        Assert.That(orbitBullet.CurrentProjectileNode.ResultType, Is.EqualTo(AttackResultType.Explosion));
+        Assert.That(orbitBullet.CurrentPayloads, Is.Empty);
+        Assert.That(orbitBullet.OwnerRoot, Is.SameAs(owner.transform));
+        Assert.That(orbitBullet.MovementAnchor, Is.SameAs(primaryBullet.MovementTarget));
+        Assert.That(orbitBullet.CurrentAttackSpec.behaviorType, Is.EqualTo(AttackBehaviorType.Spin));
+        Assert.That(orbitBullet.CurrentAttackSpec.behaviorParameter, Is.EqualTo(3f).Within(0.0001f));
+        Assert.That(Vector3.Distance(orbitBullet.MovementTarget.position, primaryBullet.MovementTarget.position), Is.EqualTo(3f).Within(0.0001f));
+
+        primaryBullet.TrySetWorldPosition(new Vector3(4f, 0f, 0f));
+        InvokePrivateMethod(orbitBullet, "TryUpdateMovementBehavior", 0.5f);
+        Assert.That(Vector3.Distance(orbitBullet.MovementTarget.position, primaryBullet.MovementTarget.position), Is.EqualTo(3f).Within(0.0001f));
+
+        primaryBullet.Expire();
+        InvokePrivateMethod(orbitBullet, "TryUpdateMovementBehavior", 0.1f);
+        Assert.That(orbitBullet == null, Is.True);
+    }
+
+    [Test]
     public void Emit_WithTriggerPayload_AttachesPayloadBlockToSpawnedBullet()
     {
         CharBullet bulletPrefab = CreateBulletPrefab();
@@ -804,6 +1259,113 @@ public sealed class SpellProgramCompilerTests
         Assert.That(spawnedBullets.Count, Is.EqualTo(1));
         Assert.That(spawnedBullets[0].CurrentProjectileNode, Is.SameAs(program.PrimaryCastBlock.Projectiles[0]));
         Assert.That(spawnedBullets[0].CurrentPayloads.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Runtime_OnTimerPayload_TriggersOnceAtProjectilePosition()
+    {
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        GameObject owner = CreateGameObject("Owner");
+        TestEnemy nearbyEnemy = CreateEnemy("NearbyEnemy", new Vector3(0.5f, 0f, 0f), 5f);
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_timer", "时", SpellTriggerType.OnTimer);
+        ValueTokenData delay = CreateValueToken("delay", "一", 1f);
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 1f);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, trigger, delay, explosion });
+        List<CharBullet> spawnedBullets = new();
+        AttackProjectileEmitter.Emit(bulletPrefab, owner.transform, Vector3.zero, Vector3.forward, program, null, spawnedBullets);
+        Physics.SyncTransforms();
+
+        SetPrivateField(spawnedBullets[0], "elapsedLifetime", 1.1f);
+        InvokePrivateMethod(spawnedBullets[0], "CheckNonImpactPayloadTriggers");
+        InvokePrivateMethod(spawnedBullets[0], "CheckNonImpactPayloadTriggers");
+
+        Assert.That(nearbyEnemy.CurrentHealth, Is.EqualTo(4f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Runtime_OnDistancePayload_TriggersOnceAtProjectilePosition()
+    {
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        GameObject owner = CreateGameObject("Owner");
+        TestEnemy nearbyEnemy = CreateEnemy("NearbyEnemy", new Vector3(0f, 0f, 2.5f), 5f);
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_distance", "程", SpellTriggerType.OnDistance);
+        ValueTokenData distance = CreateValueToken("distance", "一", 1f);
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 1f);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, trigger, distance, explosion });
+        List<CharBullet> spawnedBullets = new();
+        AttackProjectileEmitter.Emit(bulletPrefab, owner.transform, Vector3.zero, Vector3.forward, program, null, spawnedBullets);
+        spawnedBullets[0].TrySetWorldPosition(new Vector3(0f, 0f, 2f));
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(spawnedBullets[0], "CheckNonImpactPayloadTriggers");
+        InvokePrivateMethod(spawnedBullets[0], "CheckNonImpactPayloadTriggers");
+
+        Assert.That(nearbyEnemy.CurrentHealth, Is.EqualTo(4f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Runtime_OnProximityPayload_TriggersOnceNearTarget()
+    {
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        GameObject owner = CreateGameObject("Owner");
+        TestEnemy nearbyEnemy = CreateEnemy("NearbyEnemy", new Vector3(0.5f, 0f, 0f), 5f);
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_proximity", "近", SpellTriggerType.OnProximity);
+        ValueTokenData radius = CreateValueToken("radius", "一", 1f);
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 1f);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, trigger, radius, explosion });
+        List<CharBullet> spawnedBullets = new();
+        AttackProjectileEmitter.Emit(bulletPrefab, owner.transform, Vector3.zero, Vector3.forward, program, null, spawnedBullets);
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(spawnedBullets[0], "CheckNonImpactPayloadTriggers");
+        InvokePrivateMethod(spawnedBullets[0], "CheckNonImpactPayloadTriggers");
+
+        Assert.That(nearbyEnemy.CurrentHealth, Is.EqualTo(4f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Runtime_OnExpirePayload_TriggersBeforeBulletIsDestroyed()
+    {
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        GameObject owner = CreateGameObject("Owner");
+        TestEnemy nearbyEnemy = CreateEnemy("NearbyEnemy", new Vector3(0.5f, 0f, 0f), 5f);
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_expire", "终", SpellTriggerType.OnExpire);
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 1f);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, trigger, explosion });
+        List<CharBullet> spawnedBullets = new();
+        AttackProjectileEmitter.Emit(bulletPrefab, owner.transform, Vector3.zero, Vector3.forward, program, null, spawnedBullets);
+        Physics.SyncTransforms();
+
+        spawnedBullets[0].Expire();
+
+        Assert.That(nearbyEnemy.CurrentHealth, Is.EqualTo(4f).Within(0.0001f));
+    }
+
+    [Test]
+    public void Runtime_OnKillPayload_TriggersOnceFromKillingProjectile()
+    {
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        GameObject owner = CreateGameObject("Owner");
+        TestEnemy primaryEnemy = CreateEnemy("PrimaryEnemy", new Vector3(0f, 0f, 2f), 1f);
+        TestEnemy secondaryEnemy = CreateEnemy("SecondaryEnemy", new Vector3(0.6f, 0f, 2f), 5f);
+        CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        fire.Damage = 2f;
+        TriggerTokenData trigger = CreateTriggerToken("on_kill", "灭", SpellTriggerType.OnKill);
+        ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, 1f);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, trigger, explosion });
+        List<CharBullet> spawnedBullets = new();
+        AttackProjectileEmitter.Emit(bulletPrefab, owner.transform, Vector3.zero, Vector3.forward, program, null, spawnedBullets);
+        Physics.SyncTransforms();
+
+        bool handled = InvokeTryRegisterImpact(spawnedBullets[0], primaryEnemy.GetComponent<BoxCollider>());
+
+        Assert.That(handled, Is.True);
+        Assert.That(primaryEnemy.CurrentHealth, Is.EqualTo(0f).Within(0.0001f));
+        Assert.That(secondaryEnemy.CurrentHealth, Is.EqualTo(3f).Within(0.0001f));
     }
 
     [Test]
@@ -867,22 +1429,18 @@ public sealed class SpellProgramCompilerTests
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         fire.Damage = 2f;
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ModifierTokenData payloadHealingAmplify = CreateModifierToken("payload_healing_amplify", "愈+", SpellModifierScope.CurrentPayload);
         payloadHealingAmplify.SetModifiers(new[]
         {
             new TokenModifierDefinition(TokenModifierTarget.ResultMultiplier, "*=2"),
         });
         ResultTokenData healing = CreateResultToken("healing", "愈", AttackResultType.Healing, false, 0f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             payloadHealingAmplify,
             healing,
-            payloadEnd,
         });
         List<CharBullet> spawnedBullets = new();
         AttackProjectileEmitter.Emit(
@@ -945,7 +1503,6 @@ public sealed class SpellProgramCompilerTests
         EnemyStatusEffectController farStatus = farEnemy.gameObject.AddComponent<EnemyStatusEffectController>();
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ModifierTokenData payloadControlField = CreateModifierToken("payload_control_field", "缚", SpellModifierScope.CurrentPayload);
         payloadControlField.SetModifiers(new[]
         {
@@ -954,15 +1511,12 @@ public sealed class SpellProgramCompilerTests
         ResultTokenData control = CreateResultToken("control", "定", AttackResultType.StatusEffect, false, 0f);
         control.DefaultTriggerCount = 1;
         control.EffectDuration = 1f;
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             payloadControlField,
             control,
-            payloadEnd,
         });
         List<CharBullet> spawnedBullets = new();
         AttackProjectileEmitter.Emit(
@@ -1029,18 +1583,14 @@ public sealed class SpellProgramCompilerTests
     {
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData explosion = CreateResultToken("explosion", "爆", AttackResultType.Explosion, false, radius);
         explosion.ExplosionDamageMultiplier = damageMultiplier;
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         return SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             explosion,
-            payloadEnd,
         });
     }
 
@@ -1049,17 +1599,13 @@ public sealed class SpellProgramCompilerTests
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         fire.Damage = 2f;
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData healing = CreateResultToken("healing", "愈", AttackResultType.Healing, false, 0f);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         return SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             healing,
-            payloadEnd,
         });
     }
 
@@ -1068,20 +1614,16 @@ public sealed class SpellProgramCompilerTests
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         fire.Damage = 2f;
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData healing = CreateResultToken("healing", "愈", AttackResultType.Healing, true, 0f);
         healing.ValueParameterKind = SpellValueParameterKind.Radius;
         ValueTokenData radiusValue = CreateValueToken("radius", radius.ToString("0.##"), radius);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         return SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             healing,
             radiusValue,
-            payloadEnd,
         });
     }
 
@@ -1089,22 +1631,51 @@ public sealed class SpellProgramCompilerTests
     {
         CoreTokenData fire = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
         TriggerTokenData trigger = CreateTriggerToken("on_hit", "触", SpellTriggerType.OnHit);
-        PayloadBoundaryTokenData payloadStart = CreatePayloadBoundaryToken("payload_start", "[", PayloadBoundaryKind.Start);
         ResultTokenData split = CreateResultToken("split", "裂", AttackResultType.Split, true, 0f);
         split.DefaultTriggerCount = 1;
         split.ChildDamageMultiplier = childDamageMultiplier;
         ValueTokenData value = CreateValueToken("split_count", splitCount.ToString(), splitCount);
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "]", PayloadBoundaryKind.End);
 
         return SpellProgramCompiler.Compile(new BaseTokenData[]
         {
             fire,
             trigger,
-            payloadStart,
             split,
             value,
-            payloadEnd,
         });
+    }
+
+    private void AssertStrengthResult(CoreTokenData fire, ValueTokenData value, AttackResultType resultType)
+    {
+        ResultTokenData result = CreateResultToken(resultType.ToString().ToLowerInvariant(), resultType.ToString(), resultType, true, 0f);
+        result.DefaultEffectRadius = 3f;
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            result,
+            value,
+        });
+
+        SpellProjectileNode projectile = program.PrimaryCastBlock.Projectiles[0];
+        Assert.That(projectile.ResultType, Is.EqualTo(resultType));
+        Assert.That(projectile.ResultEffects.effectStrength, Is.EqualTo(3f).Within(0.0001f), resultType.ToString());
+    }
+
+    private void AssertPayloadStrengthResult(CoreTokenData fire, TriggerTokenData trigger, ValueTokenData value, AttackResultType resultType)
+    {
+        ResultTokenData result = CreateResultToken(resultType.ToString().ToLowerInvariant(), resultType.ToString(), resultType, true, 0f);
+        result.DefaultEffectRadius = 3f;
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fire,
+            trigger,
+            result,
+            value,
+        });
+
+        SpellPayloadEffectNode effect = program.PrimaryCastBlock.Projectiles[0].Payloads[0].InnerBlock.PayloadEffects[0];
+        Assert.That(effect.ResultType, Is.EqualTo(resultType));
+        Assert.That(effect.ResultEffects.effectStrength, Is.EqualTo(3f).Within(0.0001f), resultType.ToString());
     }
 
     private CoreTokenData CreateCoreToken(string tokenId, string displayText, AttackCoreType coreType)
@@ -1125,13 +1696,6 @@ public sealed class SpellProgramCompilerTests
     {
         TriggerTokenData token = CreateToken<TriggerTokenData>(tokenId, displayText);
         token.TriggerType = triggerType;
-        return token;
-    }
-
-    private PayloadBoundaryTokenData CreatePayloadBoundaryToken(string tokenId, string displayText, PayloadBoundaryKind boundaryKind)
-    {
-        PayloadBoundaryTokenData token = CreateToken<PayloadBoundaryTokenData>(tokenId, displayText);
-        token.BoundaryKind = boundaryKind;
         return token;
     }
 
@@ -1250,11 +1814,43 @@ public sealed class SpellProgramCompilerTests
         return count;
     }
 
+    private static int CountMessagesContaining(
+        CompiledSpellProgram program,
+        AttackCompileMessageSeverity severity,
+        string text)
+    {
+        int count = 0;
+        for (int i = 0; i < program.Messages.Count; i++)
+        {
+            if (program.Messages[i].severity == severity &&
+                program.Messages[i].message.Contains(text))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
     private static bool InvokeTryRegisterImpact(CharBullet bullet, Collider collider)
     {
         MethodInfo tryRegisterImpact = typeof(CharBullet).GetMethod("TryRegisterImpact", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(tryRegisterImpact, Is.Not.Null);
         return (bool)tryRegisterImpact.Invoke(bullet, new object[] { collider });
+    }
+
+    private static void InvokePrivateMethod(object target, string methodName, params object[] args)
+    {
+        MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
+        method.Invoke(target, args);
+    }
+
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        field.SetValue(target, value);
     }
 
     private sealed class TestEnemy : Enemy

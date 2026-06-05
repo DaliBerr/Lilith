@@ -9,6 +9,7 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using Vocalith.EventSystem;
 
 public sealed class MainUIScreenTests
 {
@@ -239,6 +240,65 @@ public sealed class MainUIScreenTests
     }
 
     [Test]
+    public void MainUIScreen_RewardNotificationEvent_ShowsNotificationPanelWithoutImage()
+    {
+        MainUIScreen screen = CreateMainUIScreen(out _, out _, out _);
+        InvokeNonPublic(screen, "OnInit");
+        InvokeNonPublic(screen, "OnBeforeShow");
+
+        EventManager.eventBus.Publish(new RewardNotificationEvent("火", "已收入背包", RewardNotificationKind.Token));
+
+        Assert.That(screen.NotificationPanel.gameObject.activeSelf, Is.True);
+        Assert.That(screen.NotificationTitleText.text, Is.EqualTo("火"));
+        Assert.That(screen.NotificationDescriptionText.text, Is.EqualTo("已收入背包"));
+        Assert.That(screen.NotificationCanvasGroup.alpha, Is.EqualTo(1f).Within(0.0001f));
+        Assert.That(screen.NotificationCanvasGroup.blocksRaycasts, Is.False);
+        Assert.That(screen.NotificationImage.gameObject.activeSelf, Is.False);
+
+        EventManager.eventBus.Publish(new RewardNotificationEvent("疾风书", "已装备", RewardNotificationKind.SpellBook));
+
+        Assert.That(screen.NotificationTitleText.text, Is.EqualTo("疾风书"));
+        Assert.That(screen.NotificationDescriptionText.text, Is.EqualTo("已装备"));
+
+        InvokeNonPublic(screen, "OnAfterHide");
+    }
+
+    [Test]
+    public void MainUIScreen_RewardNotificationAutoHide_HidesPanel()
+    {
+        MainUIScreen screen = CreateMainUIScreen(out _, out _, out _);
+        SetNonPublicField(screen, "notificationDisplaySeconds", 0f);
+        SetNonPublicField(screen, "notificationFadeSeconds", 0f);
+        InvokeNonPublic(screen, "OnInit");
+        InvokeNonPublic(screen, "OnBeforeShow");
+
+        EventManager.eventBus.Publish(new RewardNotificationEvent("火", "已收入背包", RewardNotificationKind.Token));
+        IEnumerator autoHide = InvokeNonPublic<IEnumerator>(screen, "PlayNotificationAutoHideCo");
+        while (autoHide.MoveNext())
+        {
+        }
+
+        Assert.That(screen.NotificationPanel.gameObject.activeSelf, Is.False);
+        Assert.That(screen.NotificationCanvasGroup.alpha, Is.EqualTo(0f).Within(0.0001f));
+
+        InvokeNonPublic(screen, "OnAfterHide");
+    }
+
+    [Test]
+    public void MainUIScreen_OnAfterHideStopsListeningToRewardNotifications()
+    {
+        MainUIScreen screen = CreateMainUIScreen(out _, out _, out _);
+        InvokeNonPublic(screen, "OnInit");
+        InvokeNonPublic(screen, "OnBeforeShow");
+        InvokeNonPublic(screen, "OnAfterHide");
+
+        EventManager.eventBus.Publish(new RewardNotificationEvent("火", "已收入背包", RewardNotificationKind.Token));
+
+        Assert.That(screen.NotificationPanel.gameObject.activeSelf, Is.False);
+        Assert.That(screen.NotificationTitleText.text, Is.Empty);
+    }
+
+    [Test]
     public void MainUIPrefabContainsHiddenObjectiveArrowView()
     {
         GameObject root = PrefabUtility.LoadPrefabContents(MainUIPrefabPath);
@@ -274,6 +334,26 @@ public sealed class MainUIScreenTests
             Assert.That(arrowImage.preserveAspect, Is.True);
             Assert.That(arrowImage.sprite, Is.Not.Null);
             StringAssert.StartsWith("ObjectiveArrow", arrowImage.sprite.name);
+
+            InvokeNonPublic(screen, "AutoBindTemplate");
+
+            RectTransform notificationPanel = screen.NotificationPanel;
+            Assert.That(notificationPanel, Is.Not.Null);
+            Assert.That(notificationPanel.name, Is.EqualTo("Notification Panel"));
+            Assert.That(notificationPanel.gameObject.activeSelf, Is.False);
+
+            CanvasGroup notificationCanvasGroup = screen.NotificationCanvasGroup;
+            Assert.That(notificationCanvasGroup, Is.Not.Null);
+            Assert.That(notificationCanvasGroup.alpha, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(notificationCanvasGroup.blocksRaycasts, Is.False);
+            Assert.That(notificationCanvasGroup.interactable, Is.False);
+
+            TMP_Text notificationTitle = screen.NotificationTitleText;
+            TMP_Text notificationDescription = screen.NotificationDescriptionText;
+            Image notificationImage = screen.NotificationImage;
+            Assert.That(notificationTitle, Is.Not.Null);
+            Assert.That(notificationDescription, Is.Not.Null);
+            Assert.That(notificationImage, Is.Not.Null);
         }
         finally
         {
@@ -315,8 +395,31 @@ public sealed class MainUIScreenTests
         questListRoot = quests.GetComponent<RectTransform>();
 
         CreateObjectiveArrowView(root.transform);
+        CreateNotificationPanel(root.transform);
 
         return screen;
+    }
+
+    private void CreateNotificationPanel(Transform parent)
+    {
+        GameObject panelObject = CreateUiObject("Notification Panel", parent);
+        panelObject.AddComponent<Image>();
+        CanvasGroup canvasGroup = panelObject.AddComponent<CanvasGroup>();
+        canvasGroup.alpha = 0f;
+        canvasGroup.blocksRaycasts = false;
+        canvasGroup.interactable = false;
+
+        GameObject titleRoot = CreateUiObject("Tittle", panelObject.transform);
+        titleRoot.AddComponent<Image>();
+        CreateTextObject("Text (TMP)", titleRoot.transform).GetComponent<TMP_Text>().text = string.Empty;
+
+        GameObject descriptionRoot = CreateUiObject("Description", panelObject.transform);
+        descriptionRoot.AddComponent<Image>();
+        CreateTextObject("Text (TMP)", descriptionRoot.transform).GetComponent<TMP_Text>().text = string.Empty;
+
+        GameObject imageObject = CreateUiObject("Image", panelObject.transform);
+        imageObject.AddComponent<Image>();
+        panelObject.SetActive(false);
     }
 
     private ObjectiveArrowView CreateObjectiveArrowView(Transform parent)

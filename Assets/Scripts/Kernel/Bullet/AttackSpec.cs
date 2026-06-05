@@ -15,6 +15,12 @@ public enum AttackCoreType
     Light = 5,
     Shadow = 6,
     Toxin = 7,
+    Arrow = 8,
+    Rock = 9,
+    Water = 10,
+    Wind = 11,
+    Sheep = 12,
+    Riddle = 13,
 }
 
 /// <summary>
@@ -30,6 +36,13 @@ public enum AttackBehaviorType
     Orbit = 5, //环绕目标飞行，持续时间用 projectileLife 表示，命中后不消失
     Pierce = 6, //命中敌人后继续飞行，穿透次数用 pierceCount 表示
     Homing = 7, //持续追踪目标，命中后按结果词结算
+    Stasis = 8, //停在发射点，持续时间用 behaviorParameter 表示
+    Rush = 9, //飞行中逐渐加速，强度用 behaviorParameter 表示
+    Slow = 10, //飞行中逐渐减速，强度用 behaviorParameter 表示
+    Snake = 11, //沿初始方向蛇形摆动，摆幅强度用 behaviorParameter 表示
+    Wander = 12, //沿当前方向确定性漂移，漂移强度用 behaviorParameter 表示
+    Split = 13, //飞行期间均匀派生小弹，次数用 behaviorParameter 表示
+    Spin = 14, //围绕施法者水平环绕，半径用 behaviorParameter 表示
 }
 
 /// <summary>
@@ -57,6 +70,11 @@ public enum AttackResultType
     SpawnChild = 4,
     Split = 5,
     Healing = 6,
+    Drain = 7,
+    Shield = 8,
+    Leave = 9,
+    Push = 10,
+    Pull = 11,
 }
 
 /// <summary>
@@ -80,6 +98,7 @@ public struct AttackSpec
     [Min(0f)] public float projectileSpeed;
     [Min(0f)] public float maxLifetime;
     [Min(0f)] public float maxTravelDistance;
+    [Min(0f)] public float behaviorParameter;
     public LayerMask impactMask;
 
     /// <summary>
@@ -105,6 +124,7 @@ public struct AttackSpec
             projectileSpeed = 320f,
             maxLifetime = 2f,
             maxTravelDistance = 512f,
+            behaviorParameter = 0f,
             impactMask = Physics.DefaultRaycastLayers,
         };
     }
@@ -131,6 +151,7 @@ public struct AttackSpec
         sanitized.projectileSpeed = Mathf.Max(0f, sanitized.projectileSpeed);
         sanitized.maxLifetime = Mathf.Max(0f, sanitized.maxLifetime);
         sanitized.maxTravelDistance = Mathf.Max(0f, sanitized.maxTravelDistance);
+        sanitized.behaviorParameter = Mathf.Max(0f, sanitized.behaviorParameter);
         return sanitized;
     }
 }

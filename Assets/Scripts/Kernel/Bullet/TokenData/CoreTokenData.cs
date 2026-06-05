@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Kernel.Bullet
@@ -27,6 +29,13 @@ namespace Kernel.Bullet
         [SerializeField, Min(0)] private int thunderChainTargetCount;
         [SerializeField, Min(0f)] private float thunderChainRadius;
         [SerializeField, Min(0f)] private float thunderChainDamage;
+        [SerializeField] private bool piercesActorsAndEnvironment;
+        [SerializeField, Range(0f, 1f)] private float penetrationDamageMultiplier = 1f;
+        [SerializeField] private bool suppressImpactEffects;
+        [SerializeField, Min(0f)] private float windPressureRadius;
+        [SerializeField, Min(0f)] private float windPressureDistance;
+        [SerializeField, Min(0f)] private float windDisplacementWeightLimit = 1f;
+        [SerializeField] private SpellStatusApplication[] statusApplications = Array.Empty<SpellStatusApplication>();
 
         public AttackCoreType CoreType
         {
@@ -142,6 +151,49 @@ namespace Kernel.Bullet
             set => thunderChainDamage = Mathf.Max(0f, value);
         }
 
+        public bool PiercesActorsAndEnvironment
+        {
+            get => piercesActorsAndEnvironment;
+            set => piercesActorsAndEnvironment = value;
+        }
+
+        public float PenetrationDamageMultiplier
+        {
+            get => penetrationDamageMultiplier;
+            set => penetrationDamageMultiplier = Mathf.Clamp01(value);
+        }
+
+        public bool SuppressImpactEffects
+        {
+            get => suppressImpactEffects;
+            set => suppressImpactEffects = value;
+        }
+
+        public float WindPressureRadius
+        {
+            get => windPressureRadius;
+            set => windPressureRadius = Mathf.Max(0f, value);
+        }
+
+        public float WindPressureDistance
+        {
+            get => windPressureDistance;
+            set => windPressureDistance = Mathf.Max(0f, value);
+        }
+
+        public float WindDisplacementWeightLimit
+        {
+            get => windDisplacementWeightLimit;
+            set => windDisplacementWeightLimit = Mathf.Max(0f, value);
+        }
+
+        public IReadOnlyList<SpellStatusApplication> StatusApplications => statusApplications;
+
+        public void SetStatusApplications(params SpellStatusApplication[] applications)
+        {
+            statusApplications = SpellStatusApplicationUtility.Sanitize(applications);
+        }
+
         /// <summary>
         /// summary: 依据当前核心词元配置创建一份攻击模板。
         /// param: 无
@@ -188,6 +240,13 @@ namespace Kernel.Bullet
                 thunderChainTargetCount = thunderChainTargetCount,
                 thunderChainRadius = thunderChainRadius,
                 thunderChainDamage = thunderChainDamage,
+                piercesActorsAndEnvironment = piercesActorsAndEnvironment,
+                penetrationDamageMultiplier = penetrationDamageMultiplier,
+                suppressImpactEffects = suppressImpactEffects,
+                windPressureRadius = windPressureRadius,
+                windPressureDistance = windPressureDistance,
+                windDisplacementWeightLimit = windDisplacementWeightLimit,
+                statusApplications = SpellStatusApplicationUtility.Sanitize(statusApplications),
             }.GetSanitized();
         }
 
@@ -217,6 +276,11 @@ namespace Kernel.Bullet
             thunderChainTargetCount = Mathf.Max(0, thunderChainTargetCount);
             thunderChainRadius = Mathf.Max(0f, thunderChainRadius);
             thunderChainDamage = Mathf.Max(0f, thunderChainDamage);
+            penetrationDamageMultiplier = Mathf.Clamp01(penetrationDamageMultiplier);
+            windPressureRadius = Mathf.Max(0f, windPressureRadius);
+            windPressureDistance = Mathf.Max(0f, windPressureDistance);
+            windDisplacementWeightLimit = Mathf.Max(0f, windDisplacementWeightLimit);
+            statusApplications = SpellStatusApplicationUtility.Sanitize(statusApplications);
         }
     }
 }

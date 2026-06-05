@@ -6,11 +6,26 @@ namespace Kernel.Bullet
     {
         public static bool CanConsumeValue(BehaviorTokenData behaviorToken)
         {
-            return behaviorToken != null &&
-                   behaviorToken.ValueParameterKind == SpellValueParameterKind.Count &&
-                   (behaviorToken.BehaviorType == AttackBehaviorType.Spread ||
-                    behaviorToken.BehaviorType == AttackBehaviorType.Bounce ||
-                    behaviorToken.BehaviorType == AttackBehaviorType.Pierce);
+            if (behaviorToken == null)
+            {
+                return false;
+            }
+
+            return behaviorToken.BehaviorType switch
+            {
+                AttackBehaviorType.Spread => behaviorToken.ValueParameterKind == SpellValueParameterKind.Count,
+                AttackBehaviorType.Bounce => behaviorToken.ValueParameterKind == SpellValueParameterKind.Count,
+                AttackBehaviorType.Pierce => behaviorToken.ValueParameterKind == SpellValueParameterKind.Count,
+                AttackBehaviorType.Chain => behaviorToken.ValueParameterKind == SpellValueParameterKind.Count,
+                AttackBehaviorType.Stasis => behaviorToken.ValueParameterKind == SpellValueParameterKind.Duration,
+                AttackBehaviorType.Rush => behaviorToken.ValueParameterKind == SpellValueParameterKind.Strength,
+                AttackBehaviorType.Slow => behaviorToken.ValueParameterKind == SpellValueParameterKind.Strength,
+                AttackBehaviorType.Snake => behaviorToken.ValueParameterKind == SpellValueParameterKind.Strength,
+                AttackBehaviorType.Wander => behaviorToken.ValueParameterKind == SpellValueParameterKind.Strength,
+                AttackBehaviorType.Split => behaviorToken.ValueParameterKind == SpellValueParameterKind.Count,
+                AttackBehaviorType.Spin => behaviorToken.ValueParameterKind == SpellValueParameterKind.Radius,
+                _ => false,
+            };
         }
 
         public static bool CanConsumeValue(ResultTokenData resultToken)
@@ -28,6 +43,11 @@ namespace Kernel.Bullet
                 AttackResultType.StatusEffect => resultToken.ValueParameterKind == SpellValueParameterKind.Count ||
                                                  resultToken.ValueParameterKind == SpellValueParameterKind.Duration,
                 AttackResultType.Healing => resultToken.ValueParameterKind == SpellValueParameterKind.Radius,
+                AttackResultType.Drain => resultToken.ValueParameterKind == SpellValueParameterKind.Strength,
+                AttackResultType.Shield => resultToken.ValueParameterKind == SpellValueParameterKind.Strength,
+                AttackResultType.Push => resultToken.ValueParameterKind == SpellValueParameterKind.Strength,
+                AttackResultType.Pull => resultToken.ValueParameterKind == SpellValueParameterKind.Strength,
+                AttackResultType.Leave => resultToken.ValueParameterKind == SpellValueParameterKind.Duration,
                 _ => false,
             };
         }
@@ -37,14 +57,16 @@ namespace Kernel.Bullet
             ValueTokenData valueToken,
             ref int spreadProjectileCount,
             ref int bounceCount,
-            ref int pierceCount)
+            ref int chainCount,
+            ref int pierceCount,
+            ref float behaviorParameter)
         {
             if (!CanConsumeValue(behaviorToken) || valueToken == null)
             {
                 return;
             }
 
-            int resolvedValue = Mathf.Max(1, valueToken.GetRoundedIntValue());
+            int resolvedValue = valueToken.ResolveCountValue();
             if (behaviorToken.BehaviorType == AttackBehaviorType.Spread)
             {
                 spreadProjectileCount = resolvedValue;
@@ -56,6 +78,20 @@ namespace Kernel.Bullet
             else if (behaviorToken.BehaviorType == AttackBehaviorType.Pierce)
             {
                 pierceCount = resolvedValue;
+            }
+            else if (behaviorToken.BehaviorType == AttackBehaviorType.Chain)
+            {
+                chainCount = resolvedValue;
+            }
+            else if (behaviorToken.BehaviorType == AttackBehaviorType.Split)
+            {
+                behaviorParameter = resolvedValue;
+            }
+            else
+            {
+                float currentValue = Mathf.Max(0f, behaviorParameter);
+                bool allowZero = AllowsZero(behaviorToken.ValueParameterKind);
+                behaviorParameter = valueToken.ResolveNumericValue(behaviorToken.ValueParameterKind, currentValue, allowZero);
             }
         }
 
@@ -69,8 +105,9 @@ namespace Kernel.Bullet
                 return;
             }
 
-            float numericValue = Mathf.Max(0f, valueToken.NumericValue);
-            int countValue = Mathf.Max(1, valueToken.GetRoundedIntValue());
+            float currentValue = ResolveCurrentResultParameterValue(resultToken, resultEffects);
+            float numericValue = valueToken.ResolveNumericValue(resultToken.ValueParameterKind, currentValue, AllowsZero(resultToken.ValueParameterKind));
+            int countValue = valueToken.ResolveCountValue(Mathf.RoundToInt(currentValue));
             switch (resultToken.ValueParameterKind)
             {
                 case SpellValueParameterKind.Count:
@@ -106,9 +143,54 @@ namespace Kernel.Bullet
                     {
                         resultEffects.controlDuration = numericValue;
                     }
+                    else if (resultToken.ResultType == AttackResultType.Leave)
+                    {
+                        resultEffects.effectDuration = numericValue;
+                    }
+
+                    break;
+
+                case SpellValueParameterKind.Strength:
+                    if (resultToken.ResultType == AttackResultType.Drain ||
+                        resultToken.ResultType == AttackResultType.Shield ||
+                        resultToken.ResultType == AttackResultType.Push ||
+                        resultToken.ResultType == AttackResultType.Pull)
+                    {
+                        resultEffects.effectStrength = numericValue;
+                    }
 
                     break;
             }
+        }
+
+        private static float ResolveCurrentResultParameterValue(ResultTokenData resultToken, ResultEffectPayload resultEffects)
+        {
+            if (resultToken == null)
+            {
+                return 0f;
+            }
+
+            return resultToken.ValueParameterKind switch
+            {
+                SpellValueParameterKind.Count when resultToken.ResultType == AttackResultType.Split => resultEffects.splitProjectileCount,
+                SpellValueParameterKind.Count when resultToken.ResultType == AttackResultType.StatusEffect => resultEffects.controlTriggerCount,
+                SpellValueParameterKind.Radius when resultToken.ResultType == AttackResultType.Explosion => resultEffects.explosionRadius,
+                SpellValueParameterKind.Radius when resultToken.ResultType == AttackResultType.Healing => resultEffects.effectRadius,
+                SpellValueParameterKind.Duration when resultToken.ResultType == AttackResultType.Explosion => resultEffects.explosionDelaySeconds,
+                SpellValueParameterKind.Duration when resultToken.ResultType == AttackResultType.StatusEffect => resultEffects.controlDuration,
+                SpellValueParameterKind.Duration when resultToken.ResultType == AttackResultType.Leave => resultEffects.effectDuration,
+                SpellValueParameterKind.Strength when resultToken.ResultType == AttackResultType.Drain => resultEffects.effectStrength,
+                SpellValueParameterKind.Strength when resultToken.ResultType == AttackResultType.Shield => resultEffects.effectStrength,
+                SpellValueParameterKind.Strength when resultToken.ResultType == AttackResultType.Push => resultEffects.effectStrength,
+                SpellValueParameterKind.Strength when resultToken.ResultType == AttackResultType.Pull => resultEffects.effectStrength,
+                _ => 0f,
+            };
+        }
+
+        private static bool AllowsZero(SpellValueParameterKind parameterKind)
+        {
+            return parameterKind == SpellValueParameterKind.Radius ||
+                   parameterKind == SpellValueParameterKind.Duration;
         }
     }
 }

@@ -180,7 +180,6 @@ public sealed class TokenSelectModalTests
         ModifierTokenData modifier = CreateToken<ModifierTokenData>("modifier_haste", "Haste", "Modify the next token");
         MulticastTokenData multicast = CreateToken<MulticastTokenData>("dual_cast", "Dual", "Cast two projectiles");
         TriggerTokenData trigger = CreateToken<TriggerTokenData>("on_hit", "Hit", "Run payload on hit");
-        PayloadBoundaryTokenData payloadEnd = CreatePayloadBoundaryToken("payload_end", "End", PayloadBoundaryKind.End);
 
         view.Bind(screen, modifier);
         Assert.That(view.CatalogText.text, Is.EqualTo("修饰"));
@@ -193,10 +192,6 @@ public sealed class TokenSelectModalTests
         view.Bind(screen, trigger);
         Assert.That(view.CatalogText.text, Is.EqualTo("触发"));
         AssertColorApproximately(view.RootImage.color, new Color(0.42f, 0.92f, 0.95f, 1f));
-
-        view.Bind(screen, payloadEnd);
-        Assert.That(view.CatalogText.text, Is.EqualTo("载荷"));
-        AssertColorApproximately(view.RootImage.color, new Color(1f, 0.62f, 0.84f, 1f));
     }
 
     [Test]
@@ -232,8 +227,6 @@ public sealed class TokenSelectModalTests
             CreateToken<ModifierTokenData>("modifier_haste", "Haste", "Modify the next token"),
             CreateToken<MulticastTokenData>("dual_cast", "Dual", "Cast two projectiles"),
             CreateToken<TriggerTokenData>("on_hit", "Hit", "Run payload on hit"),
-            CreateToken<PayloadBoundaryTokenData>("payload_start", "Start", "Start payload"),
-            CreatePayloadBoundaryToken("payload_end", "End", PayloadBoundaryKind.End),
         };
         BulletTokenLibrary library = CreateRuntimeLibrary(rewards);
         TokenSelectUIScreen screen = CreateScreenRoot(library);
@@ -249,9 +242,7 @@ public sealed class TokenSelectModalTests
             TokenType.Value,
             TokenType.Modifier,
             TokenType.Multicast,
-            TokenType.Trigger,
-            TokenType.PayloadStart,
-            TokenType.PayloadEnd);
+            TokenType.Trigger);
     }
 
     [Test]
@@ -548,13 +539,6 @@ public sealed class TokenSelectModalTests
         token.Description = description;
         token.name = tokenId;
         createdObjects.Add(token);
-        return token;
-    }
-
-    private PayloadBoundaryTokenData CreatePayloadBoundaryToken(string tokenId, string displayText, PayloadBoundaryKind kind)
-    {
-        PayloadBoundaryTokenData token = CreateToken<PayloadBoundaryTokenData>(tokenId, displayText, $"{displayText} payload");
-        token.BoundaryKind = kind;
         return token;
     }
 
