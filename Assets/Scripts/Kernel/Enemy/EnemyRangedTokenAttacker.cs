@@ -255,7 +255,10 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
             hasLoggedCompileFailure = false;
         }
 
-        compiledProgram = compiledProgramCache;
+        List<PlaceableTokenData> activationItems = rangedAttack.BuildExecutionItems();
+        compiledProgram = SpellProgramCompiler.ContainsRandomModifier(activationItems)
+            ? SpellProgramCompiler.CompileForActivation(activationItems, rangedAttack.spellBook)
+            : compiledProgramCache;
         if (compiledProgram != null && compiledProgram.CanCast)
         {
             hasLoggedCompileFailure = false;

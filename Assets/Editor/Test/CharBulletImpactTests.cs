@@ -13,6 +13,7 @@ public sealed class CharBulletImpactTests
     [TearDown]
     public void TearDown()
     {
+        CharBullet.ConfuseCandidateIndexResolver = count => UnityEngine.Random.Range(0, count);
         StatusController.ClearStatus();
 
         for (int i = createdObjects.Count - 1; i >= 0; i--)
@@ -480,6 +481,32 @@ public sealed class CharBulletImpactTests
         SetPrivateField(shieldController, "remainingDuration", 0f);
         InvokePrivateMethod(shieldController, "Update");
         Assert.That(shieldController.CurrentShield, Is.EqualTo(0f).Within(0.0001f));
+    }
+
+    [Test]
+    public void CheckImpactContacts_ConfuseResultAppliesResolvedCandidate()
+    {
+        PlayerHealth owner = CreatePlayer(new Vector3(20f, 0f, 0f), new Vector3(1f, 1f, 1f), 10f);
+        CharBullet bullet = CreateBullet(Vector3.zero, 6f);
+        BaseCharEnemyNorm1 enemy = CreateEnemyWithTaggedChildCollider(MapGridAuthoring.GroundTagName);
+        SetEnemyHealth(enemy, 10f);
+
+        CoreTokenData coreToken = CreateCoreToken(damage: 3f, projectileLife: 2);
+        ResultTokenData confuse = CreateResultToken(AttackResultType.Confuse);
+        ResultTokenData shield = CreateResultToken(AttackResultType.Shield);
+        confuse.SetRandomResultCandidates(shield);
+        CharBullet.ConfuseCandidateIndexResolver = _ => 0;
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { coreToken, confuse });
+
+        InitializeShotFromProgram(bullet, owner.transform, bullet.transform.position, Vector3.forward, program, BulletTargetPolicy.EnemiesOnly);
+        Physics.SyncTransforms();
+
+        InvokePrivateMethod(bullet, "CheckImpactContacts");
+
+        Assert.That(enemy.CurrentHealth, Is.EqualTo(7f).Within(0.0001f));
+        DamageShieldController shieldController = owner.GetComponent<DamageShieldController>();
+        Assert.That(shieldController, Is.Not.Null);
+        Assert.That(shieldController.CurrentShield, Is.EqualTo(3f).Within(0.0001f));
     }
 
     [Test]

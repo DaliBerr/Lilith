@@ -575,6 +575,7 @@ namespace Kernel.Bullet
                 AttackResultType.Leave => "残留",
                 AttackResultType.Push => "排斥",
                 AttackResultType.Pull => "牵引",
+                AttackResultType.Confuse => "随机结果",
                 AttackResultType.DirectDamage => "直击",
                 _ => !string.IsNullOrWhiteSpace(effect.DisplayText) ? effect.DisplayText : effect.ResultType.ToString(),
             };
@@ -826,6 +827,8 @@ namespace Kernel.Bullet
             AddEffectIf(effects, projectile.ResultType == AttackResultType.Shield, "Shield", catalog);
             AddEffectIf(effects, projectile.ResultType == AttackResultType.Leave && resultEffects.HasLingeringArea, "Leave", catalog);
             AddEffectIf(effects, (projectile.ResultType == AttackResultType.Push || projectile.ResultType == AttackResultType.Pull) && resultEffects.HasDisplacement, "Displacement", catalog);
+            AddEffectIf(effects, projectile.ResultType == AttackResultType.Confuse && resultEffects.HasRandomResultCandidates, "Confuse", catalog);
+            AddEffectIf(effects, HasRandomModifierToken(items), "Chaos", catalog);
 
             if (effects.Count <= 0)
             {
@@ -861,6 +864,20 @@ namespace Kernel.Bullet
                 { BindingsToken, JoinEffects(bindings, catalog.valueBindingSeparator) },
             };
             return FormatTemplate(Pick(catalog.valueBindingSentenceTemplates, random), catalog, replacements);
+        }
+
+        private static bool HasRandomModifierToken(IReadOnlyList<PlaceableTokenData> items)
+        {
+            List<BaseTokenData> tokens = ExpandDescriptionTokens(items);
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                if (tokens[i] is ModifierTokenData modifierToken && modifierToken.IsRandomModifier)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static List<string> ResolveValueBindingPhrases(IReadOnlyList<PlaceableTokenData> items, SpellDescriptionCatalogData catalog)
@@ -1067,6 +1084,7 @@ namespace Kernel.Bullet
                     AttackResultType.Leave => "残留",
                     AttackResultType.Push => "排斥",
                     AttackResultType.Pull => "牵引",
+                    AttackResultType.Confuse => "随机结果",
                     AttackResultType.DirectDamage => "直击",
                     _ => consumer.GetResolvedDisplayText(),
                 };

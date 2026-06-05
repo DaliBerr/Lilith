@@ -178,6 +178,12 @@ namespace Kernel.Bullet
             return compiledProgram;
         }
 
+        public CompiledSpellProgram CompileProgramForActivation()
+        {
+            RebuildExecutionItems();
+            return SpellProgramCompiler.CompileForActivation(executionItems, spellBook);
+        }
+
         /// <summary>
         /// summary: 把当前法术书槽位恢复到对象初次启用时的起始配置。
         /// param: 无

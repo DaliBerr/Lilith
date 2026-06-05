@@ -215,6 +215,13 @@
         "卷入<result>牵引</result>",
         "向内收束<result>吸力</result>"
       ]
+    },
+    {
+      "resultType": "Confuse",
+      "phraseTemplates": [
+        "随机触发<result>混合结果</result>",
+        "掷出一枚<result>随机结果</result>"
+      ]
     }
   ],
   "specialEffects": [
@@ -230,7 +237,9 @@
     { "effect": "Drain", "phrase": "<special>生命汲取</special>" },
     { "effect": "Shield", "phrase": "<special>临时护盾</special>" },
     { "effect": "Leave", "phrase": "<special>残留场</special>" },
-    { "effect": "Displacement", "phrase": "<special>位移牵斥</special>" }
+    { "effect": "Displacement", "phrase": "<special>位移牵斥</special>" },
+    { "effect": "Confuse", "phrase": "<special>随机结果</special>" },
+    { "effect": "Chaos", "phrase": "<special>随机修饰</special>" }
   ],
   "valueBindings": [
     { "tokenType": "Spread", "parameterKind": 1, "phrase": "<value>{value}</value>归入<behavior>{consumer}</behavior>数量" },

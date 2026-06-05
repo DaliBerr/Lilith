@@ -732,6 +732,30 @@ public static class AttackTokenAssetGenerator
             SpellValueParameterKind.Strength,
             effectRadius: 3f,
             effectStrength: 1f);
+        ResultTokenData confuse = CreateFormalResult(
+            "Confuse",
+            "result_confuse",
+            "混",
+            "命中时随机触发一个已实现 Result；不消费值词。",
+            AttackResultType.Confuse,
+            false,
+            SpellValueParameterKind.None);
+        confuse.SetRandomResultCandidates(
+            explosion,
+            split,
+            healing,
+            control,
+            burn,
+            bind,
+            corrode,
+            mark,
+            wet,
+            shock,
+            drain,
+            shield,
+            leave,
+            push,
+            pull);
 
         ModifierTokenData haste = CreateFormalModifier("Haste", "modifier_haste", "疾", "提高速度。", new TokenModifierDefinition(TokenModifierTarget.ProjectileSpeed, "*=1.25"));
         ModifierTokenData heavy = CreateFormalModifier("Heavy", "modifier_heavy", "重", "提高伤害但降低速度。", new TokenModifierDefinition(TokenModifierTarget.Damage, "*=1.25"), new TokenModifierDefinition(TokenModifierTarget.ProjectileSpeed, "*=0.85"));
@@ -751,6 +775,26 @@ public static class AttackTokenAssetGenerator
         ModifierTokenData greedy = CreateFormalModifier("Greedy", "modifier_greedy", "贪", "发射时掉血，若本次法术击败敌人则提高该敌人的所有掉落概率。", new TokenModifierDefinition(TokenModifierTarget.CasterHealthCost, "+=5"), new TokenModifierDefinition(TokenModifierTarget.DropChanceMultiplierOnKill, "*=2"));
         ModifierTokenData urgent = CreateFormalModifier("Urgent", "modifier_urgent", "急", "减少当前法术书施法间隔。", new TokenModifierDefinition(TokenModifierTarget.CastCooldownMultiplier, "*=0.8"));
         ModifierTokenData source = CreateFormalModifier("Source", "modifier_source", "源", "减少发射时法术书结算的能量消耗。", new TokenModifierDefinition(TokenModifierTarget.EnergyCostMultiplier, "*=0.5"));
+        ModifierTokenData chaos = CreateFormalModifier("Chaos", "modifier_chaos", "乱", "每次发射随机实现一个已实现 Modifier；不消费值词。");
+        chaos.SetRandomModifierCandidates(
+            haste,
+            heavy,
+            sharp,
+            field,
+            longDuration,
+            shortRange,
+            light,
+            cold,
+            fierce,
+            focus,
+            count,
+            amplify,
+            expand,
+            stable,
+            wild,
+            greedy,
+            urgent,
+            source);
 
         ValueTokenData one = CreateFormalValue("One", "value_one", "一", "数值 1。", 1f, SpellValueMode.Number, SpellValueScalePreset.None);
         ValueTokenData two = CreateFormalValue("Two", "value_two", "二", "数值 2。", 2f, SpellValueMode.Number, SpellValueScalePreset.None);
@@ -779,8 +823,8 @@ public static class AttackTokenAssetGenerator
         {
             arrow, fire, ice, thunder, rock, blade, poison, shadow, water, wind, lightCore, sheep, riddle,
             spread, pierce, bounce, homing, chain, stasis, rush, slow, snake, wander, behaviorSplit, spin,
-            explosion, split, healing, control, burn, bind, corrode, mark, wet, shock, drain, shield, leave, push, pull,
-            haste, heavy, sharp, field, longDuration, shortRange, light, cold, fierce, focus, count, amplify, expand, stable, wild, greedy, urgent, source,
+            explosion, split, healing, control, burn, bind, corrode, mark, wet, shock, drain, shield, leave, push, pull, confuse,
+            haste, heavy, sharp, field, longDuration, shortRange, light, cold, fierce, focus, count, amplify, expand, stable, wild, greedy, urgent, source, chaos,
             one, two, three, five, eight, half, doubled, giant, zero,
             dual, triple, sequence, fork, orbit,
             onHit, onTimer, onExpire, onKill, onDistance, onProximity,
@@ -797,9 +841,7 @@ public static class AttackTokenAssetGenerator
             CreatePrototype("Core_Summon", "prototype_core_summon", "召", "Core", "计划语义：发射传送门或召唤弹，命中后生成召唤物，召唤物不继承 payload。", "需要召唤物实体、生命周期、归属和性能上限。"),
             CreatePrototype("Result_Illusion", "prototype_result_illusion", "幻", "Result", "计划语义：击杀或命中后生成幻象/传送到目标位置，用于位移和欺骗。", "需要幻象对象、仇恨系统和安全落点规则。"),
             CreatePrototype("Result_Replace", "prototype_result_replace", "替", "Result", "计划语义：命中后与目标交换位置。", "需要玩家/敌人位置合法性、Boss/精英免疫和碰撞恢复。"),
-            CreatePrototype("Result_Confuse", "prototype_result_confuse", "混", "Result", "计划语义：命中后随机触发一个合法 Result 或让目标进入混乱状态。", "需要随机池过滤、AI 行为入口和高风险效果排除。"),
             CreatePrototype("Result_Puppet", "prototype_result_puppet", "傀", "Result", "计划语义：击杀目标后复活为短暂傀儡，通常与 `灭` Trigger 搭配。", "需要傀儡实体、阵营转换、寿命和强度来源规则。"),
-            CreatePrototype("Modifier_Chaos", "prototype_modifier_chaos", "乱", "Modifier", "计划语义：随机实现任意一种合法 Modifier 的效果，按当前语境抽取并应用一次。", "需要 Modifier 候选池、作用域合法性过滤、随机种子和描述同步。"),
         };
 
         CreateOrUpdateAsset<BulletTokenLibrary>(HiddenPrototypeLibraryPath, library =>
@@ -950,6 +992,7 @@ public static class AttackTokenAssetGenerator
             token.AreaDamageMultiplier = areaDamageMultiplier;
             token.ShieldDuration = shieldDuration;
             token.SetStatusApplications(Array.Empty<SpellStatusApplication>());
+            token.SetRandomResultCandidates(Array.Empty<ResultTokenData>());
         });
     }
 
@@ -982,6 +1025,7 @@ public static class AttackTokenAssetGenerator
             token.AreaDamageMultiplier = 0.25f;
             token.ShieldDuration = 6f;
             token.SetStatusApplications(new SpellStatusApplication(statusSlot, amount, duration: duration, strength: 1f));
+            token.SetRandomResultCandidates(Array.Empty<ResultTokenData>());
         });
     }
 
@@ -996,6 +1040,8 @@ public static class AttackTokenAssetGenerator
         {
             ConfigureBaseToken(token, tokenId, displayText, description);
             token.SetModifiers(modifiers);
+            token.IsRandomModifier = false;
+            token.SetRandomModifierCandidates(Array.Empty<ModifierTokenData>());
         });
     }
 

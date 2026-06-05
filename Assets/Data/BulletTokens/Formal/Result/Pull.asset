@@ -35,3 +35,4 @@ MonoBehaviour:
   areaDamageMultiplier: 0.25
   shieldDuration: 6
   statusApplications: []
+  randomResultCandidates: []

@@ -20,8 +20,8 @@ public sealed class FormalSpellTokenAssetTests
         BulletTokenLibrary hiddenLibrary = LoadLibrary(HiddenLibraryPath);
 
         Assert.That(plan, Is.Not.Null);
-        Assert.That(playableLibrary.GetTokens().Count, Is.EqualTo(78));
-        Assert.That(hiddenLibrary.GetTokens().Count, Is.EqualTo(7));
+        Assert.That(playableLibrary.GetTokens().Count, Is.EqualTo(80));
+        Assert.That(hiddenLibrary.GetTokens().Count, Is.EqualTo(5));
         Assert.That(PlanContainsLibrary(plan, playableLibrary), Is.False);
         Assert.That(PlanContainsLibrary(plan, hiddenLibrary), Is.False);
         Assert.That(HasSharedTokens(spellProgramLibrary, playableLibrary), Is.False);
@@ -145,6 +145,12 @@ public sealed class FormalSpellTokenAssetTests
         AssertStrengthResult(playableLibrary, fire, three, "result_push", AttackResultType.Push);
         AssertStrengthResult(playableLibrary, fire, three, "result_pull", AttackResultType.Pull);
 
+        ResultTokenData confuse = FindToken<ResultTokenData>(playableLibrary, "result_confuse");
+        CompiledSpellProgram confuseProgram = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, confuse });
+        SpellProjectileNode confuseProjectile = confuseProgram.PrimaryCastBlock.Projectiles[0];
+        Assert.That(confuseProjectile.ResultType, Is.EqualTo(AttackResultType.Confuse));
+        Assert.That(confuseProjectile.ResultEffects.randomResultCandidates, Has.Length.EqualTo(15));
+
         ResultTokenData leave = FindToken<ResultTokenData>(playableLibrary, "result_leave");
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[] { fire, leave, five });
         SpellProjectileNode projectile = program.PrimaryCastBlock.Projectiles[0];
@@ -188,6 +194,7 @@ public sealed class FormalSpellTokenAssetTests
         ModifierTokenData greedy = FindToken<ModifierTokenData>(playableLibrary, "modifier_greedy");
         ModifierTokenData urgent = FindToken<ModifierTokenData>(playableLibrary, "modifier_urgent");
         ModifierTokenData source = FindToken<ModifierTokenData>(playableLibrary, "modifier_source");
+        ModifierTokenData chaos = FindToken<ModifierTokenData>(playableLibrary, "modifier_chaos");
 
         CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
         {
@@ -208,6 +215,8 @@ public sealed class FormalSpellTokenAssetTests
         Assert.That(runtime.castCooldownMultiplier, Is.EqualTo(0.8f).Within(0.0001f));
         Assert.That(runtime.energyCostMultiplier, Is.EqualTo(0.75f).Within(0.0001f));
         Assert.That(program.PrimaryCastBlock.Projectiles[0].AttackSpec.damage, Is.EqualTo(8.505f).Within(0.0001f));
+        Assert.That(chaos.IsRandomModifier, Is.True);
+        Assert.That(chaos.RandomModifierCandidates.Count, Is.EqualTo(18));
     }
 
     [Test]
@@ -242,6 +251,8 @@ public sealed class FormalSpellTokenAssetTests
         AssertMissingToken(hiddenLibrary, "prototype_core_light");
         AssertMissingToken(hiddenLibrary, "prototype_core_sheep");
         AssertMissingToken(hiddenLibrary, "prototype_core_riddle");
+        AssertMissingToken(hiddenLibrary, "prototype_result_confuse");
+        AssertMissingToken(hiddenLibrary, "prototype_modifier_chaos");
 
         for (int i = 0; i < tokens.Count; i++)
         {

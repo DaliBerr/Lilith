@@ -2,14 +2,14 @@
 
 这份文档聚焦于当前 `TokenType.Core / Behavior / Value / Result / Modifier / Multicast / Trigger` 这套可编译链路，及其执行器 `SpellBookData`。
 
-## 当前正式资产库（2026-06-05）
+## 当前正式资产库（2026-06-06）
 
 第一批正式 Token 资产已经通过 `AttackTokenAssetGenerator.GenerateFormalSpellTokenAssets()` 生成，但本轮只进入 staging / hidden library，不进入普通奖励池：
 
 | 库 | 路径 | 数量 | 说明 |
 | --- | --- | --- | --- |
-| Playable Staging | `Assets/Data/BulletTokens/TokenLib/SpellToken_Playable_Staging_Lib.asset` | 78 | 运行时真实生效、描述不撒谎的第一批 Token |
-| Hidden Prototype | `Assets/Data/BulletTokens/TokenLib/SpellToken_Hidden_Prototype_Lib.asset` | 7 | 复杂机制占位；`PrototypeTokenData` 不参与编译；库内权重为 0 |
+| Playable Staging | `Assets/Data/BulletTokens/TokenLib/SpellToken_Playable_Staging_Lib.asset` | 80 | 运行时真实生效、描述不撒谎的第一批 Token |
+| Hidden Prototype | `Assets/Data/BulletTokens/TokenLib/SpellToken_Hidden_Prototype_Lib.asset` | 5 | 复杂机制占位；`PrototypeTokenData` 不参与编译；库内权重为 0 |
 
 `Plan2` 暂不引用这两个库，`SpellProgram_Token_Lib.asset` 也没有被本轮扩大。
 
@@ -19,8 +19,8 @@
 | --- | --- |
 | Core | `core_arrow`、`core_fire`、`core_ice`、`core_thunder`、`core_rock`、`core_blade`、`core_poison`、`core_shadow`、`core_water`、`core_wind`、`core_light`、`core_sheep`、`core_riddle` |
 | Behavior | `behavior_spread_formal`、`behavior_pierce_formal`、`behavior_bounce_formal`、`behavior_homing`、`behavior_chain`、`behavior_stasis`、`behavior_rush`、`behavior_slow`、`behavior_snake`、`behavior_wander`、`behavior_split`、`behavior_spin` |
-| Result | `result_explosion_formal`、`result_split_formal`、`result_healing`、`result_control_formal`、`result_burn`、`result_bind`、`result_corrode`、`result_mark`、`result_wet`、`result_shock`、`result_drain`、`result_shield`、`result_leave`、`result_push`、`result_pull` |
-| Modifier | `modifier_haste`、`modifier_heavy`、`modifier_sharp`、`modifier_field`、`modifier_long`、`modifier_short`、`modifier_light`、`modifier_cold`、`modifier_fierce`、`modifier_focus`、`modifier_count`、`modifier_amplify`、`modifier_expand`、`modifier_stable`、`modifier_wild`、`modifier_greedy`、`modifier_urgent`、`modifier_source` |
+| Result | `result_explosion_formal`、`result_split_formal`、`result_healing`、`result_control_formal`、`result_burn`、`result_bind`、`result_corrode`、`result_mark`、`result_wet`、`result_shock`、`result_drain`、`result_shield`、`result_leave`、`result_push`、`result_pull`、`result_confuse` |
+| Modifier | `modifier_haste`、`modifier_heavy`、`modifier_sharp`、`modifier_field`、`modifier_long`、`modifier_short`、`modifier_light`、`modifier_cold`、`modifier_fierce`、`modifier_focus`、`modifier_count`、`modifier_amplify`、`modifier_expand`、`modifier_stable`、`modifier_wild`、`modifier_greedy`、`modifier_urgent`、`modifier_source`、`modifier_chaos` |
 | Value | `value_one`、`value_two`、`value_three`、`value_five`、`value_eight`、`value_half`、`value_double`、`value_giant`、`value_zero` |
 | Multicast | `multicast_dual`、`multicast_triple`、`multicast_sequence`、`multicast_fork`、`multicast_orbit` |
 | Trigger | `trigger_on_hit`、`trigger_timer`、`trigger_expire`、`trigger_kill`、`trigger_distance`、`trigger_proximity` |
@@ -31,8 +31,8 @@
 | --- | --- |
 | Core | `prototype_core_mirror`、`prototype_core_summon` |
 | Behavior | 无 |
-| Result | `prototype_result_illusion`、`prototype_result_replace`、`prototype_result_confuse`、`prototype_result_puppet` |
-| Modifier | `prototype_modifier_chaos` |
+| Result | `prototype_result_illusion`、`prototype_result_replace`、`prototype_result_puppet` |
+| Modifier | 无 |
 | Multicast | 无 |
 
 当前已实现的特殊 cast-level Modifier：
@@ -43,9 +43,10 @@
 - `modifier_urgent` / `急`：减少当前法术书施法间隔/冷却，使这本书更快触发下一次施法。
 - `modifier_source` / `源`：减少发射时法术书结算的能量消耗。
 
-当前待实现 Modifier 的最新计划语义：
+当前特殊随机 Token：
 
-- `prototype_modifier_chaos` / `乱`：随机实现任意一种合法 Modifier 的效果，按当前语境抽取并应用一次。
+- `result_confuse` / `混`：命中时随机触发一个已实现 Result，候选池为 `爆/裂/愈/定/燃/缚/蚀/标/潮/震/汲/护/留/斥/吸`；不消费 Value。
+- `modifier_chaos` / `乱`：每次发射前随机替换为一个已实现 Modifier，候选池为普通修饰加 `稳/狂/贪/急/源`；不消费 Value。
 - `prototype_modifier_guard` / `卫`：已取消，不再生成游戏内 hidden prototype；仅在设计文档中保留取消记录。
 
 ## 一、通用参数（BaseTokenData / PlaceableTokenData）
@@ -183,6 +184,7 @@
 - `areaDamageMultiplier`（`>= 0`）
 - `shieldDuration`（`>= 0`）
 - `statusApplications`: 统一状态槽写入配置
+- `randomResultCandidates`: `混` Result 使用；编译到 `ResultEffectPayload.randomResultCandidates`，每次有效 Result 执行时随机抽一个候选 payload。
 
 生效逻辑：
 
@@ -194,6 +196,7 @@
 - `Shield`: 命中后按 `directDamage * defaultEffectStrength` 给施法者添加吸收盾；护盾默认用 `shieldDuration` 持续，重复获得叠加数值并刷新持续。
 - `Leave`: 命中点生成持续场；半径用 `defaultEffectRadius`，持续用 `effectDuration`，tick 间隔用 `areaTickSeconds`，每 tick 伤害用 `directDamage * areaDamageMultiplier`，并周期性应用当前 Core 状态。
 - `Push / Pull`: 命中点半径 `defaultEffectRadius` 内按 `defaultEffectStrength` 作为敌人位移重量阈值，距离为 `2 * Strength`，只移动敌人。
+- `Confuse`: 命中或 result-only payload 执行时随机抽取一个候选 Result，并按候选的正式默认参数执行一次；候选不包含自身或 hidden prototype。
 - 状态类 Result 若只写入 `statusApplications` 且不带控制阈值，描述会显示具体状态槽，例如点燃、绑缚、腐蚀、标记、潮湿、失能。
 
 ### 4. Value Token（`ValueTokenData`）
@@ -219,6 +222,7 @@
   - `Modifier + Value + 目标`：`NextN` 计数修饰
   - `Modifier + Multicast`：当前块修饰（`CurrentBlock`）
 - 真正可调的只有 `modifiers[]`（`target + expression`）。
+- `randomModifier` / `randomModifierCandidates`: `乱` Modifier 使用；发射前解析构筑时把每个 `乱` 替换为候选 Modifier 中的一项，同一次 activation 内每个 `乱` 只解析一次。
 
 ### 6. Multicast Token（`MulticastTokenData`）
 

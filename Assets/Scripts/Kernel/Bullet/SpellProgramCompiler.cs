@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Kernel.Bullet
@@ -7,6 +8,8 @@ namespace Kernel.Bullet
     /// </summary>
     public static class SpellProgramCompiler
     {
+        internal static Func<int, int> ChaosCandidateIndexResolver { get; set; } = count => UnityEngine.Random.Range(0, count);
+
         private sealed class MulticastCompileState
         {
             public readonly List<ResolvedModifierTokenData> blockModifierTokens = new();
@@ -86,6 +89,90 @@ namespace Kernel.Bullet
             List<AttackCompileMessage> messages = new();
             List<BaseTokenData> tokens = ExpandItems(items, messages);
             return CompileProgramFromTokens(tokens, messages, executorModifiers, null, SpellCastRuntimeModifiers.Identity, items);
+        }
+
+        public static CompiledSpellProgram CompileForActivation(IReadOnlyList<PlaceableTokenData> items, SpellBookData spellBook)
+        {
+            List<AttackCompileMessage> messages = new();
+            List<BaseTokenData> tokens = ExpandItems(items, messages);
+            tokens = ResolveRandomModifierTokens(tokens, messages);
+            return CompileProgramFromTokens(
+                tokens,
+                messages,
+                CreateExecutorModifierContext(spellBook),
+                null,
+                SpellCastRuntimeModifiers.Identity,
+                null);
+        }
+
+        public static bool ContainsRandomModifier(IReadOnlyList<PlaceableTokenData> items)
+        {
+            List<BaseTokenData> tokens = ExpandItems(items, null);
+            if (tokens == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                if (tokens[i] is ModifierTokenData modifierToken && modifierToken.IsRandomModifier)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static List<BaseTokenData> ResolveRandomModifierTokens(
+            IReadOnlyList<BaseTokenData> tokens,
+            ICollection<AttackCompileMessage> messages)
+        {
+            List<BaseTokenData> resolvedTokens = new(tokens != null ? tokens.Count : 0);
+            if (tokens == null)
+            {
+                return resolvedTokens;
+            }
+
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                BaseTokenData token = tokens[i];
+                if (token is not ModifierTokenData modifierToken || !modifierToken.IsRandomModifier)
+                {
+                    resolvedTokens.Add(token);
+                    continue;
+                }
+
+                ModifierTokenData candidate = ResolveRandomModifierCandidate(modifierToken);
+                if (candidate == null)
+                {
+                    AddMessage(
+                        messages,
+                        AttackCompileMessageSeverity.Warning,
+                        "Ignored random modifier token because it has no valid candidates.",
+                        modifierToken);
+                    continue;
+                }
+
+                resolvedTokens.Add(candidate);
+            }
+
+            return resolvedTokens;
+        }
+
+        private static ModifierTokenData ResolveRandomModifierCandidate(ModifierTokenData modifierToken)
+        {
+            IReadOnlyList<ModifierTokenData> candidates = modifierToken != null ? modifierToken.RandomModifierCandidates : null;
+            if (candidates == null || candidates.Count <= 0)
+            {
+                return null;
+            }
+
+            int rawIndex = ChaosCandidateIndexResolver != null
+                ? ChaosCandidateIndexResolver(candidates.Count)
+                : UnityEngine.Random.Range(0, candidates.Count);
+            int resolvedIndex = Clamp(rawIndex, 0, candidates.Count - 1);
+            return candidates[resolvedIndex];
         }
 
         private static CompiledSpellProgram CompileTriggeredProgram(
@@ -1604,6 +1691,16 @@ namespace Kernel.Bullet
         private static int MathfMin(int a, int b)
         {
             return a < b ? a : b;
+        }
+
+        private static int Clamp(int value, int min, int max)
+        {
+            if (value < min)
+            {
+                return min;
+            }
+
+            return value > max ? max : value;
         }
 
         private static int MathfRoundToInt(float value)

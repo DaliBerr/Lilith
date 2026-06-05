@@ -146,7 +146,7 @@ namespace Vocalith.UI
                 return true;
             }
 
-            if (layoutGroup.GetComponent<ContentSizeFitter>() != null)
+            if (layoutGroup is not GridLayoutGroup && layoutGroup.GetComponent<ContentSizeFitter>() != null)
             {
                 return true;
             }

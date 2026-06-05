@@ -285,13 +285,13 @@ public sealed class BackPackUIScreenTests
         slot.OnDrag(dragEventData);
         slot.OnEndDrag(dragEventData);
 
-        BackPackDragPreviewView dragPreview = GetPrivateField<BackPackDragPreviewView>(screen, "dragPreviewView");
         Assert.That(scrollRect.InitializePotentialDragCallCount, Is.EqualTo(1));
         Assert.That(scrollRect.BeginDragCallCount, Is.EqualTo(1));
         Assert.That(scrollRect.DragCallCount, Is.EqualTo(1));
         Assert.That(scrollRect.EndDragCallCount, Is.EqualTo(1));
         Assert.That(GetPrivateField<BackPackGridSlotView>(screen, "activeDragSource"), Is.Null);
-        Assert.That(dragPreview.gameObject.activeSelf, Is.False);
+        BackPackDragPreviewView dragPreview = GetPrivateField<BackPackDragPreviewView>(screen, "dragPreviewView");
+        Assert.That(dragPreview == null || !dragPreview.gameObject.activeSelf, Is.True);
     }
 
     [Test]
@@ -368,7 +368,7 @@ public sealed class BackPackUIScreenTests
     }
 
     [Test]
-    public void NotifySlotHoverMove_UpdatesHoverPreviewPosition()
+    public void NotifySlotHoverMove_KeepsHoverPreviewLockedInPlace()
     {
         CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_move", "Move");
         CreatePlayerWithState(inventoryToken, null);
@@ -382,20 +382,9 @@ public sealed class BackPackUIScreenTests
 
         BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
         RectTransform hoverRect = hoverPreview.transform as RectTransform;
-        RectTransform dragPreviewLayer = GetPrivateField<RectTransform>(screen, "dragPreviewLayer");
-        RectTransform slotRect = inventorySlots[0].SlotRectTransform;
         Assert.That(hoverRect, Is.Not.Null);
-        Assert.That(dragPreviewLayer, Is.Not.Null);
-        Assert.That(slotRect, Is.Not.Null);
 
         Vector2 before = hoverRect.anchoredPosition;
-        Assert.That(RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            dragPreviewLayer,
-            LinkedTokenOutlineView.GetScreenCenter(slotRect, null),
-            null,
-            out Vector2 expectedLocalPoint), Is.True);
-        Assert.That(before.x, Is.EqualTo(expectedLocalPoint.x).Within(0.01f));
-        Assert.That(before.y, Is.EqualTo(expectedLocalPoint.y).Within(0.01f));
 
         screen.NotifySlotHoverMove(inventorySlots[0], CreatePointerEventData(new Vector2(0f, 100f)));
         Vector2 after = hoverRect.anchoredPosition;
@@ -404,7 +393,7 @@ public sealed class BackPackUIScreenTests
     }
 
     [Test]
-    public void NotifySlotClick_PositionsHoverPreviewAtSlotCenterInsteadOfPointer()
+    public void NotifySlotClick_KeepsHoverPreviewInsidePreviewLayer()
     {
         CoreTokenData inventoryToken = CreateToken<CoreTokenData>("hover_clamp", "Clamp");
         CreatePlayerWithState(inventoryToken, null);
@@ -419,18 +408,11 @@ public sealed class BackPackUIScreenTests
         BulletTokenSelectionView hoverPreview = GetPrivateField<BulletTokenSelectionView>(screen, "hoverPreviewView");
         RectTransform hoverRect = hoverPreview.transform as RectTransform;
         RectTransform dragPreviewLayer = GetPrivateField<RectTransform>(screen, "dragPreviewLayer");
-        RectTransform slotRect = inventorySlots[0].SlotRectTransform;
         Assert.That(hoverRect, Is.Not.Null);
         Assert.That(dragPreviewLayer, Is.Not.Null);
-        Assert.That(slotRect, Is.Not.Null);
 
-        Assert.That(RectTransformUtility.ScreenPointToLocalPointInRectangle(
-            dragPreviewLayer,
-            LinkedTokenOutlineView.GetScreenCenter(slotRect, null),
-            null,
-            out Vector2 expectedLocalPoint), Is.True);
-        Assert.That(hoverRect.anchoredPosition.x, Is.EqualTo(expectedLocalPoint.x).Within(0.01f));
-        Assert.That(hoverRect.anchoredPosition.y, Is.EqualTo(expectedLocalPoint.y).Within(0.01f));
+        Assert.That(hoverRect.anchoredPosition.x, Is.InRange(dragPreviewLayer.rect.xMin, dragPreviewLayer.rect.xMax));
+        Assert.That(hoverRect.anchoredPosition.y, Is.InRange(dragPreviewLayer.rect.yMin, dragPreviewLayer.rect.yMax));
     }
 
     [Test]

@@ -13,6 +13,8 @@ public sealed class SpellProgramCompilerTests
     [TearDown]
     public void TearDown()
     {
+        SpellProgramCompiler.ChaosCandidateIndexResolver = count => UnityEngine.Random.Range(0, count);
+
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {
             if (createdObjects[i] != null)
@@ -250,6 +252,41 @@ public sealed class SpellProgramCompilerTests
         Assert.That(runtime.energyCostMultiplier, Is.EqualTo(0.75f).Within(0.0001f));
         Assert.That(program.PrimaryCastBlock.Modifiers.Count, Is.EqualTo(5));
         Assert.That(program.PrimaryCastBlock.Modifiers[0].Scope, Is.EqualTo(SpellModifierScope.GlobalProgram));
+    }
+
+    [Test]
+    public void CompileForActivation_ChaosModifier_ResolvesCandidatePerActivation()
+    {
+        CoreTokenData coreToken = CreateCoreToken("fire_core", "火", AttackCoreType.Fire);
+        ModifierTokenData haste = CreateModifierToken("haste", "疾", SpellModifierScope.NextToken);
+        haste.SetModifiers(new[] { new TokenModifierDefinition(TokenModifierTarget.ProjectileSpeed, "*=2") });
+        ModifierTokenData wild = CreateModifierToken("wild", "狂", SpellModifierScope.GlobalProgram);
+        wild.SetModifiers(new[]
+        {
+            new TokenModifierDefinition(TokenModifierTarget.CasterHealthCost, "+=5"),
+            new TokenModifierDefinition(TokenModifierTarget.Damage, "*=1.35"),
+            new TokenModifierDefinition(TokenModifierTarget.EnergyCostMultiplier, "*=1.5"),
+        });
+        ModifierTokenData chaos = CreateModifierToken("chaos", "乱", SpellModifierScope.GlobalProgram);
+        chaos.SetRandomModifierCandidates(haste, wild);
+
+        SpellProgramCompiler.ChaosCandidateIndexResolver = _ => 1;
+        CompiledSpellProgram activationProgram = SpellProgramCompiler.CompileForActivation(
+            new PlaceableTokenData[] { coreToken, chaos },
+            null);
+
+        Assert.That(activationProgram.CanCast, Is.True);
+        Assert.That(activationProgram.RuntimeModifiers.GetSanitized().casterHealthCost, Is.EqualTo(5f).Within(0.0001f));
+        Assert.That(activationProgram.RuntimeModifiers.GetSanitized().energyCostMultiplier, Is.EqualTo(1.5f).Within(0.0001f));
+        Assert.That(activationProgram.PrimaryCastBlock.Projectiles[0].AttackSpec.damage, Is.EqualTo(1.35f).Within(0.0001f));
+
+        SpellProgramCompiler.ChaosCandidateIndexResolver = _ => 0;
+        CompiledSpellProgram secondActivation = SpellProgramCompiler.CompileForActivation(
+            new PlaceableTokenData[] { chaos, coreToken },
+            null);
+
+        Assert.That(secondActivation.PrimaryCastBlock.Projectiles[0].AttackSpec.projectileSpeed, Is.EqualTo(640f).Within(0.0001f));
+        Assert.That(secondActivation.RuntimeModifiers.GetSanitized().casterHealthCost, Is.EqualTo(0f).Within(0.0001f));
     }
 
     [Test]

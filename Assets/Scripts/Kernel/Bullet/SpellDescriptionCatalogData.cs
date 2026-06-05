@@ -319,6 +319,15 @@ namespace Kernel.Bullet
                             "把周围目标拖入<result>吸力</result>",
                         },
                     },
+                    new()
+                    {
+                        resultType = "Confuse",
+                        phraseTemplates = new List<string>
+                        {
+                            "随机触发<result>混合结果</result>",
+                            "掷出一枚<result>随机结果</result>",
+                        },
+                    },
                 },
                 specialEffects = new List<SpellDescriptionSpecialEffectEntry>
                 {
@@ -335,6 +344,8 @@ namespace Kernel.Bullet
                     new() { effect = "Shield", phrase = "<special>护盾</special>" },
                     new() { effect = "Leave", phrase = "<special>残留场</special>" },
                     new() { effect = "Displacement", phrase = "<special>位移</special>" },
+                    new() { effect = "Confuse", phrase = "<special>随机结果</special>" },
+                    new() { effect = "Chaos", phrase = "<special>随机修饰</special>" },
                 },
                 valueBindings = new List<SpellDescriptionValueBindingEntry>
                 {

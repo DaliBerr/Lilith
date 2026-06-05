@@ -76,7 +76,7 @@ public sealed class BackPackInventoryTests
             CreateToken<ResultTokenData>("hit", "Hit"));
 
         Assert.That(inventory.CanPlaceItem(0, linked), Is.True);
-        Assert.That(inventory.CanPlaceItem(7, linked), Is.False, "Linked item should not wrap across rows.");
+        Assert.That(inventory.CanPlaceItem(PlayerBulletTokenInventory.Columns - 1, linked), Is.False, "Linked item should not wrap across rows.");
 
         inventory.SetToken(1, CreateToken<CoreTokenData>("blocker", "Block"));
         Assert.That(inventory.CanPlaceItem(0, linked), Is.False, "Existing occupied cell should block placement.");

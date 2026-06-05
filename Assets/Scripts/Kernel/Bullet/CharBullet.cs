@@ -42,6 +42,7 @@ public sealed class CharBullet : MonoBehaviour
     private const int MaxPayloadDerivedProjectileCount = 64;
     private const string EnemyTagName = "Enemy_Object";
     private static readonly Color DefaultDelayedExplosionIndicatorColor = new(1f, 0.1f, 0.1f, 0.92f);
+    internal static Func<int, int> ConfuseCandidateIndexResolver { get; set; } = count => UnityEngine.Random.Range(0, count);
     // private const string AlternateEnemyTagName = "Enemy";
 
     private static readonly string[] PreferredMovementChildNames =
@@ -2184,7 +2185,7 @@ public sealed class CharBullet : MonoBehaviour
             }
             else
             {
-                TryApplyPostHitEffects(targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy);
+                TryApplyPostHitEffects(other, targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy);
             }
 
             TryExecuteOnHitPayloads(impactPoint, directDamage, other, damagedEnemy != null ? damagedEnemy : primaryEnemy, targetRoot);
@@ -2545,9 +2546,14 @@ public sealed class CharBullet : MonoBehaviour
     /// param: damagedEnemy 当前主命中若为敌人且仍存活则输出对应 Enemy
     /// returns: 无
     /// </summary>
-    private void TryApplyPostHitEffects(Transform targetRoot, Vector3 impactPoint, float directDamage, Enemy primaryEnemy, Enemy damagedEnemy)
+    private void TryApplyPostHitEffects(Collider impactCollider, Transform targetRoot, Vector3 impactPoint, float directDamage, Enemy primaryEnemy, Enemy damagedEnemy)
     {
         ResultEffectPayload resultEffects = GetResultEffects();
+        if (IsCurrentResultType(AttackResultType.Confuse))
+        {
+            TryApplyRandomResultEffect(impactCollider, targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy, resultEffects);
+        }
+
         TryApplyExplosionDamageAt(impactPoint, directDamage);
         TryEmitSplitProjectiles(impactPoint, targetRoot, directDamage);
         TryApplyDrainToOwner(directDamage, resultEffects);
@@ -2568,6 +2574,131 @@ public sealed class CharBullet : MonoBehaviour
 
         TryApplyCoreEnemyEffects(damagedEnemy);
         TryApplyResultEnemyEffects(damagedEnemy, impactPoint);
+    }
+
+    private int TryApplyRandomResultEffect(
+        Collider impactCollider,
+        Transform targetRoot,
+        Vector3 impactPoint,
+        float directDamage,
+        Enemy primaryEnemy,
+        Enemy damagedEnemy,
+        ResultEffectPayload confuseEffects,
+        int remainingBudget = MaxPayloadDerivedProjectileCount)
+    {
+        if (!confuseEffects.HasRandomResultCandidates ||
+            !TryResolveRandomResultCandidate(confuseEffects, out RandomResultCandidatePayload candidate))
+        {
+            return 0;
+        }
+
+        return TryApplyExplicitResultEffect(
+            candidate.resultType,
+            candidate.resultEffects,
+            impactCollider,
+            targetRoot,
+            impactPoint,
+            directDamage,
+            primaryEnemy,
+            damagedEnemy,
+            remainingBudget);
+    }
+
+    private bool TryResolveRandomResultCandidate(
+        ResultEffectPayload confuseEffects,
+        out RandomResultCandidatePayload candidate)
+    {
+        candidate = default;
+        RandomResultCandidatePayload[] candidates = confuseEffects.randomResultCandidates;
+        if (candidates == null || candidates.Length <= 0)
+        {
+            return false;
+        }
+
+        int rawIndex = ConfuseCandidateIndexResolver != null
+            ? ConfuseCandidateIndexResolver(candidates.Length)
+            : UnityEngine.Random.Range(0, candidates.Length);
+        int resolvedIndex = Mathf.Clamp(rawIndex, 0, candidates.Length - 1);
+        candidate = candidates[resolvedIndex].GetSanitized();
+        return candidate.IsValid;
+    }
+
+    private int TryApplyExplicitResultEffect(
+        AttackResultType resultType,
+        ResultEffectPayload resultEffects,
+        Collider impactCollider,
+        Transform targetRoot,
+        Vector3 impactPoint,
+        float directDamage,
+        Enemy primaryEnemy,
+        Enemy damagedEnemy,
+        int remainingBudget)
+    {
+        resultEffects = resultEffects.GetSanitized();
+        if (resultEffects.HasStatusApplications)
+        {
+            if (resultEffects.effectRadius > 0f)
+            {
+                TryApplyStatusApplicationsAreaAt(impactPoint, resultEffects.effectRadius, resultEffects.statusApplications, null);
+            }
+            else
+            {
+                TryApplyStatusApplicationsToEnemy(damagedEnemy, resultEffects.statusApplications);
+            }
+        }
+
+        switch (resultType)
+        {
+            case AttackResultType.Explosion:
+                TryApplyExplosionDamageAt(impactPoint, directDamage, resultEffects);
+                break;
+            case AttackResultType.Split:
+                return TryEmitSplitProjectiles(
+                    impactPoint,
+                    targetRoot,
+                    directDamage,
+                    resultEffects,
+                    currentProjectileNode,
+                    remainingBudget);
+            case AttackResultType.Healing:
+                TryApplyPayloadHealingEffect(
+                    impactCollider,
+                    damagedEnemy != null && !damagedEnemy.Equals(null) ? damagedEnemy : primaryEnemy,
+                    targetRoot,
+                    impactPoint,
+                    directDamage * resultEffects.healingMultiplier,
+                    resultEffects.effectRadius);
+                break;
+            case AttackResultType.StatusEffect:
+                if (resultEffects.HasControl)
+                {
+                    if (resultEffects.effectRadius > 0f)
+                    {
+                        TryApplyControlAreaAt(impactPoint, resultEffects.effectRadius, resultEffects, null);
+                    }
+                    else
+                    {
+                        TryApplyControlToEnemy(damagedEnemy, resultEffects);
+                    }
+                }
+
+                break;
+            case AttackResultType.Drain:
+                TryApplyDrainToOwner(directDamage, resultEffects, resultType);
+                break;
+            case AttackResultType.Shield:
+                TryApplyShieldToOwner(directDamage, resultEffects, resultType);
+                break;
+            case AttackResultType.Leave:
+                TrySpawnLingeringAreaAt(impactPoint, directDamage, resultEffects, resultType);
+                break;
+            case AttackResultType.Push:
+            case AttackResultType.Pull:
+                TryApplyDisplacementAt(impactPoint, resultEffects, resultType);
+                break;
+        }
+
+        return 0;
     }
 
     /// <summary>
@@ -3025,14 +3156,24 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         ResultEffectPayload resultEffects = GetResultEffects();
-        float explosionRadius = GetExplosionRadius();
+        TryApplyExplosionDamageAt(impactPoint, directDamage, resultEffects, GetExplosionRadius());
+    }
+
+    private void TryApplyExplosionDamageAt(Vector3 impactPoint, float directDamage, ResultEffectPayload resultEffects)
+    {
+        TryApplyExplosionDamageAt(impactPoint, directDamage, resultEffects, resultEffects.explosionRadius);
+    }
+
+    private void TryApplyExplosionDamageAt(Vector3 impactPoint, float directDamage, ResultEffectPayload resultEffects, float explosionRadius)
+    {
+        resultEffects = resultEffects.GetSanitized();
         float explosionDamage = directDamage * resultEffects.explosionDamageMultiplier;
         if (explosionRadius <= 0f || explosionDamage <= 0f)
         {
             return;
         }
 
-        float explosionDelaySeconds = GetExplosionDelaySeconds();
+        float explosionDelaySeconds = resultEffects.explosionDelaySeconds;
         if (explosionDelaySeconds > 0f)
         {
             if (TrySpawnDelayedExplosionAt(impactPoint, explosionRadius, explosionDamage, explosionDelaySeconds))
@@ -3451,6 +3592,21 @@ public sealed class CharBullet : MonoBehaviour
             if (resultEffects.HasStatusApplications)
             {
                 TryApplyPayloadStatusApplications(payloadEnemy, impactPoint, resultEffects);
+            }
+
+            if (effect.ResultType == AttackResultType.Confuse)
+            {
+                int budgetForEffect = Mathf.Max(0, remainingProjectileBudget - emittedProjectiles);
+                emittedProjectiles += TryApplyRandomResultEffect(
+                    payloadCollider,
+                    targetRoot,
+                    impactPoint,
+                    baseDamage,
+                    payloadEnemy,
+                    payloadEnemy,
+                    resultEffects,
+                    budgetForEffect);
+                continue;
             }
 
             if (effect.ResultType == AttackResultType.Explosion)

@@ -52,6 +52,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     private CompiledSpellProgram compiledSpellProgramCache;
     private Component compiledProgramSource;
     private int compiledProgramRevision = -1;
+    private SpellCastRuntimeModifiers lastSuccessfulFireRuntimeModifiers = SpellCastRuntimeModifiers.Identity;
     private int lastLoggedCompileFailureRevision = int.MinValue;
     private float currentStamina;
     private float staminaRegenResumeTime;
@@ -370,7 +371,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return;
         }
 
-        nextFireTime = Time.time + ResolveCurrentFireInterval();
+        nextFireTime = Time.time + ResolveFireInterval(lastSuccessfulFireRuntimeModifiers);
     }
 
     /// <summary>
@@ -567,6 +568,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         }
 
         TryApplyCasterHealthCost(runtimeModifiers.casterHealthCost);
+        lastSuccessfulFireRuntimeModifiers = runtimeModifiers;
         return TryConsumeActivationEnergyForFiring(currentTime, runtimeModifiers);
     }
 
@@ -1064,6 +1066,15 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         return Mathf.Max(MinimumFireInterval, resolvedInterval * runtimeModifiers.castCooldownMultiplier);
     }
 
+    private float ResolveFireInterval(SpellCastRuntimeModifiers runtimeModifiers)
+    {
+        TryAutoAssignLoadout();
+        float resolvedInterval = spellBookLoadout != null && spellBookLoadout.SpellBook != null
+            ? spellBookLoadout.CastCooldownSeconds
+            : fireInterval;
+        return Mathf.Max(MinimumFireInterval, resolvedInterval * runtimeModifiers.GetSanitized().castCooldownMultiplier);
+    }
+
     private int ResolveCurrentActivationCastCount()
     {
         TryAutoAssignLoadout();
@@ -1156,7 +1167,10 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             compiledProgramRevision = spellBookLoadout.Revision;
         }
 
-        spellProgram = compiledSpellProgramCache;
+        spellProgram = spellBookLoadout.CompileProgramForActivation();
+        compiledSpellProgramCache = spellProgram;
+        compiledProgramSource = spellBookLoadout;
+        compiledProgramRevision = spellBookLoadout.Revision;
         if (spellProgram != null && spellProgram.CanCast)
         {
             lastLoggedCompileFailureRevision = int.MinValue;

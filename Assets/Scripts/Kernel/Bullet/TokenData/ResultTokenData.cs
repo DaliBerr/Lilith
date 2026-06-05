@@ -24,6 +24,7 @@ namespace Kernel.Bullet
         [SerializeField, Min(0f)] private float areaDamageMultiplier = 0.25f;
         [SerializeField, Min(0f)] private float shieldDuration = 6f;
         [SerializeField] private SpellStatusApplication[] statusApplications = Array.Empty<SpellStatusApplication>();
+        [SerializeField] private ResultTokenData[] randomResultCandidates = Array.Empty<ResultTokenData>();
 
         public AttackResultType ResultType
         {
@@ -110,10 +111,16 @@ namespace Kernel.Bullet
         }
 
         public IReadOnlyList<SpellStatusApplication> StatusApplications => statusApplications;
+        public IReadOnlyList<ResultTokenData> RandomResultCandidates => randomResultCandidates;
 
         public void SetStatusApplications(params SpellStatusApplication[] applications)
         {
             statusApplications = SpellStatusApplicationUtility.Sanitize(applications);
+        }
+
+        public void SetRandomResultCandidates(params ResultTokenData[] candidates)
+        {
+            randomResultCandidates = SanitizeRandomResultCandidates(candidates);
         }
 
         /// <summary>
@@ -140,6 +147,7 @@ namespace Kernel.Bullet
                 areaDamageMultiplier = areaDamageMultiplier,
                 shieldDuration = shieldDuration,
                 statusApplications = SpellStatusApplicationUtility.Sanitize(statusApplications),
+                randomResultCandidates = CreateRandomResultCandidates(),
             }.GetSanitized();
         }
 
@@ -164,6 +172,7 @@ namespace Kernel.Bullet
             areaDamageMultiplier = Mathf.Max(0f, areaDamageMultiplier);
             shieldDuration = Mathf.Max(0f, shieldDuration);
             statusApplications = SpellStatusApplicationUtility.Sanitize(statusApplications);
+            randomResultCandidates = SanitizeRandomResultCandidates(randomResultCandidates);
         }
 
         private SpellValueParameterKind ResolveValueParameterKind()
@@ -189,6 +198,56 @@ namespace Kernel.Bullet
                 AttackResultType.Leave => SpellValueParameterKind.Duration,
                 _ => SpellValueParameterKind.None,
             };
+        }
+
+        private RandomResultCandidatePayload[] CreateRandomResultCandidates()
+        {
+            ResultTokenData[] candidates = SanitizeRandomResultCandidates(randomResultCandidates);
+            if (candidates.Length <= 0)
+            {
+                return Array.Empty<RandomResultCandidatePayload>();
+            }
+
+            List<RandomResultCandidatePayload> payloads = new(candidates.Length);
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                ResultTokenData candidate = candidates[i];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                payloads.Add(new RandomResultCandidatePayload(
+                    candidate.ResultType,
+                    candidate.CreateResultEffects()));
+            }
+
+            return payloads.ToArray();
+        }
+
+        private static ResultTokenData[] SanitizeRandomResultCandidates(IEnumerable<ResultTokenData> candidates)
+        {
+            if (candidates == null)
+            {
+                return Array.Empty<ResultTokenData>();
+            }
+
+            List<ResultTokenData> sanitized = new();
+            HashSet<ResultTokenData> seen = new();
+            foreach (ResultTokenData candidate in candidates)
+            {
+                if (candidate == null ||
+                    candidate.ResultType == AttackResultType.None ||
+                    candidate.ResultType == AttackResultType.Confuse ||
+                    !seen.Add(candidate))
+                {
+                    continue;
+                }
+
+                sanitized.Add(candidate);
+            }
+
+            return sanitized.ToArray();
         }
     }
 }

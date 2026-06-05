@@ -25,3 +25,5 @@ MonoBehaviour:
     expression: '*=1.25'
   - target: 2
     expression: '*=1.1'
+  randomModifier: 0
+  randomModifierCandidates: []

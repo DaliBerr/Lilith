@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0443682c09f53a34a8ac6389751dbd18, type: 3}
+  m_Name: Confuse
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.ResultTokenData
+  tokenId: result_confuse
+  displayText: "\u6DF7"
+  displayTextKey: 
+  description: "\u547D\u4E2D\u65F6\u968F\u673A\u89E6\u53D1\u4E00\u4E2A\u5DF2\u5B9E\u73B0
+    Result\uFF1B\u4E0D\u6D88\u8D39\u503C\u8BCD\u3002"
+  descriptionKey: 
+  tokenType: 5
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
+  resultType: 12
+  acceptsNumericValue: 0
+  valueParameterKind: 0
+  defaultExplosionRadius: 0
+  explosionDamageMultiplier: 0
+  defaultEffectRadius: 0
+  defaultTriggerCount: 0
+  effectDuration: 0
+  childDamageMultiplier: 0
+  defaultEffectStrength: 1
+  areaTickSeconds: 0.5
+  areaDamageMultiplier: 0.25
+  shieldDuration: 6
+  statusApplications: []
+  randomResultCandidates:
+  - {fileID: 11400000, guid: 9f9084206f8fa1a4c8f57ace7bc77e5a, type: 2}
+  - {fileID: 11400000, guid: 325789bdfd775994bb10bc6ef3044747, type: 2}
+  - {fileID: 11400000, guid: 5426bb1a6c7e36a438fea25029f99742, type: 2}
+  - {fileID: 11400000, guid: 10b1ac85d2fe7604eb80e3200264e034, type: 2}
+  - {fileID: 11400000, guid: ae0d8e7888f28784d992c93cf3c081af, type: 2}
+  - {fileID: 11400000, guid: f58c8360d6d598440829e27a8a8d2b87, type: 2}
+  - {fileID: 11400000, guid: 441e0fc2165ccc6469c3e527f7db514c, type: 2}
+  - {fileID: 11400000, guid: 09a3fbbb339700540b33bc6954bbf627, type: 2}
+  - {fileID: 11400000, guid: daf98991f5c6f8d478892bdd775313da, type: 2}
+  - {fileID: 11400000, guid: 3a063ba61c9f250419f8a71c9065f850, type: 2}
+  - {fileID: 11400000, guid: 6361bc7354e847db8111562668394b5b, type: 2}
+  - {fileID: 11400000, guid: 1482bd4e68c84c4dbad8fc0267fe74d2, type: 2}
+  - {fileID: 11400000, guid: aa08e99a149c4ed19e89cdcf6b0b92fe, type: 2}
+  - {fileID: 11400000, guid: 9248054ffc874a5fa630bc405f26333c, type: 2}
+  - {fileID: 11400000, guid: a04f7c43f4c743279b20f11076286a65, type: 2}

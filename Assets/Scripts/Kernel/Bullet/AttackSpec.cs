@@ -75,6 +75,7 @@ public enum AttackResultType
     Leave = 9,
     Push = 10,
     Pull = 11,
+    Confuse = 12,
 }
 
 /// <summary>

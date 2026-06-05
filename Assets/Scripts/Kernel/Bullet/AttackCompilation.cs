@@ -232,6 +232,35 @@ namespace Kernel.Bullet
     }
 
     [Serializable]
+    public struct RandomResultCandidatePayload
+    {
+        public AttackResultType resultType;
+        public ResultEffectPayload resultEffects;
+
+        public RandomResultCandidatePayload(AttackResultType resultType, ResultEffectPayload resultEffects)
+        {
+            this.resultType = resultType;
+            this.resultEffects = resultEffects.GetSanitized();
+        }
+
+        public RandomResultCandidatePayload GetSanitized()
+        {
+            RandomResultCandidatePayload sanitized = this;
+            sanitized.resultEffects = sanitized.resultEffects.GetSanitized();
+            if (sanitized.resultType == AttackResultType.None ||
+                sanitized.resultType == AttackResultType.Confuse)
+            {
+                sanitized.resultType = AttackResultType.None;
+                sanitized.resultEffects = default;
+            }
+
+            return sanitized;
+        }
+
+        public bool IsValid => resultType != AttackResultType.None && resultType != AttackResultType.Confuse;
+    }
+
+    [Serializable]
     public struct ResultEffectPayload
     {
         public float explosionRadius;
@@ -249,6 +278,7 @@ namespace Kernel.Bullet
         public float areaDamageMultiplier;
         public float shieldDuration;
         public SpellStatusApplication[] statusApplications;
+        public RandomResultCandidatePayload[] randomResultCandidates;
 
         public ResultEffectPayload GetSanitized()
         {
@@ -268,6 +298,7 @@ namespace Kernel.Bullet
             sanitized.areaDamageMultiplier = Mathf.Max(0f, sanitized.areaDamageMultiplier);
             sanitized.shieldDuration = Mathf.Max(0f, sanitized.shieldDuration);
             sanitized.statusApplications = SpellStatusApplicationUtility.Sanitize(sanitized.statusApplications);
+            sanitized.randomResultCandidates = SanitizeRandomResultCandidates(sanitized.randomResultCandidates);
             return sanitized;
         }
 
@@ -297,7 +328,31 @@ namespace Kernel.Bullet
             effectRadius > 0f &&
             effectStrength > 0f;
 
+        public bool HasRandomResultCandidates => randomResultCandidates != null && randomResultCandidates.Length > 0;
+
         public bool HasStatusApplications => statusApplications != null && statusApplications.Length > 0;
+
+        private static RandomResultCandidatePayload[] SanitizeRandomResultCandidates(RandomResultCandidatePayload[] candidates)
+        {
+            if (candidates == null || candidates.Length <= 0)
+            {
+                return Array.Empty<RandomResultCandidatePayload>();
+            }
+
+            List<RandomResultCandidatePayload> sanitizedCandidates = new(candidates.Length);
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                RandomResultCandidatePayload candidate = candidates[i].GetSanitized();
+                if (!candidate.IsValid)
+                {
+                    continue;
+                }
+
+                sanitizedCandidates.Add(candidate);
+            }
+
+            return sanitizedCandidates.ToArray();
+        }
     }
 
     internal static class SpellStatusApplicationUtility

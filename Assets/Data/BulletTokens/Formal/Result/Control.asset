@@ -41,3 +41,4 @@ MonoBehaviour:
     threshold: 1
     duration: 1
     strength: 1
+  randomResultCandidates: []
