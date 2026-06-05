@@ -55,6 +55,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Log\GameDebug.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\LocalizedTMPText.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScreen.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\UI\UIButtonPressScaleFeedback.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\EventBus.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Audio\AudioManager.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\ResponsiveLayoutGroupFitter.cs" />
@@ -70,6 +71,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Log\Log.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogSink.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Random.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\UI\UIButtonPressScaleAutoInstaller.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UI.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Event\Events.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\SerializedFieldConverter.cs" />
@@ -636,6 +638,10 @@
       <HintPath>Library\PackageCache\com.unity.visualscripting@191c0d7e3b69\Editor\VisualScripting.Core\Dependencies\YamlDotNet\Unity.VisualScripting.YamlDotNet.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Unity.Collections.LowLevel.ILSupport">
       <HintPath>Library\PackageCache\com.unity.collections@aea9d3bd5e19\Unity.Collections.LowLevel.ILSupport\Unity.Collections.LowLevel.ILSupport.dll</HintPath>
       <Private>False</Private>
@@ -650,6 +656,10 @@
     </Reference>
     <Reference Include="Unity.Plastic.Newtonsoft.Json">
       <HintPath>Library\PackageCache\com.unity.collab-proxy@e566cd3e7623\Lib\Editor\Unity.Plastic.Newtonsoft.Json.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="System.Reflection.Metadata">
+      <HintPath>Assets\Plugins\Roslyn\System.Reflection.Metadata.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="log4netPlastic">
@@ -672,6 +682,10 @@
       <HintPath>Library\PackageCache\com.unity.visualscripting@191c0d7e3b69\Runtime\VisualScripting.Flow\Dependencies\NCalc\Unity.VisualScripting.Antlr3.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>Assets\Plugins\Roslyn\System.Collections.Immutable.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>Library\PackageCache\com.unity.nuget.newtonsoft-json@4dfd81071c64\Runtime\Newtonsoft.Json.dll</HintPath>
       <Private>False</Private>
@@ -682,6 +696,10 @@
     </Reference>
     <Reference Include="Mono.Cecil">
       <HintPath>Library\PackageCache\com.unity.nuget.mono-cecil@ecb9724e46ff\Mono.Cecil.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>Assets\Plugins\Roslyn\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Runtime.CompilerServices.Unsafe">

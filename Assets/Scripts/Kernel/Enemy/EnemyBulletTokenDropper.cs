@@ -156,11 +156,12 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
             return;
         }
 
+        float dropChanceMultiplier = EnemyDropBonusController.ConsumeDropChanceMultiplier(ownerEnemy);
         rolledDrops.Clear();
         for (int i = 0; i < tokenDrops.Count; i++)
         {
             EnemyBulletTokenDropEntry entry = tokenDrops[i];
-            if (!ShouldDrop(entry))
+            if (!ShouldDrop(entry, dropChanceMultiplier))
             {
                 continue;
             }
@@ -203,9 +204,9 @@ public sealed class EnemyBulletTokenDropper : MonoBehaviour, IEnemyWaveConfigRec
     /// param: entry 当前待判定的掉落项
     /// returns: 本次需要生成对应拾取物时返回 true
     /// </summary>
-    private bool ShouldDrop(EnemyBulletTokenDropEntry entry)
+    private bool ShouldDrop(EnemyBulletTokenDropEntry entry, float chanceMultiplier = 1f)
     {
-        float chance = Mathf.Clamp01(entry.dropChance);
+        float chance = Mathf.Clamp01(entry.dropChance * Mathf.Max(0f, chanceMultiplier));
         if (chance <= 0f || entry.token == null)
         {
             return false;

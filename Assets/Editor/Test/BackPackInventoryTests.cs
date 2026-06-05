@@ -7,6 +7,7 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using Vocalith.UI;
 
 public sealed class BackPackInventoryTests
 {
@@ -75,7 +76,7 @@ public sealed class BackPackInventoryTests
             CreateToken<ResultTokenData>("hit", "Hit"));
 
         Assert.That(inventory.CanPlaceItem(0, linked), Is.True);
-        Assert.That(inventory.CanPlaceItem(7, linked), Is.False, "Linked item should not wrap across rows.");
+        Assert.That(inventory.CanPlaceItem(PlayerBulletTokenInventory.Columns - 1, linked), Is.False, "Linked item should not wrap across rows.");
 
         inventory.SetToken(1, CreateToken<CoreTokenData>("blocker", "Block"));
         Assert.That(inventory.CanPlaceItem(0, linked), Is.False, "Existing occupied cell should block placement.");
@@ -155,15 +156,22 @@ public sealed class BackPackInventoryTests
     }
 
     [Test]
-    public void Prefab_BackPackGridUsesFixedEightColumns()
+    public void Prefab_BackPackGridUsesFixedSixColumnsInScrollContent()
     {
         GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Backpack/BackPackUI.prefab");
 
         try
         {
-            GridLayoutGroup grid = prefabRoot.transform.Find("Grids Preview Panel/BackPack Grid Panel/Grid")?.GetComponent<GridLayoutGroup>();
+            BackPackUIScreen screen = prefabRoot.GetComponent<BackPackUIScreen>();
+            Assert.That(screen, Is.Not.Null);
+
+            RectTransform backPackGrid = GetPrivateField<RectTransform>(screen, "backPackGrid");
+            ScrollRect scrollRect = prefabRoot.transform.Find("Grids Preview Panel/BackPack Grid Panel/Scroll View")?.GetComponent<ScrollRect>();
+            GridLayoutGroup grid = backPackGrid != null ? backPackGrid.GetComponent<GridLayoutGroup>() : null;
 
             Assert.That(grid, Is.Not.Null);
+            Assert.That(scrollRect, Is.Not.Null);
+            Assert.That(backPackGrid, Is.EqualTo(scrollRect.content));
             Assert.That(grid.constraint, Is.EqualTo(GridLayoutGroup.Constraint.FixedColumnCount));
             Assert.That(grid.constraintCount, Is.EqualTo(PlayerBulletTokenInventory.Columns));
         }
@@ -205,6 +213,40 @@ public sealed class BackPackInventoryTests
 
             float hoverPreviewScale = GetPrivateField<float>(screen, "hoverPreviewScale");
             Assert.That(hoverPreviewScale, Is.EqualTo(0.7f).Within(0.0001f));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
+    public void Prefab_BackPackGridPrefab_UsesBorderOnlyTypeColorMode()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Shared/BackPack Grid Prefab.prefab");
+
+        try
+        {
+            BackPackGridSlotView slot = prefabRoot.GetComponent<BackPackGridSlotView>();
+            Assert.That(slot, Is.Not.Null);
+
+            BackPackSlotTypeColorDrawMode drawMode = GetPrivateField<BackPackSlotTypeColorDrawMode>(slot, "typeColorDrawMode");
+            Image typeColorBorder = GetPrivateField<Image>(slot, "typeColorBorder");
+            Transform background = prefabRoot.transform.Find("Background");
+            Transform text = prefabRoot.transform.Find("Text");
+
+            Assert.That(drawMode, Is.EqualTo(BackPackSlotTypeColorDrawMode.BorderOnly));
+            Assert.That(typeColorBorder, Is.Not.Null);
+            Assert.That(typeColorBorder.name, Is.EqualTo("Type Border"));
+            Assert.That(typeColorBorder.GetComponent<FixedPixelSlicedImage>(), Is.Not.Null);
+            Assert.That(typeColorBorder.type, Is.EqualTo(Image.Type.Sliced));
+            Assert.That(typeColorBorder.fillCenter, Is.False);
+            Assert.That(typeColorBorder.raycastTarget, Is.False);
+            Assert.That(background, Is.Not.Null);
+            Assert.That(text, Is.Not.Null);
+            Assert.That(background.GetSiblingIndex(), Is.EqualTo(0));
+            Assert.That(typeColorBorder.transform.GetSiblingIndex(), Is.EqualTo(1));
+            Assert.That(text.GetSiblingIndex(), Is.EqualTo(2));
         }
         finally
         {
@@ -256,10 +298,51 @@ public sealed class BackPackInventoryTests
         slot.SetOccupancy(new TokenCellOccupancy(CreateToken<ValueTokenData>("value", "2"), 0, 0, true));
         Color valueColor = GetSlotBackgroundColor(slot);
 
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<ModifierTokenData>("modifier", "Mod"), 0, 0, true));
+        Color modifierColor = GetSlotBackgroundColor(slot);
+
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<MulticastTokenData>("multicast", "Dual"), 0, 0, true));
+        Color multicastColor = GetSlotBackgroundColor(slot);
+
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<TriggerTokenData>("trigger", "Hit"), 0, 0, true));
+        Color triggerColor = GetSlotBackgroundColor(slot);
+
         AssertColorApproximately(coreColor, new Color(1f, 0.82f, 0.62f, 0.35f));
         AssertColorApproximately(behaviorColor, new Color(0.66f, 0.82f, 1f, 0.35f));
         AssertColorApproximately(resultColor, new Color(1f, 0.68f, 0.68f, 0.35f));
         AssertColorApproximately(valueColor, new Color(0.68f, 0.93f, 0.68f, 0.35f));
+        AssertColorApproximately(modifierColor, new Color(0.8f, 0.7f, 1f, 0.35f));
+        AssertColorApproximately(multicastColor, new Color(1f, 0.88f, 0.55f, 0.35f));
+        AssertColorApproximately(triggerColor, new Color(0.58f, 0.94f, 0.96f, 0.35f));
+    }
+
+    [Test]
+    public void SlotView_BorderOnlyDrawsTokenTintOnBorderAndKeepsBackgroundBaseColor()
+    {
+        BackPackGridSlotView slot = CreateSlotView("BorderTint", createTypeBorder: true);
+        Image typeColorBorder = slot.transform.Find("Type Border")?.GetComponent<Image>();
+        SetPrivateField(slot, "typeColorDrawMode", BackPackSlotTypeColorDrawMode.BorderOnly);
+        SetPrivateField(slot, "typeColorBorder", typeColorBorder);
+        slot.InitializeDisplayOnly(BackPackSlotArea.Inventory);
+
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<CoreTokenData>("core", "Core"), 0, 0, true));
+        Color coreBackgroundColor = GetSlotBackgroundColor(slot);
+        Color coreBorderColor = GetSlotTypeBorderColor(slot);
+
+        slot.SetOccupancy(new TokenCellOccupancy(CreateToken<BehaviorTokenData>("behavior", "Behavior"), 0, 0, true));
+        Color behaviorBackgroundColor = GetSlotBackgroundColor(slot);
+        Color behaviorBorderColor = GetSlotTypeBorderColor(slot);
+
+        slot.SetOccupancy(TokenCellOccupancy.Empty);
+        Color emptyBackgroundColor = GetSlotBackgroundColor(slot);
+        Color emptyBorderColor = GetSlotTypeBorderColor(slot);
+
+        AssertColorApproximately(coreBackgroundColor, new Color(1f, 1f, 1f, 0.35f));
+        AssertColorApproximately(behaviorBackgroundColor, new Color(1f, 1f, 1f, 0.35f));
+        AssertColorApproximately(emptyBackgroundColor, new Color(1f, 1f, 1f, 0.35f));
+        AssertColorApproximately(coreBorderColor, new Color(1f, 0.82f, 0.62f, 1f));
+        AssertColorApproximately(behaviorBorderColor, new Color(0.66f, 0.82f, 1f, 1f));
+        AssertColorApproximately(emptyBorderColor, Color.clear);
     }
 
     private PlayerBulletTokenInventory CreateInventory()
@@ -271,7 +354,7 @@ public sealed class BackPackInventoryTests
         return inventory;
     }
 
-    private BackPackGridSlotView CreateSlotView(string name)
+    private BackPackGridSlotView CreateSlotView(string name, bool createTypeBorder = false)
     {
         GameObject root = new(name, typeof(RectTransform), typeof(CanvasGroup), typeof(LayoutElement));
         createdObjects.Add(root);
@@ -280,6 +363,13 @@ public sealed class BackPackInventoryTests
         GameObject background = new("Background", typeof(RectTransform), typeof(Image));
         createdObjects.Add(background);
         background.transform.SetParent(root.transform, false);
+
+        if (createTypeBorder)
+        {
+            GameObject typeBorder = new("Type Border", typeof(RectTransform), typeof(Image));
+            createdObjects.Add(typeBorder);
+            typeBorder.transform.SetParent(root.transform, false);
+        }
 
         GameObject text = new("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
         createdObjects.Add(text);
@@ -333,6 +423,13 @@ public sealed class BackPackInventoryTests
         return background.color;
     }
 
+    private static Color GetSlotTypeBorderColor(BackPackGridSlotView slotView)
+    {
+        Image typeColorBorder = slotView.transform.Find("Type Border")?.GetComponent<Image>();
+        Assert.That(typeColorBorder, Is.Not.Null);
+        return typeColorBorder.color;
+    }
+
     private static void AssertColorApproximately(Color actual, Color expected, float tolerance = 0.0001f)
     {
         Assert.That(actual.r, Is.EqualTo(expected.r).Within(tolerance));
@@ -346,5 +443,12 @@ public sealed class BackPackInventoryTests
         FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null, $"{target.GetType().Name}.{fieldName} should exist.");
         return (T)field.GetValue(target);
+    }
+
+    private static void SetPrivateField<T>(object target, string fieldName, T value)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"{target.GetType().Name}.{fieldName} should exist.");
+        field.SetValue(target, value);
     }
 }

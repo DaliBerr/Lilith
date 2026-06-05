@@ -84,6 +84,7 @@ public sealed class EnemyResultVisualFeedbackTests
 
         GameObject textObject = CreateGameObject("Text");
         textObject.transform.SetParent(root.transform, false);
+        textObject.AddComponent<RectTransform>();
 
         GameObject glyphObject = CreateGameObject("Glyph");
         glyphObject.transform.SetParent(textObject.transform, false);
@@ -110,6 +111,8 @@ public sealed class EnemyResultVisualFeedbackTests
         EnemyResultVisualFeedback feedback = root.AddComponent<EnemyResultVisualFeedback>();
         Assert.That(feedback.TryCacheBindings(), Is.True);
         InvokePrivateMethod(feedback, "CaptureBaselineAlpha");
+        SetPrivateField(feedback, "controlHitPulseDuration", 10f);
+        SetPrivateField(feedback, "healingHitPulseDuration", 10f);
         return feedback;
     }
 
@@ -125,6 +128,13 @@ public sealed class EnemyResultVisualFeedbackTests
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
         method.Invoke(target, null);
+    }
+
+    private static void SetPrivateField(object target, string fieldName, object value)
+    {
+        FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(field, Is.Not.Null, $"Missing private field '{fieldName}'.");
+        field.SetValue(target, value);
     }
 
     private static void AssertColorWithAlpha(Color actual, Color expected)

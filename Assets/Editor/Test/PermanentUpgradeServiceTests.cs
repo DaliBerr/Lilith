@@ -105,13 +105,14 @@ public sealed class PermanentUpgradeServiceTests
         Assert.That(upgradeService.TryUseCatalog(CreateCatalog(costRemnants: 10, maxLevel: 1, effectValue: 1f), out string errorMessage), Is.True, errorMessage);
         Assert.That(upgradeService.TryPurchase("damage_test", out PermanentUpgradePurchaseResult purchaseResult), Is.True, purchaseResult.Message);
 
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[] { coreToken });
+        CompiledSpellProgram compiledProgram = SpellProgramCompiler.Compile(new BaseTokenData[] { coreToken });
 
         Assert.That(purchaseResult.NewLevel, Is.EqualTo(1));
         Assert.That(PlayerRemnantWallet.GetCurrentRemnants(), Is.EqualTo(0));
         Assert.That(saveService.GetLifetimeStat(PermanentUpgradeService.BuildLifetimeStatKey("damage_test")), Is.EqualTo(1));
         Assert.That(upgradeService.GetDamageMultiplier(), Is.EqualTo(2f));
-        Assert.That(compiledAttack.AttackSpec.damage, Is.EqualTo(4f));
+        Assert.That(compiledProgram.TryGetPrimaryProjectile(out SpellProjectileNode projectile), Is.True);
+        Assert.That(projectile.AttackSpec.damage, Is.EqualTo(4f));
     }
 
     [Test]

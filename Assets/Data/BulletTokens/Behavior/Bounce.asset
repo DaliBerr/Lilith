@@ -22,6 +22,7 @@ MonoBehaviour:
   modifiers: []
   behaviorType: 3
   acceptsNumericValue: 1
+  valueParameterKind: 1
   defaultProjectileCount: 1
   spreadAngleStep: 0
   projectileDamageMultiplier: 1

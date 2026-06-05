@@ -63,7 +63,7 @@
 - `README.md`：稳定结构、入口、依赖、已知限制。
 - `memory.md`：高复用、难复得的排障经验；Obsidian 是跨会话主记忆层，本文件保留兼容镜像。
 - `AGENTS.md`：本仓库必须立即可见的硬规则。
-- `.codex/hooks.json`：本仓库 Codex hook 配置；当前 hooks 会在计划模式下注入“有不确定决策就直接询问用户”的提醒，并要求最终总结明确 Memory Consistency Pass 与 `README.md`、`memory.md`、`AGENTS.md` 更新评估。
+- `.codex/hooks.json`：本仓库 Codex hook 配置；当前 hooks 会在每次提交用户消息时注入“允许使用 `gpt-5.4-mini` / `gpt-5.3-codex-spark` 分担边界清晰子任务”的委派偏好，在计划模式下注入“有不确定决策就直接询问用户”的提醒，并要求最终总结明确 Memory Consistency Pass 与 `README.md`、`memory.md`、`AGENTS.md` 更新评估。
 - `lilith-repo-operator` skill：操作流程、委派节奏、文档分工、symptom index。
 - Obsidian project note / handoff / TODO：跨会话状态与交接。
 

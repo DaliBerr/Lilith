@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6eb4f6da9ada026439a04d760aff5580, type: 3}
+  m_Name: Slow
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.BehaviorTokenData
+  tokenId: behavior_slow
+  displayText: "\u7F13"
+  displayTextKey: 
+  description: "\u98DE\u884C\u4E2D\u9010\u6E10\u51CF\u901F\uFF1B\u9ED8\u8BA4\u5F3A\u5EA6
+    1\uFF0C\u53EF\u7531\u503C\u8BCD\u6539\u51CF\u901F\u5F3A\u5EA6\u3002"
+  descriptionKey: 
+  tokenType: 3
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
+  behaviorType: 10
+  acceptsNumericValue: 1
+  valueParameterKind: 4
+  defaultProjectileCount: 1
+  spreadAngleStep: 0
+  projectileDamageMultiplier: 1
+  pierceLifetimeDistanceScalePerCount: 0.2
+  defaultBehaviorParameter: 1

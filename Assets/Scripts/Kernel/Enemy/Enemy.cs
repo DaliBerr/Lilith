@@ -26,6 +26,7 @@ public abstract class Enemy : MonoBehaviour
     public abstract float AttackDamage { get; }
     public abstract float MaxHealth { get; }
     public abstract float CurrentHealth { get; }
+    public virtual float DisplacementWeight => 1f;
     public bool IsDead => CurrentHealth <= 0f;
     public event Action<Enemy> Damaged;
     public event Action<Enemy> Died;
@@ -150,10 +151,11 @@ public struct EnemyWaveConfig
     [Range(0f, 1f)] public float damageReductionPercent;
     [Min(0f)] public float visualScaleMultiplier;
     [Min(0f)] public float explosionRadius;
+    [Min(0f)] public float displacementWeight;
     public List<EnemyBulletTokenDropEntry> tokenDrops;
 
     public EnemyWaveConfig(float maxHealth, float moveSpeed, float attackRange, float attackCooldown, float attackDamage)
-        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, 0f, 1f, 0f, null)
+        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, 0f, 1f, 0f, 1f, null)
     {
     }
 
@@ -164,7 +166,7 @@ public struct EnemyWaveConfig
         float attackCooldown,
         float attackDamage,
         IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
-        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, 0f, 1f, 0f, tokenDrops)
+        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, 0f, 1f, 0f, 1f, tokenDrops)
     {
     }
 
@@ -178,6 +180,21 @@ public struct EnemyWaveConfig
         float visualScaleMultiplier,
         float explosionRadius,
         IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
+        : this(maxHealth, moveSpeed, attackRange, attackCooldown, attackDamage, damageReductionPercent, visualScaleMultiplier, explosionRadius, 1f, tokenDrops)
+    {
+    }
+
+    public EnemyWaveConfig(
+        float maxHealth,
+        float moveSpeed,
+        float attackRange,
+        float attackCooldown,
+        float attackDamage,
+        float damageReductionPercent,
+        float visualScaleMultiplier,
+        float explosionRadius,
+        float displacementWeight,
+        IEnumerable<EnemyBulletTokenDropEntry> tokenDrops)
     {
         this.maxHealth = maxHealth;
         this.moveSpeed = moveSpeed;
@@ -187,6 +204,7 @@ public struct EnemyWaveConfig
         this.damageReductionPercent = damageReductionPercent;
         this.visualScaleMultiplier = visualScaleMultiplier;
         this.explosionRadius = explosionRadius;
+        this.displacementWeight = displacementWeight;
         this.tokenDrops = tokenDrops != null ? new List<EnemyBulletTokenDropEntry>(tokenDrops) : new List<EnemyBulletTokenDropEntry>();
     }
 
@@ -206,6 +224,7 @@ public struct EnemyWaveConfig
         sanitized.damageReductionPercent = Mathf.Clamp01(sanitized.damageReductionPercent);
         sanitized.visualScaleMultiplier = SanitizePositiveValue(sanitized.visualScaleMultiplier, 1f);
         sanitized.explosionRadius = SanitizeValue(sanitized.explosionRadius, 0f);
+        sanitized.displacementWeight = SanitizePositiveValue(sanitized.displacementWeight, 1f);
         sanitized.tokenDrops = clearTokenDrops ? new List<EnemyBulletTokenDropEntry>() : SanitizeTokenDrops(sanitized.tokenDrops);
         return sanitized;
     }

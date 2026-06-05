@@ -21,7 +21,8 @@ MonoBehaviour:
   bulletTextOverride: 
   modifiers: []
   resultType: 2
-  acceptsNumericValue: 0
+  acceptsNumericValue: 1
+  valueParameterKind: 2
   defaultExplosionRadius: 48
   explosionDamageMultiplier: 0.3
   defaultTriggerCount: 0

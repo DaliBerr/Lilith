@@ -110,13 +110,7 @@ public sealed class CharBulletVisualPresenter : MonoBehaviour
         return mainGlyph != null || shadowGlyph != null;
     }
 
-    /// <summary>
-    /// summary: 按当前编译结果刷新阴影字、符文底座与拖尾颜色，使 secondary visuals 始终跟随最终子弹外观。
-    /// param: compiledAttack 当前发射使用的编译结果；为空时回退到 CharBullet 的当前攻击语义
-    /// param: owningBullet 当前持有该 presenter 的文字子弹
-    /// returns: 成功完成至少一次可见层同步时返回 true
-    /// </summary>
-    public bool ApplyCompiledAppearance(CompiledAttack compiledAttack, CharBullet owningBullet)
+    public bool ApplyCompiledAppearance(SpellProjectileNode projectileNode, CharBullet owningBullet)
     {
         if (owningBullet != null)
         {
@@ -128,10 +122,15 @@ public sealed class CharBulletVisualPresenter : MonoBehaviour
             return false;
         }
 
-        AttackCoreType coreType = compiledAttack != null ? compiledAttack.CoreType : ResolveCurrentCoreType();
-        AttackResultType resultType = compiledAttack != null ? compiledAttack.ResultType : ResolveCurrentResultType();
-        Color resolvedColor = ResolvePrimaryColor(compiledAttack);
+        AttackCoreType coreType = projectileNode != null ? projectileNode.CoreType : ResolveCurrentCoreType();
+        AttackResultType resultType = projectileNode != null ? projectileNode.ResultType : ResolveCurrentResultType();
+        Color resolvedColor = ResolvePrimaryColor(projectileNode);
 
+        return ApplyResolvedAppearance(coreType, resultType, resolvedColor);
+    }
+
+    private bool ApplyResolvedAppearance(AttackCoreType coreType, AttackResultType resultType, Color resolvedColor)
+    {
         ApplyPrimaryColor(resolvedColor);
         SyncShadowGlyph(resolvedColor);
         ApplyRuneBaseLayers(coreType, resultType, resolvedColor);
@@ -275,9 +274,9 @@ public sealed class CharBulletVisualPresenter : MonoBehaviour
     {
         if (bullet != null)
         {
-            if (HasMeaningfulCompiledAttack())
+            if (HasMeaningfulProjectileNode())
             {
-                return bullet.CurrentCompiledAttack.CoreType;
+                return bullet.CurrentProjectileNode.CoreType;
             }
 
             return bullet.CurrentAttackSpec.coreType;
@@ -290,9 +289,9 @@ public sealed class CharBulletVisualPresenter : MonoBehaviour
     {
         if (bullet != null)
         {
-            if (HasMeaningfulCompiledAttack())
+            if (HasMeaningfulProjectileNode())
             {
-                return bullet.CurrentCompiledAttack.ResultType;
+                return bullet.CurrentProjectileNode.ResultType;
             }
 
             return bullet.CurrentAttackSpec.resultType;
@@ -301,26 +300,26 @@ public sealed class CharBulletVisualPresenter : MonoBehaviour
         return AttackResultType.DirectDamage;
     }
 
-    private bool HasMeaningfulCompiledAttack()
+    private bool HasMeaningfulProjectileNode()
     {
-        if (bullet == null || bullet.CurrentCompiledAttack == null)
+        if (bullet == null || bullet.CurrentProjectileNode == null)
         {
             return false;
         }
 
-        return bullet.CurrentCompiledAttack.CanFire ||
-               bullet.CurrentCompiledAttack.CoreType != AttackCoreType.None ||
-               bullet.CurrentCompiledAttack.ResultType != AttackResultType.None;
+        return bullet.CurrentProjectileNode.CanFire ||
+               bullet.CurrentProjectileNode.CoreType != AttackCoreType.None ||
+               bullet.CurrentProjectileNode.ResultType != AttackResultType.None;
     }
 
-    private Color ResolvePrimaryColor(CompiledAttack compiledAttack)
+    private Color ResolvePrimaryColor(SpellProjectileNode projectileNode)
     {
-        if (compiledAttack != null && compiledAttack.HasTextColorOverride)
+        if (projectileNode != null && projectileNode.HasTextColorOverride)
         {
-            return compiledAttack.TextColor;
+            return projectileNode.TextColor;
         }
 
-        AttackCoreType coreType = compiledAttack != null ? compiledAttack.CoreType : ResolveCurrentCoreType();
+        AttackCoreType coreType = projectileNode != null ? projectileNode.CoreType : ResolveCurrentCoreType();
         if (visualLibrary != null && visualLibrary.TryGetCoreVisual(coreType, out CharBulletVisualLibrary.CoreVisualEntry coreVisual))
         {
             return coreVisual.fallbackTint;

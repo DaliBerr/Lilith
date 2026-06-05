@@ -185,6 +185,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - UI
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: daa6e8efb0dce754da490852ce545688
+    m_Address: Assets/Prefabs/UI/Options/Setting Panel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: e5b98263adf94d04ab18ac63ad9168e8
     m_Address: Assets/Prefabs/UI/BulletToken Selection Prefab
     m_ReadOnly: 0

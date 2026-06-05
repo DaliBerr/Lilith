@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 69cd710bca0d1bc4fb6db36097744ee1, type: 3}
+  m_Name: OnHit
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.TriggerTokenData
+  tokenId: trigger_on_hit
+  displayText: "\u89E6"
+  displayTextKey: 
+  description: "\u547D\u4E2D\u540E\u91CA\u653E\u540E\u7EED payload\u3002"
+  descriptionKey: 
+  tokenType: 9
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
+  triggerType: 1
+  parameterKind: 0
+  defaultParameterValue: 0

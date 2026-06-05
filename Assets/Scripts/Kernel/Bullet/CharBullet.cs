@@ -22,10 +22,27 @@ public sealed class CharBullet : MonoBehaviour
     private const float DefaultHomingSearchRadius = 256f;
     private const float DefaultHomingTurnSpeedDegrees = 540f;
     private const float HomingTargetRefreshIntervalSeconds = 0.12f;
+    private const float DefaultBehaviorChainRadius = 96f;
+    private const float BehaviorRushAccelerationScalePerSecond = 0.25f;
+    private const float BehaviorRushMaxSpeedMultiplier = 2.5f;
+    private const float BehaviorSlowMinSpeedMultiplier = 0.15f;
+    private const float BehaviorSnakeAmplitudeUnits = 6f;
+    private const float BehaviorSnakeFrequencyHz = 2f;
+    private const float BehaviorWanderTurnSpeedDegrees = 90f;
+    private const float BehaviorSplitChildDamageMultiplier = 0.5f;
+    private const float BehaviorSplitForkAngleDegrees = 35f;
+    private const int BehaviorSplitChildrenPerTrigger = 2;
+    private const int MaxBehaviorSplitDerivedProjectileCount = 64;
+    private const float ResultDrainHealingMultiplier = 0.5f;
+    private const float ResultShieldAmountMultiplier = 1f;
+    private const float ResultDisplacementDistancePerStrength = 2f;
     private const float DefaultDelayedExplosionIndicatorWidth = 0.2f;
     private const float DefaultDelayedExplosionIndicatorHeightOffset = 0.08f;
+    private const int MaxPayloadDepth = 4;
+    private const int MaxPayloadDerivedProjectileCount = 64;
     private const string EnemyTagName = "Enemy_Object";
     private static readonly Color DefaultDelayedExplosionIndicatorColor = new(1f, 0.1f, 0.1f, 0.92f);
+    internal static Func<int, int> ConfuseCandidateIndexResolver { get; set; } = count => UnityEngine.Random.Range(0, count);
     // private const string AlternateEnemyTagName = "Enemy";
 
     private static readonly string[] PreferredMovementChildNames =
@@ -63,6 +80,9 @@ public sealed class CharBullet : MonoBehaviour
     [SerializeField, Min(0f)] private float impactRadiusMultiplier = 1f;
 
     private readonly HashSet<int> impactedTargetRoots = new();
+    private readonly HashSet<int> penetratedEnvironmentColliders = new();
+    private readonly List<SpellPayloadBlock> activePayloads = new();
+    private readonly HashSet<SpellPayloadBlock> executedOneShotPayloads = new();
     private Vector3 baseLocalScale = Vector3.one;
     private float baseImpactRadius = 0.5f;
     private float fontSizeDrivenImpactRadius;
@@ -76,12 +96,28 @@ public sealed class CharBullet : MonoBehaviour
     private bool hasPreviousImpactCheckCenter;
     private bool isActiveShot;
     private bool ignoreGameplayPauseStatus;
-    private CompiledAttack compiledAttack;
+    private Transform movementAnchor;
+    private bool expireWhenMovementAnchorInvalid;
+    private SpellProjectileNode currentProjectileNode;
     private CharBullet spawnTemplate;
     private BulletTargetPolicy targetPolicy = BulletTargetPolicy.EnemiesOnly;
     private int remainingBounceCount;
     private Transform homingTarget;
     private float nextHomingTargetRefreshTime;
+    private Vector3 behaviorBaseDirection = Vector3.forward;
+    private Vector3 behaviorRightDirection = Vector3.right;
+    private float behaviorInitialSpeed;
+    private float behaviorWanderSeed;
+    private int behaviorSplitTotalCount;
+    private int behaviorSplitTriggeredCount;
+    private int behaviorSplitEmittedCount;
+    private Vector3 behaviorSpinLastAnchorPosition;
+    private Vector3 behaviorSpinRadialDirection = Vector3.forward;
+    private float behaviorSpinRadius;
+    private float behaviorSpinAngleDegrees;
+    private float behaviorSpinDirectionSign = 1f;
+    private bool stasisDirectImpactConsumed;
+    private bool stasisDirectImpactInProgress;
 
     public TMP_Text GlyphText
     {
@@ -141,6 +177,7 @@ public sealed class CharBullet : MonoBehaviour
     }
 
     public Transform OwnerRoot => ownerRoot;
+    public Transform MovementAnchor => movementAnchor;
     public Vector3 SpawnWorldPosition => spawnWorldPosition;
     public float ElapsedLifetime => elapsedLifetime;
     public int RemainingLife => remainingLife;
@@ -151,7 +188,8 @@ public sealed class CharBullet : MonoBehaviour
     public float ImpactRadiusMultiplier => impactRadiusMultiplier;
     public float Damage => attackSpec.damage;
     public AttackSpec CurrentAttackSpec => attackSpec;
-    public CompiledAttack CurrentCompiledAttack => compiledAttack;
+    public SpellProjectileNode CurrentProjectileNode => currentProjectileNode;
+    public IReadOnlyList<SpellPayloadBlock> CurrentPayloads => activePayloads;
     public BulletTargetPolicy TargetPolicy => targetPolicy;
 
     private void Awake()
@@ -167,36 +205,53 @@ public sealed class CharBullet : MonoBehaviour
         ApplyScaleMultiplier();
     }
 
-    /// <summary>
-    /// summary: 初始化一次新的子弹发射，并额外注入编译后的高层攻击语义。
-    /// param: owner 发射者根节点，用于忽略自碰撞
-    /// param: spawnPosition 子弹出生世界坐标
-    /// param: shotDirection 本次发射方向
-    /// param: shotAttackSpec 本次发射使用的攻击配置
-    /// param: shotCompiledAttack 本次发射对应的编译结果
-    /// param: shotTargetPolicy 本次发射允许命中的目标策略
-    /// returns: 无
-    /// </summary>
     public void InitializeShot(
         Transform owner,
         Vector3 spawnPosition,
         Vector3 shotDirection,
         AttackSpec shotAttackSpec,
-        CompiledAttack shotCompiledAttack,
+        SpellProjectileNode shotProjectileNode,
         BulletTargetPolicy shotTargetPolicy = BulletTargetPolicy.EnemiesOnly)
+    {
+        InitializeShotCore(owner, spawnPosition, shotDirection, shotAttackSpec, shotProjectileNode, shotTargetPolicy);
+    }
+
+    private void InitializeShotCore(
+        Transform owner,
+        Vector3 spawnPosition,
+        Vector3 shotDirection,
+        AttackSpec shotAttackSpec,
+        SpellProjectileNode shotProjectileNode,
+        BulletTargetPolicy shotTargetPolicy)
     {
         TryCacheBindings(overwriteExisting: true);
         EnsureCompatiblePhysicsBindings(allowFallbackCreation: false);
         EnsureImpactColliderConfiguration();
-        AttackSpec resolvedAttackSpec = shotCompiledAttack != null ? shotCompiledAttack.AttackSpec : shotAttackSpec;
+        AttackSpec resolvedAttackSpec = shotProjectileNode != null ? shotProjectileNode.AttackSpec : shotAttackSpec;
         attackSpec = resolvedAttackSpec.GetSanitized();
-        compiledAttack = shotCompiledAttack;
+        currentProjectileNode = shotProjectileNode;
+        activePayloads.Clear();
+        executedOneShotPayloads.Clear();
+        if (shotProjectileNode != null)
+        {
+            for (int i = 0; i < shotProjectileNode.Payloads.Count; i++)
+            {
+                if (shotProjectileNode.Payloads[i] != null)
+                {
+                    activePayloads.Add(shotProjectileNode.Payloads[i]);
+                }
+            }
+        }
+
         spawnTemplate ??= this;
         targetPolicy = shotTargetPolicy;
         ownerRoot = owner;
+        movementAnchor = null;
+        expireWhenMovementAnchorInvalid = false;
         spawnWorldPosition = spawnPosition;
         elapsedLifetime = 0f;
         impactedTargetRoots.Clear();
+        penetratedEnvironmentColliders.Clear();
         hasPreviousImpactCheckCenter = false;
         remainingLife = attackSpec.projectileLife;
         remainingBounceCount = attackSpec.bounceCount;
@@ -205,6 +260,20 @@ public sealed class CharBullet : MonoBehaviour
         movementSpace = Space.World;
         homingTarget = null;
         nextHomingTargetRefreshTime = 0f;
+        behaviorBaseDirection = ResolvePlanarDirection(shotDirection, Vector3.forward);
+        behaviorRightDirection = ResolvePlanarRightDirection(behaviorBaseDirection);
+        behaviorInitialSpeed = Mathf.Max(0f, attackSpec.projectileSpeed);
+        behaviorWanderSeed = ResolveBehaviorSeed(spawnPosition, behaviorBaseDirection);
+        behaviorSplitTotalCount = Mathf.Max(0, Mathf.RoundToInt(attackSpec.behaviorParameter));
+        behaviorSplitTriggeredCount = 0;
+        behaviorSplitEmittedCount = 0;
+        behaviorSpinLastAnchorPosition = ownerRoot != null ? ownerRoot.position : spawnPosition;
+        behaviorSpinRadialDirection = behaviorBaseDirection;
+        behaviorSpinRadius = 0f;
+        behaviorSpinAngleDegrees = 0f;
+        behaviorSpinDirectionSign = 1f;
+        stasisDirectImpactConsumed = false;
+        stasisDirectImpactInProgress = false;
         hasFontSizeDrivenImpactRadius = false;
         fontSizeDrivenImpactRadius = 0f;
         ignoreGameplayPauseStatus = false;
@@ -213,10 +282,11 @@ public sealed class CharBullet : MonoBehaviour
         TryStopMovement();
         TrySetWorldPosition(spawnPosition);
         TrySetDirectionAndSpeed(shotDirection, attackSpec.projectileSpeed, Space.World);
+        ConfigureInitialMovementBehavior();
         ApplyFacingDirection(shotDirection);
         IgnoreOwnerCollisions();
         ResetImpactCheckState();
-        ApplyCompiledAttackPresentation();
+        ApplyProjectilePresentation();
 
         // LogShotInitialized(spawnPosition, shotDirection, attackSpec.projectileSpeed);
         // LogSpawnOverlapIfNeeded();
@@ -230,6 +300,27 @@ public sealed class CharBullet : MonoBehaviour
     public void SetSpawnTemplate(CharBullet template)
     {
         spawnTemplate = template != null ? template : this;
+    }
+
+    /// <summary>
+    /// summary: 为 Orbit/Spin 类运动指定额外移动锚点；施法归属仍由 ownerRoot 表示。
+    /// param: anchor 运动锚点
+    /// param: expireWhenInvalid 锚点丢失或主弹失活时是否立刻过期
+    /// returns: 无
+    /// </summary>
+    public void SetMovementAnchor(Transform anchor, bool expireWhenInvalid)
+    {
+        movementAnchor = anchor;
+        expireWhenMovementAnchorInvalid = expireWhenInvalid;
+        if (TryResolveSpinAnchorPosition(expireIfInvalid: false, out Vector3 anchorPosition))
+        {
+            behaviorSpinLastAnchorPosition = anchorPosition;
+        }
+
+        if (isActiveShot && ShouldUseSpinBehavior())
+        {
+            ConfigureSpinBehavior();
+        }
     }
 
     /// <summary>
@@ -804,6 +895,7 @@ public sealed class CharBullet : MonoBehaviour
         if (MovementRigidbody != null)
         {
             movementRigidbody.position = worldPosition;
+            movementRigidbody.transform.position = worldPosition;
             return true;
         }
 
@@ -884,6 +976,8 @@ public sealed class CharBullet : MonoBehaviour
             return;
         }
 
+        Vector3 expirePoint = MovementTarget != null ? MovementTarget.position : transform.position;
+        TryExecutePayloadsByTrigger(SpellTriggerType.OnExpire, expirePoint, Damage, null, null, null);
         isActiveShot = false;
         EnableImpactCollider(false);
         TryStopMovement();
@@ -964,7 +1058,8 @@ public sealed class CharBullet : MonoBehaviour
         TryUpdateHomingDirection(Time.deltaTime);
         if (MovementRigidbody != null)
         {
-            CheckImpactContacts();
+            RunImpactContactsIfAllowed();
+            CheckNonImpactPayloadTriggers();
             if (!autoMove)
             {
                 UpdateLifetime(Time.deltaTime);
@@ -973,12 +1068,14 @@ public sealed class CharBullet : MonoBehaviour
             return;
         }
 
+        TryUpdateMovementBehavior(Time.deltaTime);
         if (autoMove)
         {
             MoveStep(Time.deltaTime);
         }
 
-        CheckImpactContacts();
+        RunImpactContactsIfAllowed();
+        CheckNonImpactPayloadTriggers();
         UpdateLifetime(Time.deltaTime);
     }
 
@@ -996,13 +1093,15 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         TryUpdateHomingDirection(Time.fixedDeltaTime);
+        TryUpdateMovementBehavior(Time.fixedDeltaTime);
 
         if (autoMove)
         {
             MoveStep(Time.fixedDeltaTime);
         }
 
-        CheckImpactContacts();
+        RunImpactContactsIfAllowed();
+        CheckNonImpactPayloadTriggers();
         UpdateLifetime(Time.fixedDeltaTime);
     }
 
@@ -1140,7 +1239,412 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldUseHomingBehavior()
     {
-        return attackSpec.behaviorType == AttackBehaviorType.Homing || compiledAttack?.BehaviorType == AttackBehaviorType.Homing;
+        return attackSpec.behaviorType == AttackBehaviorType.Homing ||
+               currentProjectileNode?.BehaviorType == AttackBehaviorType.Homing;
+    }
+
+    private bool ShouldUseStasisBehavior()
+    {
+        return attackSpec.behaviorType == AttackBehaviorType.Stasis ||
+               currentProjectileNode?.BehaviorType == AttackBehaviorType.Stasis;
+    }
+
+    private bool ShouldUseSpinBehavior()
+    {
+        return attackSpec.behaviorType == AttackBehaviorType.Spin ||
+               currentProjectileNode?.BehaviorType == AttackBehaviorType.Spin;
+    }
+
+    private void ConfigureInitialMovementBehavior()
+    {
+        if (!isActiveShot)
+        {
+            return;
+        }
+
+        if (ShouldUseSpinBehavior())
+        {
+            ConfigureSpinBehavior();
+            return;
+        }
+
+        if (!ShouldUseStasisBehavior())
+        {
+            return;
+        }
+
+        AttackSpec stasisSpec = attackSpec;
+        stasisSpec.maxLifetime = Mathf.Max(0f, stasisSpec.behaviorParameter);
+        stasisSpec.maxTravelDistance = 0f;
+        stasisSpec.projectileSpeed = 0f;
+        attackSpec = stasisSpec.GetSanitized();
+        autoMove = false;
+        TryStopMovement();
+        TrySetWorldPosition(spawnWorldPosition);
+    }
+
+    private void ConfigureSpinBehavior()
+    {
+        behaviorSpinRadius = ResolveSpinRadius();
+        if (!TryResolveSpinAnchorPosition(expireIfInvalid: false, out behaviorSpinLastAnchorPosition))
+        {
+            behaviorSpinLastAnchorPosition = spawnWorldPosition;
+        }
+
+        behaviorSpinRadialDirection = ResolveSpinRadialDirection(behaviorSpinLastAnchorPosition);
+        behaviorSpinAngleDegrees = Vector3.SignedAngle(Vector3.forward, behaviorSpinRadialDirection, Vector3.up);
+
+        Vector3 positiveTangent = Quaternion.AngleAxis(90f, Vector3.up) * behaviorSpinRadialDirection;
+        behaviorSpinDirectionSign = Vector3.Dot(positiveTangent, behaviorBaseDirection) >=
+                                    Vector3.Dot(-positiveTangent, behaviorBaseDirection)
+            ? 1f
+            : -1f;
+
+        autoMove = false;
+        TryStopMovement();
+        TrySetWorldPosition(behaviorSpinLastAnchorPosition + (behaviorSpinRadialDirection * behaviorSpinRadius));
+        ApplyFacingDirection(behaviorBaseDirection);
+    }
+
+    private void TryUpdateMovementBehavior(float deltaTime)
+    {
+        if (!isActiveShot || deltaTime <= 0f)
+        {
+            return;
+        }
+
+        switch (attackSpec.behaviorType)
+        {
+            case AttackBehaviorType.Rush:
+                UpdateRushBehavior(deltaTime);
+                break;
+
+            case AttackBehaviorType.Slow:
+                UpdateSlowBehavior(deltaTime);
+                break;
+
+            case AttackBehaviorType.Snake:
+                UpdateSnakeBehavior(deltaTime);
+                break;
+
+            case AttackBehaviorType.Wander:
+                UpdateWanderBehavior(deltaTime);
+                break;
+
+            case AttackBehaviorType.Split:
+                UpdateSplitBehavior(deltaTime);
+                break;
+
+            case AttackBehaviorType.Spin:
+                UpdateSpinBehavior(deltaTime);
+                break;
+        }
+    }
+
+    private void UpdateRushBehavior(float deltaTime)
+    {
+        float strength = Mathf.Max(0f, attackSpec.behaviorParameter);
+        float acceleration = behaviorInitialSpeed * BehaviorRushAccelerationScalePerSecond * strength;
+        float maxSpeed = behaviorInitialSpeed * BehaviorRushMaxSpeedMultiplier;
+        TrySetSpeed(maxSpeed > 0f ? Mathf.Min(maxSpeed, speed + acceleration * deltaTime) : speed);
+    }
+
+    private void UpdateSlowBehavior(float deltaTime)
+    {
+        float strength = Mathf.Max(0f, attackSpec.behaviorParameter);
+        float deceleration = behaviorInitialSpeed * BehaviorRushAccelerationScalePerSecond * strength;
+        float minSpeed = behaviorInitialSpeed * BehaviorSlowMinSpeedMultiplier;
+        TrySetSpeed(Mathf.Max(minSpeed, speed - deceleration * deltaTime));
+    }
+
+    private void UpdateSnakeBehavior(float deltaTime)
+    {
+        float strength = Mathf.Max(0f, attackSpec.behaviorParameter);
+        float amplitude = BehaviorSnakeAmplitudeUnits * strength;
+        float nextTime = elapsedLifetime + Mathf.Max(0f, deltaTime);
+        float lateralVelocity = Mathf.Cos(nextTime * BehaviorSnakeFrequencyHz * Mathf.PI * 2f) *
+                                amplitude *
+                                BehaviorSnakeFrequencyHz *
+                                Mathf.PI * 2f;
+        Vector3 nextDirection = (behaviorBaseDirection * Mathf.Max(1f, behaviorInitialSpeed)) +
+                                (behaviorRightDirection * lateralVelocity);
+        if (nextDirection.sqrMagnitude <= MinimumVectorSqrMagnitude)
+        {
+            return;
+        }
+
+        TrySetDirection(nextDirection.normalized, Space.World);
+        ApplyFacingDirection(nextDirection);
+    }
+
+    private void UpdateWanderBehavior(float deltaTime)
+    {
+        float strength = Mathf.Max(0f, attackSpec.behaviorParameter);
+        if (strength <= 0f)
+        {
+            return;
+        }
+
+        float noise = Mathf.PerlinNoise(behaviorWanderSeed, (elapsedLifetime + deltaTime) * 4f);
+        float signedNoise = (noise * 2f) - 1f;
+        float turnDegrees = signedNoise * BehaviorWanderTurnSpeedDegrees * strength * deltaTime;
+        Vector3 currentDirection = GetVelocity(Space.World);
+        if (currentDirection.sqrMagnitude <= MinimumVectorSqrMagnitude)
+        {
+            currentDirection = direction;
+        }
+
+        Vector3 nextDirection = Quaternion.AngleAxis(turnDegrees, Vector3.up) * ResolvePlanarDirection(currentDirection, behaviorBaseDirection);
+        TrySetDirection(nextDirection, Space.World);
+        ApplyFacingDirection(nextDirection);
+    }
+
+    private void UpdateSplitBehavior(float deltaTime)
+    {
+        int totalCount = behaviorSplitTotalCount > 0
+            ? behaviorSplitTotalCount
+            : Mathf.Max(1, Mathf.RoundToInt(attackSpec.behaviorParameter));
+        if (totalCount <= 0)
+        {
+            return;
+        }
+
+        float splitLifetime = ResolveBehaviorSplitLifetime();
+        if (splitLifetime <= 0f)
+        {
+            return;
+        }
+
+        float nextElapsedLifetime = elapsedLifetime + Mathf.Max(0f, deltaTime);
+        while (behaviorSplitTriggeredCount < totalCount)
+        {
+            float triggerTime = splitLifetime * (behaviorSplitTriggeredCount + 1) / (totalCount + 1);
+            if (nextElapsedLifetime + 0.0001f < triggerTime)
+            {
+                break;
+            }
+
+            behaviorSplitTriggeredCount++;
+            behaviorSplitEmittedCount += TryEmitBehaviorSplitProjectiles();
+        }
+    }
+
+    private int TryEmitBehaviorSplitProjectiles()
+    {
+        if (currentProjectileNode == null || behaviorSplitEmittedCount >= MaxBehaviorSplitDerivedProjectileCount)
+        {
+            return 0;
+        }
+
+        CharBullet template = spawnTemplate != null ? spawnTemplate : this;
+        SpellProjectileNode childProjectile = SpellProjectileNode.CreateDerivedCoreStatusChild(
+            currentProjectileNode,
+            attackSpec.damage * BehaviorSplitChildDamageMultiplier);
+        if (childProjectile == null || !childProjectile.CanFire)
+        {
+            return 0;
+        }
+
+        Vector3 baseDirection = ResolvePlanarDirection(GetVelocity(Space.World), direction);
+        Vector3 spawnPoint = MovementTarget.position;
+        int emittedCount = 0;
+        int remainingBudget = Mathf.Max(0, MaxBehaviorSplitDerivedProjectileCount - behaviorSplitEmittedCount);
+        for (int i = 0; i < BehaviorSplitChildrenPerTrigger && emittedCount < remainingBudget; i++)
+        {
+            float angle = i == 0 ? -BehaviorSplitForkAngleDegrees : BehaviorSplitForkAngleDegrees;
+            Vector3 splitDirection = Quaternion.AngleAxis(angle, Vector3.up) * baseDirection;
+            Vector3 spawnOffset = splitDirection * Mathf.Max(ResolveImpactRadius() + 0.05f, 0.1f);
+            List<CharBullet> spawnedBullets = new();
+            emittedCount += AttackProjectileEmitter.Emit(
+                template,
+                ownerRoot != null ? ownerRoot : transform,
+                spawnPoint + spawnOffset,
+                splitDirection,
+                childProjectile,
+                targetPolicy,
+                null,
+                spawnedBullets);
+
+            for (int bulletIndex = 0; bulletIndex < spawnedBullets.Count; bulletIndex++)
+            {
+                CharBullet spawnedBullet = spawnedBullets[bulletIndex];
+                if (spawnedBullet == null)
+                {
+                    continue;
+                }
+
+                spawnedBullet.SetIgnoreGameplayPauseStatus(ignoreGameplayPauseStatus);
+            }
+        }
+
+        return emittedCount;
+    }
+
+    private float ResolveBehaviorSplitLifetime()
+    {
+        if (attackSpec.maxLifetime > 0f)
+        {
+            return attackSpec.maxLifetime;
+        }
+
+        if (attackSpec.maxTravelDistance > 0f && behaviorInitialSpeed > 0f)
+        {
+            return attackSpec.maxTravelDistance / behaviorInitialSpeed;
+        }
+
+        return 0f;
+    }
+
+    private void UpdateSpinBehavior(float deltaTime)
+    {
+        if (!TryResolveSpinAnchorPosition(expireIfInvalid: true, out Vector3 anchor))
+        {
+            return;
+        }
+
+        Vector3 currentPosition = MovementTarget.position;
+        if (behaviorSpinRadius <= 0f)
+        {
+            Vector3 anchorVelocity = (anchor - currentPosition) / deltaTime;
+            TrySetWorldPosition(anchor);
+            TrySetVelocity(anchorVelocity, Space.World);
+            ApplyFacingDirection(anchorVelocity.sqrMagnitude > MinimumVectorSqrMagnitude ? anchorVelocity : behaviorBaseDirection);
+            return;
+        }
+
+        float angularDegrees = behaviorInitialSpeed > 0f
+            ? (behaviorInitialSpeed / behaviorSpinRadius) * Mathf.Rad2Deg
+            : 0f;
+        behaviorSpinAngleDegrees += angularDegrees * behaviorSpinDirectionSign * deltaTime;
+        behaviorSpinRadialDirection = Quaternion.AngleAxis(behaviorSpinAngleDegrees, Vector3.up) * Vector3.forward;
+
+        Vector3 nextPosition = anchor + (behaviorSpinRadialDirection * behaviorSpinRadius);
+        Vector3 velocity = (nextPosition - currentPosition) / deltaTime;
+        TrySetWorldPosition(nextPosition);
+        if (velocity.sqrMagnitude > MinimumVectorSqrMagnitude)
+        {
+            TrySetVelocity(velocity, Space.World);
+            ApplyFacingDirection(velocity);
+            return;
+        }
+
+        Vector3 tangent = Quaternion.AngleAxis(90f * behaviorSpinDirectionSign, Vector3.up) * behaviorSpinRadialDirection;
+        TrySetDirection(tangent, Space.World);
+        ApplyFacingDirection(tangent);
+    }
+
+    private float ResolveSpinRadius()
+    {
+        return Mathf.Max(0f, attackSpec.behaviorParameter);
+    }
+
+    private Vector3 ResolveSpinAnchorPosition()
+    {
+        TryResolveSpinAnchorPosition(expireIfInvalid: true, out Vector3 anchorPosition);
+        return anchorPosition;
+    }
+
+    private bool TryResolveSpinAnchorPosition(bool expireIfInvalid, out Vector3 anchorPosition)
+    {
+        if (movementAnchor != null)
+        {
+            if (IsMovementAnchorActive())
+            {
+                behaviorSpinLastAnchorPosition = movementAnchor.position;
+                anchorPosition = behaviorSpinLastAnchorPosition;
+                return true;
+            }
+
+            if (expireWhenMovementAnchorInvalid)
+            {
+                anchorPosition = behaviorSpinLastAnchorPosition;
+                if (expireIfInvalid && isActiveShot)
+                {
+                    Expire();
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
+        if (expireWhenMovementAnchorInvalid && movementAnchor == null)
+        {
+            anchorPosition = behaviorSpinLastAnchorPosition;
+            if (expireIfInvalid && isActiveShot)
+            {
+                Expire();
+                return false;
+            }
+
+            return true;
+        }
+
+        if (ownerRoot != null)
+        {
+            behaviorSpinLastAnchorPosition = ownerRoot.position;
+            anchorPosition = behaviorSpinLastAnchorPosition;
+            return true;
+        }
+
+        anchorPosition = behaviorSpinLastAnchorPosition;
+        return true;
+    }
+
+    private bool IsMovementAnchorActive()
+    {
+        if (movementAnchor == null)
+        {
+            return false;
+        }
+
+        if (movementAnchor.TryGetComponent(out CharBullet anchorBullet))
+        {
+            return anchorBullet.IsActiveShot && anchorBullet.gameObject.activeInHierarchy;
+        }
+
+        return movementAnchor.gameObject.activeInHierarchy;
+    }
+
+    private Vector3 ResolveSpinRadialDirection(Vector3 anchorPosition)
+    {
+        Vector3 radial = spawnWorldPosition - anchorPosition;
+        radial.y = 0f;
+        return ResolvePlanarDirection(radial, behaviorBaseDirection);
+    }
+
+    private void RunImpactContactsIfAllowed()
+    {
+        if (!ShouldBeginDirectImpactCheck())
+        {
+            return;
+        }
+
+        try
+        {
+            CheckImpactContacts();
+        }
+        finally
+        {
+            stasisDirectImpactInProgress = false;
+        }
+    }
+
+    private bool ShouldBeginDirectImpactCheck()
+    {
+        if (!ShouldUseStasisBehavior())
+        {
+            return true;
+        }
+
+        if (stasisDirectImpactConsumed)
+        {
+            return false;
+        }
+
+        stasisDirectImpactConsumed = true;
+        stasisDirectImpactInProgress = true;
+        return true;
     }
 
     /// <summary>
@@ -1292,6 +1796,38 @@ public sealed class CharBullet : MonoBehaviour
         float deltaX = to.x - from.x;
         float deltaZ = to.z - from.z;
         return (deltaX * deltaX) + (deltaZ * deltaZ);
+    }
+
+    private static Vector3 ResolvePlanarDirection(Vector3 candidate, Vector3 fallback)
+    {
+        candidate.y = 0f;
+        if (candidate.sqrMagnitude > MinimumVectorSqrMagnitude)
+        {
+            return candidate.normalized;
+        }
+
+        fallback.y = 0f;
+        if (fallback.sqrMagnitude > MinimumVectorSqrMagnitude)
+        {
+            return fallback.normalized;
+        }
+
+        return Vector3.forward;
+    }
+
+    private static Vector3 ResolvePlanarRightDirection(Vector3 forward)
+    {
+        Vector3 right = Vector3.Cross(Vector3.up, ResolvePlanarDirection(forward, Vector3.forward));
+        return right.sqrMagnitude > MinimumVectorSqrMagnitude ? right.normalized : Vector3.right;
+    }
+
+    private static float ResolveBehaviorSeed(Vector3 spawnPosition, Vector3 baseDirection)
+    {
+        float seed = (spawnPosition.x * 12.9898f) +
+                     (spawnPosition.z * 78.233f) +
+                     (baseDirection.x * 37.719f) +
+                     (baseDirection.z * 11.137f);
+        return Mathf.Repeat(Mathf.Sin(seed) * 43758.5453f, 1000f);
     }
 
     /// <summary>
@@ -1556,7 +2092,29 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool TryRegisterImpact(Collider other)
     {
-        return TryRegisterImpactInternal(other, null, out _);
+        bool isStasisImpact = ShouldUseStasisBehavior();
+        if (isStasisImpact && stasisDirectImpactConsumed && !stasisDirectImpactInProgress)
+        {
+            return false;
+        }
+
+        if (isStasisImpact && !stasisDirectImpactInProgress)
+        {
+            stasisDirectImpactConsumed = true;
+            stasisDirectImpactInProgress = true;
+        }
+
+        try
+        {
+            return TryRegisterImpactInternal(other, null, out _);
+        }
+        finally
+        {
+            if (isStasisImpact)
+            {
+                stasisDirectImpactInProgress = false;
+            }
+        }
     }
 
     /// <summary>
@@ -1592,6 +2150,11 @@ public sealed class CharBullet : MonoBehaviour
 
         if (isEnvironmentImpact)
         {
+            if (IsPiercingLightCore())
+            {
+                return TryHandleLightEnvironmentPenetration(other, out stopFurtherProcessing);
+            }
+
             return TryHandleEnvironmentImpact(other, impactNormal, out stopFurtherProcessing);
         }
 
@@ -1604,11 +2167,28 @@ public sealed class CharBullet : MonoBehaviour
         Vector3 impactPoint = GetImpactPoint(other);
         Enemy primaryEnemy = other.GetComponentInParent<Enemy>();
         float directDamage = ResolveDirectDamage(primaryEnemy);
+        if (IsPiercingLightCore())
+        {
+            bool appliedLightDamage = TryApplyLightDirectDamage(other, targetRoot, directDamage);
+            DecayLightDamageAfterPenetration();
+            stopFurtherProcessing = false;
+            return appliedLightDamage;
+        }
+
         bool shouldApplyHealing = ShouldApplyHealingOnImpact();
         bool appliedDirectEffect = TryApplyConfiguredDirectDamage(other, targetRoot, "Direct", directDamage, out Enemy damagedEnemy, out _);
-        if (appliedDirectEffect && !shouldApplyHealing)
+        if (appliedDirectEffect)
         {
-            TryApplyPostHitEffects(targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy);
+            if (shouldApplyHealing)
+            {
+                TryApplyHealingAreaAt(impactPoint, GetResultEffects().effectRadius, directDamage, targetRoot);
+            }
+            else
+            {
+                TryApplyPostHitEffects(other, targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy);
+            }
+
+            TryExecuteOnHitPayloads(impactPoint, directDamage, other, damagedEnemy != null ? damagedEnemy : primaryEnemy, targetRoot);
         }
 
         ApplyLifeCost(attackSpec.impactLifeCost);
@@ -1628,6 +2208,8 @@ public sealed class CharBullet : MonoBehaviour
         stopFurtherProcessing = false;
         if (!ShouldBounceOnEnvironment())
         {
+            TryApplyCoreWindPressureAt(GetImpactPoint(other));
+            TryExecuteOnHitPayloads(GetImpactPoint(other), Damage, null, null, null);
             ApplyLifeCost(attackSpec.impactLifeCost);
             stopFurtherProcessing = true;
             return true;
@@ -1760,7 +2342,13 @@ public sealed class CharBullet : MonoBehaviour
     /// param: damagedEnemy 若成功造成伤害则输出被命中的敌人组件
     /// returns: 成功对敌人结算伤害时返回 true
     /// </summary>
-    private bool TryApplyDamageToEnemy(Collider other, Transform targetRoot, string damageSource, float damageAmount, out Enemy damagedEnemy)
+    private bool TryApplyDamageToEnemy(
+        Collider other,
+        Transform targetRoot,
+        string damageSource,
+        float damageAmount,
+        out Enemy damagedEnemy,
+        bool triggerOnKillPayload = true)
     {
         damagedEnemy = null;
         Enemy enemy = other.GetComponentInParent<Enemy>();
@@ -1778,9 +2366,17 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         string targetName = targetRoot != null ? targetRoot.name : "<destroyed>";
+        Vector3 killPoint = targetRoot != null ? targetRoot.position : (MovementTarget != null ? MovementTarget.position : transform.position);
         float previousHealth = enemy.CurrentHealth;
+        float dropChanceMultiplier = ResolveDropChanceMultiplierOnKill();
+        if (dropChanceMultiplier > 1f)
+        {
+            EnemyDropBonusController.RegisterDropChanceMultiplier(enemy, dropChanceMultiplier);
+        }
+
         if (!enemy.TryApplyDamage(damageAmount, out float remainingHealth, out bool isDead))
         {
+            EnemyDropBonusController.ClearDropChanceMultiplier(enemy);
             GameDebug.LogFormat(
                 "[CharBullet] Enemy target='{0}' ignored {1} damage={2} health={3}/{4}",
                 targetName,
@@ -1803,10 +2399,65 @@ public sealed class CharBullet : MonoBehaviour
         if (isDead)
         {
             GameDebug.LogFormat("[CharBullet] Enemy target='{0}' died from {1}.", targetName, damageSource);
+            if (triggerOnKillPayload)
+            {
+                TryExecuteOnKillPayloads(killPoint, damageAmount, other, enemy, targetRoot);
+            }
+        }
+        else if (dropChanceMultiplier > 1f)
+        {
+            EnemyDropBonusController.ClearDropChanceMultiplier(enemy);
         }
 
         damagedEnemy = enemy;
         return true;
+    }
+
+    private bool TryHandleLightEnvironmentPenetration(Collider other, out bool stopFurtherProcessing)
+    {
+        stopFurtherProcessing = false;
+        if (other == null || !penetratedEnvironmentColliders.Add(other.GetInstanceID()))
+        {
+            return false;
+        }
+
+        DecayLightDamageAfterPenetration();
+        return true;
+    }
+
+    private bool TryApplyLightDirectDamage(Collider other, Transform targetRoot, float directDamage)
+    {
+        bool damagedAnyTarget = false;
+        if (ShouldDamageEnemies())
+        {
+            damagedAnyTarget |= TryApplyDamageToEnemy(other, targetRoot, "LightDirect", directDamage, out _, triggerOnKillPayload: false);
+        }
+
+        if (ShouldDamagePlayer())
+        {
+            damagedAnyTarget |= TryApplyDamageToPlayer(other, targetRoot, "LightDirect", directDamage, out _);
+        }
+
+        return damagedAnyTarget;
+    }
+
+    private void DecayLightDamageAfterPenetration()
+    {
+        CoreEffectPayload coreEffects = GetCoreEffects();
+        float multiplier = coreEffects.penetrationDamageMultiplier > 0f ? coreEffects.penetrationDamageMultiplier : 1f;
+        AttackSpec decayedSpec = attackSpec;
+        decayedSpec.damage = Mathf.Max(0f, decayedSpec.damage * multiplier);
+        attackSpec = decayedSpec.GetSanitized();
+    }
+
+    private float ResolveDropChanceMultiplierOnKill()
+    {
+        if (currentProjectileNode == null)
+        {
+            return 1f;
+        }
+
+        return currentProjectileNode.RuntimeModifiers.GetSanitized().dropChanceMultiplierOnKill;
     }
 
     /// <summary>
@@ -1895,13 +2546,25 @@ public sealed class CharBullet : MonoBehaviour
     /// param: damagedEnemy 当前主命中若为敌人且仍存活则输出对应 Enemy
     /// returns: 无
     /// </summary>
-    private void TryApplyPostHitEffects(Transform targetRoot, Vector3 impactPoint, float directDamage, Enemy primaryEnemy, Enemy damagedEnemy)
+    private void TryApplyPostHitEffects(Collider impactCollider, Transform targetRoot, Vector3 impactPoint, float directDamage, Enemy primaryEnemy, Enemy damagedEnemy)
     {
+        ResultEffectPayload resultEffects = GetResultEffects();
+        if (IsCurrentResultType(AttackResultType.Confuse))
+        {
+            TryApplyRandomResultEffect(impactCollider, targetRoot, impactPoint, directDamage, primaryEnemy, damagedEnemy, resultEffects);
+        }
+
         TryApplyExplosionDamageAt(impactPoint, directDamage);
         TryEmitSplitProjectiles(impactPoint, targetRoot, directDamage);
+        TryApplyDrainToOwner(directDamage, resultEffects);
+        TryApplyShieldToOwner(directDamage, resultEffects);
+        TrySpawnLingeringAreaAt(impactPoint, directDamage, resultEffects);
+        TryApplyDisplacementAt(impactPoint, resultEffects);
+        TryApplyCoreWindPressureAt(impactPoint);
         if (primaryEnemy != null)
         {
             TryApplyThunderChain(targetRoot);
+            TryApplyBehaviorChain(targetRoot, directDamage);
         }
 
         if (damagedEnemy == null || damagedEnemy.Equals(null))
@@ -1910,7 +2573,132 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         TryApplyCoreEnemyEffects(damagedEnemy);
-        TryApplyResultEnemyEffects(damagedEnemy);
+        TryApplyResultEnemyEffects(damagedEnemy, impactPoint);
+    }
+
+    private int TryApplyRandomResultEffect(
+        Collider impactCollider,
+        Transform targetRoot,
+        Vector3 impactPoint,
+        float directDamage,
+        Enemy primaryEnemy,
+        Enemy damagedEnemy,
+        ResultEffectPayload confuseEffects,
+        int remainingBudget = MaxPayloadDerivedProjectileCount)
+    {
+        if (!confuseEffects.HasRandomResultCandidates ||
+            !TryResolveRandomResultCandidate(confuseEffects, out RandomResultCandidatePayload candidate))
+        {
+            return 0;
+        }
+
+        return TryApplyExplicitResultEffect(
+            candidate.resultType,
+            candidate.resultEffects,
+            impactCollider,
+            targetRoot,
+            impactPoint,
+            directDamage,
+            primaryEnemy,
+            damagedEnemy,
+            remainingBudget);
+    }
+
+    private bool TryResolveRandomResultCandidate(
+        ResultEffectPayload confuseEffects,
+        out RandomResultCandidatePayload candidate)
+    {
+        candidate = default;
+        RandomResultCandidatePayload[] candidates = confuseEffects.randomResultCandidates;
+        if (candidates == null || candidates.Length <= 0)
+        {
+            return false;
+        }
+
+        int rawIndex = ConfuseCandidateIndexResolver != null
+            ? ConfuseCandidateIndexResolver(candidates.Length)
+            : UnityEngine.Random.Range(0, candidates.Length);
+        int resolvedIndex = Mathf.Clamp(rawIndex, 0, candidates.Length - 1);
+        candidate = candidates[resolvedIndex].GetSanitized();
+        return candidate.IsValid;
+    }
+
+    private int TryApplyExplicitResultEffect(
+        AttackResultType resultType,
+        ResultEffectPayload resultEffects,
+        Collider impactCollider,
+        Transform targetRoot,
+        Vector3 impactPoint,
+        float directDamage,
+        Enemy primaryEnemy,
+        Enemy damagedEnemy,
+        int remainingBudget)
+    {
+        resultEffects = resultEffects.GetSanitized();
+        if (resultEffects.HasStatusApplications)
+        {
+            if (resultEffects.effectRadius > 0f)
+            {
+                TryApplyStatusApplicationsAreaAt(impactPoint, resultEffects.effectRadius, resultEffects.statusApplications, null);
+            }
+            else
+            {
+                TryApplyStatusApplicationsToEnemy(damagedEnemy, resultEffects.statusApplications);
+            }
+        }
+
+        switch (resultType)
+        {
+            case AttackResultType.Explosion:
+                TryApplyExplosionDamageAt(impactPoint, directDamage, resultEffects);
+                break;
+            case AttackResultType.Split:
+                return TryEmitSplitProjectiles(
+                    impactPoint,
+                    targetRoot,
+                    directDamage,
+                    resultEffects,
+                    currentProjectileNode,
+                    remainingBudget);
+            case AttackResultType.Healing:
+                TryApplyPayloadHealingEffect(
+                    impactCollider,
+                    damagedEnemy != null && !damagedEnemy.Equals(null) ? damagedEnemy : primaryEnemy,
+                    targetRoot,
+                    impactPoint,
+                    directDamage * resultEffects.healingMultiplier,
+                    resultEffects.effectRadius);
+                break;
+            case AttackResultType.StatusEffect:
+                if (resultEffects.HasControl)
+                {
+                    if (resultEffects.effectRadius > 0f)
+                    {
+                        TryApplyControlAreaAt(impactPoint, resultEffects.effectRadius, resultEffects, null);
+                    }
+                    else
+                    {
+                        TryApplyControlToEnemy(damagedEnemy, resultEffects);
+                    }
+                }
+
+                break;
+            case AttackResultType.Drain:
+                TryApplyDrainToOwner(directDamage, resultEffects, resultType);
+                break;
+            case AttackResultType.Shield:
+                TryApplyShieldToOwner(directDamage, resultEffects, resultType);
+                break;
+            case AttackResultType.Leave:
+                TrySpawnLingeringAreaAt(impactPoint, directDamage, resultEffects, resultType);
+                break;
+            case AttackResultType.Push:
+            case AttackResultType.Pull:
+                TryApplyDisplacementAt(impactPoint, resultEffects, resultType);
+                break;
+        }
+
+        return 0;
     }
 
     /// <summary>
@@ -1940,6 +2728,11 @@ public sealed class CharBullet : MonoBehaviour
         {
             statusController.ApplySlow(coreEffects.slowPercent, coreEffects.slowDuration);
         }
+
+        if (coreEffects.HasStatusApplications)
+        {
+            statusController.TryApplyStatusApplications(coreEffects.statusApplications);
+        }
     }
 
     /// <summary>
@@ -1947,22 +2740,255 @@ public sealed class CharBullet : MonoBehaviour
     /// param: enemy 当前主命中的敌人
     /// returns: 无
     /// </summary>
-    private void TryApplyResultEnemyEffects(Enemy enemy)
+    private void TryApplyResultEnemyEffects(Enemy enemy, Vector3 impactPoint)
     {
-        if (enemy == null || enemy.Equals(null) || !ShouldTriggerControl())
-        {
-            return;
-        }
-
-        TryNotifyEnemyControlHit(enemy);
-
-        if (!enemy.TryGetComponent(out EnemyStatusEffectController statusController))
+        if (enemy == null || enemy.Equals(null))
         {
             return;
         }
 
         ResultEffectPayload resultEffects = GetResultEffects();
-        statusController.RegisterControlHit(resultEffects.controlTriggerCount, resultEffects.controlDuration);
+        if (resultEffects.HasStatusApplications)
+        {
+            TryApplyStatusApplicationsToEnemy(enemy, resultEffects.statusApplications);
+        }
+
+        if (!ShouldTriggerControl())
+        {
+            return;
+        }
+
+        if (resultEffects.effectRadius > 0f)
+        {
+            TryApplyControlAreaAt(impactPoint, resultEffects.effectRadius, resultEffects, null);
+            return;
+        }
+
+        TryApplyControlToEnemy(enemy, resultEffects);
+    }
+
+    private void TryApplyDrainToOwner(float directDamage, ResultEffectPayload resultEffects, AttackResultType resultType = AttackResultType.None)
+    {
+        if (!IsResultType(AttackResultType.Drain, resultType) || directDamage <= 0f)
+        {
+            return;
+        }
+
+        float healingAmount = directDamage * ResultDrainHealingMultiplier * Mathf.Max(0f, resultEffects.effectStrength);
+        if (healingAmount <= 0f || ownerRoot == null)
+        {
+            return;
+        }
+
+        PlayerHealth ownerPlayer = ownerRoot.GetComponentInParent<PlayerHealth>();
+        ownerPlayer ??= ownerRoot.GetComponentInChildren<PlayerHealth>();
+        if (ownerPlayer != null)
+        {
+            ownerPlayer.TryApplyHealing(healingAmount, out _, out _);
+            return;
+        }
+
+        Enemy ownerEnemy = ownerRoot.GetComponentInParent<Enemy>();
+        ownerEnemy ??= ownerRoot.GetComponentInChildren<Enemy>();
+        if (ownerEnemy != null && !ownerEnemy.Equals(null))
+        {
+            ownerEnemy.TryApplyHealing(healingAmount, out _, out _);
+        }
+    }
+
+    private void TryApplyShieldToOwner(float directDamage, ResultEffectPayload resultEffects, AttackResultType resultType = AttackResultType.None)
+    {
+        if (!IsResultType(AttackResultType.Shield, resultType) || directDamage <= 0f || ownerRoot == null)
+        {
+            return;
+        }
+
+        float shieldAmount = directDamage * ResultShieldAmountMultiplier * Mathf.Max(0f, resultEffects.effectStrength);
+        float shieldDuration = Mathf.Max(0f, resultEffects.shieldDuration);
+        if (shieldAmount <= 0f || shieldDuration <= 0f)
+        {
+            return;
+        }
+
+        Transform shieldRoot = ResolveOwnerHealthRoot();
+        DamageShieldController shield = DamageShieldController.GetOrAdd(shieldRoot);
+        shield?.AddShield(shieldAmount, shieldDuration);
+    }
+
+    private void TrySpawnLingeringAreaAt(Vector3 impactPoint, float directDamage, ResultEffectPayload resultEffects, AttackResultType resultType = AttackResultType.None)
+    {
+        if (!IsResultType(AttackResultType.Leave, resultType) || !resultEffects.HasLingeringArea)
+        {
+            return;
+        }
+
+        float tickDamage = directDamage * resultEffects.areaDamageMultiplier;
+        LingeringResultAreaRuntime.Spawn(
+            impactPoint,
+            resultEffects.effectDuration,
+            resultEffects.areaTickSeconds,
+            resultEffects.effectRadius,
+            tickDamage,
+            attackSpec.impactMask,
+            targetPolicy,
+            ownerRoot,
+            GetCoreEffects());
+    }
+
+    private int TryApplyDisplacementAt(Vector3 impactPoint, ResultEffectPayload resultEffects, AttackResultType resultType = AttackResultType.None)
+    {
+        bool isPush = IsResultType(AttackResultType.Push, resultType);
+        bool isPull = IsResultType(AttackResultType.Pull, resultType);
+        if ((!isPush && !isPull) || !resultEffects.HasDisplacement || !ShouldDamageEnemies())
+        {
+            return 0;
+        }
+
+        return TryApplyEnemyDisplacementArea(
+            impactPoint,
+            resultEffects.effectRadius,
+            ResultDisplacementDistancePerStrength * Mathf.Max(0f, resultEffects.effectStrength),
+            Mathf.Max(0f, resultEffects.effectStrength),
+            isPull);
+    }
+
+    private int TryApplyCoreWindPressureAt(Vector3 impactPoint)
+    {
+        CoreEffectPayload coreEffects = GetCoreEffects();
+        if (!coreEffects.HasWindPressure || !ShouldDamageEnemies())
+        {
+            return 0;
+        }
+
+        return TryApplyEnemyDisplacementArea(
+            impactPoint,
+            coreEffects.windPressureRadius,
+            coreEffects.windPressureDistance,
+            coreEffects.windDisplacementWeightLimit,
+            pullTowardImpact: false);
+    }
+
+    private int TryApplyEnemyDisplacementArea(
+        Vector3 impactPoint,
+        float effectRadius,
+        float displacementDistance,
+        float maxDisplacementWeight,
+        bool pullTowardImpact)
+    {
+        if (effectRadius <= 0f || displacementDistance <= 0f || !ShouldDamageEnemies())
+        {
+            return 0;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(impactPoint, effectRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        HashSet<int> displacedRoots = new();
+        int displacedCount = 0;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            Enemy enemy = overlap.GetComponentInParent<Enemy>();
+            if (overlapRoot == null ||
+                enemy == null ||
+                enemy.Equals(null) ||
+                enemy.DisplacementWeight > maxDisplacementWeight ||
+                !displacedRoots.Add(overlapRoot.GetInstanceID()) ||
+                !IsEnemyImpactTarget(overlap, overlapRoot, enemy))
+            {
+                continue;
+            }
+
+            Vector3 planarOffset = overlapRoot.position - impactPoint;
+            planarOffset.y = 0f;
+            Vector3 directionFromImpact = planarOffset.sqrMagnitude > MinimumVectorSqrMagnitude
+                ? planarOffset.normalized
+                : Vector3.forward;
+            Vector3 displacementDirection = pullTowardImpact ? -directionFromImpact : directionFromImpact;
+            float appliedDistance = displacementDistance;
+            if (pullTowardImpact)
+            {
+                appliedDistance = Mathf.Min(displacementDistance, Mathf.Max(0f, planarOffset.magnitude - 0.1f));
+            }
+
+            if (appliedDistance <= 0f)
+            {
+                continue;
+            }
+
+            Vector3 targetPosition = overlapRoot.position + (displacementDirection * appliedDistance);
+            targetPosition.y = overlapRoot.position.y;
+            ApplyEnemyDisplacement(overlapRoot, targetPosition);
+            displacedCount++;
+        }
+
+        return displacedCount;
+    }
+
+    private Transform ResolveOwnerHealthRoot()
+    {
+        if (ownerRoot == null)
+        {
+            return null;
+        }
+
+        PlayerHealth ownerPlayer = ownerRoot.GetComponentInParent<PlayerHealth>();
+        if (ownerPlayer != null)
+        {
+            return ownerPlayer.transform;
+        }
+
+        ownerPlayer = ownerRoot.GetComponentInChildren<PlayerHealth>();
+        if (ownerPlayer != null)
+        {
+            return ownerPlayer.transform;
+        }
+
+        Enemy ownerEnemy = ownerRoot.GetComponentInParent<Enemy>();
+        if (ownerEnemy != null && !ownerEnemy.Equals(null))
+        {
+            return ownerEnemy.transform;
+        }
+
+        ownerEnemy = ownerRoot.GetComponentInChildren<Enemy>();
+        return ownerEnemy != null && !ownerEnemy.Equals(null) ? ownerEnemy.transform : null;
+    }
+
+    private static void ApplyEnemyDisplacement(Transform enemyRoot, Vector3 worldPosition)
+    {
+        if (enemyRoot == null)
+        {
+            return;
+        }
+
+        Rigidbody rigidbody = enemyRoot.GetComponent<Rigidbody>();
+        if (rigidbody != null)
+        {
+            rigidbody.position = worldPosition;
+            rigidbody.transform.position = worldPosition;
+            rigidbody.linearVelocity = Vector3.zero;
+            return;
+        }
+
+        enemyRoot.position = worldPosition;
+    }
+
+    private bool TryApplyStatusApplicationsToEnemy(Enemy enemy, SpellStatusApplication[] applications)
+    {
+        if (enemy == null || enemy.Equals(null) || applications == null || applications.Length <= 0)
+        {
+            return false;
+        }
+
+        return enemy.TryGetComponent(out EnemyStatusEffectController statusController) &&
+               statusController.TryApplyStatusApplications(applications) > 0;
     }
 
     /// <summary>
@@ -2028,6 +3054,95 @@ public sealed class CharBullet : MonoBehaviour
     }
 
     /// <summary>
+    /// summary: Chain 行为命中后向附近未命中过的敌人传导 50% 直伤；不触发 payload，也不递归派生。
+    /// param: primaryRoot 当前主命中的敌人根节点
+    /// param: directDamage 当前主命中实际造成的直伤
+    /// returns: 无
+    /// </summary>
+    private void TryApplyBehaviorChain(Transform primaryRoot, float directDamage)
+    {
+        if (primaryRoot == null ||
+            attackSpec.behaviorType != AttackBehaviorType.Chain ||
+            attackSpec.chainCount <= 0 ||
+            directDamage <= 0f)
+        {
+            return;
+        }
+
+        HashSet<int> visitedRoots = new();
+        visitedRoots.Add(primaryRoot.GetInstanceID());
+
+        Transform currentRoot = primaryRoot;
+        float chainDamage = directDamage * 0.5f;
+        int remainingChains = Mathf.Max(0, attackSpec.chainCount);
+        while (remainingChains > 0 &&
+               TryResolveNearestBehaviorChainTarget(
+                   currentRoot.position,
+                   visitedRoots,
+                   out Collider chainCollider,
+                   out Transform chainRoot))
+        {
+            visitedRoots.Add(chainRoot.GetInstanceID());
+            TryApplyDamageToEnemy(chainCollider, chainRoot, "BehaviorChain", chainDamage, out _, triggerOnKillPayload: false);
+            currentRoot = chainRoot;
+            remainingChains--;
+        }
+    }
+
+    private bool TryResolveNearestBehaviorChainTarget(
+        Vector3 searchCenter,
+        HashSet<int> visitedRoots,
+        out Collider bestCollider,
+        out Transform bestRoot)
+    {
+        bestCollider = null;
+        bestRoot = null;
+        if (visitedRoots == null || !ShouldDamageEnemies())
+        {
+            return false;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(searchCenter, DefaultBehaviorChainRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        float bestDistanceSqr = float.MaxValue;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Enemy chainedEnemy = overlap.GetComponentInParent<Enemy>();
+            Transform overlapRoot = chainedEnemy != null
+                ? chainedEnemy.transform
+                : (overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root);
+            if (chainedEnemy == null ||
+                chainedEnemy.IsDead ||
+                overlapRoot == null ||
+                visitedRoots.Contains(overlapRoot.GetInstanceID()) ||
+                !IsEnemyImpactTarget(overlap, overlapRoot, chainedEnemy))
+            {
+                continue;
+            }
+
+            float distanceSqr = GetPlanarDistanceSqr(searchCenter, overlapRoot.position);
+            if (distanceSqr >= bestDistanceSqr)
+            {
+                continue;
+            }
+
+            bestDistanceSqr = distanceSqr;
+            bestCollider = overlap;
+            bestRoot = overlapRoot;
+        }
+
+        return bestCollider != null && bestRoot != null;
+    }
+
+    /// <summary>
     /// summary: 若当前编译结果带有爆炸语义，则在命中点附近再做一次 AoE 伤害结算。
     /// param: impactPoint 当前命中的世界位置
     /// param: directDamage 当前直击实际造成的伤害值
@@ -2041,14 +3156,24 @@ public sealed class CharBullet : MonoBehaviour
         }
 
         ResultEffectPayload resultEffects = GetResultEffects();
-        float explosionRadius = GetExplosionRadius();
+        TryApplyExplosionDamageAt(impactPoint, directDamage, resultEffects, GetExplosionRadius());
+    }
+
+    private void TryApplyExplosionDamageAt(Vector3 impactPoint, float directDamage, ResultEffectPayload resultEffects)
+    {
+        TryApplyExplosionDamageAt(impactPoint, directDamage, resultEffects, resultEffects.explosionRadius);
+    }
+
+    private void TryApplyExplosionDamageAt(Vector3 impactPoint, float directDamage, ResultEffectPayload resultEffects, float explosionRadius)
+    {
+        resultEffects = resultEffects.GetSanitized();
         float explosionDamage = directDamage * resultEffects.explosionDamageMultiplier;
         if (explosionRadius <= 0f || explosionDamage <= 0f)
         {
             return;
         }
 
-        float explosionDelaySeconds = GetExplosionDelaySeconds();
+        float explosionDelaySeconds = resultEffects.explosionDelaySeconds;
         if (explosionDelaySeconds > 0f)
         {
             if (TrySpawnDelayedExplosionAt(impactPoint, explosionRadius, explosionDamage, explosionDelaySeconds))
@@ -2153,34 +3278,58 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private void TryEmitSplitProjectiles(Vector3 impactPoint, Transform targetRoot, float directDamage)
     {
-        if (!ShouldTriggerSplit() || compiledAttack == null)
+        if (!ShouldTriggerSplit())
         {
             return;
         }
 
         ResultEffectPayload resultEffects = GetResultEffects();
-        CharBullet template = spawnTemplate != null ? spawnTemplate : this;
-        CompiledAttack childAttack = compiledAttack.Clone();
-        AttackSpec childSpec = childAttack.AttackSpec;
-        childSpec.damage = Mathf.Max(0f, directDamage * resultEffects.splitDamageMultiplier);
-        childSpec.resultType = AttackResultType.DirectDamage;
-        childAttack.AttackSpec = childSpec.GetSanitized();
-        childAttack.ResultType = AttackResultType.DirectDamage;
-        childAttack.ResultEffects = default;
-        childAttack.HasExplosion = false;
-        childAttack.ExplosionRadius = 0f;
+        TryEmitSplitProjectiles(
+            impactPoint,
+            targetRoot,
+            directDamage,
+            resultEffects,
+            currentProjectileNode,
+            int.MaxValue);
+    }
 
-        for (int i = 0; i < resultEffects.splitProjectileCount; i++)
+    private int TryEmitSplitProjectiles(
+        Vector3 impactPoint,
+        Transform targetRoot,
+        float directDamage,
+        ResultEffectPayload resultEffects,
+        SpellProjectileNode splitProjectile,
+        int remainingBudget)
+    {
+        if (!resultEffects.HasSplit || remainingBudget <= 0)
+        {
+            return 0;
+        }
+
+        CharBullet template = spawnTemplate != null ? spawnTemplate : this;
+        SpellProjectileNode childProjectile = CreateSplitChildProjectile(
+            splitProjectile,
+            directDamage,
+            resultEffects);
+        if (childProjectile == null || !childProjectile.CanFire)
+        {
+            return 0;
+        }
+
+        int emittedCount = 0;
+        int childProjectileCount = Mathf.Max(1, childProjectile.ProjectileCount);
+        int requestedSplitCount = Mathf.Min(resultEffects.splitProjectileCount, remainingBudget / childProjectileCount);
+        for (int i = 0; i < requestedSplitCount && emittedCount < remainingBudget; i++)
         {
             Vector3 splitDirection = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, 360f), Vector3.up) * Vector3.forward;
             Vector3 spawnOffset = splitDirection * Mathf.Max(ResolveImpactRadius() + 0.05f, 0.1f);
             List<CharBullet> spawnedBullets = new();
-            AttackProjectileEmitter.Emit(
+            emittedCount += AttackProjectileEmitter.Emit(
                 template,
                 ownerRoot != null ? ownerRoot : transform,
                 impactPoint + spawnOffset,
                 splitDirection,
-                childAttack,
+                childProjectile,
                 targetPolicy,
                 null,
                 spawnedBullets);
@@ -2197,6 +3346,585 @@ public sealed class CharBullet : MonoBehaviour
                 spawnedBullet.SetIgnoreGameplayPauseStatus(ignoreGameplayPauseStatus);
             }
         }
+
+        return emittedCount;
+    }
+
+    private static SpellProjectileNode CreateSplitChildProjectile(
+        SpellProjectileNode splitProjectile,
+        float directDamage,
+        ResultEffectPayload resultEffects)
+    {
+        if (splitProjectile == null)
+        {
+            return null;
+        }
+
+        float childDamage = Mathf.Max(0f, directDamage * resultEffects.splitDamageMultiplier);
+        return SpellProjectileNode.CreateDerivedCoreStatusChild(splitProjectile, childDamage);
+    }
+
+    private void TryExecuteOnHitPayloads(
+        Vector3 impactPoint,
+        float baseDamage,
+        Collider payloadCollider,
+        Enemy payloadEnemy,
+        Transform targetRoot)
+    {
+        TryExecutePayloadsByTrigger(SpellTriggerType.OnHit, impactPoint, baseDamage, payloadCollider, payloadEnemy, targetRoot);
+    }
+
+    private void TryExecuteOnKillPayloads(
+        Vector3 killPoint,
+        float baseDamage,
+        Collider payloadCollider,
+        Enemy payloadEnemy,
+        Transform targetRoot)
+    {
+        TryExecutePayloadsByTrigger(SpellTriggerType.OnKill, killPoint, baseDamage, payloadCollider, payloadEnemy, targetRoot);
+    }
+
+    private void CheckNonImpactPayloadTriggers()
+    {
+        if (activePayloads.Count <= 0)
+        {
+            return;
+        }
+
+        Vector3 currentPoint = MovementTarget != null ? MovementTarget.position : transform.position;
+        for (int i = 0; i < activePayloads.Count; i++)
+        {
+            SpellPayloadBlock payload = activePayloads[i];
+            if (payload == null || payload.InnerBlock == null || executedOneShotPayloads.Contains(payload))
+            {
+                continue;
+            }
+
+            switch (payload.TriggerType)
+            {
+                case SpellTriggerType.OnTimer:
+                    if (elapsedLifetime >= payload.ParameterValue)
+                    {
+                        TryExecutePayload(payload, currentPoint, Damage, null, null, null);
+                    }
+                    break;
+                case SpellTriggerType.OnDistance:
+                    if ((currentPoint - spawnWorldPosition).magnitude >= payload.ParameterValue)
+                    {
+                        TryExecutePayload(payload, currentPoint, Damage, null, null, null);
+                    }
+                    break;
+                case SpellTriggerType.OnProximity:
+                    if (TryResolveNearestPayloadTarget(
+                            payload.ParameterValue,
+                            out Collider proximityCollider,
+                            out Enemy proximityEnemy,
+                            out Transform proximityRoot,
+                            out Vector3 proximityPoint))
+                    {
+                        TryExecutePayload(payload, proximityPoint, Damage, proximityCollider, proximityEnemy, proximityRoot);
+                    }
+                    break;
+            }
+        }
+    }
+
+    private void TryExecutePayloadsByTrigger(
+        SpellTriggerType triggerType,
+        Vector3 triggerPoint,
+        float baseDamage,
+        Collider payloadCollider,
+        Enemy payloadEnemy,
+        Transform targetRoot)
+    {
+        if (activePayloads.Count <= 0)
+        {
+            return;
+        }
+
+        int remainingDerivedProjectiles = MaxPayloadDerivedProjectileCount;
+        for (int i = 0; i < activePayloads.Count; i++)
+        {
+            SpellPayloadBlock payload = activePayloads[i];
+            if (payload == null || payload.TriggerType != triggerType || payload.InnerBlock == null)
+            {
+                continue;
+            }
+
+            if (triggerType != SpellTriggerType.OnHit && executedOneShotPayloads.Contains(payload))
+            {
+                continue;
+            }
+
+            remainingDerivedProjectiles -= TryExecutePayload(
+                payload,
+                triggerPoint,
+                baseDamage,
+                payloadCollider,
+                payloadEnemy,
+                targetRoot,
+                remainingDerivedProjectiles);
+            remainingDerivedProjectiles = Mathf.Max(0, remainingDerivedProjectiles);
+        }
+    }
+
+    private int TryExecutePayload(
+        SpellPayloadBlock payload,
+        Vector3 triggerPoint,
+        float baseDamage,
+        Collider payloadCollider,
+        Enemy payloadEnemy,
+        Transform targetRoot,
+        int remainingDerivedProjectiles = MaxPayloadDerivedProjectileCount)
+    {
+        if (payload == null || payload.InnerBlock == null)
+        {
+            return 0;
+        }
+
+        if (payload.TriggerType != SpellTriggerType.OnHit)
+        {
+            executedOneShotPayloads.Add(payload);
+        }
+
+        SpellCastBlock innerBlock = payload.InnerBlock;
+        if (innerBlock.Depth > MaxPayloadDepth)
+        {
+            GameDebug.LogWarning("[CharBullet] Ignored trigger payload because it exceeds the maximum payload depth.");
+            return 0;
+        }
+
+        float payloadBaseDamage = baseDamage > 0f ? baseDamage : Damage;
+        int emittedProjectiles = TryApplyPayloadEffects(
+            innerBlock,
+            triggerPoint,
+            payloadBaseDamage,
+            payloadCollider,
+            payloadEnemy,
+            targetRoot,
+            remainingDerivedProjectiles);
+        int remainingBudget = Mathf.Max(0, remainingDerivedProjectiles - emittedProjectiles);
+        if (remainingBudget > 0)
+        {
+            emittedProjectiles += TryEmitPayloadProjectiles(innerBlock, triggerPoint, targetRoot, remainingBudget);
+        }
+
+        return emittedProjectiles;
+    }
+
+    private bool TryResolveNearestPayloadTarget(
+        float radius,
+        out Collider payloadCollider,
+        out Enemy payloadEnemy,
+        out Transform targetRoot,
+        out Vector3 triggerPoint)
+    {
+        payloadCollider = null;
+        payloadEnemy = null;
+        targetRoot = null;
+        triggerPoint = MovementTarget != null ? MovementTarget.position : transform.position;
+        if (radius <= 0f)
+        {
+            return false;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(triggerPoint, radius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        float bestDistanceSqr = float.MaxValue;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            if (overlapRoot == null ||
+                impactedTargetRoots.Contains(overlapRoot.GetInstanceID()) ||
+                !IsConfiguredActorImpactTarget(overlap, overlapRoot))
+            {
+                continue;
+            }
+
+            float distanceSqr = (overlapRoot.position - triggerPoint).sqrMagnitude;
+            if (distanceSqr >= bestDistanceSqr)
+            {
+                continue;
+            }
+
+            bestDistanceSqr = distanceSqr;
+            payloadCollider = overlap;
+            payloadEnemy = overlap.GetComponentInParent<Enemy>();
+            targetRoot = overlapRoot;
+        }
+
+        if (payloadCollider == null)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private int TryApplyPayloadEffects(
+        SpellCastBlock innerBlock,
+        Vector3 impactPoint,
+        float baseDamage,
+        Collider payloadCollider,
+        Enemy payloadEnemy,
+        Transform targetRoot,
+        int remainingProjectileBudget)
+    {
+        IReadOnlyList<SpellPayloadEffectNode> effects = innerBlock.PayloadEffects;
+        int emittedProjectiles = 0;
+        for (int i = 0; i < effects.Count; i++)
+        {
+            SpellPayloadEffectNode effect = effects[i];
+            if (effect == null)
+            {
+                continue;
+            }
+
+            ResultEffectPayload resultEffects = effect.ResultEffects;
+            if (resultEffects.HasStatusApplications)
+            {
+                TryApplyPayloadStatusApplications(payloadEnemy, impactPoint, resultEffects);
+            }
+
+            if (effect.ResultType == AttackResultType.Confuse)
+            {
+                int budgetForEffect = Mathf.Max(0, remainingProjectileBudget - emittedProjectiles);
+                emittedProjectiles += TryApplyRandomResultEffect(
+                    payloadCollider,
+                    targetRoot,
+                    impactPoint,
+                    baseDamage,
+                    payloadEnemy,
+                    payloadEnemy,
+                    resultEffects,
+                    budgetForEffect);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Explosion)
+            {
+                float explosionRadius = Mathf.Max(0f, resultEffects.explosionRadius);
+                float explosionDamage = Mathf.Max(0f, baseDamage * resultEffects.explosionDamageMultiplier);
+                if (explosionRadius > 0f && explosionDamage > 0f)
+                {
+                    TryApplyExplosionDamageImmediately(impactPoint, explosionRadius, explosionDamage);
+                }
+
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.StatusEffect)
+            {
+                TryApplyPayloadControlEffect(payloadEnemy, impactPoint, resultEffects);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Healing)
+            {
+                float healingAmount = Mathf.Max(0f, baseDamage * resultEffects.healingMultiplier);
+                TryApplyPayloadHealingEffect(payloadCollider, payloadEnemy, targetRoot, impactPoint, healingAmount, resultEffects.effectRadius);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Split)
+            {
+                int budgetForEffect = Mathf.Max(0, remainingProjectileBudget - emittedProjectiles);
+                emittedProjectiles += TryEmitSplitProjectiles(
+                    impactPoint,
+                    targetRoot,
+                    baseDamage,
+                    resultEffects,
+                    currentProjectileNode,
+                    budgetForEffect);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Drain)
+            {
+                TryApplyDrainToOwner(baseDamage, resultEffects, effect.ResultType);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Shield)
+            {
+                TryApplyShieldToOwner(baseDamage, resultEffects, effect.ResultType);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Leave)
+            {
+                TrySpawnLingeringAreaAt(impactPoint, baseDamage, resultEffects, effect.ResultType);
+                continue;
+            }
+
+            if (effect.ResultType == AttackResultType.Push ||
+                effect.ResultType == AttackResultType.Pull)
+            {
+                TryApplyDisplacementAt(impactPoint, resultEffects, effect.ResultType);
+            }
+        }
+
+        return emittedProjectiles;
+    }
+
+    private void TryApplyPayloadStatusApplications(Enemy enemy, Vector3 impactPoint, ResultEffectPayload resultEffects)
+    {
+        if (!resultEffects.HasStatusApplications)
+        {
+            return;
+        }
+
+        if (resultEffects.effectRadius > 0f)
+        {
+            TryApplyStatusApplicationsAreaAt(impactPoint, resultEffects.effectRadius, resultEffects.statusApplications, null);
+            return;
+        }
+
+        TryApplyStatusApplicationsToEnemy(enemy, resultEffects.statusApplications);
+    }
+
+    private void TryApplyPayloadControlEffect(Enemy enemy, Vector3 impactPoint, ResultEffectPayload resultEffects)
+    {
+        if (!resultEffects.HasControl)
+        {
+            return;
+        }
+
+        if (resultEffects.effectRadius > 0f)
+        {
+            TryApplyControlAreaAt(impactPoint, resultEffects.effectRadius, resultEffects, null);
+            return;
+        }
+
+        TryApplyControlToEnemy(enemy, resultEffects);
+    }
+
+    private bool TryApplyControlToEnemy(Enemy enemy, ResultEffectPayload resultEffects)
+    {
+        if (enemy == null || enemy.Equals(null) || !resultEffects.HasControl)
+        {
+            return false;
+        }
+
+        TryNotifyEnemyControlHit(enemy);
+        if (enemy.TryGetComponent(out EnemyStatusEffectController statusController))
+        {
+            return statusController.RegisterControlHit(resultEffects.controlTriggerCount, resultEffects.controlDuration);
+        }
+
+        return false;
+    }
+
+    private int TryApplyControlAreaAt(Vector3 impactPoint, float controlRadius, ResultEffectPayload resultEffects, Transform excludedRoot)
+    {
+        if (controlRadius <= 0f || !resultEffects.HasControl || !ShouldDamageEnemies())
+        {
+            return 0;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(impactPoint, controlRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        HashSet<int> controlledRoots = new();
+        int controlledCount = 0;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            Enemy enemy = overlap.GetComponentInParent<Enemy>();
+            if (overlapRoot == null ||
+                (excludedRoot != null && overlapRoot == excludedRoot) ||
+                !controlledRoots.Add(overlapRoot.GetInstanceID()) ||
+                !IsEnemyImpactTarget(overlap, overlapRoot, enemy))
+            {
+                continue;
+            }
+
+            if (TryApplyControlToEnemy(enemy, resultEffects))
+            {
+                controlledCount++;
+            }
+        }
+
+        return controlledCount;
+    }
+
+    private int TryApplyStatusApplicationsAreaAt(
+        Vector3 impactPoint,
+        float radius,
+        SpellStatusApplication[] applications,
+        Transform excludedRoot)
+    {
+        if (radius <= 0f || applications == null || applications.Length <= 0 || !ShouldDamageEnemies())
+        {
+            return 0;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(impactPoint, radius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        HashSet<int> affectedRoots = new();
+        int affectedCount = 0;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            Enemy enemy = overlap.GetComponentInParent<Enemy>();
+            if (overlapRoot == null ||
+                (excludedRoot != null && overlapRoot == excludedRoot) ||
+                !affectedRoots.Add(overlapRoot.GetInstanceID()) ||
+                !IsEnemyImpactTarget(overlap, overlapRoot, enemy))
+            {
+                continue;
+            }
+
+            if (TryApplyStatusApplicationsToEnemy(enemy, applications))
+            {
+                affectedCount++;
+            }
+        }
+
+        return affectedCount;
+    }
+
+    private void TryApplyPayloadHealingEffect(
+        Collider payloadCollider,
+        Enemy enemy,
+        Transform targetRoot,
+        Vector3 impactPoint,
+        float healingAmount,
+        float healingRadius)
+    {
+        if (healingAmount <= 0f)
+        {
+            return;
+        }
+
+        if (healingRadius > 0f)
+        {
+            TryApplyHealingAreaAt(impactPoint, healingRadius, healingAmount, null);
+            return;
+        }
+
+        if (payloadCollider == null || targetRoot == null)
+        {
+            return;
+        }
+
+        if (enemy != null && !enemy.Equals(null))
+        {
+            TryApplyHealingToEnemy(payloadCollider, targetRoot, "PayloadHealing", healingAmount, out _);
+        }
+
+        TryApplyHealingToPlayer(payloadCollider, targetRoot, "PayloadHealing", healingAmount, out _);
+    }
+
+    private int TryApplyHealingAreaAt(Vector3 impactPoint, float healingRadius, float healingAmount, Transform excludedRoot)
+    {
+        if (healingRadius <= 0f || healingAmount <= 0f)
+        {
+            return 0;
+        }
+
+        Collider[] overlaps = Physics.OverlapSphere(impactPoint, healingRadius, attackSpec.impactMask, QueryTriggerInteraction.Ignore);
+        HashSet<int> healedRoots = new();
+        int healedCount = 0;
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            Collider overlap = overlaps[i];
+            if (overlap == null ||
+                overlap.isTrigger ||
+                IsOwnedTransform(overlap.transform) ||
+                overlap.GetComponentInParent<CharBullet>() != null)
+            {
+                continue;
+            }
+
+            Transform overlapRoot = overlap.attachedRigidbody != null ? overlap.attachedRigidbody.transform : overlap.transform.root;
+            if (overlapRoot == null ||
+                (excludedRoot != null && overlapRoot == excludedRoot) ||
+                !healedRoots.Add(overlapRoot.GetInstanceID()))
+            {
+                continue;
+            }
+
+            bool healed = false;
+            healed |= TryApplyHealingToEnemy(overlap, overlapRoot, "HealingArea", healingAmount, out _);
+            healed |= TryApplyHealingToPlayer(overlap, overlapRoot, "HealingArea", healingAmount, out _);
+            if (healed)
+            {
+                healedCount++;
+            }
+        }
+
+        return healedCount;
+    }
+
+    private int TryEmitPayloadProjectiles(SpellCastBlock innerBlock, Vector3 impactPoint, Transform targetRoot, int remainingBudget)
+    {
+        if (remainingBudget <= 0 || innerBlock.Projectiles.Count <= 0)
+        {
+            return 0;
+        }
+
+        CharBullet template = spawnTemplate != null ? spawnTemplate : this;
+        Transform payloadOwner = ownerRoot != null ? ownerRoot : transform;
+        Vector3 baseDirection = direction.sqrMagnitude > MinimumVectorSqrMagnitude ? direction.normalized : Vector3.forward;
+        int emittedCount = 0;
+        for (int i = 0; i < innerBlock.Projectiles.Count && emittedCount < remainingBudget; i++)
+        {
+            SpellProjectileNode projectile = innerBlock.Projectiles[i];
+            if (projectile == null || !projectile.CanFire)
+            {
+                continue;
+            }
+
+            Vector3 spawnOffset = baseDirection * Mathf.Max(ResolveImpactRadius() + 0.05f, 0.1f);
+            List<CharBullet> spawnedBullets = new();
+            emittedCount += AttackProjectileEmitter.Emit(
+                template,
+                payloadOwner,
+                impactPoint + spawnOffset,
+                baseDirection,
+                projectile,
+                targetPolicy,
+                null,
+                spawnedBullets);
+
+            for (int bulletIndex = 0; bulletIndex < spawnedBullets.Count; bulletIndex++)
+            {
+                CharBullet spawnedBullet = spawnedBullets[bulletIndex];
+                if (spawnedBullet == null)
+                {
+                    continue;
+                }
+
+                spawnedBullet.RegisterIgnoredTargetRoot(targetRoot);
+                spawnedBullet.SetIgnoreGameplayPauseStatus(ignoreGameplayPauseStatus);
+            }
+        }
+
+        return emittedCount;
     }
 
     /// <summary>
@@ -2263,7 +3991,15 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldBounceOnEnvironment()
     {
-        return attackSpec.behaviorType == AttackBehaviorType.Bounce || compiledAttack?.BehaviorType == AttackBehaviorType.Bounce;
+        return attackSpec.behaviorType == AttackBehaviorType.Bounce ||
+               currentProjectileNode?.BehaviorType == AttackBehaviorType.Bounce;
+    }
+
+    private bool IsPiercingLightCore()
+    {
+        CoreEffectPayload coreEffects = GetCoreEffects();
+        return attackSpec.coreType == AttackCoreType.Light &&
+               coreEffects.HasPiercingSuppression;
     }
 
     /// <summary>
@@ -2273,7 +4009,12 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private CoreEffectPayload GetCoreEffects()
     {
-        return compiledAttack != null ? compiledAttack.CoreEffects.GetSanitized() : default;
+        if (currentProjectileNode != null)
+        {
+            return currentProjectileNode.CoreEffects.GetSanitized();
+        }
+
+        return default;
     }
 
     /// <summary>
@@ -2283,7 +4024,12 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private ResultEffectPayload GetResultEffects()
     {
-        return compiledAttack != null ? compiledAttack.ResultEffects.GetSanitized() : default;
+        if (currentProjectileNode != null)
+        {
+            return currentProjectileNode.ResultEffects.GetSanitized();
+        }
+
+        return default;
     }
 
     /// <summary>
@@ -2293,9 +4039,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldTriggerSplit()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return compiledAttack.ResultType == AttackResultType.Split && compiledAttack.ResultEffects.HasSplit;
+            return currentProjectileNode.ResultType == AttackResultType.Split && currentProjectileNode.ResultEffects.HasSplit;
         }
 
         return attackSpec.resultType == AttackResultType.Split;
@@ -2308,9 +4054,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldTriggerControl()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return compiledAttack.ResultType == AttackResultType.StatusEffect && compiledAttack.ResultEffects.HasControl;
+            return currentProjectileNode.ResultType == AttackResultType.StatusEffect && currentProjectileNode.ResultEffects.HasControl;
         }
 
         return attackSpec.resultType == AttackResultType.StatusEffect;
@@ -2323,9 +4069,29 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldApplyHealingOnImpact()
     {
-        return compiledAttack != null
-            ? compiledAttack.ResultType == AttackResultType.Healing
-            : attackSpec.resultType == AttackResultType.Healing;
+        if (currentProjectileNode != null)
+        {
+            return currentProjectileNode.ResultType == AttackResultType.Healing;
+        }
+
+        return attackSpec.resultType == AttackResultType.Healing;
+    }
+
+    private bool IsCurrentResultType(AttackResultType resultType)
+    {
+        if (currentProjectileNode != null)
+        {
+            return currentProjectileNode.ResultType == resultType;
+        }
+
+        return attackSpec.resultType == resultType;
+    }
+
+    private bool IsResultType(AttackResultType expectedType, AttackResultType explicitType)
+    {
+        return explicitType != AttackResultType.None
+            ? explicitType == expectedType
+            : IsCurrentResultType(expectedType);
     }
 
     /// <summary>
@@ -2426,9 +4192,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private bool ShouldTriggerExplosion()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return compiledAttack.HasExplosion;
+            return currentProjectileNode.HasExplosion;
         }
 
         return attackSpec.resultType == AttackResultType.Explosion;
@@ -2441,9 +4207,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private float GetExplosionRadius()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return Mathf.Max(0f, compiledAttack.ExplosionRadius);
+            return Mathf.Max(0f, currentProjectileNode.ExplosionRadius);
         }
 
         return 0f;
@@ -2456,9 +4222,9 @@ public sealed class CharBullet : MonoBehaviour
     /// </summary>
     private float GetExplosionDelaySeconds()
     {
-        if (compiledAttack != null)
+        if (currentProjectileNode != null)
         {
-            return Mathf.Max(0f, compiledAttack.ResultEffects.explosionDelaySeconds);
+            return Mathf.Max(0f, currentProjectileNode.ResultEffects.explosionDelaySeconds);
         }
 
         return 0f;
@@ -2622,39 +4388,46 @@ public sealed class CharBullet : MonoBehaviour
         impactCollider.radius = baseImpactRadius * scaleMultiplier * impactRadiusMultiplier;
     }
 
-    private void ApplyCompiledAttackPresentation()
+    private void ApplyProjectilePresentation()
     {
-        float resolvedScaleMultiplier = compiledAttack != null ? Mathf.Max(0f, compiledAttack.ScaleMultiplier) : scaleMultiplier;
-        float resolvedImpactRadiusMultiplier = compiledAttack != null ? Mathf.Max(0f, compiledAttack.ImpactRadiusMultiplier) : impactRadiusMultiplier;
+        SpellProjectileNode projectile = currentProjectileNode;
+        float resolvedScaleMultiplier = projectile != null
+            ? Mathf.Max(0f, projectile.ScaleMultiplier)
+            : scaleMultiplier;
+        float resolvedImpactRadiusMultiplier = projectile != null
+            ? Mathf.Max(0f, projectile.ImpactRadiusMultiplier)
+            : impactRadiusMultiplier;
 
         TrySetScaleMultiplier(resolvedScaleMultiplier);
         TrySetImpactRadiusMultiplier(resolvedImpactRadiusMultiplier);
 
-        if (compiledAttack == null)
+        if (projectile != null)
         {
+            if (!string.IsNullOrEmpty(projectile.DisplayText))
+            {
+                TrySetText(projectile.DisplayText);
+            }
+
+            if (projectile.HasTextColorOverride)
+            {
+                TrySetTextColor(projectile.TextColor);
+            }
+
+            if (projectile.HasFontSizeOverride)
+            {
+                float baseFontSize = GetCurrentGlyphSquareSize();
+                TrySetFontSize(projectile.ResolveFontSize(baseFontSize));
+            }
+
+            if (visualPresenter != null)
+            {
+                visualPresenter.ApplyCompiledAppearance(projectile, this);
+            }
+
             return;
         }
 
-        if (!string.IsNullOrEmpty(compiledAttack.DisplayText))
-        {
-            TrySetText(compiledAttack.DisplayText);
-        }
-
-        if (compiledAttack.HasTextColorOverride)
-        {
-            TrySetTextColor(compiledAttack.TextColor);
-        }
-
-        if (compiledAttack.HasFontSizeOverride)
-        {
-            float baseFontSize = GetCurrentGlyphSquareSize();
-            TrySetFontSize(compiledAttack.ResolveFontSize(baseFontSize));
-        }
-
-        if (visualPresenter != null)
-        {
-            visualPresenter.ApplyCompiledAppearance(compiledAttack, this);
-        }
+        visualPresenter?.RefreshPreview();
     }
 
     private void NotifyVisualPresenterPreview()

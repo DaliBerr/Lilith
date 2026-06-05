@@ -168,6 +168,7 @@ public sealed class EnemyDefinition : ScriptableObject
         [Min(0f)] public float attackDamage;
         [Range(0f, 1f)] public float damageReductionPercent;
         [Min(0f)] public float visualScaleMultiplier;
+        [Min(0f)] public float displacementWeight;
 
         /// <summary>
         /// summary: 修正敌人基础战斗数值中的非法取值，确保运行时解算拿到稳定配置。
@@ -184,6 +185,7 @@ public sealed class EnemyDefinition : ScriptableObject
             sanitized.attackDamage = SanitizeValue(sanitized.attackDamage, 0f);
             sanitized.damageReductionPercent = Mathf.Clamp01(sanitized.damageReductionPercent);
             sanitized.visualScaleMultiplier = SanitizePositiveValue(sanitized.visualScaleMultiplier, 1f);
+            sanitized.displacementWeight = SanitizePositiveValue(sanitized.displacementWeight, 1f);
             return sanitized;
         }
     }
@@ -192,6 +194,7 @@ public sealed class EnemyDefinition : ScriptableObject
     public struct RangedBulletAttackDefinition
     {
         public CharBullet bulletPrefab;
+        public SpellBookData spellBook;
         public List<PlaceableTokenData> formulaItems;
         public BulletTargetPolicy targetPolicy;
         [Min(0f)] public float projectileSpeedMultiplier;
@@ -218,6 +221,35 @@ public sealed class EnemyDefinition : ScriptableObject
             }
 
             return sanitized;
+        }
+
+        /// <summary>
+        /// summary: 将敌人远程攻击配置解析为实际交给编译器的执行序列。
+        /// param: 无
+        /// returns: 当前远程攻击的执行 token 物件序列
+        /// </summary>
+        public List<PlaceableTokenData> BuildExecutionItems()
+        {
+            if (spellBook != null)
+            {
+                return spellBook.BuildExecutionItems(formulaItems);
+            }
+
+            List<PlaceableTokenData> executionItems = new();
+            if (formulaItems == null)
+            {
+                return executionItems;
+            }
+
+            for (int i = 0; i < formulaItems.Count; i++)
+            {
+                if (formulaItems[i] != null)
+                {
+                    executionItems.Add(formulaItems[i]);
+                }
+            }
+
+            return executionItems;
         }
     }
 
@@ -424,6 +456,7 @@ public sealed class EnemyDefinition : ScriptableObject
         attackDamage = 1f,
         damageReductionPercent = 0f,
         visualScaleMultiplier = 1f,
+        displacementWeight = 1f,
     };
     [SerializeField] private RangedBulletAttackDefinition rangedBulletAttack = new()
     {
@@ -520,6 +553,7 @@ public sealed class EnemyDefinition : ScriptableObject
             sanitizedCombat.damageReductionPercent,
             sanitizedCombat.visualScaleMultiplier,
             sanitizedExplosiveAttack.explosionRadius * growthMultiplier,
+            sanitizedCombat.displacementWeight,
             resolvedTokenDrops).GetSanitized();
     }
 

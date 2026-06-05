@@ -13,6 +13,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     private const float DefaultAttackCooldown = 0f;
     private const float DefaultAttackDamage = 0f;
     private const float DefaultHealth = 1f;
+    private const float DefaultDisplacementWeight = 1f;
 
     [Header("Movement")]
     [SerializeField, Min(0f)] private float moveSpeed = DefaultMoveSpeed;
@@ -25,6 +26,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     [SerializeField, Min(0f)] private float attackDamage = DefaultAttackDamage;
     [SerializeField, Range(0f, 1f)] private float damageReductionPercent;
     [SerializeField, Min(0f)] private float health = DefaultHealth;
+    [SerializeField, Min(0f)] private float displacementWeight = DefaultDisplacementWeight;
 
     public override float MoveSpeed => moveSpeed;
     public override float RotationSpeed => rotationSpeed;
@@ -33,6 +35,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
     public override float AttackCooldown => attackCooldown;
     public override float AttackDamage => attackDamage;
     public override float MaxHealth => health;
+    public override float DisplacementWeight => displacementWeight;
     public float DamageReductionPercent => damageReductionPercent;
     public EnemyWaveConfig CurrentWaveConfig => currentWaveConfig;
     public bool HasWaveConfig => hasWaveConfig;
@@ -103,6 +106,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
         attackCooldown = SanitizeValue(currentWaveConfig.attackCooldown, attackCooldown);
         attackDamage = SanitizeValue(currentWaveConfig.attackDamage, attackDamage);
         damageReductionPercent = Mathf.Clamp01(currentWaveConfig.damageReductionPercent);
+        displacementWeight = SanitizePositiveValue(currentWaveConfig.displacementWeight, displacementWeight);
         SanitizeConfiguration();
         ResetHealthToFull();
     }
@@ -128,6 +132,20 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
         if (resolvedDamage <= 0f)
         {
             return false;
+        }
+
+        if (TryGetComponent(out DamageShieldController shield) &&
+            shield.TryAbsorbDamage(resolvedDamage, out float remainingDamage, out _))
+        {
+            resolvedDamage = remainingDamage;
+        }
+
+        if (resolvedDamage <= 0f)
+        {
+            remainingHealth = currentHealth;
+            isDead = IsDead;
+            NotifyDamaged();
+            return true;
         }
 
         currentHealth = Mathf.Max(0f, currentHealth - resolvedDamage);
@@ -182,6 +200,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
         attackDamage = DefaultAttackDamage;
         damageReductionPercent = 0f;
         health = DefaultHealth;
+        displacementWeight = DefaultDisplacementWeight;
         SanitizeConfiguration();
         ResetHealthToFull();
     }
@@ -201,6 +220,7 @@ public sealed class BaseCharEnemyNorm1 : Enemy, ILegacyEnemyMovementSettingsRece
         attackDamage = SanitizeValue(attackDamage, DefaultAttackDamage);
         damageReductionPercent = Mathf.Clamp01(damageReductionPercent);
         health = SanitizePositiveValue(health, DefaultHealth);
+        displacementWeight = SanitizePositiveValue(displacementWeight, DefaultDisplacementWeight);
     }
 
     /// <summary>

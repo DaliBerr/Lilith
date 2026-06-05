@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Kernel.Bullet;
 using UnityEngine;
 using Vocalith.Logging;
@@ -19,7 +20,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
 
     private float nextAttackTime;
     private EnemyDefinition compiledDefinition;
-    private CompiledAttack compiledAttackCache;
+    private CompiledSpellProgram compiledProgramCache;
     private bool hasLoggedCompileFailure;
 
     private void Awake()
@@ -27,7 +28,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
         TryResolveEnemyData();
         TryResolveStatusEffects();
         TryResolveTargetPlayer();
-        InvalidateCompiledAttack();
+        InvalidateCompiledProgram();
     }
 
     private void Update()
@@ -50,7 +51,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
         TryResolveEnemyData();
         TryResolveStatusEffects();
         TryResolveTargetPlayer();
-        InvalidateCompiledAttack();
+        InvalidateCompiledProgram();
     }
 
     /// <summary>
@@ -100,7 +101,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
 
         EnemyDefinition definition = enemyData.Definition;
         EnemyDefinition.RangedBulletAttackDefinition rangedAttack = definition != null ? definition.RangedBulletAttack : default;
-        if (rangedAttack.bulletPrefab == null || !TryGetCompiledAttack(definition, rangedAttack, out CompiledAttack compiledAttack))
+        if (rangedAttack.bulletPrefab == null || !TryGetCompiledProgram(definition, rangedAttack, out CompiledSpellProgram compiledProgram))
         {
             return false;
         }
@@ -110,13 +111,13 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
             return false;
         }
 
-        ApplyConfiguredCombatOverrides(compiledAttack, rangedAttack);
-        if (AttackProjectileEmitter.Emit(
+        if (EmitConfiguredProgram(
                 rangedAttack.bulletPrefab,
                 transform,
                 spawnPosition,
                 shotDirection,
-                compiledAttack,
+                compiledProgram,
+                rangedAttack,
                 rangedAttack.targetPolicy) <= 0)
         {
             return false;
@@ -127,17 +128,61 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     }
 
     /// <summary>
-    /// summary: 当敌人本身声明了明确战斗数值时，用运行时配置覆盖编译结果里的子弹伤害与可达距离。
-    /// param: compiledAttack 当前准备发射的编译攻击结果
-    /// returns: 无
+    /// summary: 当敌人本身声明了明确战斗数值时，以派生 projectile node 的方式覆盖外层子弹的伤害与可达距离。
+    /// param: compiledProgram 当前准备发射的法术程序
+    /// returns: 实际成功生成的子弹数量
     /// </summary>
-    private void ApplyConfiguredCombatOverrides(
-        CompiledAttack compiledAttack,
+    private int EmitConfiguredProgram(
+        CharBullet bulletPrefab,
+        Transform owner,
+        Vector3 spawnPosition,
+        Vector3 shotDirection,
+        CompiledSpellProgram compiledProgram,
+        EnemyDefinition.RangedBulletAttackDefinition rangedAttack,
+        BulletTargetPolicy targetPolicy)
+    {
+        if (compiledProgram?.PrimaryCastBlock == null)
+        {
+            return 0;
+        }
+
+        IReadOnlyList<SpellProjectileNode> projectiles = compiledProgram.PrimaryCastBlock.Projectiles;
+        int emittedCount = 0;
+        int activationCastCount = rangedAttack.spellBook != null ? rangedAttack.spellBook.CastsPerActivation : 1;
+        float activationSpreadAngleStep = rangedAttack.spellBook != null ? rangedAttack.spellBook.ActivationSpreadAngleStep : 0f;
+        int castCount = Mathf.Max(1, activationCastCount);
+        for (int castIndex = 0; castIndex < castCount; castIndex++)
+        {
+            Vector3 castDirection = AttackProjectileEmitter.ResolveActivationCastDirection(
+                shotDirection,
+                castIndex,
+                castCount,
+                activationSpreadAngleStep);
+            for (int i = 0; i < projectiles.Count; i++)
+            {
+                SpellProjectileNode runtimeProjectile = CreateConfiguredRuntimeProjectile(projectiles[i], rangedAttack);
+                emittedCount += AttackProjectileEmitter.Emit(
+                    bulletPrefab,
+                    owner,
+                    spawnPosition,
+                    castDirection,
+                    runtimeProjectile,
+                    targetPolicy,
+                    null,
+                    null);
+            }
+        }
+
+        return emittedCount;
+    }
+
+    private SpellProjectileNode CreateConfiguredRuntimeProjectile(
+        SpellProjectileNode projectile,
         EnemyDefinition.RangedBulletAttackDefinition rangedAttack)
     {
-        if (compiledAttack == null || !TryResolveEnemyData())
+        if (projectile == null || !TryResolveEnemyData())
         {
-            return;
+            return null;
         }
 
         float configuredAttackRange = Mathf.Max(0f, enemyData.AttackRange);
@@ -145,10 +190,10 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
         float configuredProjectileSpeedMultiplier = rangedAttack.projectileSpeedMultiplier;
         if (configuredDamage <= 0f && configuredAttackRange <= 0f && configuredProjectileSpeedMultiplier <= 0f)
         {
-            return;
+            return projectile;
         }
 
-        AttackSpec shotSpec = compiledAttack.AttackSpec;
+        AttackSpec shotSpec = projectile.AttackSpec;
         if (configuredProjectileSpeedMultiplier > 0f)
         {
             shotSpec.projectileSpeed = Mathf.Max(0f, shotSpec.projectileSpeed * configuredProjectileSpeedMultiplier);
@@ -170,7 +215,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
             }
         }
 
-        compiledAttack.AttackSpec = shotSpec.GetSanitized();
+        return SpellProjectileNode.CreateWithAttackSpecOverride(projectile, shotSpec);
     }
 
     /// <summary>
@@ -186,33 +231,35 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
         return Mathf.Max(attackRange, attackRange + planarSpawnOffset);
     }
 
-    /// <summary>
-    /// summary: 读取定义资产里的词元序列并缓存对应的编译结果。
-    /// param: definition 当前敌人绑定的定义资产
-    /// param: rangedAttack 当前定义里的远程攻击配置
-    /// param: compiledAttack 输出的可复用编译结果
-    /// returns: 成功拿到可发射的编译结果时返回 true
-    /// </summary>
-    private bool TryGetCompiledAttack(
+    private bool TryGetCompiledProgram(
         EnemyDefinition definition,
         EnemyDefinition.RangedBulletAttackDefinition rangedAttack,
-        out CompiledAttack compiledAttack)
+        out CompiledSpellProgram compiledProgram)
     {
-        compiledAttack = null;
-        if (definition == null || rangedAttack.formulaItems == null || rangedAttack.formulaItems.Count <= 0)
+        compiledProgram = null;
+        if (definition == null)
         {
             return false;
         }
 
-        if (compiledAttackCache == null || compiledDefinition != definition)
+        if (compiledProgramCache == null || compiledDefinition != definition)
         {
+            List<PlaceableTokenData> executionItems = rangedAttack.BuildExecutionItems();
+            if (executionItems.Count <= 0)
+            {
+                return false;
+            }
+
             compiledDefinition = definition;
-            compiledAttackCache = AttackFormulaCompiler.Compile(rangedAttack.formulaItems);
+            compiledProgramCache = SpellProgramCompiler.Compile(executionItems, rangedAttack.spellBook);
             hasLoggedCompileFailure = false;
         }
 
-        compiledAttack = compiledAttackCache;
-        if (compiledAttack != null && compiledAttack.CanFire)
+        List<PlaceableTokenData> activationItems = rangedAttack.BuildExecutionItems();
+        compiledProgram = SpellProgramCompiler.ContainsRandomModifier(activationItems)
+            ? SpellProgramCompiler.CompileForActivation(activationItems, rangedAttack.spellBook)
+            : compiledProgramCache;
+        if (compiledProgram != null && compiledProgram.CanCast)
         {
             hasLoggedCompileFailure = false;
             return true;
@@ -271,10 +318,10 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
         return offset.sqrMagnitude <= attackRange * attackRange;
     }
 
-    private void InvalidateCompiledAttack()
+    private void InvalidateCompiledProgram()
     {
         compiledDefinition = null;
-        compiledAttackCache = null;
+        compiledProgramCache = null;
         hasLoggedCompileFailure = false;
     }
 

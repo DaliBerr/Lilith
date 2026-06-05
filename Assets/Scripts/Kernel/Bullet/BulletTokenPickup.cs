@@ -89,6 +89,7 @@ namespace Kernel.Bullet
                 return;
             }
 
+            EventManager.eventBus.Publish(RewardNotificationEvent.FromToken(token));
             ConsumePickup();
         }
 
@@ -133,6 +134,9 @@ namespace Kernel.Bullet
             EventManager.eventBus.Publish(new RunRewardCollectedEvent(
                 LocalizationManager.TranslateOrDefault("reward.remnant", "残卷"),
                 remnantToken.RemnantAmount));
+            EventManager.eventBus.Publish(RewardNotificationEvent.FromItem(
+                remnantToken,
+                $"已获得 {remnantToken.RemnantAmount} 个{LocalizationManager.TranslateOrDefault("reward.remnant", "残卷")}"));
             ConsumePickup();
             return true;
         }
@@ -151,6 +155,7 @@ namespace Kernel.Bullet
             }
 
             playerHealth.TryApplyHealing(healingToken.HealingAmount, out _, out _);
+            EventManager.eventBus.Publish(RewardNotificationEvent.FromItem(healingToken));
             ConsumePickup();
             return true;
         }

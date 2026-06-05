@@ -92,7 +92,7 @@ public sealed class MapRunFlowControllerTests
             out PlayerPlaneMovement playerMovement,
             out PlayerHealth playerHealth,
             out PlayerBulletTokenInventory inventory,
-            out AttackFormulaLoadout loadout,
+            out SpellBookLoadout loadout,
             out Transform runtimeEnemyContainer,
             out Transform runtimePickupContainer,
             out _,
@@ -117,8 +117,8 @@ public sealed class MapRunFlowControllerTests
         Assert.That(runtimePickupContainer.childCount, Is.EqualTo(0));
         Assert.That(playerHealth.CurrentHealth, Is.EqualTo(playerHealth.MaxHealth).Within(0.0001f));
         Assert.That(inventory.GetCell(0).item, Is.SameAs(startingToken));
-        Assert.That(loadout.Items.Count, Is.EqualTo(1));
-        Assert.That(loadout.Items[0], Is.SameAs(startingToken));
+        Assert.That(loadout.EquippedItems.Count, Is.EqualTo(1));
+        Assert.That(loadout.EquippedItems[0], Is.SameAs(startingToken));
         Assert.That(controller.TryGetSettlementSnapshot(out _), Is.False);
         Assert.That(playerMovement.transform.position.x, Is.EqualTo(0f).Within(0.0001f));
         Assert.That(playerMovement.transform.position.z, Is.EqualTo(0f).Within(0.0001f));
@@ -154,6 +154,26 @@ public sealed class MapRunFlowControllerTests
     }
 
     [Test]
+    public void TryResolveWaveRewardSelectionLibraries_UsesSpellBookSelectionPlan()
+    {
+        SpellBookData wideBook = CreateSpellBook("wide", "Wide Spellbook", 7, 0.4f);
+        SpellBookRewardLibrary spellBookLibrary = CreateSpellBookLibrary("SpellBookRewardLibrary", wideBook);
+        CombatEntryTokenSelectionPlan selectionPlan = CreateSpellBookSelectionPlan(spellBookLibrary);
+        MapRunFlowController controller = CreateController(out _, out _, out _, out _, out _, out _, out _, out _, out _);
+
+        bool success = InvokeMethodWithTwoOutArguments(
+            controller,
+            "TryResolveWaveRewardSelectionLibraries",
+            selectionPlan,
+            out BulletTokenLibrary resolvedTokenLibrary,
+            out SpellBookRewardLibrary resolvedSpellBookLibrary);
+
+        Assert.That(success, Is.True);
+        Assert.That(resolvedTokenLibrary, Is.Null);
+        Assert.That(resolvedSpellBookLibrary, Is.SameAs(spellBookLibrary));
+    }
+
+    [Test]
     public void TryAddSelectedTokenToInventory_AddsTokenToInventory()
     {
         CoreTokenData startingToken = CreateToken<CoreTokenData>("start", "Start");
@@ -169,13 +189,90 @@ public sealed class MapRunFlowControllerTests
             out _,
             out _,
             startingToken);
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        bool success = InvokeMethodWithOutArgument(controller, "TryAddSelectedTokenToInventory", selectedToken, out string error);
+        try
+        {
+            bool success = InvokeMethodWithOutArgument(controller, "TryAddSelectedTokenToInventory", selectedToken, out string error);
+
+            Assert.That(success, Is.True, error);
+            Assert.That(error, Is.Null.Or.Empty);
+            Assert.That(ContainsItem(inventory, startingToken), Is.True);
+            Assert.That(ContainsItem(inventory, selectedToken), Is.True);
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("Selected"));
+            Assert.That(notifications[0].description, Is.EqualTo("已收入背包"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.Token));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
+    }
+
+    [Test]
+    public void TryEquipSelectedSpellBook_UpdatesPlayerSpellBookLoadout()
+    {
+        SpellBookData quickBook = CreateSpellBook("quick", "Quick Spellbook", 4, 0.12f);
+        MapRunFlowController controller = CreateController(
+            out _,
+            out _,
+            out _,
+            out SpellBookLoadout spellBookLoadout,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _);
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
+
+        try
+        {
+            bool success = InvokeMethodWithOutArgument(controller, "TryEquipSelectedSpellBook", quickBook, out string error);
+
+            Assert.That(success, Is.True, error);
+            Assert.That(error, Is.Null.Or.Empty);
+            Assert.That(spellBookLoadout.SpellBook, Is.SameAs(quickBook));
+            Assert.That(spellBookLoadout.SlotCount, Is.EqualTo(4));
+            Assert.That(spellBookLoadout.CastCooldownSeconds, Is.EqualTo(0.12f).Within(0.0001f));
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("Quick Spellbook"));
+            Assert.That(notifications[0].description, Does.Contain("4 槽"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.SpellBook));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
+    }
+
+    [Test]
+    public void TryApplySelectedReward_WithSpellBook_UpdatesPlayerSpellBookLoadout()
+    {
+        SpellBookData wideBook = CreateSpellBook("wide", "Wide Spellbook", 7, 0.4f);
+        MapRunFlowController controller = CreateController(
+            out _,
+            out _,
+            out _,
+            out SpellBookLoadout spellBookLoadout,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _);
+
+        bool success = InvokeMethodWithOutArgument(
+            controller,
+            "TryApplySelectedReward",
+            RunRewardOption.FromSpellBook(wideBook),
+            out string error);
 
         Assert.That(success, Is.True, error);
         Assert.That(error, Is.Null.Or.Empty);
-        Assert.That(ContainsItem(inventory, startingToken), Is.True);
-        Assert.That(ContainsItem(inventory, selectedToken), Is.True);
+        Assert.That(spellBookLoadout.SpellBook, Is.SameAs(wideBook));
+        Assert.That(spellBookLoadout.SlotCount, Is.EqualTo(7));
     }
 
     [Test]
@@ -233,11 +330,23 @@ public sealed class MapRunFlowControllerTests
             startingToken);
 
         SetPrivateField(controller, "tutorialReturnTokenOverride", tutorialReturnToken);
+        List<RewardNotificationEvent> notifications = new();
+        System.IDisposable subscription = EventManager.eventBus.Subscribe<RewardNotificationEvent>(notifications.Add);
 
-        controller.TryGrantTutorialEntryTokenAfterTeleporterTriggered();
+        try
+        {
+            controller.TryGrantTutorialEntryTokenAfterTeleporterTriggered();
 
-        Assert.That(ContainsItem(inventory, startingToken), Is.True);
-        Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.True);
+            Assert.That(ContainsItem(inventory, startingToken), Is.True);
+            Assert.That(ContainsItem(inventory, tutorialReturnToken), Is.True);
+            Assert.That(notifications.Count, Is.EqualTo(1));
+            Assert.That(notifications[0].title, Is.EqualTo("InitReturn"));
+            Assert.That(notifications[0].kind, Is.EqualTo(RewardNotificationKind.Token));
+        }
+        finally
+        {
+            subscription.Dispose();
+        }
     }
 
     [Test]
@@ -273,7 +382,7 @@ public sealed class MapRunFlowControllerTests
         out PlayerPlaneMovement playerMovement,
         out PlayerHealth playerHealth,
         out PlayerBulletTokenInventory inventory,
-        out AttackFormulaLoadout loadout,
+        out SpellBookLoadout loadout,
         out Transform runtimeEnemyContainer,
         out Transform runtimePickupContainer,
         out MapGridAuthoring startRoomMap,
@@ -295,8 +404,8 @@ public sealed class MapRunFlowControllerTests
         SetPrivateField(inventory, "startingTokens", new List<PlaceableTokenData>(startingLoadoutItems ?? System.Array.Empty<PlaceableTokenData>()));
         inventory.EnsureInitialized();
 
-        loadout = playerObject.AddComponent<AttackFormulaLoadout>();
-        SetPrivateField(loadout, "items", new List<PlaceableTokenData>(startingLoadoutItems ?? System.Array.Empty<PlaceableTokenData>()));
+        loadout = playerObject.AddComponent<SpellBookLoadout>();
+        SetPrivateField(loadout, "equippedItems", new List<PlaceableTokenData>(startingLoadoutItems ?? System.Array.Empty<PlaceableTokenData>()));
         InvokeMethod(loadout, "Awake");
 
         GameObject startRoomRoot = CreateGameObject("StartRoomMapRoot");
@@ -407,6 +516,41 @@ public sealed class MapRunFlowControllerTests
         return plan;
     }
 
+    private CombatEntryTokenSelectionPlan CreateSpellBookSelectionPlan(params SpellBookRewardLibrary[] libraries)
+    {
+        CombatEntryTokenSelectionPlan plan = ScriptableObject.CreateInstance<CombatEntryTokenSelectionPlan>();
+        createdObjects.Add(plan);
+
+        for (int i = 0; i < libraries.Length; i++)
+        {
+            plan.AddSpellBookLibrary(libraries[i], 1f);
+        }
+
+        return plan;
+    }
+
+    private SpellBookRewardLibrary CreateSpellBookLibrary(string name, params SpellBookData[] spellBooks)
+    {
+        SpellBookRewardLibrary library = ScriptableObject.CreateInstance<SpellBookRewardLibrary>();
+        library.name = name;
+        library.SetSpellBooks(spellBooks);
+        createdObjects.Add(library);
+        return library;
+    }
+
+    private SpellBookData CreateSpellBook(string spellBookId, string displayName, int slotCount, float castCooldownSeconds)
+    {
+        SpellBookData spellBook = ScriptableObject.CreateInstance<SpellBookData>();
+        spellBook.SpellBookId = spellBookId;
+        spellBook.DisplayName = displayName;
+        spellBook.SlotCount = slotCount;
+        spellBook.CastCooldownSeconds = castCooldownSeconds;
+        spellBook.CastsPerActivation = 1;
+        spellBook.name = spellBookId;
+        createdObjects.Add(spellBook);
+        return spellBook;
+    }
+
     private GameObject CreateGameObject(string name, Transform parent = null)
     {
         GameObject gameObject = new(name);
@@ -457,6 +601,22 @@ public sealed class MapRunFlowControllerTests
         object[] arguments = { null };
         bool result = (bool)method.Invoke(target, arguments);
         output = arguments[0] is TOutput typedOutput ? typedOutput : default;
+        return result;
+    }
+
+    private static bool InvokeMethodWithTwoOutArguments<TInput, TOutputA, TOutputB>(
+        object target,
+        string methodName,
+        TInput input,
+        out TOutputA outputA,
+        out TOutputB outputB)
+    {
+        MethodInfo method = FindInstanceMethod(target.GetType(), methodName);
+        Assert.That(method, Is.Not.Null, $"Missing method '{methodName}'.");
+        object[] arguments = { input, null, null };
+        bool result = (bool)method.Invoke(target, arguments);
+        outputA = arguments[1] is TOutputA typedOutputA ? typedOutputA : default;
+        outputB = arguments[2] is TOutputB typedOutputB ? typedOutputB : default;
         return result;
     }
 

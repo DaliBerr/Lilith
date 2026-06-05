@@ -10,6 +10,8 @@
     "ui.common.none": "无",
     "ui.exit.confirm_message": "确定要退出游戏吗？",
     "ui.exit.confirm": "退出游戏",
+    "ui.pause.return_start.confirm_message": "确定要返回主菜单吗？本轮未保存的进度会丢失。",
+    "ui.pause.return_start.confirm": "返回主菜单",
     "ui.options.unsaved_changes": "当前设置尚未应用。要保存这些改动吗？",
     "ui.options.not_available": "暂未开放",
     "ui.options.binding_prompt": "{0}\n当前绑定：{1}\n请按下新的按键。\nEsc 或取消会放弃本次绑定。",

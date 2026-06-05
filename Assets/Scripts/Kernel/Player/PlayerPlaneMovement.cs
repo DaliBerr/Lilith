@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Kernel;
 using Kernel.Bullet;
 using Kernel.GameState;
@@ -45,11 +46,13 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     [SerializeField] private Vector3 bulletSpawnLocalOffset = new(0f, 0f, 32f);
     [SerializeField, Min(MinimumFireInterval)] private float fireInterval = 0.15f;
     [SerializeField] private LayerMask aimRaycastMask = Physics.DefaultRaycastLayers;
-    [SerializeField] private AttackFormulaLoadout attackFormulaLoadout;
+    [SerializeField] private SpellBookLoadout spellBookLoadout;
 
     private float nextFireTime;
-    private CompiledAttack compiledAttackCache;
-    private int compiledAttackRevision = -1;
+    private CompiledSpellProgram compiledSpellProgramCache;
+    private Component compiledProgramSource;
+    private int compiledProgramRevision = -1;
+    private SpellCastRuntimeModifiers lastSuccessfulFireRuntimeModifiers = SpellCastRuntimeModifiers.Identity;
     private int lastLoggedCompileFailureRevision = int.MinValue;
     private float currentStamina;
     private float staminaRegenResumeTime;
@@ -368,7 +371,7 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return;
         }
 
-        nextFireTime = Time.time + fireInterval;
+        nextFireTime = Time.time + ResolveFireInterval(lastSuccessfulFireRuntimeModifiers);
     }
 
     /// <summary>
@@ -536,12 +539,37 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
             return false;
         }
 
-        if (!TryResolveAttackForFiring(out CompiledAttack compiledAttack))
+        if (!TryResolveSpellProgramForFiring(out CompiledSpellProgram spellProgram))
         {
             return false;
         }
 
-        return AttackProjectileEmitter.Emit(bulletPrefab, transform, spawnPosition, bulletDirection, compiledAttack) > 0;
+        float currentTime = Time.time;
+        SpellCastRuntimeModifiers runtimeModifiers = spellProgram.RuntimeModifiers.GetSanitized();
+        if (!HasActivationEnergyForFiring(currentTime, runtimeModifiers))
+        {
+            return false;
+        }
+
+        int emittedCount = AttackProjectileEmitter.Emit(
+            bulletPrefab,
+            transform,
+            spawnPosition,
+            bulletDirection,
+            spellProgram,
+            BulletTargetPolicy.EnemiesOnly,
+            null,
+            null,
+            ResolveCurrentActivationCastCount(),
+            ResolveCurrentActivationSpreadAngleStep(spellProgram));
+        if (emittedCount <= 0)
+        {
+            return false;
+        }
+
+        TryApplyCasterHealthCost(runtimeModifiers.casterHealthCost);
+        lastSuccessfulFireRuntimeModifiers = runtimeModifiers;
+        return TryConsumeActivationEnergyForFiring(currentTime, runtimeModifiers);
     }
 
     /// <summary>
@@ -1022,34 +1050,134 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
         SanitizeConfiguration();
     }
 
-    /// <summary>
-    /// summary: 从词槽 loadout 读取并缓存最新编译结果。
-    /// param: compiledAttack 输出的最终发射配置
-    /// returns: 当前存在可执行攻击时返回 true
-    /// </summary>
-    private bool TryResolveAttackForFiring(out CompiledAttack compiledAttack)
+    private bool TryResolveSpellProgramForFiring(out CompiledSpellProgram spellProgram)
     {
-        compiledAttack = null;
-        if (attackFormulaLoadout == null || !attackFormulaLoadout.HasTokens)
+        TryAutoAssignLoadout();
+        return TryResolveSpellBookProgramForFiring(out spellProgram);
+    }
+
+    private float ResolveCurrentFireInterval()
+    {
+        TryAutoAssignLoadout();
+        float resolvedInterval = spellBookLoadout != null && spellBookLoadout.SpellBook != null
+            ? spellBookLoadout.CastCooldownSeconds
+            : fireInterval;
+        SpellCastRuntimeModifiers runtimeModifiers = ResolveCurrentRuntimeModifiers();
+        return Mathf.Max(MinimumFireInterval, resolvedInterval * runtimeModifiers.castCooldownMultiplier);
+    }
+
+    private float ResolveFireInterval(SpellCastRuntimeModifiers runtimeModifiers)
+    {
+        TryAutoAssignLoadout();
+        float resolvedInterval = spellBookLoadout != null && spellBookLoadout.SpellBook != null
+            ? spellBookLoadout.CastCooldownSeconds
+            : fireInterval;
+        return Mathf.Max(MinimumFireInterval, resolvedInterval * runtimeModifiers.GetSanitized().castCooldownMultiplier);
+    }
+
+    private int ResolveCurrentActivationCastCount()
+    {
+        TryAutoAssignLoadout();
+        return spellBookLoadout != null && spellBookLoadout.SpellBook != null
+            ? Mathf.Max(1, spellBookLoadout.CastsPerActivation)
+            : 1;
+    }
+
+    private float ResolveCurrentActivationSpreadAngleStep()
+    {
+        return ResolveCurrentActivationSpreadAngleStep(null);
+    }
+
+    private float ResolveCurrentActivationSpreadAngleStep(CompiledSpellProgram spellProgram)
+    {
+        TryAutoAssignLoadout();
+        float spreadAngle = spellBookLoadout != null && spellBookLoadout.SpellBook != null
+            ? Mathf.Max(0f, spellBookLoadout.ActivationSpreadAngleStep)
+            : 0f;
+        SpellCastRuntimeModifiers runtimeModifiers = spellProgram != null
+            ? spellProgram.RuntimeModifiers.GetSanitized()
+            : ResolveCurrentRuntimeModifiers();
+        return Mathf.Max(0f, spreadAngle * runtimeModifiers.angleSpreadMultiplier);
+    }
+
+    private bool HasActivationEnergyForFiring(float currentTime)
+    {
+        return HasActivationEnergyForFiring(currentTime, ResolveCurrentRuntimeModifiers());
+    }
+
+    private bool HasActivationEnergyForFiring(float currentTime, SpellCastRuntimeModifiers runtimeModifiers)
+    {
+        TryAutoAssignLoadout();
+        return spellBookLoadout == null || spellBookLoadout.HasActivationEnergy(currentTime, runtimeModifiers.GetSanitized().energyCostMultiplier);
+    }
+
+    private bool TryConsumeActivationEnergyForFiring(float currentTime)
+    {
+        return TryConsumeActivationEnergyForFiring(currentTime, ResolveCurrentRuntimeModifiers());
+    }
+
+    private bool TryConsumeActivationEnergyForFiring(float currentTime, SpellCastRuntimeModifiers runtimeModifiers)
+    {
+        TryAutoAssignLoadout();
+        return spellBookLoadout == null || spellBookLoadout.TryConsumeActivationEnergy(currentTime, runtimeModifiers.GetSanitized().energyCostMultiplier);
+    }
+
+    private void TryApplyCasterHealthCost(float healthCost)
+    {
+        if (healthCost <= 0f)
         {
-            LogCompileFailureIfNeeded(null);
+            return;
+        }
+
+        PlayerHealth playerHealth = GetComponentInParent<PlayerHealth>();
+        playerHealth ??= GetComponentInChildren<PlayerHealth>();
+        playerHealth?.TryApplyHealthCost(healthCost, out _, out _);
+    }
+
+    private SpellCastRuntimeModifiers ResolveCurrentRuntimeModifiers()
+    {
+        if (compiledSpellProgramCache != null && compiledProgramSource == spellBookLoadout)
+        {
+            return compiledSpellProgramCache.RuntimeModifiers.GetSanitized();
+        }
+
+        if (spellBookLoadout != null && spellBookLoadout.TryGetCompiledProgram(out CompiledSpellProgram spellProgram))
+        {
+            return spellProgram.RuntimeModifiers.GetSanitized();
+        }
+
+        return SpellCastRuntimeModifiers.Identity;
+    }
+
+    private bool TryResolveSpellBookProgramForFiring(out CompiledSpellProgram spellProgram)
+    {
+        spellProgram = null;
+        if (spellBookLoadout == null || !spellBookLoadout.HasTokens)
+        {
+            LogSpellProgramCompileFailureIfNeeded(null);
             return false;
         }
 
-        if (compiledAttackCache == null || compiledAttackRevision != attackFormulaLoadout.Revision)
+        if (compiledSpellProgramCache == null ||
+            compiledProgramSource != spellBookLoadout ||
+            compiledProgramRevision != spellBookLoadout.Revision)
         {
-            compiledAttackCache = attackFormulaLoadout.Recompile();
-            compiledAttackRevision = attackFormulaLoadout.Revision;
+            compiledSpellProgramCache = spellBookLoadout.RecompileProgram();
+            compiledProgramSource = spellBookLoadout;
+            compiledProgramRevision = spellBookLoadout.Revision;
         }
 
-        compiledAttack = compiledAttackCache;
-        if (compiledAttack != null && compiledAttack.CanFire)
+        spellProgram = spellBookLoadout.CompileProgramForActivation();
+        compiledSpellProgramCache = spellProgram;
+        compiledProgramSource = spellBookLoadout;
+        compiledProgramRevision = spellBookLoadout.Revision;
+        if (spellProgram != null && spellProgram.CanCast)
         {
             lastLoggedCompileFailureRevision = int.MinValue;
             return true;
         }
 
-        LogCompileFailureIfNeeded(compiledAttack);
+        LogSpellProgramCompileFailureIfNeeded(spellProgram);
         return false;
     }
 
@@ -1060,54 +1188,64 @@ public sealed class PlayerPlaneMovement : MonoBehaviour
     /// </summary>
     private void TryAutoAssignLoadout()
     {
-        if (attackFormulaLoadout == null)
+        if (spellBookLoadout == null)
         {
-            attackFormulaLoadout = GetComponent<AttackFormulaLoadout>();
+            spellBookLoadout = GetComponent<SpellBookLoadout>();
         }
     }
 
     /// <summary>
-    /// summary: 仅在 loadout 修订号变化时输出一次编译失败日志，避免按住开火时刷屏。
-    /// param: compiledAttack 当前失败的编译结果
+    /// summary: 仅在法术书 loadout 修订号变化时输出一次编译失败日志，避免按住开火时刷屏。
+    /// param: spellProgram 当前失败的法术程序
     /// returns: 无
     /// </summary>
-    private void LogCompileFailureIfNeeded(CompiledAttack compiledAttack)
+    private void LogSpellProgramCompileFailureIfNeeded(CompiledSpellProgram spellProgram)
     {
-        int currentRevision = attackFormulaLoadout != null ? attackFormulaLoadout.Revision : int.MinValue;
+        int currentRevision = spellBookLoadout != null ? spellBookLoadout.Revision : int.MinValue;
         if (currentRevision == lastLoggedCompileFailureRevision)
         {
             return;
         }
 
         lastLoggedCompileFailureRevision = currentRevision;
-        if (compiledAttack == null)
+        if (spellProgram == null)
         {
-            if (attackFormulaLoadout == null)
+            if (spellBookLoadout == null)
             {
-                GameDebug.LogWarning("[PlayerPlaneMovement] Attack formula loadout is missing. Firing is disabled until a loadout is assigned.");
+                GameDebug.LogWarning("[PlayerPlaneMovement] Spell book loadout is missing. Firing is disabled until a spell book loadout is assigned.");
                 return;
             }
 
-            if (!attackFormulaLoadout.HasTokens)
+            if (!spellBookLoadout.HasTokens)
             {
-                GameDebug.LogWarning("[PlayerPlaneMovement] Attack formula loadout is empty. Firing is disabled until at least one valid core formula is equipped.");
+                GameDebug.LogWarning("[PlayerPlaneMovement] Spell book loadout is empty. Firing is disabled until at least one valid executable token is available.");
                 return;
             }
 
-            GameDebug.LogWarning("[PlayerPlaneMovement] Attack formula loadout failed to compile and produced no result.");
+            GameDebug.LogWarning("[PlayerPlaneMovement] Spell book loadout failed to compile and produced no spell program.");
             return;
         }
 
-        for (int i = 0; i < compiledAttack.Messages.Count; i++)
+        LogCompileMessages(spellProgram.Messages, "Spell program");
+    }
+
+    private static void LogCompileMessages(IReadOnlyList<AttackCompileMessage> messages, string sourceName)
+    {
+        if (messages == null)
         {
-            AttackCompileMessage message = compiledAttack.Messages[i];
+            return;
+        }
+
+        for (int i = 0; i < messages.Count; i++)
+        {
+            AttackCompileMessage message = messages[i];
             if (message.severity == AttackCompileMessageSeverity.Error)
             {
-                GameDebug.LogError($"[PlayerPlaneMovement] Attack formula error: {message.message} token='{message.tokenId}'");
+                GameDebug.LogError($"[PlayerPlaneMovement] {sourceName} error: {message.message} token='{message.tokenId}'");
             }
             else if (message.severity == AttackCompileMessageSeverity.Warning)
             {
-                GameDebug.LogWarning($"[PlayerPlaneMovement] Attack formula warning: {message.message} token='{message.tokenId}'");
+                GameDebug.LogWarning($"[PlayerPlaneMovement] {sourceName} warning: {message.message} token='{message.tokenId}'");
             }
         }
     }

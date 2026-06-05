@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d235e5ecf423bc4aa6fc456eb710361, type: 3}
+  m_Name: Urgent
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.ModifierTokenData
+  tokenId: modifier_urgent
+  displayText: "\u6025"
+  displayTextKey: 
+  description: "\u51CF\u5C11\u5F53\u524D\u6CD5\u672F\u4E66\u65BD\u6CD5\u95F4\u9694\u3002"
+  descriptionKey: 
+  tokenType: 7
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers:
+  - target: 11
+    expression: '*=0.8'
+  randomModifier: 0
+  randomModifierCandidates: []

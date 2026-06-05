@@ -28,16 +28,26 @@ namespace Kernel.UI
         ChainTail = 4,
     }
 
+    public enum BackPackSlotTypeColorDrawMode
+    {
+        FullBackground = 0,
+        BorderOnly = 1,
+    }
+
     /// <summary>
-    /// 背包单槽位视图，负责显示当前格上的视觉 token 并把拖拽事件转发给 BackPackUIScreen。
+    /// 背包单槽位视图，负责显示当前格上的视觉 token 并把拖拽、点击等交互转发给 BackPackUIScreen。
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class BackPackGridSlotView : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler, IPointerEnterHandler, IPointerExitHandler, IPointerMoveHandler
+    public sealed class BackPackGridSlotView : MonoBehaviour, IInitializePotentialDragHandler, IPointerDownHandler, IPointerUpHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler, IPointerClickHandler, IPointerMoveHandler
     {
+        private const float InventoryDragHoldSeconds = 0.18f;
+
         [Header("View")]
         [SerializeField] private Image background;
         [SerializeField] private TMP_Text tokenText;
         [SerializeField] private CanvasGroup canvasGroup;
+        [SerializeField] private BackPackSlotTypeColorDrawMode typeColorDrawMode = BackPackSlotTypeColorDrawMode.FullBackground;
+        [SerializeField] private Image typeColorBorder;
 
         [Header("State Colors")]
         [SerializeField] private Color inventoryIdleColor = new(1f, 1f, 1f, 0.35f);
@@ -52,15 +62,21 @@ namespace Kernel.UI
         [SerializeField] private Color behaviorTypeTint = new(0.66f, 0.82f, 1f, 1f);
         [SerializeField] private Color resultTypeTint = new(1f, 0.68f, 0.68f, 1f);
         [SerializeField] private Color valueTypeTint = new(0.68f, 0.93f, 0.68f, 1f);
+        [SerializeField] private Color modifierTypeTint = new(0.8f, 0.7f, 1f, 1f);
+        [SerializeField] private Color multicastTypeTint = new(1f, 0.88f, 0.55f, 1f);
+        [SerializeField] private Color triggerTypeTint = new(0.58f, 0.94f, 0.96f, 1f);
         [SerializeField] private Color fallbackTypeTint = new(1f, 1f, 1f, 1f);
 
         private BackPackUIScreen owner;
         private TokenCellOccupancy occupancy;
         private bool isDragging;
+        private bool isForwardingDragToScrollRect;
         private bool isDisplayOnly;
         private BackPackSlotArea area;
         private int slotIndex;
         private RectTransform rectTransform;
+        private ScrollRect parentScrollRect;
+        private float pointerDownTime;
         private readonly List<BaseTokenData> compileTokenBuffer = new();
 
         public BackPackSlotArea Area => area;
@@ -100,6 +116,8 @@ namespace Kernel.UI
             slotIndex = index;
             isDisplayOnly = false;
             isDragging = false;
+            isForwardingDragToScrollRect = false;
+            pointerDownTime = float.NegativeInfinity;
             SetRaycastBlocking(true);
             ApplyVisualState();
         }
@@ -117,6 +135,8 @@ namespace Kernel.UI
             slotIndex = -1;
             isDisplayOnly = true;
             isDragging = false;
+            isForwardingDragToScrollRect = false;
+            pointerDownTime = float.NegativeInfinity;
             SetRaycastBlocking(false);
             ApplyVisualState();
         }
@@ -144,8 +164,34 @@ namespace Kernel.UI
             SetOccupancy(value != null ? new TokenCellOccupancy(value, slotIndex, 0, true) : TokenCellOccupancy.Empty);
         }
 
+        public void OnInitializePotentialDrag(PointerEventData eventData)
+        {
+            if (!ShouldRouteInventoryGestureToScrollRect())
+            {
+                return;
+            }
+
+            parentScrollRect?.OnInitializePotentialDrag(eventData);
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            pointerDownTime = Time.unscaledTime;
+            isForwardingDragToScrollRect = false;
+        }
+
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            isForwardingDragToScrollRect = false;
+        }
+
         public void OnBeginDrag(PointerEventData eventData)
         {
+            if (TryForwardDragToScrollRect(eventData))
+            {
+                return;
+            }
+
             if (isDisplayOnly || owner == null || !occupancy.IsOccupied)
             {
                 return;
@@ -164,6 +210,12 @@ namespace Kernel.UI
                 return;
             }
 
+            if (isForwardingDragToScrollRect)
+            {
+                parentScrollRect?.OnDrag(eventData);
+                return;
+            }
+
             owner?.NotifySlotDrag(this, eventData);
         }
 
@@ -171,6 +223,13 @@ namespace Kernel.UI
         {
             if (isDisplayOnly)
             {
+                return;
+            }
+
+            if (isForwardingDragToScrollRect)
+            {
+                parentScrollRect?.OnEndDrag(eventData);
+                isForwardingDragToScrollRect = false;
                 return;
             }
 
@@ -188,24 +247,19 @@ namespace Kernel.UI
             owner?.NotifySlotDrop(this);
         }
 
-        public void OnPointerEnter(PointerEventData eventData)
+        public void OnPointerClick(PointerEventData eventData)
         {
             if (isDisplayOnly || isDragging)
             {
                 return;
             }
 
-            owner?.NotifySlotHoverEnter(this, eventData);
-        }
-
-        public void OnPointerExit(PointerEventData eventData)
-        {
-            if (isDisplayOnly || isDragging)
+            if (eventData != null && eventData.button != PointerEventData.InputButton.Left)
             {
                 return;
             }
 
-            owner?.NotifySlotHoverExit(this);
+            owner?.NotifySlotClick(this, eventData);
         }
 
         public void OnPointerMove(PointerEventData eventData)
@@ -239,7 +293,9 @@ namespace Kernel.UI
         private void EnsureLocalReferences()
         {
             rectTransform ??= transform as RectTransform;
+            parentScrollRect ??= GetComponentInParent<ScrollRect>();
             background ??= transform.Find("Background")?.GetComponent<Image>();
+            typeColorBorder ??= transform.Find("Type Border")?.GetComponent<Image>();
             tokenText ??= transform.Find("Text")?.GetComponent<TMP_Text>();
             if (canvasGroup == null)
             {
@@ -254,6 +310,61 @@ namespace Kernel.UI
             {
                 tokenText.raycastTarget = false;
             }
+
+            if (typeColorBorder != null)
+            {
+                typeColorBorder.raycastTarget = false;
+            }
+        }
+
+        private bool TryForwardDragToScrollRect(PointerEventData eventData)
+        {
+            if (!ShouldRouteInventoryGestureToScrollRect())
+            {
+                return false;
+            }
+
+            if (IsInventoryTokenDragArmed())
+            {
+                isForwardingDragToScrollRect = false;
+                return false;
+            }
+
+            isForwardingDragToScrollRect = true;
+            parentScrollRect?.OnBeginDrag(eventData);
+            return true;
+        }
+
+        private bool IsInventoryTokenDragArmed()
+        {
+            if (!occupancy.IsOccupied || owner == null)
+            {
+                return false;
+            }
+
+            return Time.unscaledTime - pointerDownTime >= InventoryDragHoldSeconds;
+        }
+
+        private bool ShouldRouteInventoryGestureToScrollRect()
+        {
+            if (isDisplayOnly || area != BackPackSlotArea.Inventory || parentScrollRect == null)
+            {
+                return false;
+            }
+
+            if (!parentScrollRect.IsActive() || !parentScrollRect.enabled || !parentScrollRect.vertical)
+            {
+                return false;
+            }
+
+            RectTransform viewport = parentScrollRect.viewport;
+            RectTransform content = parentScrollRect.content;
+            if (viewport == null || content == null)
+            {
+                return false;
+            }
+
+            return content.rect.height > viewport.rect.height + 0.01f;
         }
 
         /// <summary>
@@ -280,7 +391,16 @@ namespace Kernel.UI
         {
             if (background != null)
             {
-                background.color = isDragging ? dragHighlightColor : ResolveIdleColor();
+                background.color = isDragging
+                    ? dragHighlightColor
+                    : typeColorDrawMode == BackPackSlotTypeColorDrawMode.BorderOnly
+                        ? ResolveBaseIdleColor()
+                        : ResolveIdleColor();
+            }
+
+            if (typeColorBorder != null)
+            {
+                typeColorBorder.color = ResolveTypeBorderColor();
             }
 
             if (canvasGroup != null)
@@ -340,16 +460,30 @@ namespace Kernel.UI
 
         private Color ResolveIdleColor()
         {
+            return MultiplyColor(ResolveBaseIdleColor(), ResolveTypeTint(ResolveDisplayTokenType()));
+        }
+
+        private Color ResolveBaseIdleColor()
+        {
             Color baseColor = area == BackPackSlotArea.SpellBook ? spellBookIdleColor : inventoryIdleColor;
-            Color chainColor = ChainRole switch
+            return ChainRole switch
             {
                 BackPackChainCellRole.ChainHead => MultiplyColor(baseColor, chainHeadTint),
                 BackPackChainCellRole.ChainBody => MultiplyColor(baseColor, chainBodyTint),
                 BackPackChainCellRole.ChainTail => MultiplyColor(baseColor, chainTailTint),
                 _ => baseColor,
             };
+        }
 
-            return MultiplyColor(chainColor, ResolveTypeTint(ResolveDisplayTokenType()));
+        private Color ResolveTypeBorderColor()
+        {
+            if (typeColorDrawMode != BackPackSlotTypeColorDrawMode.BorderOnly || isDragging || !occupancy.IsOccupied)
+            {
+                return Color.clear;
+            }
+
+            TokenType tokenType = ResolveDisplayTokenType();
+            return tokenType != TokenType.None ? ResolveTypeTint(tokenType) : Color.clear;
         }
 
         /// <summary>
@@ -408,6 +542,9 @@ namespace Kernel.UI
                 TokenType.Behavior => behaviorTypeTint,
                 TokenType.Result => resultTypeTint,
                 TokenType.Value => valueTypeTint,
+                TokenType.Modifier => modifierTypeTint,
+                TokenType.Multicast => multicastTypeTint,
+                TokenType.Trigger => triggerTypeTint,
                 _ => fallbackTypeTint,
             };
         }

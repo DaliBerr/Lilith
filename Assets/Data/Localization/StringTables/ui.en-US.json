@@ -10,6 +10,8 @@
     "ui.common.none": "None",
     "ui.exit.confirm_message": "Quit the game?",
     "ui.exit.confirm": "Quit Game",
+    "ui.pause.return_start.confirm_message": "Return to the main menu? Unsaved run progress will be lost.",
+    "ui.pause.return_start.confirm": "Return to Menu",
     "ui.options.unsaved_changes": "These settings have not been applied. Save the changes?",
     "ui.options.not_available": "Not available",
     "ui.options.binding_prompt": "{0}\nCurrent binding: {1}\nPress a new key.\nEsc or Cancel will discard this binding change.",

@@ -801,6 +801,7 @@ MonoBehaviour:
     projectileSpeed: 320
     maxLifetime: 2
     maxTravelDistance: 512
+    behaviorParameter: 0
     impactMask:
       serializedVersion: 2
       m_Bits: 2035

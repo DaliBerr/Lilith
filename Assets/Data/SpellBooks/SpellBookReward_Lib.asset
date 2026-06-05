@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f3021263004b429489dca620e60cbdf2, type: 3}
+  m_Name: SpellBookReward_Lib
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.SpellBookRewardLibrary
+  selectableSpellBooks:
+  - {fileID: 11400000, guid: 60b09fc48466464e9253392bb13bc031, type: 2}
+  - {fileID: 11400000, guid: a35debeb8aec4dfbba8784990c22b5c3, type: 2}
+  - {fileID: 11400000, guid: d77abdeb75514b4887226d52139f2e9d, type: 2}
+  - {fileID: 11400000, guid: fa085310778a44f8805311e1b7667e16, type: 2}
+  - {fileID: 11400000, guid: 7aa7b61de08f4d1b9c3e5baf41ce2d76, type: 2}
+  spellBookWeights:
+  - spellBook: {fileID: 11400000, guid: 60b09fc48466464e9253392bb13bc031, type: 2}
+    drawWeight: 0.9
+  - spellBook: {fileID: 11400000, guid: a35debeb8aec4dfbba8784990c22b5c3, type: 2}
+    drawWeight: 1
+  - spellBook: {fileID: 11400000, guid: d77abdeb75514b4887226d52139f2e9d, type: 2}
+    drawWeight: 0.75
+  - spellBook: {fileID: 11400000, guid: fa085310778a44f8805311e1b7667e16, type: 2}
+    drawWeight: 0.65
+  - spellBook: {fileID: 11400000, guid: 7aa7b61de08f4d1b9c3e5baf41ce2d76, type: 2}
+    drawWeight: 0.7

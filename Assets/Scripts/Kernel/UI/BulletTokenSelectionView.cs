@@ -33,10 +33,15 @@ namespace Kernel.UI
         [SerializeField] private Color behaviorTypeColor = new(0.48f, 0.74f, 1f, 1f);
         [SerializeField] private Color resultTypeColor = new(1f, 0.53f, 0.53f, 1f);
         [SerializeField] private Color valueTypeColor = new(0.56f, 0.9f, 0.6f, 1f);
+        [SerializeField] private Color modifierTypeColor = new(0.74f, 0.62f, 1f, 1f);
+        [SerializeField] private Color multicastTypeColor = new(1f, 0.84f, 0.42f, 1f);
+        [SerializeField] private Color triggerTypeColor = new(0.42f, 0.92f, 0.95f, 1f);
+        [SerializeField] private Color spellBookTypeColor = new(0.48f, 0.86f, 0.68f, 1f);
         [SerializeField] private Color fallbackTypeColor = new(0.85f, 0.85f, 0.85f, 1f);
 
         private TokenSelectUIScreen ownerScreen;
         private PlaceableTokenData boundToken;
+        private RunRewardOption boundReward;
         private RectTransform rectTransform;
         private readonly List<BaseTokenData> compileTokenBuffer = new();
 
@@ -46,6 +51,8 @@ namespace Kernel.UI
         /// returns: 当前卡片绑定的 token
         /// </summary>
         public PlaceableTokenData BoundToken => boundToken;
+
+        public RunRewardOption BoundReward => boundReward;
 
         /// <summary>
         /// summary: 当前卡片的 token 文本引用。
@@ -100,6 +107,7 @@ namespace Kernel.UI
             UnbindButtonCallbacks();
             ownerScreen = null;
             boundToken = null;
+            boundReward = RunRewardOption.None;
         }
 
         /// <summary>
@@ -110,8 +118,14 @@ namespace Kernel.UI
         /// </summary>
         public void Bind(TokenSelectUIScreen owner, PlaceableTokenData token)
         {
+            Bind(owner, RunRewardOption.FromToken(token));
+        }
+
+        public void Bind(TokenSelectUIScreen owner, RunRewardOption reward)
+        {
             ownerScreen = owner;
-            boundToken = token;
+            boundReward = reward;
+            boundToken = reward.Kind == RunRewardOptionKind.Token ? reward.Token : null;
             TryAutoBindReferences();
             BindButtonCallbacks();
             RefreshView();
@@ -128,12 +142,12 @@ namespace Kernel.UI
 
             if (tokenText != null)
             {
-                tokenText.text = boundToken != null ? boundToken.GetPickupDisplayText() : string.Empty;
+                tokenText.text = boundReward.IsValid ? boundReward.GetDisplayText() : string.Empty;
             }
 
             if (descriptionText != null)
             {
-                descriptionText.text = boundToken != null ? boundToken.GetSelectionDescription() : string.Empty;
+                descriptionText.text = boundReward.IsValid ? boundReward.GetSelectionDescription() : string.Empty;
             }
 
             RefreshCatalogAndTypeVisuals();
@@ -147,7 +161,7 @@ namespace Kernel.UI
 
             if (selectButton != null)
             {
-                selectButton.interactable = boundToken != null;
+                selectButton.interactable = boundReward.IsValid;
             }
         }
 
@@ -158,12 +172,12 @@ namespace Kernel.UI
         /// </summary>
         public void RequestSelect()
         {
-            if (boundToken == null)
+            if (!boundReward.IsValid)
             {
                 return;
             }
 
-            ownerScreen?.RequestSelection(boundToken);
+            ownerScreen?.RequestSelection(boundReward);
         }
 
         /// <summary>
@@ -202,7 +216,7 @@ namespace Kernel.UI
         private void RefreshCatalogAndTypeVisuals()
         {
             TokenType tokenType = ResolvePrimaryTokenType(boundToken);
-            string catalogLabel = ResolveCatalogLabel(tokenType);
+            string catalogLabel = ResolveCatalogLabel(boundReward, tokenType);
 
             if (catalogText != null)
             {
@@ -211,12 +225,12 @@ namespace Kernel.UI
 
             if (catalogRoot != null)
             {
-                catalogRoot.gameObject.SetActive(boundToken != null && !string.IsNullOrWhiteSpace(catalogLabel));
+                catalogRoot.gameObject.SetActive(boundReward.IsValid && !string.IsNullOrWhiteSpace(catalogLabel));
             }
 
             if (rootImage != null)
             {
-                rootImage.color = boundToken != null ? ResolveTypeColor(tokenType) : emptyTokenColor;
+                rootImage.color = boundReward.IsValid ? ResolveTypeColor(boundReward, tokenType) : emptyTokenColor;
             }
         }
 
@@ -267,14 +281,22 @@ namespace Kernel.UI
         /// param name="tokenType": 当前 token 类型
         /// returns: 对应中文类型文案
         /// </summary>
-        private static string ResolveCatalogLabel(TokenType tokenType)
+        private static string ResolveCatalogLabel(RunRewardOption reward, TokenType tokenType)
         {
+            if (reward.Kind == RunRewardOptionKind.SpellBook)
+            {
+                return LocalizationManager.TranslateOrDefault("ui.reward_type.spellbook", "法术书");
+            }
+
             return tokenType switch
             {
                 TokenType.Core => LocalizationManager.TranslateOrDefault("ui.token_type.core", "核心"),
                 TokenType.Behavior => LocalizationManager.TranslateOrDefault("ui.token_type.behavior", "行为"),
                 TokenType.Result => LocalizationManager.TranslateOrDefault("ui.token_type.result", "结果"),
                 TokenType.Value => LocalizationManager.TranslateOrDefault("ui.token_type.value", "数值"),
+                TokenType.Modifier => LocalizationManager.TranslateOrDefault("ui.token_type.modifier", "修饰"),
+                TokenType.Multicast => LocalizationManager.TranslateOrDefault("ui.token_type.multicast", "多重"),
+                TokenType.Trigger => LocalizationManager.TranslateOrDefault("ui.token_type.trigger", "触发"),
                 _ => string.Empty,
             };
         }
@@ -284,14 +306,22 @@ namespace Kernel.UI
         /// param name="tokenType": 当前 token 类型
         /// returns: 对应的背景色
         /// </summary>
-        private Color ResolveTypeColor(TokenType tokenType)
+        private Color ResolveTypeColor(RunRewardOption reward, TokenType tokenType)
         {
+            if (reward.Kind == RunRewardOptionKind.SpellBook)
+            {
+                return spellBookTypeColor;
+            }
+
             return tokenType switch
             {
                 TokenType.Core => coreTypeColor,
                 TokenType.Behavior => behaviorTypeColor,
                 TokenType.Result => resultTypeColor,
                 TokenType.Value => valueTypeColor,
+                TokenType.Modifier => modifierTypeColor,
+                TokenType.Multicast => multicastTypeColor,
+                TokenType.Trigger => triggerTypeColor,
                 _ => fallbackTypeColor,
             };
         }
@@ -334,12 +364,12 @@ namespace Kernel.UI
         /// </summary>
         private void HandleSelectButtonClicked()
         {
-            if (boundToken == null)
+            if (!boundReward.IsValid)
             {
                 return;
             }
 
-            ownerScreen?.RequestSelection(boundToken);
+            ownerScreen?.RequestSelection(boundReward);
         }
     }
 }

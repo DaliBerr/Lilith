@@ -36,15 +36,13 @@ public sealed class CharBulletVisualPresenterTests
         bullet.TrySetText("Ignis");
         bullet.TrySetFontSize(32f);
 
-        CompiledAttack compiledAttack = new()
-        {
-            CoreType = AttackCoreType.Fire,
-            ResultType = AttackResultType.Explosion,
-            HasTextColorOverride = true,
-            TextColor = Color.red,
-        };
+        SpellProjectileNode projectileNode = CreateProjectileNode(
+            AttackCoreType.Fire,
+            AttackResultType.Explosion,
+            hasTextColorOverride: true,
+            textColor: Color.red);
 
-        Assert.That(presenter.ApplyCompiledAppearance(compiledAttack, bullet), Is.True);
+        Assert.That(presenter.ApplyCompiledAppearance(projectileNode, bullet), Is.True);
         Assert.That(mainGlyph.color, Is.EqualTo(Color.red));
         Assert.That(shadowGlyph.text, Is.EqualTo("Ignis"));
         Assert.That(shadowGlyph.rectTransform.sizeDelta.x, Is.EqualTo(mainGlyph.rectTransform.sizeDelta.x).Within(0.0001f));
@@ -65,14 +63,11 @@ public sealed class CharBulletVisualPresenterTests
         Assert.That(bullet.TryCacheBindings(overwriteExisting: true), Is.True);
         Assert.That(presenter.TryCacheBindings(overwriteExisting: true), Is.True);
 
-        CompiledAttack compiledAttack = new()
-        {
-            CoreType = AttackCoreType.Fire,
-            ResultType = AttackResultType.DirectDamage,
-            HasTextColorOverride = false,
-        };
+        SpellProjectileNode projectileNode = CreateProjectileNode(
+            AttackCoreType.Fire,
+            AttackResultType.DirectDamage);
 
-        Assert.That(presenter.ApplyCompiledAppearance(compiledAttack, bullet), Is.True);
+        Assert.That(presenter.ApplyCompiledAppearance(projectileNode, bullet), Is.True);
         Assert.That(mainGlyph.color, Is.EqualTo(new Color(0.3f, 0.7f, 1f, 1f)));
         Assert.That(coreRenderer.color.r, Is.EqualTo(mainGlyph.color.r).Within(0.25f));
         Assert.That(coreRenderer.enabled, Is.True);
@@ -89,15 +84,58 @@ public sealed class CharBulletVisualPresenterTests
         bullet.TrySetText("Rune");
         bullet.TrySetTextColor(Color.green);
 
-        CompiledAttack compiledAttack = new()
-        {
-            CoreType = AttackCoreType.Fire,
-            ResultType = AttackResultType.DirectDamage,
-        };
+        SpellProjectileNode projectileNode = CreateProjectileNode(
+            AttackCoreType.Fire,
+            AttackResultType.DirectDamage);
 
-        Assert.That(() => presenter.ApplyCompiledAppearance(compiledAttack, bullet), Throws.Nothing);
+        Assert.That(() => presenter.ApplyCompiledAppearance(projectileNode, bullet), Throws.Nothing);
         Assert.That(mainGlyph.text, Is.EqualTo("Rune"));
         Assert.That(shadowGlyph.text, Is.EqualTo("Rune"));
+    }
+
+    private SpellProjectileNode CreateProjectileNode(
+        AttackCoreType coreType,
+        AttackResultType resultType,
+        bool hasTextColorOverride = false,
+        Color? textColor = null)
+    {
+        CoreTokenData coreToken = ScriptableObject.CreateInstance<CoreTokenData>();
+        createdObjects.Add(coreToken);
+        coreToken.TokenId = "visual_core";
+        coreToken.DisplayText = "V";
+        coreToken.CoreType = coreType;
+        coreToken.Damage = 1f;
+        coreToken.ProjectileLife = 1;
+        coreToken.ImpactLifeCost = 1;
+        coreToken.ProjectileSpeed = 100f;
+        coreToken.MaxLifetime = 1f;
+        coreToken.MaxTravelDistance = 100f;
+        coreToken.ImpactMask = ~0;
+        if (hasTextColorOverride)
+        {
+            string colorLiteral = ColorUtility.ToHtmlStringRGBA(textColor ?? Color.white);
+            coreToken.SetModifiers(new[]
+            {
+                new TokenModifierDefinition(TokenModifierTarget.TextColor, $"=#{colorLiteral}"),
+            });
+        }
+
+        List<BaseTokenData> tokens = new() { coreToken };
+        if (resultType != AttackResultType.DirectDamage)
+        {
+            ResultTokenData resultToken = ScriptableObject.CreateInstance<ResultTokenData>();
+            createdObjects.Add(resultToken);
+            resultToken.TokenId = "visual_result";
+            resultToken.DisplayText = "R";
+            resultToken.ResultType = resultType;
+            resultToken.DefaultExplosionRadius = resultType == AttackResultType.Explosion ? 1f : 0f;
+            resultToken.ExplosionDamageMultiplier = 1f;
+            tokens.Add(resultToken);
+        }
+
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(tokens);
+        Assert.That(program.TryGetPrimaryProjectile(out SpellProjectileNode projectileNode), Is.True);
+        return projectileNode;
     }
 
     private CharBullet CreateVisualBullet(out CharBulletVisualPresenter presenter, out TMP_Text mainGlyph, out TMP_Text shadowGlyph, out SpriteRenderer coreRenderer, out SpriteRenderer resultRenderer, out TrailRenderer trailRenderer)

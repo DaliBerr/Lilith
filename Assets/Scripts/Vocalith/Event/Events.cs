@@ -93,38 +93,5 @@ namespace Vocalith.EventSystem
         }
 
     }
-
-    public struct SelectedFactory
-    {
-        public long buildingId;
-        public SelectedFactory(long buildingId)
-        {
-        this.buildingId = buildingId;
-        }
-    }
-
-    public struct TryModifyInteriorBuildingEvent
-    {
-        public string buildingId;
-        public bool isAdd;
-        public TryModifyInteriorBuildingEvent(string buildingId, bool isAdd)
-        {
-            this.buildingId = buildingId;
-            this.isAdd = isAdd;
-        }
-    }
-    
-
-    public struct FactoryGridSelected
-    {
-        public int gridIndex;
-        public bool isEmpty;
-        public FactoryGridSelected(int gridIndex, bool isEmpty)
-        {
-            this.gridIndex = gridIndex;
-            this.isEmpty = isEmpty;
-        }
-
-    }
 }
 }

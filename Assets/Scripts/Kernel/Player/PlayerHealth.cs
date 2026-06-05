@@ -68,8 +68,48 @@ public sealed class PlayerHealth : MonoBehaviour
             return false;
         }
 
+        float resolvedDamage = damage;
+        if (TryGetComponent(out DamageShieldController shield) &&
+            shield.TryAbsorbDamage(damage, out float remainingDamage, out _))
+        {
+            resolvedDamage = remainingDamage;
+        }
+
+        if (resolvedDamage <= 0f)
+        {
+            remainingHealth = currentHealth;
+            isDead = IsDead;
+            return true;
+        }
+
         float previousHealth = currentHealth;
-        currentHealth = Mathf.Max(0f, currentHealth - damage);
+        currentHealth = Mathf.Max(0f, currentHealth - resolvedDamage);
+        remainingHealth = currentHealth;
+        isDead = IsDead;
+        PublishHealthChanged(previousHealth);
+        PublishDeathIfNeeded(previousHealth);
+        return true;
+    }
+
+    /// <summary>
+    /// summary: 结算一次由施法等系统产生的生命代价；该代价绕过吸收盾。
+    /// param: healthCost 本次需要扣除的生命值
+    /// param: remainingHealth 本次结算后的剩余生命值
+    /// param: isDead 本次结算后玩家是否死亡
+    /// returns: 成功处理本次生命代价时返回 true
+    /// </summary>
+    public bool TryApplyHealthCost(float healthCost, out float remainingHealth, out bool isDead)
+    {
+        EnsureInitialized();
+        remainingHealth = currentHealth;
+        isDead = IsDead;
+        if (healthCost <= 0f || IsDead)
+        {
+            return false;
+        }
+
+        float previousHealth = currentHealth;
+        currentHealth = Mathf.Max(0f, currentHealth - healthCost);
         remainingHealth = currentHealth;
         isDead = IsDead;
         PublishHealthChanged(previousHealth);

@@ -23,6 +23,7 @@ MonoBehaviour:
   modifiers: []
   resultType: 3
   acceptsNumericValue: 1
+  valueParameterKind: 1
   defaultExplosionRadius: 0
   explosionDamageMultiplier: 0
   defaultTriggerCount: 5

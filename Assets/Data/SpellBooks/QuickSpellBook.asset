@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5a294e144754a147a8184d192171cd6, type: 3}
+  m_Name: QuickSpellBook
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.SpellBookData
+  spellBookId: quick_spellbook
+  displayName: Quick Spellbook
+  selectionDescription: 4 slots, fast cooldown, fixed Haste modifier before equipped tokens, native damage x0.85.
+  slotCount: 4
+  castCooldownSeconds: 0.14
+  castsPerActivation: 1
+  activationSpreadAngleStep: 0
+  energyCapacity: 0
+  energyRegenPerSecond: 0
+  energyCostPerActivation: 0
+  executorModifiers:
+  - target: 10
+    expression: "*=0.85"
+  fixedItemPlacement: 0
+  fixedCastItems:
+  - {fileID: 11400000, guid: 83ba02558ed54c578e72e3b1dd750d61, type: 2}

@@ -49,6 +49,7 @@ MonoBehaviour:
     attackDamage: 1
     damageReductionPercent: 0.2
     visualScaleMultiplier: 1.25
+    displacementWeight: 3
   rangedBulletAttack:
     bulletPrefab: {fileID: 0}
     formulaItems: []

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Kernel.Bullet
@@ -10,11 +12,19 @@ namespace Kernel.Bullet
     {
         [SerializeField] private AttackResultType resultType = AttackResultType.DirectDamage;
         [SerializeField] private bool acceptsNumericValue;
+        [SerializeField] private SpellValueParameterKind valueParameterKind = SpellValueParameterKind.None;
         [SerializeField, Min(0f)] private float defaultExplosionRadius;
         [SerializeField, Range(0f, 1f)] private float explosionDamageMultiplier = 1f;
+        [SerializeField, Min(0f)] private float defaultEffectRadius;
         [SerializeField, Min(0)] private int defaultTriggerCount;
         [SerializeField, Min(0f)] private float effectDuration;
         [SerializeField, Range(0f, 1f)] private float childDamageMultiplier = 1f;
+        [SerializeField, Min(0f)] private float defaultEffectStrength = 1f;
+        [SerializeField, Min(0f)] private float areaTickSeconds = 0.5f;
+        [SerializeField, Min(0f)] private float areaDamageMultiplier = 0.25f;
+        [SerializeField, Min(0f)] private float shieldDuration = 6f;
+        [SerializeField] private SpellStatusApplication[] statusApplications = Array.Empty<SpellStatusApplication>();
+        [SerializeField] private ResultTokenData[] randomResultCandidates = Array.Empty<ResultTokenData>();
 
         public AttackResultType ResultType
         {
@@ -28,6 +38,18 @@ namespace Kernel.Bullet
             set => acceptsNumericValue = value;
         }
 
+        public SpellValueParameterKind ValueParameterKind
+        {
+            get => ResolveValueParameterKind();
+            set => valueParameterKind = value;
+        }
+
+        public SpellValueParameterKind ConfiguredValueParameterKind
+        {
+            get => valueParameterKind;
+            set => valueParameterKind = value;
+        }
+
         public float DefaultExplosionRadius
         {
             get => defaultExplosionRadius;
@@ -38,6 +60,12 @@ namespace Kernel.Bullet
         {
             get => explosionDamageMultiplier;
             set => explosionDamageMultiplier = Mathf.Clamp01(value);
+        }
+
+        public float DefaultEffectRadius
+        {
+            get => defaultEffectRadius;
+            set => defaultEffectRadius = Mathf.Max(0f, value);
         }
 
         public int DefaultTriggerCount
@@ -58,6 +86,43 @@ namespace Kernel.Bullet
             set => childDamageMultiplier = Mathf.Clamp01(value);
         }
 
+        public float DefaultEffectStrength
+        {
+            get => defaultEffectStrength;
+            set => defaultEffectStrength = Mathf.Max(0f, value);
+        }
+
+        public float AreaTickSeconds
+        {
+            get => areaTickSeconds;
+            set => areaTickSeconds = Mathf.Max(0f, value);
+        }
+
+        public float AreaDamageMultiplier
+        {
+            get => areaDamageMultiplier;
+            set => areaDamageMultiplier = Mathf.Max(0f, value);
+        }
+
+        public float ShieldDuration
+        {
+            get => shieldDuration;
+            set => shieldDuration = Mathf.Max(0f, value);
+        }
+
+        public IReadOnlyList<SpellStatusApplication> StatusApplications => statusApplications;
+        public IReadOnlyList<ResultTokenData> RandomResultCandidates => randomResultCandidates;
+
+        public void SetStatusApplications(params SpellStatusApplication[] applications)
+        {
+            statusApplications = SpellStatusApplicationUtility.Sanitize(applications);
+        }
+
+        public void SetRandomResultCandidates(params ResultTokenData[] candidates)
+        {
+            randomResultCandidates = SanitizeRandomResultCandidates(candidates);
+        }
+
         /// <summary>
         /// summary: 依据当前结果词元配置创建一份命中后二级效果载荷。
         /// param: 无
@@ -70,10 +135,19 @@ namespace Kernel.Bullet
                 explosionRadius = defaultExplosionRadius,
                 explosionDamageMultiplier = explosionDamageMultiplier,
                 explosionDelaySeconds = effectDuration,
+                effectRadius = defaultEffectRadius,
                 splitProjectileCount = defaultTriggerCount,
                 splitDamageMultiplier = childDamageMultiplier,
                 controlTriggerCount = defaultTriggerCount,
                 controlDuration = effectDuration,
+                healingMultiplier = 1f,
+                effectDuration = effectDuration,
+                effectStrength = defaultEffectStrength,
+                areaTickSeconds = areaTickSeconds,
+                areaDamageMultiplier = areaDamageMultiplier,
+                shieldDuration = shieldDuration,
+                statusApplications = SpellStatusApplicationUtility.Sanitize(statusApplications),
+                randomResultCandidates = CreateRandomResultCandidates(),
             }.GetSanitized();
         }
 
@@ -89,9 +163,91 @@ namespace Kernel.Bullet
             SetTokenType(TokenType.Result);
             defaultExplosionRadius = Mathf.Max(0f, defaultExplosionRadius);
             explosionDamageMultiplier = Mathf.Clamp01(explosionDamageMultiplier);
+            defaultEffectRadius = Mathf.Max(0f, defaultEffectRadius);
             defaultTriggerCount = Mathf.Max(0, defaultTriggerCount);
             effectDuration = Mathf.Max(0f, effectDuration);
             childDamageMultiplier = Mathf.Clamp01(childDamageMultiplier);
+            defaultEffectStrength = Mathf.Max(0f, defaultEffectStrength);
+            areaTickSeconds = Mathf.Max(0f, areaTickSeconds);
+            areaDamageMultiplier = Mathf.Max(0f, areaDamageMultiplier);
+            shieldDuration = Mathf.Max(0f, shieldDuration);
+            statusApplications = SpellStatusApplicationUtility.Sanitize(statusApplications);
+            randomResultCandidates = SanitizeRandomResultCandidates(randomResultCandidates);
+        }
+
+        private SpellValueParameterKind ResolveValueParameterKind()
+        {
+            if (!acceptsNumericValue)
+            {
+                return SpellValueParameterKind.None;
+            }
+
+            if (valueParameterKind != SpellValueParameterKind.None)
+            {
+                return valueParameterKind;
+            }
+
+            return resultType switch
+            {
+                AttackResultType.Split => SpellValueParameterKind.Count,
+                AttackResultType.StatusEffect => SpellValueParameterKind.Count,
+                AttackResultType.Drain => SpellValueParameterKind.Strength,
+                AttackResultType.Shield => SpellValueParameterKind.Strength,
+                AttackResultType.Push => SpellValueParameterKind.Strength,
+                AttackResultType.Pull => SpellValueParameterKind.Strength,
+                AttackResultType.Leave => SpellValueParameterKind.Duration,
+                _ => SpellValueParameterKind.None,
+            };
+        }
+
+        private RandomResultCandidatePayload[] CreateRandomResultCandidates()
+        {
+            ResultTokenData[] candidates = SanitizeRandomResultCandidates(randomResultCandidates);
+            if (candidates.Length <= 0)
+            {
+                return Array.Empty<RandomResultCandidatePayload>();
+            }
+
+            List<RandomResultCandidatePayload> payloads = new(candidates.Length);
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                ResultTokenData candidate = candidates[i];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                payloads.Add(new RandomResultCandidatePayload(
+                    candidate.ResultType,
+                    candidate.CreateResultEffects()));
+            }
+
+            return payloads.ToArray();
+        }
+
+        private static ResultTokenData[] SanitizeRandomResultCandidates(IEnumerable<ResultTokenData> candidates)
+        {
+            if (candidates == null)
+            {
+                return Array.Empty<ResultTokenData>();
+            }
+
+            List<ResultTokenData> sanitized = new();
+            HashSet<ResultTokenData> seen = new();
+            foreach (ResultTokenData candidate in candidates)
+            {
+                if (candidate == null ||
+                    candidate.ResultType == AttackResultType.None ||
+                    candidate.ResultType == AttackResultType.Confuse ||
+                    !seen.Add(candidate))
+                {
+                    continue;
+                }
+
+                sanitized.Add(candidate);
+            }
+
+            return sanitized.ToArray();
         }
     }
 }

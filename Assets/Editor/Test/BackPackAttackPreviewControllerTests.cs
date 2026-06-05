@@ -52,12 +52,12 @@ public sealed class BackPackAttackPreviewControllerTests
         CharBullet bulletPrefab = CreateBulletPrefab();
         PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
         });
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
 
         BackPackAttackPreviewRig boundRig = GetPrivateField<BackPackAttackPreviewRig>(controller, "previewRig");
         Camera previewCamera = GetPrivateField<Camera>(controller, "previewCamera");
@@ -84,12 +84,12 @@ public sealed class BackPackAttackPreviewControllerTests
         CharBullet bulletPrefab = CreateBulletPrefab();
         PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
         });
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
 
         Camera previewCamera = GetPrivateField<Camera>(controller, "previewCamera");
         Assert.That(previewCamera, Is.Not.Null);
@@ -109,14 +109,14 @@ public sealed class BackPackAttackPreviewControllerTests
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
         BehaviorTokenData spreadToken = CreateBehaviorToken("spread", "Spread", AttackBehaviorType.Spread, acceptsNumericValue: true, defaultProjectileCount: 2, spreadAngleStep: 12f);
         ValueTokenData valueThree = CreateValueToken("three", "3", 3f);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
             spreadToken,
             valueThree,
         });
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
 
         List<CharBullet> activePreviewBullets = GetPrivateField<List<CharBullet>>(controller, "activePreviewBullets");
         Assert.That(activePreviewBullets.Count, Is.EqualTo(3));
@@ -127,6 +127,59 @@ public sealed class BackPackAttackPreviewControllerTests
     }
 
     [Test]
+    public void RefreshPreview_WithMulticastProgram_EmitsEachProjectileNodeUnderSceneRigRoot()
+    {
+        BackPackAttackPreviewController controller = CreateController();
+        BackPackAttackPreviewRig sceneRig = CreateSceneRig();
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
+        MulticastTokenData doubleCast = CreateMulticastToken("double_cast", "Double", 2);
+        CoreTokenData fireToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        CoreTokenData iceToken = CreateCoreToken("ice_core", "Ice", AttackCoreType.Ice);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            doubleCast,
+            fireToken,
+            iceToken,
+        });
+
+        controller.RefreshPreview(player, program);
+
+        List<CharBullet> activePreviewBullets = GetPrivateField<List<CharBullet>>(controller, "activePreviewBullets");
+        Assert.That(activePreviewBullets.Count, Is.EqualTo(2));
+        Assert.That(activePreviewBullets[0].transform.parent, Is.SameAs(sceneRig.ProjectileRoot));
+        Assert.That(activePreviewBullets[1].transform.parent, Is.SameAs(sceneRig.ProjectileRoot));
+        Assert.That(activePreviewBullets[0].CurrentProjectileNode.CoreType, Is.EqualTo(AttackCoreType.Fire));
+        Assert.That(activePreviewBullets[1].CurrentProjectileNode.CoreType, Is.EqualTo(AttackCoreType.Ice));
+    }
+
+    [Test]
+    public void RefreshPreview_WithTriggerPayloadProgram_PreservesPayloadWithoutImmediateInnerEmission()
+    {
+        BackPackAttackPreviewController controller = CreateController();
+        BackPackAttackPreviewRig sceneRig = CreateSceneRig();
+        CharBullet bulletPrefab = CreateBulletPrefab();
+        PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
+        CoreTokenData fireToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
+        TriggerTokenData trigger = CreateTriggerToken("on_hit", "Trigger", SpellTriggerType.OnHit);
+        ResultTokenData explosion = CreateResultToken("explosion", "Boom", AttackResultType.Explosion, acceptsNumericValue: false, defaultExplosionRadius: 2f);
+        CompiledSpellProgram program = SpellProgramCompiler.Compile(new BaseTokenData[]
+        {
+            fireToken,
+            trigger,
+            explosion,
+        });
+
+        controller.RefreshPreview(player, program);
+
+        List<CharBullet> activePreviewBullets = GetPrivateField<List<CharBullet>>(controller, "activePreviewBullets");
+        Assert.That(activePreviewBullets.Count, Is.EqualTo(1));
+        Assert.That(sceneRig.ProjectileRoot.childCount, Is.EqualTo(1));
+        Assert.That(activePreviewBullets[0].CurrentPayloads.Count, Is.EqualTo(1));
+        Assert.That(activePreviewBullets[0].CurrentPayloads[0].InnerBlock.PayloadEffects.Count, Is.EqualTo(1));
+    }
+
+    [Test]
     public void RefreshPreview_WithDummyFormation_TracksAllDummiesAndPrefersMiddleAsPrimary()
     {
         BackPackAttackPreviewController controller = CreateController();
@@ -134,12 +187,12 @@ public sealed class BackPackAttackPreviewControllerTests
         CharBullet bulletPrefab = CreateBulletPrefab();
         PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
         });
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
 
         BackPackPreviewDummyEnemy previewDummy = GetPrivateField<BackPackPreviewDummyEnemy>(controller, "previewDummy");
         List<BackPackPreviewDummyEnemy> previewDummies = GetPrivateField<List<BackPackPreviewDummyEnemy>>(controller, "previewDummies");
@@ -159,9 +212,9 @@ public sealed class BackPackAttackPreviewControllerTests
         BackPackAttackPreviewRig sceneRig = CreateSceneRig();
         CharBullet bulletPrefab = CreateBulletPrefab();
         PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[0]);
+        CompiledSpellProgram program = CompileProgram();
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
 
         TMP_Text statusLabel = GetPrivateField<TMP_Text>(controller, "statusLabel");
         RenderTexture previewTexture = GetPrivateField<RenderTexture>(controller, "previewTexture");
@@ -181,12 +234,12 @@ public sealed class BackPackAttackPreviewControllerTests
         CharBullet bulletPrefab = CreateBulletPrefab();
         PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
         });
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
 
         TMP_Text statusLabel = GetPrivateField<TMP_Text>(controller, "statusLabel");
         RawImage previewImage = GetPrivateField<RawImage>(controller, "previewImage");
@@ -205,12 +258,12 @@ public sealed class BackPackAttackPreviewControllerTests
         CharBullet bulletPrefab = CreateBulletPrefab();
         PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
         });
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
 
         TMP_Text statusLabel = GetPrivateField<TMP_Text>(controller, "statusLabel");
         RawImage previewImage = GetPrivateField<RawImage>(controller, "previewImage");
@@ -229,14 +282,14 @@ public sealed class BackPackAttackPreviewControllerTests
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
         ResultTokenData explosionToken = CreateResultToken("explosion", "Boom", AttackResultType.Explosion, acceptsNumericValue: true, defaultExplosionRadius: 1f);
         ValueTokenData radiusValue = CreateValueToken("radius", "2", 2f);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
             explosionToken,
             radiusValue,
         });
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
 
         BackPackPreviewDummyEnemy previewDummy = GetPrivateField<BackPackPreviewDummyEnemy>(controller, "previewDummy");
         LineRenderer explosionHint = GetPrivateField<LineRenderer>(controller, "explosionHint");
@@ -248,7 +301,7 @@ public sealed class BackPackAttackPreviewControllerTests
         Assert.That(applied, Is.True);
         Assert.That(explosionHint.enabled, Is.True);
         Assert.That(new Vector2(explosionHint.GetPosition(0).x, explosionHint.GetPosition(0).z).magnitude,
-            Is.EqualTo(compiledAttack.ExplosionRadius).Within(0.01f));
+            Is.EqualTo(GetPrimaryProjectile(program).ExplosionRadius).Within(0.01f));
     }
 
     [Test]
@@ -313,12 +366,12 @@ public sealed class BackPackAttackPreviewControllerTests
         CharBullet bulletPrefab = CreateBulletPrefab();
         PlayerPlaneMovement player = CreatePlayer(bulletPrefab);
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
         });
 
-        controller.RefreshPreview(player, compiledAttack);
+        controller.RefreshPreview(player, program);
         controller.ClearPreview();
 
         Camera previewCamera = sceneRig.PreviewCamera;
@@ -344,7 +397,7 @@ public sealed class BackPackAttackPreviewControllerTests
         CoreTokenData coreToken = CreateCoreToken("fire_core", "Fire", AttackCoreType.Fire);
         BehaviorTokenData spreadToken = CreateBehaviorToken("spread", "Spread", AttackBehaviorType.Spread, acceptsNumericValue: true, defaultProjectileCount: 2, spreadAngleStep: 12f);
         ValueTokenData valueThree = CreateValueToken("three", "3", 3f);
-        CompiledAttack compiledAttack = AttackFormulaCompiler.Compile(new BaseTokenData[]
+        CompiledSpellProgram program = CompileProgram(new BaseTokenData[]
         {
             coreToken,
             spreadToken,
@@ -357,7 +410,7 @@ public sealed class BackPackAttackPreviewControllerTests
             owner.transform,
             Vector3.zero,
             Vector3.forward,
-            compiledAttack,
+            program,
             projectileRoot.transform,
             spawnedBullets);
 
@@ -368,6 +421,18 @@ public sealed class BackPackAttackPreviewControllerTests
             Assert.That(spawnedBullets[i], Is.Not.Null);
             Assert.That(spawnedBullets[i].transform.parent, Is.SameAs(projectileRoot.transform));
         }
+    }
+
+    private static CompiledSpellProgram CompileProgram(params BaseTokenData[] tokens)
+    {
+        return SpellProgramCompiler.Compile(tokens);
+    }
+
+    private static SpellProjectileNode GetPrimaryProjectile(CompiledSpellProgram program)
+    {
+        Assert.That(program, Is.Not.Null);
+        Assert.That(program.TryGetPrimaryProjectile(out SpellProjectileNode projectile), Is.True);
+        return projectile;
     }
 
     private BackPackAttackPreviewController CreateController()
@@ -540,6 +605,20 @@ public sealed class BackPackAttackPreviewControllerTests
         token.ResultType = resultType;
         token.AcceptsNumericValue = acceptsNumericValue;
         token.DefaultExplosionRadius = defaultExplosionRadius;
+        return token;
+    }
+
+    private MulticastTokenData CreateMulticastToken(string tokenId, string displayText, int castCount)
+    {
+        MulticastTokenData token = CreateToken<MulticastTokenData>(tokenId, displayText);
+        token.CastCount = castCount;
+        return token;
+    }
+
+    private TriggerTokenData CreateTriggerToken(string tokenId, string displayText, SpellTriggerType triggerType)
+    {
+        TriggerTokenData token = CreateToken<TriggerTokenData>(tokenId, displayText);
+        token.TriggerType = triggerType;
         return token;
     }
 

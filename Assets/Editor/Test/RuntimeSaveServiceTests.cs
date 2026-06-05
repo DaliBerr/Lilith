@@ -267,7 +267,7 @@ public sealed class RuntimeSaveServiceTests
         PlayerRemnantWallet wallet = CreateWallet(initialCount: 0);
         RuntimeSaveService saveService = CreateSaveService();
         PlayerHealth health = CreateComponent<PlayerHealth>("PlayerHealth");
-        AttackFormulaLoadout loadout = CreateComponent<AttackFormulaLoadout>("AttackFormulaLoadout");
+        SpellBookLoadout loadout = CreateComponent<SpellBookLoadout>("SpellBookLoadout");
         PlayerBulletTokenInventory inventory = CreateComponent<PlayerBulletTokenInventory>("PlayerBulletTokenInventory");
         TestTokenData loadoutToken = CreateToken("loadout_token");
         TestTokenData inventoryToken = CreateToken("inventory_token");
@@ -286,8 +286,8 @@ public sealed class RuntimeSaveServiceTests
         Assert.That(reloadSuccess, Is.True);
         Assert.That(wallet.CurrentRemnants, Is.EqualTo(9));
         Assert.That(health.CurrentHealth, Is.EqualTo(remainingHealth));
-        Assert.That(loadout.Items.Count, Is.EqualTo(1));
-        Assert.That(loadout.Items[0], Is.SameAs(loadoutToken));
+        Assert.That(loadout.EquippedItems.Count, Is.EqualTo(1));
+        Assert.That(loadout.EquippedItems[0], Is.SameAs(loadoutToken));
         Assert.That(inventory.GetToken(0), Is.SameAs(inventoryToken));
     }
 

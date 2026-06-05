@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4e63797e11405d45b5dde1ce51cda3b, type: 3}
+  m_Name: SpellProgram_Token_Lib
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.BulletTokenLibrary
+  selectableTokens:
+  - {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
+  - {fileID: 11400000, guid: f34b2ee987af5e04fb918b5bb0d5309f, type: 2}
+  - {fileID: 11400000, guid: 83ba02558ed54c578e72e3b1dd750d61, type: 2}
+  - {fileID: 11400000, guid: 8865de68a7814ea3953c70e915b80472, type: 2}
+  - {fileID: 11400000, guid: d8b7c41a92e5414e9f73c2a8d63b5e91, type: 2}
+  - {fileID: 11400000, guid: b14f1d9e9c254c3b8f0f5d4b2a6e7c90, type: 2}
+  - {fileID: 11400000, guid: 8f62b7c9e4d84a5a91f1d1a4d3b8f2c6, type: 2}
+  - {fileID: 11400000, guid: 6b9e2a271a6245b9a8af245ab62cc3ad, type: 2}
+  - {fileID: 11400000, guid: 7c8d93f008304399ba23ca74b13aa29e, type: 2}
+  - {fileID: 11400000, guid: 51e87198f6a34444953d769c38fcee9a, type: 2}
+  tokenWeights:
+  - token: {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
+    drawWeight: 0.5
+  - token: {fileID: 11400000, guid: f34b2ee987af5e04fb918b5bb0d5309f, type: 2}
+    drawWeight: 1.2
+  - token: {fileID: 11400000, guid: 83ba02558ed54c578e72e3b1dd750d61, type: 2}
+    drawWeight: 1
+  - token: {fileID: 11400000, guid: 8865de68a7814ea3953c70e915b80472, type: 2}
+    drawWeight: 0.8
+  - token: {fileID: 11400000, guid: d8b7c41a92e5414e9f73c2a8d63b5e91, type: 2}
+    drawWeight: 0.7
+  - token: {fileID: 11400000, guid: b14f1d9e9c254c3b8f0f5d4b2a6e7c90, type: 2}
+    drawWeight: 0.7
+  - token: {fileID: 11400000, guid: 8f62b7c9e4d84a5a91f1d1a4d3b8f2c6, type: 2}
+    drawWeight: 0.7
+  - token: {fileID: 11400000, guid: 6b9e2a271a6245b9a8af245ab62cc3ad, type: 2}
+    drawWeight: 0.65
+  - token: {fileID: 11400000, guid: 7c8d93f008304399ba23ca74b13aa29e, type: 2}
+    drawWeight: 0.8
+  - token: {fileID: 11400000, guid: 51e87198f6a34444953d769c38fcee9a, type: 2}
+    drawWeight: 0.7

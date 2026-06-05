@@ -169,19 +169,12 @@ namespace Kernel.Bullet
             }
         }
 
-        /// <summary>
-        /// summary: 把一条修饰定义应用到编译结果上。
-        /// param: compiledAttack 需要被修改的编译结果
-        /// param: modifier 当前修饰定义
-        /// param: errorMessage 应用失败时返回的错误消息
-        /// returns: 修饰成功生效时返回 true
-        /// </summary>
-        public static bool TryApplyModifier(CompiledAttack compiledAttack, TokenModifierDefinition modifier, out string errorMessage)
+        internal static bool TryApplyModifier(SpellProjectileCompileResult projectileResult, TokenModifierDefinition modifier, out string errorMessage)
         {
             errorMessage = string.Empty;
-            if (compiledAttack == null)
+            if (projectileResult == null)
             {
-                errorMessage = "Compiled attack is missing.";
+                errorMessage = "Projectile compile result is missing.";
                 return false;
             }
 
@@ -204,8 +197,8 @@ namespace Kernel.Bullet
                         return false;
                     }
 
-                    compiledAttack.HasTextColorOverride = true;
-                    compiledAttack.TextColor = color;
+                    projectileResult.HasTextColorOverride = true;
+                    projectileResult.TextColor = color;
                     return true;
 
                 case TokenModifierTarget.FontSize:
@@ -220,37 +213,40 @@ namespace Kernel.Bullet
                         return false;
                     }
 
-                    compiledAttack.AddFontSizeModifier(operation, fontSize);
+                    projectileResult.AddFontSizeModifier(operation, fontSize);
                     return true;
 
                 case TokenModifierTarget.ScaleMultiplier:
                     if (!TryParseNumericLiteral(literal, out float scaleOperand, out errorMessage) ||
-                        !TryApplyNumericOperator(compiledAttack.ScaleMultiplier, operation, scaleOperand, out float scaleResult, out errorMessage))
+                        !TryApplyNumericOperator(projectileResult.ScaleMultiplier, operation, scaleOperand, out float scaleResult, out errorMessage))
                     {
                         return false;
                     }
 
-                    compiledAttack.ScaleMultiplier = Mathf.Max(0f, scaleResult);
+                    projectileResult.ScaleMultiplier = Mathf.Max(0f, scaleResult);
                     return true;
 
                 case TokenModifierTarget.ImpactRadiusMultiplier:
                     if (!TryParseNumericLiteral(literal, out float radiusOperand, out errorMessage) ||
-                        !TryApplyNumericOperator(compiledAttack.ImpactRadiusMultiplier, operation, radiusOperand, out float radiusResult, out errorMessage))
+                        !TryApplyNumericOperator(projectileResult.ImpactRadiusMultiplier, operation, radiusOperand, out float radiusResult, out errorMessage))
                     {
                         return false;
                     }
 
-                    compiledAttack.ImpactRadiusMultiplier = Mathf.Max(0f, radiusResult);
+                    projectileResult.ImpactRadiusMultiplier = Mathf.Max(0f, radiusResult);
                     return true;
 
                 case TokenModifierTarget.ProjectileSpeed:
-                    return TryApplyAttackSpecNumericModifier(compiledAttack, TokenModifierTarget.ProjectileSpeed, operation, literal, out errorMessage);
+                    return TryApplyAttackSpecNumericModifier(projectileResult, TokenModifierTarget.ProjectileSpeed, operation, literal, out errorMessage);
 
                 case TokenModifierTarget.MaxLifetime:
-                    return TryApplyAttackSpecNumericModifier(compiledAttack, TokenModifierTarget.MaxLifetime, operation, literal, out errorMessage);
+                    return TryApplyAttackSpecNumericModifier(projectileResult, TokenModifierTarget.MaxLifetime, operation, literal, out errorMessage);
 
                 case TokenModifierTarget.MaxTravelDistance:
-                    return TryApplyAttackSpecNumericModifier(compiledAttack, TokenModifierTarget.MaxTravelDistance, operation, literal, out errorMessage);
+                    return TryApplyAttackSpecNumericModifier(projectileResult, TokenModifierTarget.MaxTravelDistance, operation, literal, out errorMessage);
+
+                case TokenModifierTarget.Damage:
+                    return TryApplyAttackSpecNumericModifier(projectileResult, TokenModifierTarget.Damage, operation, literal, out errorMessage);
 
                 default:
                     errorMessage = $"Unsupported modifier target '{modifier.target}'.";
@@ -258,8 +254,24 @@ namespace Kernel.Bullet
             }
         }
 
+        public static bool TryApplyNumericExpression(float currentValue, string expression, out float result, out string errorMessage)
+        {
+            result = currentValue;
+            if (!TryParseExpression(expression, out TokenModifierOperator operation, out string literal, out errorMessage))
+            {
+                return false;
+            }
+
+            if (!TryParseNumericLiteral(literal, out float operand, out errorMessage))
+            {
+                return false;
+            }
+
+            return TryApplyNumericOperator(currentValue, operation, operand, out result, out errorMessage);
+        }
+
         private static bool TryApplyAttackSpecNumericModifier(
-            CompiledAttack compiledAttack,
+            SpellProjectileCompileResult projectileResult,
             TokenModifierTarget target,
             TokenModifierOperator operation,
             string literal,
@@ -271,7 +283,7 @@ namespace Kernel.Bullet
                 return false;
             }
 
-            AttackSpec spec = compiledAttack.AttackSpec;
+            AttackSpec spec = projectileResult.AttackSpec;
             float currentValue;
             switch (target)
             {
@@ -283,6 +295,9 @@ namespace Kernel.Bullet
                     break;
                 case TokenModifierTarget.MaxTravelDistance:
                     currentValue = spec.maxTravelDistance;
+                    break;
+                case TokenModifierTarget.Damage:
+                    currentValue = spec.damage;
                     break;
                 default:
                     errorMessage = $"Unsupported AttackSpec modifier target '{target}'.";
@@ -305,9 +320,12 @@ namespace Kernel.Bullet
                 case TokenModifierTarget.MaxTravelDistance:
                     spec.maxTravelDistance = Mathf.Max(0f, nextValue);
                     break;
+                case TokenModifierTarget.Damage:
+                    spec.damage = Mathf.Max(0f, nextValue);
+                    break;
             }
 
-            compiledAttack.AttackSpec = spec.GetSanitized();
+            projectileResult.AttackSpec = spec.GetSanitized();
             return true;
         }
 

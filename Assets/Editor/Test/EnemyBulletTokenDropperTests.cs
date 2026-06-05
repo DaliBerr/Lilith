@@ -145,6 +145,40 @@ public sealed class EnemyBulletTokenDropperTests
     }
 
     [Test]
+    public void EnemyDeath_ConsumesDropChanceMultiplierForAllDropEntries()
+    {
+        GameObject pickupParent = CreateGameObject("PickupParent");
+        BulletTokenPickup pickupPrefab = CreatePickupPrefab();
+        BaseCharEnemyNorm1 enemy = CreateEnemy();
+        EnemyBulletTokenDropper dropper = enemy.gameObject.AddComponent<EnemyBulletTokenDropper>();
+
+        Assert.That(dropper.TrySetPickupPrefab(pickupPrefab), Is.True);
+        SetPrivateField(dropper, "pickupParent", pickupParent.transform);
+
+        CoreTokenData token = CreateToken<CoreTokenData>("drop_token", "Drop Token");
+        RemnantPickupTokenData remnantToken = CreateRemnantToken("pickup_remnant", "Remnant", 2);
+        HealingPickupTokenData healingToken = CreateHealingToken("pickup_heal", "Heal", 20f);
+        dropper.ApplyWaveConfig(new EnemyWaveConfig(
+            100f,
+            120f,
+            3f,
+            0.5f,
+            1f,
+            new[]
+            {
+                new EnemyBulletTokenDropEntry(token, 0.6f),
+                new EnemyBulletTokenDropEntry(remnantToken, 0.6f),
+                new EnemyBulletTokenDropEntry(healingToken, 0.6f),
+            }));
+
+        EnemyDropBonusController.RegisterDropChanceMultiplier(enemy, 2f);
+
+        Assert.That(enemy.TryApplyDamage(enemy.CurrentHealth, out _, out bool isDead), Is.True);
+        Assert.That(isDead, Is.True);
+        Assert.That(pickupParent.transform.childCount, Is.EqualTo(3));
+    }
+
+    [Test]
     public void EnemyDeath_UsesWaveDropCountForSpawnQuantity()
     {
         GameObject pickupParent = CreateGameObject("PickupParent");

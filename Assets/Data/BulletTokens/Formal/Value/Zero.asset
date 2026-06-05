@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62d48fb0984ece44e9b80c0dcede1b3b, type: 3}
+  m_Name: Zero
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.Bullet.ValueTokenData
+  tokenId: value_zero
+  displayText: "\u96F6"
+  displayTextKey: 
+  description: "\u6309\u5141\u8BB8\u96F6\u503C\u7684\u53C2\u6570\u89E3\u6790\u4E3A
+    0\u3002"
+  descriptionKey: 
+  tokenType: 4
+  hasBulletTextOverride: 0
+  bulletTextOverride: 
+  modifiers: []
+  numericValue: 0
+  valueMode: 2
+  scalePreset: 3
