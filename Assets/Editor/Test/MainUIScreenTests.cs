@@ -341,6 +341,25 @@ public sealed class MainUIScreenTests
             Assert.That(notificationPanel, Is.Not.Null);
             Assert.That(notificationPanel.name, Is.EqualTo("Notification Panel"));
             Assert.That(notificationPanel.gameObject.activeSelf, Is.False);
+            Assert.That(root.transform.Find("TopPanel"), Is.Null);
+            Assert.That(screen.TopPanel, Is.Not.Null);
+            Assert.That(screen.TopPanel.name, Is.EqualTo("Player Info Panel"));
+            Assert.That(screen.HealthPanel, Is.Not.Null);
+            Assert.That(screen.HealthPanel.name, Is.EqualTo("Hp bar"));
+            Assert.That(screen.HealthTitleText, Is.Null);
+            Assert.That(screen.HealthPanel.Find("Titlle"), Is.Null);
+            Assert.That(screen.HealthBarRoot, Is.Not.Null);
+            Assert.That(screen.HealthBarRoot.name, Is.EqualTo("Bar"));
+            Assert.That(screen.HealthBarRoot.anchorMin, Is.EqualTo(new Vector2(0f, 0f)));
+            Assert.That(screen.HealthBarRoot.anchorMax, Is.EqualTo(new Vector2(1f, 1f)));
+            Assert.That(screen.HealthBarRoot.sizeDelta, Is.EqualTo(Vector2.zero));
+            Assert.That(screen.SpellPanel, Is.Not.Null);
+            Assert.That(screen.SpellPanel.name, Is.EqualTo("Spell"));
+            Assert.That(screen.SpellPanel.Find("Book"), Is.Not.Null);
+            Assert.That(screen.SpellPanel.Find("Book").GetComponentInChildren<BackPackGridSlotView>(true), Is.Not.Null);
+            Assert.That(screen.SpellSlotTemplate, Is.Not.Null);
+            Assert.That(screen.SpellSlotTemplate.name, Is.EqualTo("Runtime Spell Template"));
+            Assert.That(screen.SpellSlotTemplate.transform.IsChildOf(screen.SpellPanel), Is.True);
 
             CanvasGroup notificationCanvasGroup = screen.NotificationCanvasGroup;
             Assert.That(notificationCanvasGroup, Is.Not.Null);
@@ -368,20 +387,52 @@ public sealed class MainUIScreenTests
         root.AddComponent<CanvasGroup>();
         MainUIScreen screen = root.AddComponent<MainUIScreen>();
 
-        RectTransform topPanel = CreateUiObject("TopPanel", root.transform).GetComponent<RectTransform>();
-        GameObject healthPanel = CreateUiObject("HP Bar", topPanel);
+        GameObject playerInfoPanel = CreateUiObject("Player Info Panel", root.transform);
+        playerInfoPanel.AddComponent<Image>();
+        playerInfoPanel.AddComponent<HorizontalLayoutGroup>();
+        playerInfoPanel.AddComponent<ContentSizeFitter>();
+
+        GameObject avatar = CreateUiObject("Avator", playerInfoPanel.transform);
+        avatar.AddComponent<Image>();
+        avatar.AddComponent<LayoutElement>();
+
+        GameObject panel = CreateUiObject("Panel", playerInfoPanel.transform);
+        panel.AddComponent<Image>();
+        panel.AddComponent<LayoutElement>();
+        panel.AddComponent<VerticalLayoutGroup>();
+        panel.AddComponent<ContentSizeFitter>();
+
+        GameObject healthPanel = CreateUiObject("Hp bar", panel.transform);
         healthPanel.AddComponent<Image>();
-        CreateTextObject("Titlle", healthPanel.transform);
+        healthPanel.AddComponent<LayoutElement>();
+        healthPanel.AddComponent<VerticalLayoutGroup>();
+        healthPanel.AddComponent<ContentSizeFitter>();
 
         GameObject bar = CreateUiObject("Bar", healthPanel.transform);
+        RectTransform barRect = bar.GetComponent<RectTransform>();
+        barRect.anchorMin = new Vector2(0f, 0f);
+        barRect.anchorMax = new Vector2(1f, 1f);
+        barRect.anchoredPosition = Vector2.zero;
+        barRect.sizeDelta = Vector2.zero;
         bar.AddComponent<HorizontalLayoutGroup>();
         bar.AddComponent<PlayerHealthBarController>();
 
-        GameObject spellPanelObject = CreateUiObject("Spell Panel", topPanel);
+        GameObject spellPanelObject = CreateUiObject("Spell", panel.transform);
         spellPanelObject.AddComponent<Image>();
+        spellPanelObject.AddComponent<LayoutElement>();
         spellPanelObject.AddComponent<GridLayoutGroup>();
+        spellPanelObject.AddComponent<ContentSizeFitter>();
         spellPanel = spellPanelObject.GetComponent<RectTransform>();
-        templateSlot = CreateSpellSlot("BackPack Grid Prefab", spellPanelObject.transform);
+
+        GameObject book = CreateUiObject("Book", spellPanelObject.transform);
+        book.AddComponent<Image>();
+        CreateSpellSlot("Book Slot", book.transform);
+
+        templateSlot = CreateSpellSlot("Runtime Spell Template", spellPanelObject.transform);
+
+        GameObject power = CreateUiObject("Power", panel.transform);
+        power.AddComponent<Image>();
+        power.AddComponent<LayoutElement>();
 
         GameObject questPanel = CreateUiObject("Quest Panel", root.transform);
         questPanel.AddComponent<Image>();
