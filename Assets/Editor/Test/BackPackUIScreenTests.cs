@@ -285,6 +285,7 @@ public sealed class BackPackUIScreenTests
         slot.OnDrag(dragEventData);
         slot.OnEndDrag(dragEventData);
 
+        Assert.That(IsHoldProgressRingVisible(slot), Is.False);
         Assert.That(scrollRect.InitializePotentialDragCallCount, Is.EqualTo(1));
         Assert.That(scrollRect.BeginDragCallCount, Is.EqualTo(1));
         Assert.That(scrollRect.DragCallCount, Is.EqualTo(1));
@@ -292,6 +293,117 @@ public sealed class BackPackUIScreenTests
         Assert.That(GetPrivateField<BackPackGridSlotView>(screen, "activeDragSource"), Is.Null);
         BackPackDragPreviewView dragPreview = GetPrivateField<BackPackDragPreviewView>(screen, "dragPreviewView");
         Assert.That(dragPreview == null || !dragPreview.gameObject.activeSelf, Is.True);
+    }
+
+    [Test]
+    public void InventorySlotPointerDown_ShowsHoldProgressRingAtZeroFill()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("slot_hold_ring", "HoldRing");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TrackingScrollRect scrollRect = screen.transform.Find("MainContent/BackPack Grid Panel/Scroll View")?.GetComponent<TrackingScrollRect>();
+        Assert.That(scrollRect, Is.Not.Null);
+        ConfigureInventoryScrollArea(scrollRect);
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        BackPackGridSlotView slot = inventorySlots[0];
+        PointerEventData pointerEventData = CreatePointerEventData(new Vector2(180f, 160f));
+        pointerEventData.button = PointerEventData.InputButton.Left;
+
+        slot.OnPointerDown(pointerEventData);
+
+        Image fillImage = GetHoldProgressFillImage(slot);
+        Assert.That(IsHoldProgressRingVisible(slot), Is.True);
+        Assert.That(fillImage, Is.Not.Null);
+        Assert.That(fillImage.raycastTarget, Is.False);
+        Assert.That(fillImage.type, Is.EqualTo(Image.Type.Filled));
+        Assert.That(fillImage.fillMethod, Is.EqualTo(Image.FillMethod.Radial360));
+        Assert.That(fillImage.fillAmount, Is.EqualTo(0f).Within(0.0001f));
+    }
+
+    [Test]
+    public void InventorySlotLongPressProgress_FillsThenHidesWhenItemDragStarts()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("slot_hold_ring_drag", "HoldRingDrag");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TrackingScrollRect scrollRect = screen.transform.Find("MainContent/BackPack Grid Panel/Scroll View")?.GetComponent<TrackingScrollRect>();
+        Assert.That(scrollRect, Is.Not.Null);
+        ConfigureInventoryScrollArea(scrollRect);
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        BackPackGridSlotView slot = inventorySlots[0];
+        PointerEventData dragEventData = CreatePointerEventData(new Vector2(180f, 160f));
+        dragEventData.button = PointerEventData.InputButton.Left;
+
+        slot.OnPointerDown(dragEventData);
+        SetPrivateField(slot, "pointerDownTime", Time.unscaledTime - 1f);
+        InvokeNonPublic(slot, "Update");
+
+        Image fillImage = GetHoldProgressFillImage(slot);
+        Assert.That(fillImage.fillAmount, Is.EqualTo(1f).Within(0.0001f));
+
+        slot.OnBeginDrag(dragEventData);
+
+        Assert.That(GetPrivateField<BackPackGridSlotView>(screen, "activeDragSource"), Is.SameAs(slot));
+        Assert.That(IsHoldProgressRingVisible(slot), Is.False);
+
+        slot.OnEndDrag(dragEventData);
+    }
+
+    [Test]
+    public void InventorySlotPointerUp_HidesHoldProgressRingWithoutDragging()
+    {
+        CoreTokenData inventoryToken = CreateToken<CoreTokenData>("slot_hold_ring_up", "HoldRingUp");
+        CreatePlayerWithState(inventoryToken, null);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        TrackingScrollRect scrollRect = screen.transform.Find("MainContent/BackPack Grid Panel/Scroll View")?.GetComponent<TrackingScrollRect>();
+        Assert.That(scrollRect, Is.Not.Null);
+        ConfigureInventoryScrollArea(scrollRect);
+
+        List<BackPackGridSlotView> inventorySlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "inventorySlots");
+        BackPackGridSlotView slot = inventorySlots[0];
+        PointerEventData pointerEventData = CreatePointerEventData(new Vector2(180f, 160f));
+        pointerEventData.button = PointerEventData.InputButton.Left;
+
+        slot.OnPointerDown(pointerEventData);
+        Assert.That(IsHoldProgressRingVisible(slot), Is.True);
+
+        slot.OnPointerUp(pointerEventData);
+
+        Assert.That(IsHoldProgressRingVisible(slot), Is.False);
+    }
+
+    [Test]
+    public void SpellBookSlotPointerDown_DoesNotShowHoldProgressRing()
+    {
+        CoreTokenData spellBookToken = CreateToken<CoreTokenData>("slot_spell_no_hold_ring", "SpellNoHoldRing");
+        CreatePlayerWithState(null, spellBookToken);
+
+        BackPackUIScreen screen = CreateBackPackUIScreen();
+        InvokeNonPublic(screen, "OnInit");
+        screen.RefreshFromCurrentPlayer();
+
+        List<BackPackGridSlotView> spellBookSlots = GetPrivateField<List<BackPackGridSlotView>>(screen, "spellBookSlots");
+        BackPackGridSlotView slot = spellBookSlots[0];
+        PointerEventData pointerEventData = CreatePointerEventData(new Vector2(180f, 160f));
+        pointerEventData.button = PointerEventData.InputButton.Left;
+
+        slot.OnPointerDown(pointerEventData);
+
+        Assert.That(IsHoldProgressRingVisible(slot), Is.False);
     }
 
     [Test]
@@ -937,6 +1049,18 @@ public sealed class BackPackUIScreenTests
         }
 
         return count;
+    }
+
+    private static bool IsHoldProgressRingVisible(BackPackGridSlotView slot)
+    {
+        Transform ring = slot != null ? slot.transform.Find("Hold Progress Ring") : null;
+        return ring != null && ring.gameObject.activeSelf;
+    }
+
+    private static Image GetHoldProgressFillImage(BackPackGridSlotView slot)
+    {
+        Transform fill = slot != null ? slot.transform.Find("Hold Progress Ring/Fill") : null;
+        return fill != null ? fill.GetComponent<Image>() : null;
     }
 
     private static T GetPrivateField<T>(object target, string fieldName)

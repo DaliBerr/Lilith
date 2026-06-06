@@ -41,6 +41,11 @@ namespace Kernel.UI
     public sealed class BackPackGridSlotView : MonoBehaviour, IInitializePotentialDragHandler, IPointerDownHandler, IPointerUpHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler, IPointerClickHandler, IPointerMoveHandler
     {
         private const float InventoryDragHoldSeconds = 0.18f;
+        private const float HoldProgressRingSize = 34f;
+        private const int HoldProgressRingTextureSize = 64;
+        private const float HoldProgressRingOuterRadius = 0.47f;
+        private const float HoldProgressRingInnerRadius = 0.34f;
+        private static Sprite holdProgressRingSprite;
 
         [Header("View")]
         [SerializeField] private Image background;
@@ -77,6 +82,10 @@ namespace Kernel.UI
         private RectTransform rectTransform;
         private ScrollRect parentScrollRect;
         private float pointerDownTime;
+        private RectTransform holdProgressRingRect;
+        private Image holdProgressRingBackground;
+        private Image holdProgressRingFill;
+        private bool isHoldProgressRingVisible;
         private readonly List<BaseTokenData> compileTokenBuffer = new();
 
         public BackPackSlotArea Area => area;
@@ -111,6 +120,7 @@ namespace Kernel.UI
         public void Initialize(BackPackUIScreen ownerScreen, BackPackSlotArea slotArea, int index)
         {
             EnsureLocalReferences();
+            HideHoldProgressRing();
             owner = ownerScreen;
             area = slotArea;
             slotIndex = index;
@@ -130,6 +140,7 @@ namespace Kernel.UI
         public void InitializeDisplayOnly(BackPackSlotArea slotArea)
         {
             EnsureLocalReferences();
+            HideHoldProgressRing();
             owner = null;
             area = slotArea;
             slotIndex = -1;
@@ -149,9 +160,15 @@ namespace Kernel.UI
         public void SetOccupancy(TokenCellOccupancy value)
         {
             EnsureLocalReferences();
+            HideHoldProgressRing();
             occupancy = value;
             RefreshText();
             ApplyVisualState();
+        }
+
+        private void Update()
+        {
+            UpdateHoldProgressRing();
         }
 
         /// <summary>
@@ -178,11 +195,13 @@ namespace Kernel.UI
         {
             pointerDownTime = Time.unscaledTime;
             isForwardingDragToScrollRect = false;
+            TryShowHoldProgressRing(eventData);
         }
 
         public void OnPointerUp(PointerEventData eventData)
         {
             isForwardingDragToScrollRect = false;
+            HideHoldProgressRing();
         }
 
         public void OnBeginDrag(PointerEventData eventData)
@@ -194,9 +213,11 @@ namespace Kernel.UI
 
             if (isDisplayOnly || owner == null || !occupancy.IsOccupied)
             {
+                HideHoldProgressRing();
                 return;
             }
 
+            HideHoldProgressRing();
             isDragging = true;
             SetRaycastBlocking(false);
             ApplyVisualState();
@@ -230,6 +251,7 @@ namespace Kernel.UI
             {
                 parentScrollRect?.OnEndDrag(eventData);
                 isForwardingDragToScrollRect = false;
+                HideHoldProgressRing();
                 return;
             }
 
@@ -280,6 +302,7 @@ namespace Kernel.UI
         public void ResetDragPresentation()
         {
             EnsureLocalReferences();
+            HideHoldProgressRing();
             isDragging = false;
             SetRaycastBlocking(true);
             ApplyVisualState();
@@ -331,8 +354,170 @@ namespace Kernel.UI
             }
 
             isForwardingDragToScrollRect = true;
+            HideHoldProgressRing();
             parentScrollRect?.OnBeginDrag(eventData);
             return true;
+        }
+
+        private void TryShowHoldProgressRing(PointerEventData eventData)
+        {
+            if (!CanShowHoldProgressRing(eventData))
+            {
+                HideHoldProgressRing();
+                return;
+            }
+
+            EnsureHoldProgressRing();
+            if (holdProgressRingRect == null || holdProgressRingFill == null)
+            {
+                return;
+            }
+
+            Camera eventCamera = eventData != null ? eventData.pressEventCamera : null;
+            Vector2 screenPosition = eventData != null ? eventData.position : RectTransformUtility.WorldToScreenPoint(eventCamera, rectTransform.position);
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, screenPosition, eventCamera, out Vector2 localPoint))
+            {
+                holdProgressRingRect.anchoredPosition = localPoint;
+            }
+            else
+            {
+                holdProgressRingRect.anchoredPosition = Vector2.zero;
+            }
+
+            holdProgressRingFill.fillAmount = 0f;
+            holdProgressRingRect.gameObject.SetActive(true);
+            isHoldProgressRingVisible = true;
+        }
+
+        private bool CanShowHoldProgressRing(PointerEventData eventData)
+        {
+            if (eventData != null && eventData.button != PointerEventData.InputButton.Left)
+            {
+                return false;
+            }
+
+            return ShouldRouteInventoryGestureToScrollRect()
+                && owner != null
+                && occupancy.IsOccupied;
+        }
+
+        private void EnsureHoldProgressRing()
+        {
+            if (holdProgressRingRect != null)
+            {
+                return;
+            }
+
+            EnsureLocalReferences();
+            if (rectTransform == null)
+            {
+                return;
+            }
+
+            GameObject ringObject = new("Hold Progress Ring");
+            ringObject.layer = gameObject.layer;
+            ringObject.transform.SetParent(rectTransform, false);
+            holdProgressRingRect = ringObject.AddComponent<RectTransform>();
+            holdProgressRingRect.sizeDelta = new Vector2(HoldProgressRingSize, HoldProgressRingSize);
+            holdProgressRingRect.pivot = new Vector2(0.5f, 0.5f);
+            holdProgressRingRect.anchorMin = new Vector2(0.5f, 0.5f);
+            holdProgressRingRect.anchorMax = new Vector2(0.5f, 0.5f);
+
+            Sprite ringSprite = GetHoldProgressRingSprite();
+            holdProgressRingBackground = CreateHoldProgressRingImage("Track", holdProgressRingRect, ringSprite, new Color(0f, 0f, 0f, 0.38f));
+            holdProgressRingFill = CreateHoldProgressRingImage("Fill", holdProgressRingRect, ringSprite, new Color(1f, 0.88f, 0.42f, 0.95f));
+            holdProgressRingFill.type = Image.Type.Filled;
+            holdProgressRingFill.fillMethod = Image.FillMethod.Radial360;
+            holdProgressRingFill.fillOrigin = (int)Image.Origin360.Top;
+            holdProgressRingFill.fillClockwise = true;
+            holdProgressRingFill.fillAmount = 0f;
+            holdProgressRingRect.gameObject.SetActive(false);
+        }
+
+        private static Image CreateHoldProgressRingImage(string name, Transform parent, Sprite sprite, Color color)
+        {
+            GameObject imageObject = new(name);
+            imageObject.layer = parent.gameObject.layer;
+            imageObject.transform.SetParent(parent, false);
+            RectTransform imageRect = imageObject.AddComponent<RectTransform>();
+            imageRect.anchorMin = Vector2.zero;
+            imageRect.anchorMax = Vector2.one;
+            imageRect.offsetMin = Vector2.zero;
+            imageRect.offsetMax = Vector2.zero;
+
+            Image image = imageObject.AddComponent<Image>();
+            image.sprite = sprite;
+            image.color = color;
+            image.raycastTarget = false;
+            image.type = Image.Type.Simple;
+            image.preserveAspect = true;
+            return image;
+        }
+
+        private static Sprite GetHoldProgressRingSprite()
+        {
+            if (holdProgressRingSprite != null)
+            {
+                return holdProgressRingSprite;
+            }
+
+            Texture2D texture = new(HoldProgressRingTextureSize, HoldProgressRingTextureSize, TextureFormat.RGBA32, false)
+            {
+                name = "Generated Hold Progress Ring",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+
+            Color clear = Color.clear;
+            Color solid = Color.white;
+            float center = (HoldProgressRingTextureSize - 1) * 0.5f;
+            for (int y = 0; y < HoldProgressRingTextureSize; y++)
+            {
+                for (int x = 0; x < HoldProgressRingTextureSize; x++)
+                {
+                    float dx = (x - center) / HoldProgressRingTextureSize;
+                    float dy = (y - center) / HoldProgressRingTextureSize;
+                    float radius = Mathf.Sqrt(dx * dx + dy * dy);
+                    float outerAlpha = Mathf.Clamp01((HoldProgressRingOuterRadius - radius) * HoldProgressRingTextureSize);
+                    float innerAlpha = Mathf.Clamp01((radius - HoldProgressRingInnerRadius) * HoldProgressRingTextureSize);
+                    float alpha = Mathf.Min(outerAlpha, innerAlpha);
+                    texture.SetPixel(x, y, alpha > 0f ? new Color(solid.r, solid.g, solid.b, alpha) : clear);
+                }
+            }
+
+            texture.Apply(false, true);
+            holdProgressRingSprite = Sprite.Create(
+                texture,
+                new Rect(0f, 0f, HoldProgressRingTextureSize, HoldProgressRingTextureSize),
+                new Vector2(0.5f, 0.5f),
+                HoldProgressRingTextureSize);
+            holdProgressRingSprite.name = "Generated Hold Progress Ring Sprite";
+            return holdProgressRingSprite;
+        }
+
+        private void UpdateHoldProgressRing()
+        {
+            if (!isHoldProgressRingVisible || holdProgressRingFill == null)
+            {
+                return;
+            }
+
+            float elapsedSeconds = Time.unscaledTime - pointerDownTime;
+            holdProgressRingFill.fillAmount = Mathf.Clamp01(elapsedSeconds / InventoryDragHoldSeconds);
+        }
+
+        private void HideHoldProgressRing()
+        {
+            isHoldProgressRingVisible = false;
+            if (holdProgressRingFill != null)
+            {
+                holdProgressRingFill.fillAmount = 0f;
+            }
+
+            if (holdProgressRingRect != null)
+            {
+                holdProgressRingRect.gameObject.SetActive(false);
+            }
         }
 
         private bool IsInventoryTokenDragArmed()
