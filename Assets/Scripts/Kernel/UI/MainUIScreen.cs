@@ -125,6 +125,7 @@ namespace Kernel.UI
 
         protected override void OnBeforeShow()
         {
+            TryAutoBindReferences();
             RefreshSpellPanel();
             SubscribeToQuestEvents();
             RefreshQuestEntries();
@@ -186,67 +187,66 @@ namespace Kernel.UI
                 dangerEdge = dangerEdgeImage.rectTransform;
             }
 
-            dangerEdge ??= transform.Find("Danger Edge") as RectTransform;
+            dangerEdge = transform.Find("Danger Edge") as RectTransform ?? dangerEdge;
             if (dangerEdge != null)
             {
-                dangerEdgeImage ??= dangerEdge.GetComponent<Image>();
+                dangerEdgeImage = dangerEdge.GetComponent<Image>() ?? dangerEdgeImage;
             }
 
-            notificationPanel ??= transform.Find("Notification Panel") as RectTransform;
+            notificationPanel = transform.Find("Notification Panel") as RectTransform ?? notificationPanel;
             if (notificationPanel != null)
             {
-                notificationCanvasGroup ??= notificationPanel.GetComponent<CanvasGroup>();
-                notificationTitleText ??= notificationPanel.Find("Tittle/Text (TMP)")?.GetComponent<TMP_Text>();
-                notificationTitleText ??= notificationPanel.Find("Title/Text (TMP)")?.GetComponent<TMP_Text>();
-                notificationDescriptionText ??= notificationPanel.Find("Description/Text (TMP)")?.GetComponent<TMP_Text>();
-                notificationImage ??= notificationPanel.Find("Image")?.GetComponent<Image>();
+                notificationCanvasGroup = notificationPanel.GetComponent<CanvasGroup>() ?? notificationCanvasGroup;
+                notificationTitleText = notificationPanel.Find("Tittle/Text (TMP)")?.GetComponent<TMP_Text>()
+                    ?? notificationPanel.Find("Title/Text (TMP)")?.GetComponent<TMP_Text>()
+                    ?? notificationTitleText;
+                notificationDescriptionText = notificationPanel.Find("Description/Text (TMP)")?.GetComponent<TMP_Text>() ?? notificationDescriptionText;
+                notificationImage = notificationPanel.Find("Image")?.GetComponent<Image>() ?? notificationImage;
             }
 
-            if (objectiveArrowView == null)
+            Transform arrowPanel = transform.Find("Arrow Panel");
+            if (arrowPanel != null)
             {
-                Transform arrowPanel = transform.Find("Arrow Panel");
-                if (arrowPanel != null)
+                objectiveArrowView = arrowPanel.GetComponent<ObjectiveArrowView>() ?? objectiveArrowView;
+            }
+
+            topPanel = ResolvePlayerInfoPanelRoot(transform) ?? topPanel;
+            healthPanel = ResolveHealthPanel(transform) ?? healthPanel;
+            healthTitleText = ResolveHealthTitleText(healthPanel);
+            healthBarRoot = ResolveCurrentHealthBarRoot(healthPanel);
+            if (healthBarRoot != null)
+            {
+                healthBarController = healthBarRoot.GetComponent<PlayerHealthBarController>() ?? healthBarController;
+            }
+            else
+            {
+                healthBarController = null;
+            }
+
+            spellPanel = ResolveSpellPanel(transform) ?? spellPanel;
+            if (spellPanel != null)
+            {
+                bool templateBelongsToSource = spellSlotTemplate != null
+                    && spellSlotTemplate.transform.IsChildOf(spellPanel);
+                if (!templateBelongsToSource)
                 {
-                    objectiveArrowView = arrowPanel.GetComponent<ObjectiveArrowView>();
+                    spellSlotTemplate = ResolveSpellSlotTemplate(spellPanel);
                 }
             }
 
-            topPanel ??= transform.Find("TopPanel") as RectTransform;
-            if (topPanel == null)
-            {
-                return;
-            }
-
-            healthPanel ??= topPanel.Find("HP Bar") as RectTransform;
-            if (healthPanel != null)
-            {
-                healthTitleText ??= healthPanel.Find("Titlle")?.GetComponent<TMP_Text>();
-                healthBarRoot ??= healthPanel.Find("Bar") as RectTransform;
-                if (healthBarRoot != null)
-                {
-                    healthBarController ??= healthBarRoot.GetComponent<PlayerHealthBarController>();
-                }
-            }
-
-            spellPanel ??= topPanel.Find("Spell Panel") as RectTransform;
-            if (spellPanel != null && (spellSlotTemplate == null || !spellSlotTemplate.transform.IsChildOf(spellPanel)))
-            {
-                spellSlotTemplate = ResolveSpellSlotTemplate(spellPanel);
-            }
-
-            questPanel ??= transform.Find("Quest Panel") as RectTransform;
+            questPanel = transform.Find("Quest Panel") as RectTransform ?? questPanel;
             if (questPanel != null)
             {
-                questListRoot ??= questPanel.Find("Quests") as RectTransform;
+                questListRoot = questPanel.Find("Quests") as RectTransform ?? questListRoot;
             }
 
-            pauseButtonRoot ??= ResolvePauseButtonRoot(topPanel);
+            pauseButtonRoot = ResolvePauseButtonRoot(transform) ?? pauseButtonRoot;
             if (pauseButtonRoot != null)
             {
-                pauseButton ??= pauseButtonRoot.GetComponentInChildren<Button>(true);
+                pauseButton = pauseButtonRoot.GetComponentInChildren<Button>(true) ?? pauseButton;
                 if (pauseButton != null)
                 {
-                    pauseButtonText ??= pauseButton.GetComponentInChildren<TMP_Text>(true);
+                    pauseButtonText = pauseButton.GetComponentInChildren<TMP_Text>(true) ?? pauseButtonText;
                 }
             }
         }
@@ -327,7 +327,11 @@ namespace Kernel.UI
                 return false;
             }
 
-            spellSlotTemplate ??= ResolveSpellSlotTemplate(spellPanel);
+            if (spellSlotTemplate == null || !spellSlotTemplate.transform.IsChildOf(spellPanel))
+            {
+                spellSlotTemplate = ResolveSpellSlotTemplate(spellPanel);
+            }
+
             if (spellSlotTemplate == null)
             {
                 if (!hasLoggedMissingSpellTemplate)
@@ -1110,13 +1114,14 @@ namespace Kernel.UI
         /// <returns>暂停按钮根节点；未找到时返回 null。</returns>
         private static RectTransform ResolvePauseButtonRoot(Transform root)
         {
-            if (root == null)
+            RectTransform rootButton = FindDirectChildRect(root, "Pause Btn")
+                ?? FindDirectChildRect(root, "Pause Button");
+            if (rootButton != null)
             {
-                return null;
+                return rootButton;
             }
 
-            return root.Find("Pause Btn") as RectTransform
-                ?? root.Find("Pause Button") as RectTransform;
+            return null;
         }
 
         /// <summary>
@@ -1141,6 +1146,50 @@ namespace Kernel.UI
             }
 
             return null;
+        }
+
+        private static RectTransform ResolvePlayerInfoPanelRoot(Transform root)
+        {
+            return root != null ? root.Find("Player Info Panel") as RectTransform : null;
+        }
+
+        private static RectTransform ResolveHealthPanel(Transform root)
+        {
+            return root != null ? root.Find("Player Info Panel/Panel/Hp bar") as RectTransform : null;
+        }
+
+        private static TMP_Text ResolveHealthTitleText(RectTransform panel)
+        {
+            if (panel == null)
+            {
+                return null;
+            }
+
+            return panel.Find("Titlle")?.GetComponent<TMP_Text>()
+                ?? panel.Find("Title")?.GetComponent<TMP_Text>()
+                ?? panel.Find("Title/Text (TMP)")?.GetComponent<TMP_Text>()
+                ?? panel.Find("Titlle/Text (TMP)")?.GetComponent<TMP_Text>();
+        }
+
+        private static RectTransform ResolveCurrentHealthBarRoot(RectTransform panel)
+        {
+            if (panel == null)
+            {
+                return null;
+            }
+
+            PlayerHealthBarController controller = panel.GetComponentInChildren<PlayerHealthBarController>(true);
+            return controller != null ? controller.transform as RectTransform : null;
+        }
+
+        private static RectTransform ResolveSpellPanel(Transform root)
+        {
+            return root != null ? root.Find("Player Info Panel/Panel/Spell") as RectTransform : null;
+        }
+
+        private static RectTransform FindDirectChildRect(Transform root, string childName)
+        {
+            return root != null ? root.Find(childName) as RectTransform : null;
         }
 
         private void EnsureSpellOutlineLayer()
