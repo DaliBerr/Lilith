@@ -514,6 +514,7 @@ MonoBehaviour:
   attackDamage: 1
   damageReductionPercent: 0
   health: 100
+  displacementWeight: 1
 --- !u!114 &6645123987412301111
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,16 +1,16 @@
 using UnityEngine;
 
 /// <summary>
-/// Orthographic camera follow used by the generated 2D isometric room debug flow.
+/// Perspective camera follow used by the generated 2D isometric room debug flow.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Camera))]
 public sealed class Player2DIsometricCamera : MonoBehaviour
 {
-    private const float MinimumOrthographicSize = 0.01f;
+    private const float MinimumFieldOfView = 1f;
 
     [SerializeField] private Transform target;
-    [SerializeField, Min(MinimumOrthographicSize)] private float orthographicSize = 6f;
+    [SerializeField, Min(MinimumFieldOfView)] private float orthographicSize = 43f;
     [SerializeField] private float zOffset = -10f;
     [SerializeField] private bool snapOnEnable = true;
     [SerializeField] private ScreenShakeState screenShake = new();
@@ -60,7 +60,7 @@ public sealed class Player2DIsometricCamera : MonoBehaviour
 
     private void OnValidate()
     {
-        orthographicSize = Mathf.Max(MinimumOrthographicSize, orthographicSize);
+        orthographicSize = Mathf.Max(MinimumFieldOfView, orthographicSize);
         EnsureScreenShakeState();
         EnsureCameraReference();
     }
@@ -94,8 +94,8 @@ public sealed class Player2DIsometricCamera : MonoBehaviour
             return;
         }
 
-        cachedCamera.orthographic = true;
-        cachedCamera.orthographicSize = orthographicSize;
+        cachedCamera.orthographic = false;
+        cachedCamera.fieldOfView = orthographicSize;
     }
 
     private bool EnsureCameraReference()
