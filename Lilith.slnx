@@ -1,5 +1,6 @@
 ﻿<Solution>
   <Project Path="Lilith.Tests.EditMode.csproj" />
+  <Project Path="AmplifyShaderEditor.csproj" />
   <Project Path="Lilith.Kernel.csproj" />
   <Project Path="Lilith.Input.csproj" />
   <Project Path="Lilith.Vocalith.csproj" />

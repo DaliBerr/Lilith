@@ -32,6 +32,7 @@ namespace SystemCallBlocker
             "/obj/",
             "/Logs/",
             "/Assets/Plugins/",
+            "/Assets/AmplifyShaderEditor/",
             "/Assets/InputSystem/",
             "/Assets/Editor/",
             "/Assets/Input/",

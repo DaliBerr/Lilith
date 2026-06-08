@@ -12,6 +12,15 @@ Obsidian vault is now the primary cross-session memory layer for agent workflow,
 
 Keep this file as a repo-local compatibility mirror for high-value Lilith troubleshooting patterns. When adding new durable memory, prefer Obsidian first, then update this file only if the knowledge must remain available without Obsidian.
 
+## SystemCallBlocker Should Exclude Imported Third-Party Editor Plugins
+
+- Problem: 导入 ASE / Amplify Shader Editor 后，`SystemCallBlocker` 在编译完成扫描时把第三方 Editor 插件里的 `UnityEngine.Debug` 用法当成项目违规，Console 刷出 58 条 `[SystemCallBlocker] 违规调用：规则 禁止 UnityEngine.Debug，文件 Assets/AmplifyShaderEditor/...`，影响美术同事正常使用 ASE。
+- Cause: `Assets/Editor/SystemCallBlocker.cs` 的 `GlobalExcludedPathContains` 只排除了 `Packages`、`Plugins`、`Assets/Editor` 等目录，没有排除 Asset Store 形式导入的 `Assets/AmplifyShaderEditor/`。ASE 作为第三方 Editor 工具不能按项目自有运行时代码规范要求替换为 `Vocalith.GameDebug`。
+- Fix: 在 `GlobalExcludedPathContains` 中加入 `"/Assets/AmplifyShaderEditor/"`。后续导入类似大型第三方 Editor 插件时，应优先把插件根目录加入 blocker 的全局排除，而不是修改第三方源码或放宽项目自有代码规则。
+- ASE sample package cleanup: `Assets/AmplifyShaderEditor/Examples/*.unitypackage` 本体被 `ignore.conf` 的 `*.unitypackage` 排除且不在磁盘上时，Unity 会持续删除对应的孤儿 `*.unitypackage.meta`。如果这些 meta 已被 Plastic 跟踪，ignore 不会隐藏当前删除项；正确处理是提交删除这些孤儿 meta，并在 `ignore.conf` 中明确忽略 `Assets/AmplifyShaderEditor/Examples/*.unitypackage(.meta)`，防止后续重新纳入版本库。
+- Verify: 2026-06-08 反射确认 Unity 当前加载的 `SystemCallBlocker` 排除列表包含 `/Assets/AmplifyShaderEditor/`；清空 Console 后反射调用 `ScanAndReport(false)` 返回 `False`；Unity Console error 0；`dotnet build Lilith.Editor.csproj /p:UseSharedCompilation=false` 0 warning / 0 error。
+- Scope: 适用于 Asset Store / 第三方 Editor 工具源码以 `Assets/<PluginName>/` 形式进入仓库，且不应被项目自有 API 使用规范扫描的情况。仍应继续扫描项目自有 `Assets/Scripts/**`、必要 Editor 工具和测试代码。
+
 ## Trigger Payload Is Implicit After Trigger Token
 
 - Problem: 显式 `PayloadStart/PayloadEnd` token 让构筑语法和 UI 都显得违和，并且奖励池需要额外暴露没有独立玩法价值的边界 token。
