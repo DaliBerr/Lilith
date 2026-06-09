@@ -35,6 +35,7 @@
     "ui.profile.elapsed_hours": "{0}h ago",
     "ui.profile.elapsed_minutes": "{0}m ago",
     "ui.profile.elapsed_seconds": "{0}s ago",
+    "ui.guide.popup.click_hint": "Click anywhere to continue",
     "ui.upgrade.title": "Permanent Upgrades",
     "ui.upgrade.title_with_remnants": "{0} (Remnants: {1})",
     "ui.upgrade.level": "Level {0}/{1}",

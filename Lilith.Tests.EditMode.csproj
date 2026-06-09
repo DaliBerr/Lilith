@@ -118,6 +118,7 @@
     <Compile Include="Assets\Editor\Test\EnemyResultVisualFeedbackTests.cs" />
     <Compile Include="Assets\Editor\Test\CharGlyphPresenterTests.cs" />
     <Compile Include="Assets\Editor\Test\MapSpawnUtilityTests.cs" />
+    <Compile Include="Assets\Editor\Test\UIGuideOverlayControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\CombatRunTimerTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthBarControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\StoryTellerUIScreenTests.cs" />

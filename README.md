@@ -78,6 +78,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - 入口：[`StatusController.cs`](Assets/Scripts/Kernel/Status/StatusController.cs)
 - UI：位于 [`Assets/Scripts/Kernel/UI`](Assets/Scripts/Kernel/UI)
   - 当前主入口包括 `StartUpMenuUI`、`OptionsUIScreen`、`StoryTellerUIScreen`、`DialogUIScreen`、`MainUIScreen`、`PauseUIScreen`、`BackPackUIScreen`、`HintUIScreen`、`PopUpUIScreen`、`ProfileManagementUIScreen`、`TokenSelectUIScreen`、`UpdateUIScreen`、`SettlementUIScreen`
+  - `UIGuideOverlayController` 提供可复用 UI 区块指南能力：在 `UIManager.layerOverlay` 上创建点击拦截 overlay、dim 区域、目标 highlight 与贴边 popup；`Guide Popup.prefab` 位于 `Assets/Prefabs/UI/Guide/Guide Popup.prefab`，Addressables 地址为 `Assets/Prefabs/UI/Guide/Guide Popup`。当前不自动接入任何现有界面，后续页面需显式调用 `StartGuide()` / `StartSingleStepGuide(...)`
   - `MainUI.prefab` 预埋隐藏的 `ObjectiveArrowView`，后续系统可通过 `MainUIScreen.ObjectiveArrowView.Bind(camera, target)` 显示世界目标箭头；当前不绑定具体玩法目标，HUD 隐藏时会清空目标
   - `MainUI.prefab` 预埋隐藏的 `Notification Panel`；玩家成功拾取场景 Token / 物品、Token Select 接受 Token / 法术书奖励或教程补发 Token 后，会通过 `RewardNotificationEvent` 在 HUD 上显示标题与描述，约 2 秒后自动淡出。当前图片位保留但隐藏，尚不扩展 Token / 法术书资产 icon 字段
 - 地图与寻路：位于 [`Assets/Scripts/Kernel/MapGrid`](Assets/Scripts/Kernel/MapGrid) 与 [`Assets/Scripts/Kernel/MapGridAuthoring.cs`](Assets/Scripts/Kernel/MapGridAuthoring.cs)

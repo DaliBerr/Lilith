@@ -27,6 +27,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - UI
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0e69d75572d9de64ea954c390fb3a7af
+    m_Address: Assets/Prefabs/UI/Guide/Guide Popup
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - UI
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 1a552fe519794fb4cac8f8be32ecee54
     m_Address: "Assets/Art/UI/Start up/Seal/\u859B"
     m_ReadOnly: 0

@@ -35,6 +35,7 @@
     "ui.profile.elapsed_hours": "{0}小时前",
     "ui.profile.elapsed_minutes": "{0}分钟前",
     "ui.profile.elapsed_seconds": "{0}秒前",
+    "ui.guide.popup.click_hint": "点击任意位置继续",
     "ui.upgrade.title": "永久升级",
     "ui.upgrade.title_with_remnants": "{0} (残卷: {1})",
     "ui.upgrade.level": "等级 {0}/{1}",

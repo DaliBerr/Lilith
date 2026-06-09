@@ -119,6 +119,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\SettlementModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Quest\QuestPersistenceModels.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\UIGuideOverlayController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Input\GlobalTextInputGuard.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomTypes.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\ProceduralRoom2DDebugBootstrap.cs" />
@@ -154,6 +155,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\CoreTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\StatusController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealth.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\UIGuidePopupAttentionController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\PickupTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerDiedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\ArenaSeedMapGenerator.cs" />
