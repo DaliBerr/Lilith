@@ -14,8 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: "\u7532"
   displayName: "\u7532"
-  description: "披甲重卫，步伐缓慢却格外耐打，正面硬拼最吃亏。"
+  displayNameKey: 
+  description: "\u62AB\u7532\u91CD\u536B\uFF0C\u6B65\u4F10\u7F13\u6162\u5374\u683C\u5916\u8010\u6253\uFF0C\u6B63\u9762\u786C\u62FC\u6700\u5403\u4E8F\u3002"
+  descriptionKey: 
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  aiProfile: {fileID: 11400000, guid: 2c5ed5036724c224496b6d6f84c16ec1, type: 2}
   movementKind: 1
   attackKind: 1
   dashMovement:
@@ -34,8 +37,18 @@ MonoBehaviour:
     orbitRadiusTolerance: 2
     orbitSpeedMultiplier: 1
     clockwise: 0
+  bossSmartRoamMovement:
+    preferredDistance: 24
+    distanceTolerance: 4
+    strafeSpeedMultiplier: 1
+    radialCorrectionStrength: 0.5
+    approachSpeedMultiplier: 1.15
+    retreatSpeedMultiplier: 1.25
+    sideSwitchIntervalSeconds: 1.5
+    startClockwise: 1
   visual:
     glyphText: "\u7532"
+    glyphScaleMultiplier: 1
     glyphColor: {r: 1, g: 0.46176243, b: 0, a: 1}
     runeBaseSprite: {fileID: 0}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
@@ -52,8 +65,10 @@ MonoBehaviour:
     displacementWeight: 3
   rangedBulletAttack:
     bulletPrefab: {fileID: 0}
+    spellBook: {fileID: 0}
     formulaItems: []
     targetPolicy: 1
+    projectileSpeedMultiplier: 0
   explosiveAttack:
     explosionRadius: 0
     windupSeconds: 0.8

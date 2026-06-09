@@ -8,6 +8,7 @@ public sealed class EnemyExplosiveAttacker : MonoBehaviour
 {
     [SerializeField] private Enemy enemyData;
     [SerializeField] private EnemyStatusEffectController statusEffects;
+    [SerializeField] private EnemyAIController aiController;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private PlayerHealth targetPlayerHealth;
 
@@ -18,12 +19,18 @@ public sealed class EnemyExplosiveAttacker : MonoBehaviour
     {
         TryResolveEnemyData();
         TryResolveStatusEffects();
+        TryResolveAIController();
         TryResolveTargetPlayer();
     }
 
     private void Update()
     {
         if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
+        {
+            return;
+        }
+
+        if (TryResolveAIController() && aiController.IsProfileActive)
         {
             return;
         }
@@ -45,6 +52,7 @@ public sealed class EnemyExplosiveAttacker : MonoBehaviour
     {
         TryResolveEnemyData();
         TryResolveStatusEffects();
+        TryResolveAIController();
         TryResolveTargetPlayer();
     }
 
@@ -63,6 +71,38 @@ public sealed class EnemyExplosiveAttacker : MonoBehaviour
         targetPlayer = player;
         targetPlayerHealth = ResolvePlayerHealth(player);
         return targetPlayerHealth != null;
+    }
+
+    public bool CanExecuteAIAction(EnemyAIContext context, float currentTime)
+    {
+        if (context.Enemy != null && context.Enemy != enemyData)
+        {
+            enemyData = context.Enemy;
+        }
+
+        if (context.TargetPlayer != null)
+        {
+            TrySetTarget(context.TargetPlayer);
+        }
+
+        if (!context.CanAct || !context.TargetAlive || !TryResolveEnemyData() || enemyData.AttackDamage <= 0f)
+        {
+            return false;
+        }
+
+        return isChargingExplosion || context.TargetInAttackRange;
+    }
+
+    public bool TryExecuteAIAction(EnemyAIContext context, float currentTime)
+    {
+        if (!CanExecuteAIAction(context, currentTime))
+        {
+            return false;
+        }
+
+        bool wasCharging = isChargingExplosion;
+        bool exploded = TryTickExplosion(currentTime);
+        return exploded || (!wasCharging && isChargingExplosion);
     }
 
     /// <summary>
@@ -182,6 +222,17 @@ public sealed class EnemyExplosiveAttacker : MonoBehaviour
 
         statusEffects = null;
         return TryGetComponent(out statusEffects);
+    }
+
+    private bool TryResolveAIController()
+    {
+        if (aiController != null && aiController.transform == transform)
+        {
+            return true;
+        }
+
+        aiController = null;
+        return TryGetComponent(out aiController);
     }
 
     /// <summary>

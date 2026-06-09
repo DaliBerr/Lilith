@@ -8,6 +8,7 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
 {
     [SerializeField] private Enemy enemyData;
     [SerializeField] private EnemyStatusEffectController statusEffects;
+    [SerializeField] private EnemyAIController aiController;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private PlayerHealth targetPlayerHealth;
 
@@ -17,6 +18,7 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
     {
         TryResolveEnemyData();
         TryResolveStatusEffects();
+        TryResolveAIController();
         TryResolveTargetPlayer();
     }
 
@@ -28,6 +30,11 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
     private void Update()
     {
         if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
+        {
+            return;
+        }
+
+        if (TryResolveAIController() && aiController.IsProfileActive)
         {
             return;
         }
@@ -44,6 +51,7 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
     {
         TryResolveEnemyData();
         TryResolveStatusEffects();
+        TryResolveAIController();
         TryResolveTargetPlayer();
     }
 
@@ -62,6 +70,36 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
         targetPlayer = player;
         targetPlayerHealth = ResolvePlayerHealth(player);
         return targetPlayerHealth != null;
+    }
+
+    public bool CanExecuteAIAction(EnemyAIContext context, float currentTime)
+    {
+        if (context.Enemy != null && context.Enemy != enemyData)
+        {
+            enemyData = context.Enemy;
+        }
+
+        if (context.TargetPlayer != null)
+        {
+            TrySetTarget(context.TargetPlayer);
+        }
+
+        return context.CanAct
+            && context.TargetAlive
+            && context.TargetInAttackRange
+            && currentTime >= nextAttackTime
+            && TryResolveEnemyData()
+            && enemyData.AttackDamage > 0f;
+    }
+
+    public bool TryExecuteAIAction(EnemyAIContext context, float currentTime)
+    {
+        if (!CanExecuteAIAction(context, currentTime))
+        {
+            return false;
+        }
+
+        return TryPerformAttack(currentTime);
     }
 
     /// <summary>
@@ -144,6 +182,17 @@ public sealed class EnemyMeleeAttacker : MonoBehaviour
 
         statusEffects = null;
         return TryGetComponent(out statusEffects);
+    }
+
+    private bool TryResolveAIController()
+    {
+        if (aiController != null && aiController.transform == transform)
+        {
+            return true;
+        }
+
+        aiController = null;
+        return TryGetComponent(out aiController);
     }
 
     /// <summary>

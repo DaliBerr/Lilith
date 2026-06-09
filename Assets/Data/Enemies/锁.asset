@@ -14,8 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: "\u9501"
   displayName: "\u9501"
-  description: "会以锁咒牵制你的走位，火力不算凶，却最擅长打乱节奏。"
+  displayNameKey: 
+  description: "\u4F1A\u4EE5\u9501\u5492\u7275\u5236\u4F60\u7684\u8D70\u4F4D\uFF0C\u706B\u529B\u4E0D\u7B97\u51F6\uFF0C\u5374\u6700\u64C5\u957F\u6253\u4E71\u8282\u594F\u3002"
+  descriptionKey: 
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  aiProfile: {fileID: 11400000, guid: b4ac0c9dfd4399a45b4c1f6800d55d20, type: 2}
   movementKind: 3
   attackKind: 2
   dashMovement:
@@ -34,8 +37,18 @@ MonoBehaviour:
     orbitRadiusTolerance: 2
     orbitSpeedMultiplier: 1
     clockwise: 0
+  bossSmartRoamMovement:
+    preferredDistance: 24
+    distanceTolerance: 4
+    strafeSpeedMultiplier: 1
+    radialCorrectionStrength: 0.5
+    approachSpeedMultiplier: 1.15
+    retreatSpeedMultiplier: 1.25
+    sideSwitchIntervalSeconds: 1.5
+    startClockwise: 1
   visual:
     glyphText: "\u9501"
+    glyphScaleMultiplier: 1
     glyphColor: {r: 1, g: 0.72, b: 0.42, a: 1}
     runeBaseSprite: {fileID: 0}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
@@ -49,12 +62,15 @@ MonoBehaviour:
     attackDamage: 1
     damageReductionPercent: 0
     visualScaleMultiplier: 1
+    displacementWeight: 1
   rangedBulletAttack:
     bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
+    spellBook: {fileID: 0}
     formulaItems:
     - {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
     - {fileID: 11400000, guid: 63f3e8847196484f8f0efdf99de0a1bb, type: 2}
     targetPolicy: 1
+    projectileSpeedMultiplier: 0
   explosiveAttack:
     explosionRadius: 0
     windupSeconds: 0.8

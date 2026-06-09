@@ -113,6 +113,7 @@
     <Compile Include="Assets\Editor\Test\StrokeRevealUIWordTests.cs" />
     <Compile Include="Assets\Editor\Test\CharBulletPrefabTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerPlaneMovementTests.cs" />
+    <Compile Include="Assets\Editor\Test\EnemyAIControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyStatusEffectControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyResultVisualFeedbackTests.cs" />
     <Compile Include="Assets\Editor\Test\CharGlyphPresenterTests.cs" />

@@ -12,10 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
   m_Name: "\u7206"
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  enemyId: 爆
-  displayName: 爆
-  description: "短命却危险的爆裂体，一旦贴近就会引爆，别让它靠太近。"
+  enemyId: "\u7206"
+  displayName: "\u7206"
+  displayNameKey: 
+  description: "\u77ED\u547D\u5374\u5371\u9669\u7684\u7206\u88C2\u4F53\uFF0C\u4E00\u65E6\u8D34\u8FD1\u5C31\u4F1A\u5F15\u7206\uFF0C\u522B\u8BA9\u5B83\u9760\u592A\u8FD1\u3002"
+  descriptionKey: 
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  aiProfile: {fileID: 11400000, guid: e4982e573598e164bbdfcd58af5deea0, type: 2}
   movementKind: 1
   attackKind: 3
   dashMovement:
@@ -34,8 +37,18 @@ MonoBehaviour:
     orbitRadiusTolerance: 2
     orbitSpeedMultiplier: 1
     clockwise: 0
+  bossSmartRoamMovement:
+    preferredDistance: 24
+    distanceTolerance: 4
+    strafeSpeedMultiplier: 1
+    radialCorrectionStrength: 0.5
+    approachSpeedMultiplier: 1.15
+    retreatSpeedMultiplier: 1.25
+    sideSwitchIntervalSeconds: 1.5
+    startClockwise: 1
   visual:
-    glyphText: 爆
+    glyphText: "\u7206"
+    glyphScaleMultiplier: 1
     glyphColor: {r: 1, g: 0.35, b: 0.28, a: 1}
     runeBaseSprite: {fileID: 0}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
@@ -49,10 +62,13 @@ MonoBehaviour:
     attackDamage: 2
     damageReductionPercent: 0
     visualScaleMultiplier: 1
+    displacementWeight: 1
   rangedBulletAttack:
     bulletPrefab: {fileID: 0}
+    spellBook: {fileID: 0}
     formulaItems: []
     targetPolicy: 1
+    projectileSpeedMultiplier: 0
   explosiveAttack:
     explosionRadius: 18
     windupSeconds: 0.8

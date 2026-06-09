@@ -67,6 +67,38 @@ public sealed class CharEnemyMovementTests
     }
 
     [Test]
+    public void TickMovement_UsesAIMovementOverrideWhenProfileIsActive()
+    {
+        BaseCharEnemyNorm1 enemy = CreateEnemy(out CharEnemyMovement movement, out GameObject enemyObject);
+        EnemyAIController aiController = enemyObject.AddComponent<EnemyAIController>();
+        GameObject playerObject = CreateGameObject("Player");
+        MapGridAuthoring mapGrid = CreateMapAuthoring(32, 32, Vector2.one);
+        enemyObject.transform.position = mapGrid.GetCellWorldPosition(10, 10);
+        playerObject.transform.position = mapGrid.GetCellWorldPosition(20, 10);
+
+        EnemyDefinition definition = CreateDefinition(EnemyMovementKind.AggroOnHit, EnemyAttackKind.None);
+        enemy.TryBindDefinition(definition);
+        enemy.ApplyWaveConfig(new EnemyWaveConfig(10f, 5f, 0f, 0f, 0f));
+        Assert.That(movement.TrySetTarget(playerObject.transform), Is.True);
+        Assert.That(movement.TrySetTargetMapGrid(mapGrid), Is.True);
+        InvokePrivateMethod(movement, "Awake");
+
+        Vector3 idlePosition = enemyObject.transform.position;
+        InvokePrivateMethod(movement, "TickMovement", 0.2f, 0f);
+        Assert.That(enemyObject.transform.position, Is.EqualTo(idlePosition));
+
+        EnemyAIProfile profile = ScriptableObject.CreateInstance<EnemyAIProfile>();
+        createdObjects.Add(profile);
+        Assert.That(aiController.TryCacheBindings(overwriteExisting: true), Is.True);
+        Assert.That(aiController.ApplyProfile(profile), Is.True);
+        Assert.That(aiController.TickAI(0.1f), Is.True);
+
+        InvokePrivateMethod(movement, "TickMovement", 0.2f, 0.2f);
+
+        Assert.That(enemyObject.transform.position.x, Is.GreaterThan(idlePosition.x));
+    }
+
+    [Test]
     public void TickMovement_KeepDistance_ApproachesAndRetreatsBasedOnDistanceBand()
     {
         BaseCharEnemyNorm1 enemy = CreateEnemy(out CharEnemyMovement movement, out GameObject enemyObject);

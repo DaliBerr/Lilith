@@ -1,0 +1,78 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37aa794097d9d2f418a84de7229eacea, type: 3}
+  m_Name: AI_Xun
+  m_EditorClassIdentifier: Lilith.Kernel::EnemyAIProfile
+  tickIntervalSeconds: 0.12
+  perceptionRadius: 96
+  actions:
+  - actionId: dash_melee
+    actionKind: 2
+    movementKind: 0
+    attackKind: 1
+    skillKind: 0
+    skillSlotIndex: -1
+    weight: 5
+    cooldownSeconds: 0
+    actionLockSeconds: 0
+    considerations:
+    - input: 3
+      minInput: 0
+      maxInput: 1
+      invert: 0
+      minScore: 0
+      maxScore: 1
+    - input: 6
+      minInput: 0
+      maxInput: 1
+      invert: 0
+      minScore: 0
+      maxScore: 1
+  - actionId: dash_engage
+    actionKind: 1
+    movementKind: 2
+    attackKind: 0
+    skillKind: 0
+    skillSlotIndex: -1
+    weight: 3
+    cooldownSeconds: 0
+    actionLockSeconds: 0
+    considerations:
+    - input: 1
+      minInput: 8
+      maxInput: 64
+      invert: 0
+      minScore: 0
+      maxScore: 1
+    - input: 5
+      minInput: 0
+      maxInput: 1
+      invert: 0
+      minScore: 0
+      maxScore: 1
+  fallbackAction:
+    actionId: fallback_chase
+    actionKind: 1
+    movementKind: 1
+    attackKind: 0
+    skillKind: 0
+    skillSlotIndex: -1
+    weight: 1
+    cooldownSeconds: 0
+    actionLockSeconds: 0
+    considerations:
+    - input: 5
+      minInput: 0
+      maxInput: 1
+      invert: 0
+      minScore: 0
+      maxScore: 1

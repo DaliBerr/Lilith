@@ -403,6 +403,7 @@ public sealed class EnemyDefinition : ScriptableObject
     [TextArea(3, 8)] [SerializeField] private string description = string.Empty;
     [SerializeField] private string descriptionKey = string.Empty;
     [SerializeField] private EnemyDefinitionBinder runtimePrefab;
+    [SerializeField] private EnemyAIProfile aiProfile;
     [SerializeField] private EnemyMovementKind movementKind = EnemyMovementKind.ChaseTarget;
     [SerializeField] private EnemyAttackKind attackKind = EnemyAttackKind.MeleeContact;
     [SerializeField] private DashMovementDefinition dashMovement = new()
@@ -483,6 +484,7 @@ public sealed class EnemyDefinition : ScriptableObject
         string.IsNullOrWhiteSpace(description) ? string.Empty : description.Trim());
     public EnemyDefinitionBinder RuntimePrefabBinder => runtimePrefab;
     public GameObject RuntimePrefab => runtimePrefab != null ? runtimePrefab.gameObject : null;
+    public EnemyAIProfile AIProfile => aiProfile;
     public EnemyMovementKind MovementKind => movementKind;
     public EnemyAttackKind AttackKind => attackKind;
     public DashMovementDefinition DashMovement => dashMovement;

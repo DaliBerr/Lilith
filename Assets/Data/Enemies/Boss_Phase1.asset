@@ -14,8 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: Boss_Phase1
   displayName: "\u971C\u4E3B\xB7\u58F9"
-  description: "霜主初相，以寒潮与延时爆域试探猎物，走位失误会被连续追击。"
+  displayNameKey: 
+  description: "\u971C\u4E3B\u521D\u76F8\uFF0C\u4EE5\u5BD2\u6F6E\u4E0E\u5EF6\u65F6\u7206\u57DF\u8BD5\u63A2\u730E\u7269\uFF0C\u8D70\u4F4D\u5931\u8BEF\u4F1A\u88AB\u8FDE\u7EED\u8FFD\u51FB\u3002"
+  descriptionKey: 
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  aiProfile: {fileID: 0}
   movementKind: 7
   attackKind: 2
   dashMovement:
@@ -62,6 +65,7 @@ MonoBehaviour:
     displacementWeight: 999
   rangedBulletAttack:
     bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
+    spellBook: {fileID: 0}
     formulaItems:
     - {fileID: 11400000, guid: 43b717043b8e70f42a5133f5f171aac9, type: 2}
     - {fileID: 11400000, guid: 7fdec109bdb8a4249ac2c5ddbd680095, type: 2}

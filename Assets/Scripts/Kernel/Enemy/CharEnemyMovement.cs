@@ -38,6 +38,7 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
     [SerializeField] private Enemy enemyData;
     [SerializeField] private EnemyStatusEffectController statusEffects;
+    [SerializeField] private EnemyAIController aiController;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private Transform orbitTarget;
     [SerializeField] private Rigidbody targetRigidbody;
@@ -71,6 +72,7 @@ public sealed class CharEnemyMovement : MonoBehaviour
         ResolveMovementRigidbody();
         TryResolveEnemyData();
         TryResolveStatusEffects();
+        TryResolveAIController();
         MigrateLegacyMovementDataIfNeeded();
         TryResolveTargetPlayer();
         TryResolveTargetMapGrid();
@@ -202,6 +204,7 @@ public sealed class CharEnemyMovement : MonoBehaviour
         ResolveMovementRigidbody();
         TryResolveEnemyData();
         TryResolveStatusEffects();
+        TryResolveAIController();
         MigrateLegacyMovementDataIfNeeded();
         TryResolveTargetMapGrid();
         TryResolveGroundingReferenceCollider();
@@ -1793,6 +1796,11 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
     private EnemyMovementKind ResolveMovementKind()
     {
+        if (TryResolveAIController() && aiController.TryGetMovementOverride(out EnemyMovementKind aiMovementKind))
+        {
+            return aiMovementKind;
+        }
+
         return enemyData != null && enemyData.Definition != null
             ? enemyData.Definition.MovementKind
             : EnemyMovementKind.ChaseTarget;
@@ -1939,6 +1947,17 @@ public sealed class CharEnemyMovement : MonoBehaviour
 
         statusEffects = null;
         return TryGetComponent(out statusEffects);
+    }
+
+    private bool TryResolveAIController()
+    {
+        if (aiController != null && aiController.transform == transform)
+        {
+            return true;
+        }
+
+        aiController = null;
+        return TryGetComponent(out aiController);
     }
 
     /// <summary>

@@ -13,6 +13,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
 
     [SerializeField] private Enemy enemyData;
     [SerializeField] private EnemyStatusEffectController statusEffects;
+    [SerializeField] private EnemyAIController aiController;
     [SerializeField] private Transform targetPlayer;
     [SerializeField] private PlayerHealth targetPlayerHealth;
     [SerializeField] private Transform bulletSpawnOrigin;
@@ -27,6 +28,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     {
         TryResolveEnemyData();
         TryResolveStatusEffects();
+        TryResolveAIController();
         TryResolveTargetPlayer();
         InvalidateCompiledProgram();
     }
@@ -34,6 +36,11 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     private void Update()
     {
         if (EnemyGameplayPauseGuard.ShouldSuspendEnemyActions())
+        {
+            return;
+        }
+
+        if (TryResolveAIController() && aiController.IsProfileActive)
         {
             return;
         }
@@ -50,6 +57,7 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
     {
         TryResolveEnemyData();
         TryResolveStatusEffects();
+        TryResolveAIController();
         TryResolveTargetPlayer();
         InvalidateCompiledProgram();
     }
@@ -69,6 +77,41 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
         targetPlayer = player;
         targetPlayerHealth = ResolvePlayerHealth(player);
         return targetPlayerHealth != null;
+    }
+
+    public bool CanExecuteAIAction(EnemyAIContext context, float currentTime)
+    {
+        if (context.Enemy != null && context.Enemy != enemyData)
+        {
+            enemyData = context.Enemy;
+        }
+
+        if (context.TargetPlayer != null)
+        {
+            TrySetTarget(context.TargetPlayer);
+        }
+
+        if (!context.CanAct || !context.TargetAlive || !context.TargetInAttackRange || currentTime < nextAttackTime)
+        {
+            return false;
+        }
+
+        if (!TryResolveEnemyData() || enemyData.Definition == null)
+        {
+            return false;
+        }
+
+        return enemyData.Definition.RangedBulletAttack.bulletPrefab != null;
+    }
+
+    public bool TryExecuteAIAction(EnemyAIContext context, float currentTime)
+    {
+        if (!CanExecuteAIAction(context, currentTime))
+        {
+            return false;
+        }
+
+        return TryPerformAttack(currentTime);
     }
 
     /// <summary>
@@ -350,6 +393,17 @@ public sealed class EnemyRangedTokenAttacker : MonoBehaviour
 
         statusEffects = null;
         return TryGetComponent(out statusEffects);
+    }
+
+    private bool TryResolveAIController()
+    {
+        if (aiController != null && aiController.transform == transform)
+        {
+            return true;
+        }
+
+        aiController = null;
+        return TryGetComponent(out aiController);
     }
 
     private bool TryResolveTargetPlayer()

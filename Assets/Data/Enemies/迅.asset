@@ -14,8 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: "\u8FC5"
   displayName: "\u8FC5"
-  description: "以冲刺切入战场的刺客，移动极快，稍不留神就会近身。"
+  displayNameKey: 
+  description: "\u4EE5\u51B2\u523A\u5207\u5165\u6218\u573A\u7684\u523A\u5BA2\uFF0C\u79FB\u52A8\u6781\u5FEB\uFF0C\u7A0D\u4E0D\u7559\u795E\u5C31\u4F1A\u8FD1\u8EAB\u3002"
+  descriptionKey: 
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  aiProfile: {fileID: 11400000, guid: ff5d26c503dfcb0469ce00ad1d7db386, type: 2}
   movementKind: 2
   attackKind: 1
   dashMovement:
@@ -34,8 +37,18 @@ MonoBehaviour:
     orbitRadiusTolerance: 2
     orbitSpeedMultiplier: 1
     clockwise: 0
+  bossSmartRoamMovement:
+    preferredDistance: 24
+    distanceTolerance: 4
+    strafeSpeedMultiplier: 1
+    radialCorrectionStrength: 0.5
+    approachSpeedMultiplier: 1.15
+    retreatSpeedMultiplier: 1.25
+    sideSwitchIntervalSeconds: 1.5
+    startClockwise: 1
   visual:
     glyphText: "\u8FC5"
+    glyphScaleMultiplier: 1
     glyphColor: {r: 1, g: 0.904488, b: 0.5235849, a: 1}
     runeBaseSprite: {fileID: 21300000, guid: 102f1e024a95ffd458c822de641b670c, type: 3}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
@@ -49,10 +62,13 @@ MonoBehaviour:
     attackDamage: 1
     damageReductionPercent: 0
     visualScaleMultiplier: 1
+    displacementWeight: 1
   rangedBulletAttack:
     bulletPrefab: {fileID: 0}
+    spellBook: {fileID: 0}
     formulaItems: []
     targetPolicy: 1
+    projectileSpeedMultiplier: 0
   explosiveAttack:
     explosionRadius: 0
     windupSeconds: 0.8

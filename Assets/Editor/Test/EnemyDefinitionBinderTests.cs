@@ -251,6 +251,53 @@ public sealed class EnemyDefinitionBinderTests
     }
 
     [Test]
+    public void Update_ProfileActive_SkipsLegacySkillAutoScheduling()
+    {
+        EnemyDefinitionBinder binder = CreateBoundEnemyShell(
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _,
+            out _);
+        TestDelayedBombSkillCaster skillCaster = binder.gameObject.AddComponent<TestDelayedBombSkillCaster>();
+        skillCaster.ShouldCast = true;
+
+        EnemyAIProfile profile = ScriptableObject.CreateInstance<EnemyAIProfile>();
+        createdObjects.Add(profile);
+        EnemyDefinition definition = CreateEnemyDefinition(
+            "ProfileSkillCaster",
+            binder,
+            EnemyMovementKind.ChaseTarget,
+            EnemyAttackKind.None,
+            new[]
+            {
+                new EnemyDefinition.EnemySkillSlotDefinition
+                {
+                    skillKind = EnemySkillKind.DelayedGroundBomb,
+                    cooldownSeconds = 0f,
+                    castRange = 10f,
+                    actionLockSeconds = 0.4f,
+                },
+            },
+            new EnemyDefinition.EnemyVisualDefinition
+            {
+                glyphText = "智",
+                glyphColor = Color.white,
+            });
+        SetPrivateField(definition, "aiProfile", profile);
+
+        Assert.That(binder.ApplyDefinition(definition), Is.True);
+
+        InvokePrivateMethod(binder, "Update");
+
+        Assert.That(skillCaster.CastCount, Is.EqualTo(0));
+        Assert.That(binder.GetComponent<EnemyAIController>().IsProfileActive, Is.True);
+    }
+
+    [Test]
     public void Prefab_ProvidesEnemyDefinitionBinderContract()
     {
         GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/Enemy/CharEnemy.prefab");
@@ -261,6 +308,7 @@ public sealed class EnemyDefinitionBinderTests
             Assert.That(binder, Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<Enemy>(), Is.Not.Null);
             Assert.That(prefabRoot.GetComponent<CharEnemyMovement>(), Is.Not.Null);
+            Assert.That(prefabRoot.GetComponent<EnemyAIController>(), Is.Not.Null);
         Assert.That(prefabRoot.GetComponent<EnemyMeleeAttacker>(), Is.Not.Null);
         Assert.That(prefabRoot.GetComponent<EnemyRangedTokenAttacker>(), Is.Not.Null);
         Assert.That(prefabRoot.GetComponent<EnemyExplosiveAttacker>(), Is.Not.Null);
@@ -597,11 +645,17 @@ public sealed class EnemyDefinitionBinderTests
     private sealed class TestDelayedBombSkillCaster : MonoBehaviour, IEnemySkillCaster
     {
         public bool ShouldCast { get; set; }
+        public int CastCount { get; private set; }
 
         public EnemySkillKind SkillKind => EnemySkillKind.DelayedGroundBomb;
 
         public bool TryCastSkill(EnemyDefinition.EnemySkillSlotDefinition skillSlot)
         {
+            if (ShouldCast)
+            {
+                CastCount++;
+            }
+
             return ShouldCast;
         }
     }

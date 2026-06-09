@@ -14,8 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: "\u53EC"
   displayName: "\u53EC"
-  description: "躲在远处施法，时常唤来杂兵拖住你，久战会越打越乱。"
+  displayNameKey: 
+  description: "\u8EB2\u5728\u8FDC\u5904\u65BD\u6CD5\uFF0C\u65F6\u5E38\u5524\u6765\u6742\u5175\u62D6\u4F4F\u4F60\uFF0C\u4E45\u6218\u4F1A\u8D8A\u6253\u8D8A\u4E71\u3002"
+  descriptionKey: 
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  aiProfile: {fileID: 11400000, guid: 7913cb992ddf0334f888b84a7559f600, type: 2}
   movementKind: 3
   attackKind: 2
   dashMovement:
@@ -34,8 +37,18 @@ MonoBehaviour:
     orbitRadiusTolerance: 2
     orbitSpeedMultiplier: 1
     clockwise: 0
+  bossSmartRoamMovement:
+    preferredDistance: 24
+    distanceTolerance: 4
+    strafeSpeedMultiplier: 1
+    radialCorrectionStrength: 0.5
+    approachSpeedMultiplier: 1.15
+    retreatSpeedMultiplier: 1.25
+    sideSwitchIntervalSeconds: 1.5
+    startClockwise: 1
   visual:
     glyphText: "\u53EC"
+    glyphScaleMultiplier: 1
     glyphColor: {r: 0.86, g: 0.42, b: 1, a: 1}
     runeBaseSprite: {fileID: 0}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
@@ -49,11 +62,14 @@ MonoBehaviour:
     attackDamage: 1
     damageReductionPercent: 0
     visualScaleMultiplier: 1
+    displacementWeight: 1
   rangedBulletAttack:
     bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
+    spellBook: {fileID: 0}
     formulaItems:
     - {fileID: 11400000, guid: c9d483e5c8baf7b45a7924770ee9b3cf, type: 2}
     targetPolicy: 1
+    projectileSpeedMultiplier: 0
   explosiveAttack:
     explosionRadius: 0
     windupSeconds: 0.8
@@ -63,9 +79,20 @@ MonoBehaviour:
   - skillKind: 1
     cooldownSeconds: 4.5
     castRange: 288
+    actionLockSeconds: 0
     summonSkill:
       summonedEnemyDefinition: {fileID: 11400000, guid: ecdcd26a22af2c54b9a3556d567bc8e3, type: 2}
       minSummonCountPerCast: 1
       maxSummonCountPerCast: 2
       summonRadius: 8
       maxAliveSummons: 6
+    delayedGroundBombSkill:
+      delaySeconds: 1.5
+      explosionRadius: 100
+      explosionDamage: 1
+      bombsPerSequence: 1
+      bombIntervalSeconds: 0
+      randomCooldownMinSeconds: 0
+      randomCooldownMaxSeconds: 0
+      indicatorWidth: 0.2
+      indicatorColor: {r: 0, g: 0, b: 0, a: 0}

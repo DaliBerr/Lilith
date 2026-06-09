@@ -114,6 +114,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BaseTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomTemplateData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\RuntimeSaveService.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyAIController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\SettlementModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyVisualPresenter.cs" />
@@ -137,6 +138,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewRig.cs" />
     <Compile Include="Assets\Scripts\Kernel\Display\LilithDisplaySettings.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\CharBullet.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyAIProfile.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StorySequenceParser.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\LoadingUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\RunRewardOption.cs" />

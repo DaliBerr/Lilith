@@ -57,6 +57,34 @@ public sealed class EnemyMeleeAttackerTests
         Assert.That(playerHealth.CurrentHealth, Is.EqualTo(0f));
     }
 
+    [Test]
+    public void Update_ProfileActive_DoesNotRunAutonomousAttack()
+    {
+        GameObject playerObject = CreateGameObject("Player");
+        PlayerHealth playerHealth = playerObject.AddComponent<PlayerHealth>();
+        SetPrivateField(playerHealth, "maxHealth", 20f);
+        SetPrivateField(playerHealth, "currentHealth", 20f);
+        SetPrivateField(playerHealth, "hasInitializedHealth", true);
+
+        GameObject enemyObject = CreateGameObject("Enemy");
+        enemyObject.transform.position = new Vector3(1f, 0f, 0f);
+        enemyObject.AddComponent<EnemyStatusEffectController>();
+        BaseCharEnemyNorm1 enemyData = enemyObject.AddComponent<BaseCharEnemyNorm1>();
+        enemyData.ApplyWaveConfig(new EnemyWaveConfig(50f, 0f, 2f, 0.5f, 3f));
+        EnemyMeleeAttacker attacker = enemyObject.AddComponent<EnemyMeleeAttacker>();
+        EnemyAIController aiController = enemyObject.AddComponent<EnemyAIController>();
+        EnemyAIProfile profile = ScriptableObject.CreateInstance<EnemyAIProfile>();
+        createdObjects.Add(profile);
+
+        Assert.That(attacker.TrySetTarget(playerObject.transform), Is.True);
+        Assert.That(aiController.TryCacheBindings(overwriteExisting: true), Is.True);
+        Assert.That(aiController.ApplyProfile(profile), Is.True);
+
+        InvokePrivateMethod<object>(attacker, "Update");
+
+        Assert.That(playerHealth.CurrentHealth, Is.EqualTo(20f));
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);

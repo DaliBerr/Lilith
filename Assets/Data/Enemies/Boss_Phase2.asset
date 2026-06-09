@@ -14,8 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
   enemyId: Boss_Phase2
   displayName: "\u971C\u9510\xB7\u8D30"
-  description: "霜锐现身后攻势骤烈，边召援边压场，容错极低，必须速战。"
+  displayNameKey: 
+  description: "\u971C\u9510\u73B0\u8EAB\u540E\u653B\u52BF\u9AA4\u70C8\uFF0C\u8FB9\u53EC\u63F4\u8FB9\u538B\u573A\uFF0C\u5BB9\u9519\u6781\u4F4E\uFF0C\u5FC5\u987B\u901F\u6218\u3002"
+  descriptionKey: 
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  aiProfile: {fileID: 0}
   movementKind: 7
   attackKind: 2
   dashMovement:
@@ -62,6 +65,7 @@ MonoBehaviour:
     displacementWeight: 999
   rangedBulletAttack:
     bulletPrefab: {fileID: -1014768599797537341, guid: aeb88ada11ad52545b8f426749750eff, type: 3}
+    spellBook: {fileID: 0}
     formulaItems:
     - {fileID: 11400000, guid: 60ae7cfbc364cfd42be3310cae27c72d, type: 2}
     targetPolicy: 1

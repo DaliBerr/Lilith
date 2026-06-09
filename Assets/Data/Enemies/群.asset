@@ -12,10 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 98392b79ff6e7d241afeaa3b921e4524, type: 3}
   m_Name: "\u7FA4"
   m_EditorClassIdentifier: Assembly-CSharp::EnemyDefinition
-  enemyId: 群
-  displayName: 群
-  description: "成群扑来的前锋，速度不慢，血薄但会不断贴身骚扰。"
+  enemyId: "\u7FA4"
+  displayName: "\u7FA4"
+  displayNameKey: 
+  description: "\u6210\u7FA4\u6251\u6765\u7684\u524D\u950B\uFF0C\u901F\u5EA6\u4E0D\u6162\uFF0C\u8840\u8584\u4F46\u4F1A\u4E0D\u65AD\u8D34\u8EAB\u9A9A\u6270\u3002"
+  descriptionKey: 
   runtimePrefab: {fileID: 443256865960667020, guid: af868a31ad7b66a4ba5c492433992098, type: 3}
+  aiProfile: {fileID: 11400000, guid: 9f8b6d1247bab284cbe4629adccdeee6, type: 2}
   movementKind: 1
   attackKind: 1
   dashMovement:
@@ -34,8 +37,18 @@ MonoBehaviour:
     orbitRadiusTolerance: 2
     orbitSpeedMultiplier: 1
     clockwise: 0
+  bossSmartRoamMovement:
+    preferredDistance: 24
+    distanceTolerance: 4
+    strafeSpeedMultiplier: 1
+    radialCorrectionStrength: 0.5
+    approachSpeedMultiplier: 1.15
+    retreatSpeedMultiplier: 1.25
+    sideSwitchIntervalSeconds: 1.5
+    startClockwise: 1
   visual:
-    glyphText: 群
+    glyphText: "\u7FA4"
+    glyphScaleMultiplier: 1
     glyphColor: {r: 1, g: 0.72, b: 0.44, a: 1}
     runeBaseSprite: {fileID: 0}
     runeBaseTint: {r: 0.92, g: 0.94, b: 0.98, a: 0.45}
@@ -49,10 +62,13 @@ MonoBehaviour:
     attackDamage: 1
     damageReductionPercent: 0
     visualScaleMultiplier: 1
+    displacementWeight: 1
   rangedBulletAttack:
     bulletPrefab: {fileID: 0}
+    spellBook: {fileID: 0}
     formulaItems: []
     targetPolicy: 1
+    projectileSpeedMultiplier: 0
   explosiveAttack:
     explosionRadius: 0
     windupSeconds: 0.8

@@ -18,6 +18,7 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
     [SerializeField] private EnemyMeleeAttacker meleeAttacker;
     [SerializeField] private EnemyRangedTokenAttacker rangedTokenAttacker;
     [SerializeField] private EnemyExplosiveAttacker explosiveAttacker;
+    [SerializeField] private EnemyAIController aiController;
     [SerializeField] private EnemySummoner summoner;
     [SerializeField] private CharGlyphPresenter glyphPresenter;
     [SerializeField] private CharEnemyVisualPresenter visualPresenter;
@@ -62,6 +63,11 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
             return;
         }
 
+        if (aiController != null && aiController.IsProfileActive)
+        {
+            return;
+        }
+
         TryPerformSkills(Time.time);
     }
 
@@ -100,6 +106,11 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
         if (overwriteExisting || explosiveAttacker == null || explosiveAttacker.transform != transform)
         {
             explosiveAttacker = GetComponent<EnemyExplosiveAttacker>();
+        }
+
+        if (overwriteExisting || aiController == null || aiController.transform != transform)
+        {
+            aiController = GetComponent<EnemyAIController>();
         }
 
         if (overwriteExisting || summoner == null || summoner.transform != transform)
@@ -157,8 +168,34 @@ public sealed class EnemyDefinitionBinder : MonoBehaviour
         }
 
         ResetSkillRuntimeState(forceReset: true);
+        if (!ApplyAIProfile(definition.AIProfile))
+        {
+            return false;
+        }
+
         ApplyVisuals(definition.Visual);
         return true;
+    }
+
+    private bool ApplyAIProfile(EnemyAIProfile aiProfile)
+    {
+        if (aiProfile == null)
+        {
+            if (aiController != null)
+            {
+                aiController.ApplyProfile(null);
+            }
+
+            return true;
+        }
+
+        if (aiController == null)
+        {
+            aiController = gameObject.AddComponent<EnemyAIController>();
+        }
+
+        aiController.TryCacheBindings(overwriteExisting: true);
+        return aiController.ApplyProfile(aiProfile);
     }
 
     private bool ApplyMovementKind(EnemyMovementKind movementKind)

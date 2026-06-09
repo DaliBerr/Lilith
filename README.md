@@ -108,7 +108,8 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - 敌人与波次：位于 [`Assets/Scripts/Kernel/Enemy`](Assets/Scripts/Kernel/Enemy)
   - 入口：[`EnemyDefinition.cs`](Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs)、[`EnemyGenerator.cs`](Assets/Scripts/Kernel/Enemy/EnemyGenerator.cs)、[`WaveDefinition.cs`](Assets/Scripts/Kernel/Enemy/WaveDefinition.cs)、[`WaveManager.cs`](Assets/Scripts/Kernel/Enemy/WaveManager.cs)
   - `EnemyStatusEffectController` 现在提供通用状态槽骨架：点燃、冻结、潮湿、腐蚀、失能、绑缚、标记、变形和傀儡标记；Core 与 Result 都可通过 `SpellStatusApplication` 写入同一套槽位。当前反应解析器覆盖热裂、感电、导雷和毒爆的基础判断，并默认消耗相关槽 50%；完整平衡表和视觉表现仍在 `Docs/SpellTokenSystemDesign.md` 中作为内容后续
-  - `EnemyDefinition` 当前支持独立的移动槽、攻击槽、技能槽与基础战斗数值；移动类型包含追踪、冲刺、风筝、受击仇恨、环绕目标、Boss 主动游走与“跟随最近敌人并保持距离”，攻击类型包含接触近战、远程 Token 子弹与近距自爆；技能类型除召唤外新增了 Boss 一阶段可用的 `DelayedGroundBomb`（玩家脚下延时爆炸与范围红圈预警），并引入通用技能行动锁使敌人释放技能期间不触发平A；远程子弹现支持 Homing 追踪与 Healing 命中结算，并支持敌人侧子弹速度倍率覆写；当前普通敌人原型统一收敛为 `群 / 迅 / 甲 / 召 / 爆 / 弦 / 锁 / 愈`，并新增双阶段 Boss 定义 `Boss_Phase1 / Boss_Phase2`
+  - `EnemyDefinition` 当前支持独立的移动槽、攻击槽、技能槽、AI Profile 与基础战斗数值；移动类型包含追踪、冲刺、风筝、受击仇恨、环绕目标、Boss 主动游走与“跟随最近敌人并保持距离”，攻击类型包含接触近战、远程 Token 子弹与近距自爆；技能类型除召唤外新增了 Boss 一阶段可用的 `DelayedGroundBomb`（玩家脚下延时爆炸与范围红圈预警），并引入通用技能行动锁使敌人释放技能期间不触发平A；远程子弹现支持 Homing 追踪与 Healing 命中结算，并支持敌人侧子弹速度倍率覆写；当前普通敌人原型统一收敛为 `群 / 迅 / 甲 / 召 / 爆 / 弦 / 锁 / 愈`，并新增双阶段 Boss 定义 `Boss_Phase1 / Boss_Phase2`
+  - 普通敌人首版 AI 使用数据驱动 Utility 架构：[`EnemyAIProfile`](Assets/Scripts/Kernel/Enemy/EnemyAIProfile.cs) 保存 tick 间隔、感知半径、行动列表、评分条件和 fallback 行动，[`EnemyAIController`](Assets/Scripts/Kernel/Enemy/EnemyAIController.cs) 在 profile 存在时接管行动选择、profile 冷却、movement override、攻击触发与技能触发；`EnemyDefinitionBinder`、移动组件和攻击组件在 `AIProfile == null` 时继续走旧枚举/Update/技能槽调度逻辑。8 个普通敌人已绑定 [`Assets/Data/Enemies/AIProfiles`](Assets/Data/Enemies/AIProfiles) 下的 profile，Boss_Phase1 / Boss_Phase2 保持 profile 为空并继续走现有 Boss 逻辑
   - `WaveDefinition` 当前负责刷怪组合、Boss 波次开关与 Boss 元数据（Boss 显示名、二阶段定义、血量阈值）；普通波次掉落与波后 `CombatEntryTokenSelectionPlan` 由 [`WaveSequenceProgressionConfig`](Assets/Scripts/Kernel/Enemy/WaveSequenceProgressionConfig.cs) 按“第 x 波”统一驱动，`WaveDefinition` 仅保留条目级额外掉落扩展位；Boss 波次只走自身内部掉落（及可选自身波后计划），不参与普通波次映射；敌人数值真源位于 [`EnemyDefinition`](Assets/Scripts/Kernel/Enemy/EnemyDefinition.cs)
   - `Main` 场景中的 [`WaveManager`](Assets/Scripts/Kernel/Enemy/WaveManager.cs) 不再依赖启用时自动开打，而是由 `MapRunFlowController` 在玩家进入起始房间传送装置后显式启动；每波清空后若解析到了波后计划，会先请求一轮 token 选择，再恢复波次推进；同一场战斗内每清完一波，`WaveManager` 会把 `completedWaveCount` 同步给 `EnemyGenerator`，并按 `1 + 0.04 * completedWaveCount` 对敌人的战力向数值做统一成长；Boss 条目会触发 Boss 生命周期事件，并可在运行时按血量阈值切换到二阶段定义
 - 输入、玩家、存档：位于 [`Assets/Scripts/Kernel/Input`](Assets/Scripts/Kernel/Input)、[`Assets/Scripts/Kernel/Player`](Assets/Scripts/Kernel/Player)、[`Assets/Scripts/Kernel/Save`](Assets/Scripts/Kernel/Save)
@@ -147,7 +148,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - [`SpellBookReward_Lib.asset`](Assets/Data/SpellBooks/SpellBookReward_Lib.asset) 是当前 Run 内法术书奖励库；`Plan2` 已将其作为后段波后奖励来源之一，并用低于新 token 来源的保守权重接入，避免后段奖励过早被法术书替换压过 token 构筑
 - 子弹视觉配置：[`Assets/Data/BulletVisuals`](Assets/Data/BulletVisuals)
 - 敌人定义：[`Assets/Data/Enemies`](Assets/Data/Enemies)
-  - `EnemyDefinition` 资产持有敌人的行为开关、基础战斗数值、远程/自爆配置与技能槽；当前包含 8 个普通敌人原型与双阶段 Boss 定义 `Boss_Phase1`、`Boss_Phase2`
+  - `EnemyDefinition` 资产持有敌人的行为开关、AI Profile、基础战斗数值、远程/自爆配置与技能槽；当前包含 8 个普通敌人原型与双阶段 Boss 定义 `Boss_Phase1`、`Boss_Phase2`，普通敌人 profile 位于 [`Assets/Data/Enemies/AIProfiles`](Assets/Data/Enemies/AIProfiles)
 - 波次定义：[`Assets/Data/Waves`](Assets/Data/Waves)
   - `WaveDefinition` 资产声明每波会刷哪些 `EnemyDefinition`、刷多少只、可选条目级额外掉落、Boss 波次标记与 Boss 元数据；普通波次掉落与波后抽取映射由 [`Assets/Data/Waves/NonBossWaveSequenceProgression.asset`](Assets/Data/Waves/NonBossWaveSequenceProgression.asset) 维护，Boss 波次使用自身 `WaveDefinition` 内部配置；当前 `Main` 场景默认串联 `Wave01` 到 `Wave06`，其中 `Wave01` 到 `Wave05` 为普通波次，`Wave06` 为 Boss 波次
 - 开场剧情文本与 Main 场景开场引导对话：[`Assets/Data/Story`](Assets/Data/Story)
@@ -169,6 +170,8 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 | --- | --- | --- |
 | [`Docs/ArtistGuide.md`](Docs/ArtistGuide.md) | 美术 | 替换临时美术资源、确认场景 / prefab / UI 视觉入口与注意事项 |
 | [`Docs/DesignGuide.md`](Docs/DesignGuide.md) | 策划 | 编写游戏内文本、任务、敌人、波次、Token、掉落和数值配置 |
+| [`Docs/EnemyContentLayerPlan.md`](Docs/EnemyContentLayerPlan.md) | 程序 / 策划 / Agent | 接手普通敌人 AI 内容层调参、身份强化、治疗/控制/召唤/自爆表现和验收 |
+| [`Docs/EnemyBossAIPlan.md`](Docs/EnemyBossAIPlan.md) | 程序 / 策划 / Agent | 接手 Boss AI 层设计，保持与普通敌人 Utility AI 解耦 |
 | [`Docs/SpellConstructionSystemDesign.md`](Docs/SpellConstructionSystemDesign.md) | 程序 / 策划 / Agent | 理解当前法术构筑系统的概念、编译规则、运行边界和扩展方式 |
 | [`Docs/SpellConstructionUseCases.md`](Docs/SpellConstructionUseCases.md) | 程序 / 策划 / Agent | 查询具体构筑摆法、槽位类别、编译解释、运行效果和 warning |
 | [`Docs/LocalizationGuide.md`](Docs/LocalizationGuide.md) | 策划 / 翻译 / 测试 | 添加和验收多语言文案、维护字符串表与 JSON patch |
