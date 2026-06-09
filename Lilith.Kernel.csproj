@@ -53,6 +53,7 @@
     <Compile Include="Assets\Scripts\Kernel\MapGrid\CombatRunTimer.cs" />
     <Compile Include="Assets\Scripts\Kernel\Audio\LilithAudioSettings.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\Status.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\UpgradeNodeView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerFollowCamera.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\CombatVictoryEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StartUpButtonHoverFeedback.cs" />
