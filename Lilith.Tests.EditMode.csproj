@@ -69,6 +69,7 @@
     <Compile Include="Assets\Editor\Test\ReplaceTMPFontReferences.cs" />
     <Compile Include="Assets\Editor\Test\PlayerFollowCameraTests.cs" />
     <Compile Include="Assets\Editor\Test\SpellProgramProjectileCompilerTests.cs" />
+    <Compile Include="Assets\Editor\Test\UpdateUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\GridPathfinderTests.cs" />
     <Compile Include="Assets\Editor\Test\ObjectiveArrowViewTests.cs" />
     <Compile Include="Assets\Editor\Test\GlobalStartupTests.cs" />

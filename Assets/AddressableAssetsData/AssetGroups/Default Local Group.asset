@@ -25,6 +25,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e79fe4d24c1805e49945bb4bbaf5b506
+    m_Address: Assets/Prefabs/UI/Upgrade/Upgrade Node Prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: a97f81f4f974e444f9502500f16d9321, type: 2}
   m_SchemaSet:

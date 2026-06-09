@@ -193,6 +193,15 @@
 
 ```json
 {
+  "canvasSize": { "x": 1800, "y": 1200 },
+  "edges": [
+    {
+      "from": "damage_test",
+      "to": "damage_test_2",
+      "color": "#66E35F",
+      "width": 8
+    }
+  ],
   "sections": [
     {
       "id": "combat",
@@ -204,7 +213,15 @@
           "costRemnants": 10,
           "maxLevel": 1,
           "effectType": "DamageMultiplierBonus",
-          "effectValue": 1.0
+          "effectValue": 1.0,
+          "requires": [],
+          "position": { "x": 120, "y": 160 },
+          "size": { "x": 112, "y": 112 },
+          "shape": "Rectangle",
+          "iconAddress": "",
+          "backgroundColor": "#1F2937",
+          "borderColor": "#66E35F",
+          "borderWidth": 4
         }
       ]
     }
@@ -216,6 +233,11 @@
 
 | 字段 | 含义 |
 | --- | --- |
+| `canvasSize` | 科技树滚动内容尺寸，单位为 UI 像素；旧 JSON 缺省为 `1800 x 1200` |
+| `edges[]` | 节点连线列表，可为空；第一版渲染为 UI Image 直线段 |
+| `edges[].from` / `edges[].to` | 连线两端升级项 ID，必须指向已存在节点 |
+| `edges[].color` | 连线颜色，HTML hex 格式；缺省为绿色 |
+| `edges[].width` | 连线宽度，缺省为 `8` |
 | `sections[].id` | 升级分类 ID |
 | `sections[].title` | 分类显示名 |
 | `entries[].id` | 升级项 ID，必须唯一 |
@@ -224,6 +246,15 @@
 | `maxLevel` | 最大等级 |
 | `effectType` | 效果类型，目前已有 `DamageMultiplierBonus` |
 | `effectValue` | 效果数值，例如 `1.0` 表示 +100% |
+| `requires` | 前置升级 ID 列表；依赖节点购买等级 `>= 1` 时满足 |
+| `position` | 节点左上角位置，`x` 向右、`y` 向下；旧 JSON 缺省为 `{ "x": 0, "y": 0 }` |
+| `size` | 节点尺寸；旧 JSON 缺省为 `{ "x": 100, "y": 100 }` |
+| `shape` | 节点形状，第一版支持 `Rectangle` / `Circle` / `Diamond` / `Hexagon`；没有配置 sprite 映射时回退 prefab 默认外观 |
+| `iconAddress` | Addressables Sprite 地址；为空则隐藏图标，加载失败只记录 warning |
+| `backgroundColor` / `borderColor` | 节点背景和边框颜色，HTML hex 格式 |
+| `borderWidth` | 边框厚度；节点 prefab 会按该值内缩 `Background` |
+
+校验规则：重复升级 ID、未知前置、循环前置、自依赖、未知连线端点、非法尺寸和非法颜色会让整个目录加载失败。多 section 第一版会渲染到同一个科技树画布，章节切换暂未启用。
 
 ## 任务配置
 

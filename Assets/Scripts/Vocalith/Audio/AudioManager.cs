@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -9,11 +10,17 @@ namespace Vocalith.Audio
     [DisallowMultipleComponent]
     public sealed class AudioManager : MonoBehaviour
     {
-        private const int DefaultSfxPoolSize = 16;
+        private const int DefaultSfxPoolSize = 32;
         private const float DefaultMusicFadeSeconds = 0.5f;
 
+        public const int HighestPriority = 1000;
+
         private readonly AudioSource[] musicSources = new AudioSource[2];
+        private readonly Dictionary<AudioCue, CachedCueClip> cachedCueClips = new();
+        private readonly Dictionary<AudioCue, float> lastCuePlayTimes = new();
+
         private AudioSource[] sfxSources;
+        private SfxPlaybackState[] sfxStates;
         private float[] sfxVolumeScales;
 
         private Coroutine musicFadeRoutine;
@@ -86,46 +93,6 @@ namespace Vocalith.Audio
             RefreshSfxVolumes();
         }
 
-        public void PlayMusic(AudioClip clip, float fadeSeconds = DefaultMusicFadeSeconds, bool loop = true)
-        {
-            if (clip == null)
-            {
-                GameDebug.LogWarning("[AudioManager] PlayMusic ignored because clip is missing.");
-                return;
-            }
-
-            ReleaseActiveMusicHandle();
-            StartMusicTransition(clip, fadeSeconds, loop);
-        }
-
-        public IEnumerator PlayMusicByAddress(string address, float fadeSeconds = DefaultMusicFadeSeconds, bool loop = true)
-        {
-            if (string.IsNullOrWhiteSpace(address))
-            {
-                GameDebug.LogWarning("[AudioManager] PlayMusicByAddress ignored because address is empty.");
-                yield break;
-            }
-
-            AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(address.Trim());
-            yield return handle;
-
-            if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
-            {
-                GameDebug.LogWarning($"[AudioManager] Failed to load music address '{address}'.");
-                if (handle.IsValid())
-                {
-                    Addressables.Release(handle);
-                }
-
-                yield break;
-            }
-
-            ReleaseActiveMusicHandle();
-            activeMusicHandle = handle;
-            hasActiveMusicHandle = true;
-            StartMusicTransition(handle.Result, fadeSeconds, loop);
-        }
-
         public void StopMusic(float fadeSeconds = DefaultMusicFadeSeconds)
         {
             EnsureSources();
@@ -156,25 +123,72 @@ namespace Vocalith.Audio
             musicFadeRoutine = StartCoroutine(FadeOutMusic(activeSource, Mathf.Max(0f, fadeSeconds), true));
         }
 
-        public void PlaySfx(AudioClip clip, float volumeScale = 1f)
+        public bool PlayCue(AudioCue cue, AudioCuePlayRequest request = default)
         {
-            PlaySfxInternal(clip, volumeScale);
+            if (!ValidateCue(cue))
+            {
+                return false;
+            }
+
+            if (TryGetLoadedCueClip(cue, out AudioClip loadedClip))
+            {
+                return cue.Kind == AudioCueKind.Music
+                    ? PlayLoadedMusicCue(cue, loadedClip)
+                    : TryPlaySfxCue(loadedClip, cue, request) != null;
+            }
+
+            if (!HasAddress(cue))
+            {
+                GameDebug.LogWarning($"[AudioManager] Cue '{cue.name}' has no AudioClip or Addressables address.");
+                return false;
+            }
+
+            if (cue.Kind == AudioCueKind.Music)
+            {
+                StartCoroutine(PlayMusicCueByAddress(cue));
+                return true;
+            }
+
+            StartCoroutine(PlaySfxCueByAddress(cue, request));
+            return true;
         }
 
-        public IEnumerator PlaySfxByAddress(string address, float volumeScale = 1f)
+        public bool PlayCueAt(AudioCue cue, Vector3 position, AudioCuePlayRequest request = default)
         {
-            if (string.IsNullOrWhiteSpace(address))
+            request.HasPosition = true;
+            request.Position = position;
+            return PlayCue(cue, request);
+        }
+
+        public IEnumerator PreloadCue(AudioCue cue)
+        {
+            if (!ValidateCue(cue))
             {
-                GameDebug.LogWarning("[AudioManager] PlaySfxByAddress ignored because address is empty.");
                 yield break;
             }
 
-            AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(address.Trim());
+            if (cue.Clip != null)
+            {
+                yield break;
+            }
+
+            if (!HasAddress(cue))
+            {
+                GameDebug.LogWarning($"[AudioManager] PreloadCue ignored because cue '{cue.name}' has no address.");
+                yield break;
+            }
+
+            if (cachedCueClips.ContainsKey(cue))
+            {
+                yield break;
+            }
+
+            AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(cue.Address.Trim());
             yield return handle;
 
             if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
             {
-                GameDebug.LogWarning($"[AudioManager] Failed to load sfx address '{address}'.");
+                GameDebug.LogWarning($"[AudioManager] Failed to preload audio cue '{cue.name}' at '{cue.Address}'.");
                 if (handle.IsValid())
                 {
                     Addressables.Release(handle);
@@ -183,16 +197,28 @@ namespace Vocalith.Audio
                 yield break;
             }
 
-            AudioSource source = PlaySfxInternal(handle.Result, volumeScale);
-            while (source != null && source.isPlaying)
+            cachedCueClips[cue] = new CachedCueClip(handle);
+        }
+
+        public void ReleaseCue(AudioCue cue)
+        {
+            if (cue == null || !cachedCueClips.TryGetValue(cue, out CachedCueClip cached))
             {
-                yield return null;
+                return;
             }
 
-            if (handle.IsValid())
+            cached.Release();
+            cachedCueClips.Remove(cue);
+        }
+
+        public void ReleaseAllCachedCues()
+        {
+            foreach (CachedCueClip cached in cachedCueClips.Values)
             {
-                Addressables.Release(handle);
+                cached.Release();
             }
+
+            cachedCueClips.Clear();
         }
 
         private void Awake()
@@ -214,6 +240,7 @@ namespace Vocalith.Audio
             }
 
             ReleaseActiveMusicHandle();
+            ReleaseAllCachedCues();
         }
 
         private void PromoteToPersistentRoot()
@@ -245,6 +272,7 @@ namespace Vocalith.Audio
             if (sfxSources == null || sfxSources.Length != DefaultSfxPoolSize)
             {
                 sfxSources = new AudioSource[DefaultSfxPoolSize];
+                sfxStates = new SfxPlaybackState[DefaultSfxPoolSize];
                 sfxVolumeScales = new float[DefaultSfxPoolSize];
                 for (int i = 0; i < sfxVolumeScales.Length; i++)
                 {
@@ -286,6 +314,102 @@ namespace Vocalith.Audio
             return source;
         }
 
+        private static bool ValidateCue(AudioCue cue)
+        {
+            if (cue != null)
+            {
+                return true;
+            }
+
+            GameDebug.LogWarning("[AudioManager] PlayCue ignored because cue is missing.");
+            return false;
+        }
+
+        private static bool HasAddress(AudioCue cue)
+        {
+            return cue != null && !string.IsNullOrWhiteSpace(cue.Address);
+        }
+
+        private bool TryGetLoadedCueClip(AudioCue cue, out AudioClip clip)
+        {
+            clip = cue.Clip;
+            if (clip != null)
+            {
+                return true;
+            }
+
+            if (cachedCueClips.TryGetValue(cue, out CachedCueClip cached) && cached.Clip != null)
+            {
+                clip = cached.Clip;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool PlayLoadedMusicCue(AudioCue cue, AudioClip clip)
+        {
+            if (clip == null)
+            {
+                GameDebug.LogWarning($"[AudioManager] Music cue '{cue.name}' has no loaded clip.");
+                return false;
+            }
+
+            ReleaseActiveMusicHandle();
+            StartMusicTransition(clip, DefaultMusicFadeSeconds, true);
+            return true;
+        }
+
+        private IEnumerator PlayMusicCueByAddress(AudioCue cue)
+        {
+            AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(cue.Address.Trim());
+            yield return handle;
+
+            if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
+            {
+                GameDebug.LogWarning($"[AudioManager] Failed to load music cue '{cue.name}' at '{cue.Address}'.");
+                if (handle.IsValid())
+                {
+                    Addressables.Release(handle);
+                }
+
+                yield break;
+            }
+
+            ReleaseActiveMusicHandle();
+            activeMusicHandle = handle;
+            hasActiveMusicHandle = true;
+            StartMusicTransition(handle.Result, DefaultMusicFadeSeconds, true);
+        }
+
+        private IEnumerator PlaySfxCueByAddress(AudioCue cue, AudioCuePlayRequest request)
+        {
+            AsyncOperationHandle<AudioClip> handle = Addressables.LoadAssetAsync<AudioClip>(cue.Address.Trim());
+            yield return handle;
+
+            if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
+            {
+                GameDebug.LogWarning($"[AudioManager] Failed to load sfx cue '{cue.name}' at '{cue.Address}'.");
+                if (handle.IsValid())
+                {
+                    Addressables.Release(handle);
+                }
+
+                yield break;
+            }
+
+            AudioSource source = TryPlaySfxCue(handle.Result, cue, request);
+            while (source != null && source.clip == handle.Result && source.isPlaying)
+            {
+                yield return null;
+            }
+
+            if (handle.IsValid())
+            {
+                Addressables.Release(handle);
+            }
+        }
+
         private void StartMusicTransition(AudioClip clip, float fadeSeconds, bool loop)
         {
             EnsureSources();
@@ -310,6 +434,8 @@ namespace Vocalith.Audio
             nextSource.clip = clip;
             nextSource.loop = loop;
             nextSource.volume = 0f;
+            nextSource.pitch = 1f;
+            nextSource.spatialBlend = 0f;
             nextSource.Play();
 
             if (fadeSeconds <= 0f || !Application.isPlaying)
@@ -402,29 +528,113 @@ namespace Vocalith.Audio
             }
         }
 
-        private AudioSource PlaySfxInternal(AudioClip clip, float volumeScale)
+        private AudioSource TryPlaySfxCue(AudioClip clip, AudioCue cue, AudioCuePlayRequest request)
         {
             if (clip == null)
             {
-                GameDebug.LogWarning("[AudioManager] PlaySfx ignored because clip is missing.");
+                GameDebug.LogWarning($"[AudioManager] Cue '{cue.name}' has no loaded clip.");
                 return null;
             }
 
             EnsureSources();
+            RefreshSfxPlaybackStates();
 
-            int sourceIndex = FindAvailableSfxSourceIndex();
+            int priority = cue.Priority + request.PriorityOffset;
+            AudioCueCategory category = request.HasCategoryOverride ? request.CategoryOverride : cue.Category;
+            if (IsBlockedByCooldown(cue, priority))
+            {
+                return null;
+            }
+
+            if (!TryResolveCueSourceIndex(cue, category, priority, out int sourceIndex))
+            {
+                return null;
+            }
+
             AudioSource source = sfxSources[sourceIndex];
+            float volumeScale = request.HasVolumeScaleOverride ? request.VolumeScaleOverride : cue.VolumeScale;
             float normalizedScale = NormalizeVolume(volumeScale);
-            sfxVolumeScales[sourceIndex] = normalizedScale;
+            float pitch = ResolvePitch(cue);
+            bool useWorldPosition = cue.SpatialMode == AudioCueSpatialMode.WorldPosition && request.HasPosition;
+            if (cue.SpatialMode == AudioCueSpatialMode.WorldPosition && !request.HasPosition)
+            {
+                GameDebug.LogWarning($"[AudioManager] Cue '{cue.name}' requested world audio but no position was provided. Playing as 2D.");
+            }
 
-            source.Stop();
-            source.clip = clip;
-            source.loop = false;
-            source.volume = EffectiveSfxVolume * normalizedScale;
-            source.Play();
+            ConfigureSfxSource(source, clip, normalizedScale, pitch, request.Position, useWorldPosition, cue.MinDistance, cue.MaxDistance);
+            SetSfxState(sourceIndex, cue, category, priority, normalizedScale);
+            lastCuePlayTimes[cue] = Time.unscaledTime;
 
             nextSfxIndex = (sourceIndex + 1) % sfxSources.Length;
             return source;
+        }
+
+        private bool IsBlockedByCooldown(AudioCue cue, int priority)
+        {
+            if (cue.CooldownSeconds <= 0f || priority >= HighestPriority)
+            {
+                return false;
+            }
+
+            if (!lastCuePlayTimes.TryGetValue(cue, out float lastTime))
+            {
+                return false;
+            }
+
+            return Time.unscaledTime - lastTime < cue.CooldownSeconds;
+        }
+
+        private bool TryResolveCueSourceIndex(AudioCue cue, AudioCueCategory category, int priority, out int sourceIndex)
+        {
+            sourceIndex = -1;
+
+            int selfCount = CountPlayingCue(cue);
+            if (selfCount >= cue.MaxSimultaneousSelf)
+            {
+                int candidate = FindLowestPriorityCueSource(cue);
+                if (candidate < 0 || priority <= sfxStates[candidate].Priority)
+                {
+                    return false;
+                }
+
+                sourceIndex = candidate;
+            }
+
+            int categoryCount = CountPlayingCategory(category);
+            if (categoryCount >= GetCategoryLimit(category))
+            {
+                int candidate = FindLowestPriorityCategorySource(category);
+                if (candidate < 0 || priority <= sfxStates[candidate].Priority)
+                {
+                    return false;
+                }
+
+                if (sourceIndex < 0 || sfxStates[candidate].Priority < sfxStates[sourceIndex].Priority)
+                {
+                    sourceIndex = candidate;
+                }
+            }
+
+            if (sourceIndex >= 0)
+            {
+                return true;
+            }
+
+            sourceIndex = FindAvailableSfxSourceIndex();
+            if (sourceIndex >= 0)
+            {
+                return true;
+            }
+
+            int globalCandidate = FindLowestPrioritySfxSource();
+            if (globalCandidate >= 0 && priority > sfxStates[globalCandidate].Priority)
+            {
+                sourceIndex = globalCandidate;
+                return true;
+            }
+
+            sourceIndex = -1;
+            return false;
         }
 
         private int FindAvailableSfxSourceIndex()
@@ -438,7 +648,173 @@ namespace Vocalith.Audio
                 }
             }
 
-            return nextSfxIndex;
+            return -1;
+        }
+
+        private int CountPlayingCue(AudioCue cue)
+        {
+            int count = 0;
+            for (int i = 0; i < sfxStates.Length; i++)
+            {
+                if (sfxStates[i].Active && sfxStates[i].Cue == cue)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountPlayingCategory(AudioCueCategory category)
+        {
+            int count = 0;
+            for (int i = 0; i < sfxStates.Length; i++)
+            {
+                if (sfxStates[i].Active && sfxStates[i].Category == category)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int FindLowestPriorityCueSource(AudioCue cue)
+        {
+            return FindLowestPrioritySource(state => state.Cue == cue);
+        }
+
+        private int FindLowestPriorityCategorySource(AudioCueCategory category)
+        {
+            return FindLowestPrioritySource(state => state.Category == category);
+        }
+
+        private int FindLowestPrioritySfxSource()
+        {
+            return FindLowestPrioritySource(_ => true);
+        }
+
+        private int FindLowestPrioritySource(System.Predicate<SfxPlaybackState> predicate)
+        {
+            int index = -1;
+            int priority = int.MaxValue;
+            float startTime = float.MaxValue;
+
+            for (int i = 0; i < sfxStates.Length; i++)
+            {
+                SfxPlaybackState state = sfxStates[i];
+                if (!state.Active || !predicate(state))
+                {
+                    continue;
+                }
+
+                if (state.Priority < priority || (state.Priority == priority && state.StartTime < startTime))
+                {
+                    priority = state.Priority;
+                    startTime = state.StartTime;
+                    index = i;
+                }
+            }
+
+            return index;
+        }
+
+        private static int GetCategoryLimit(AudioCueCategory category)
+        {
+            return category switch
+            {
+                AudioCueCategory.Ui => 6,
+                AudioCueCategory.Combat => 18,
+                AudioCueCategory.Ambience => 4,
+                AudioCueCategory.Voice => 3,
+                AudioCueCategory.System => 4,
+                _ => 12,
+            };
+        }
+
+        private void ConfigureSfxSource(
+            AudioSource source,
+            AudioClip clip,
+            float normalizedScale,
+            float pitch,
+            Vector3 position,
+            bool useWorldPosition,
+            float minDistance,
+            float maxDistance)
+        {
+            source.Stop();
+            source.clip = clip;
+            source.loop = false;
+            source.pitch = pitch;
+            source.volume = EffectiveSfxVolume * normalizedScale;
+            source.spatialBlend = useWorldPosition ? 1f : 0f;
+            source.rolloffMode = AudioRolloffMode.Linear;
+            source.minDistance = Mathf.Max(0f, minDistance);
+            source.maxDistance = Mathf.Max(source.minDistance + 0.01f, maxDistance);
+
+            if (useWorldPosition)
+            {
+                source.transform.position = position;
+            }
+            else
+            {
+                source.transform.SetParent(transform, false);
+                source.transform.localPosition = Vector3.zero;
+            }
+
+            source.Play();
+        }
+
+        private void SetSfxState(int index, AudioCue cue, AudioCueCategory category, int priority, float volumeScale)
+        {
+            sfxVolumeScales[index] = volumeScale;
+            sfxStates[index] = new SfxPlaybackState
+            {
+                Active = true,
+                Cue = cue,
+                Category = category,
+                Priority = priority,
+                StartTime = Time.unscaledTime,
+            };
+        }
+
+        private void RefreshSfxPlaybackStates()
+        {
+            if (sfxSources == null || sfxStates == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < sfxSources.Length; i++)
+            {
+                AudioSource source = sfxSources[i];
+                if (source == null || !source.isPlaying || source.clip == null)
+                {
+                    sfxStates[i] = default;
+                }
+            }
+        }
+
+        private static float ResolvePitch(AudioCue cue)
+        {
+            float min = SanitizePitch(cue.PitchMin);
+            float max = Mathf.Max(min, SanitizePitch(cue.PitchMax));
+            if (Mathf.Approximately(min, max))
+            {
+                return min;
+            }
+
+            return UnityEngine.Random.Range(min, max);
+        }
+
+        private static float SanitizePitch(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
+            {
+                return 1f;
+            }
+
+            return value;
         }
 
         private void RefreshSourceVolumes()
@@ -497,6 +873,35 @@ namespace Vocalith.Audio
             }
 
             return Mathf.Clamp01(value);
+        }
+
+        private readonly struct CachedCueClip
+        {
+            private readonly AsyncOperationHandle<AudioClip> handle;
+
+            public CachedCueClip(AsyncOperationHandle<AudioClip> handle)
+            {
+                this.handle = handle;
+            }
+
+            public AudioClip Clip => handle.IsValid() ? handle.Result : null;
+
+            public void Release()
+            {
+                if (handle.IsValid())
+                {
+                    Addressables.Release(handle);
+                }
+            }
+        }
+
+        private struct SfxPlaybackState
+        {
+            public bool Active;
+            public AudioCue Cue;
+            public AudioCueCategory Category;
+            public int Priority;
+            public float StartTime;
         }
     }
 }

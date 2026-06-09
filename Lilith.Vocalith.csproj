@@ -85,6 +85,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Log\LogForwarder.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\FixedPixelSlicedImage.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScale.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\Audio\AudioCue.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Scripts\Vocalith\Lilith.Vocalith.asmdef" />
