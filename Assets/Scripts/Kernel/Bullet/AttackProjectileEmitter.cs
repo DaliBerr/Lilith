@@ -11,7 +11,8 @@ namespace Kernel.Bullet
     public static class AttackProjectileEmitter
     {
         private const float OrbitMulticastRadius = 3f;
-        internal static Func<int, int> RiddleCandidateIndexResolver { get; set; } = count => UnityEngine.Random.Range(0, count);
+        private static readonly Vocalith.Random RandomSource = new();
+        internal static Func<int, int> RiddleCandidateIndexResolver { get; set; } = count => RandomSource.Next(0, count);
 
         public static int Emit(CharBullet bulletPrefab, Transform owner, Vector3 spawnPosition, Vector3 baseDirection, CompiledSpellProgram spellProgram)
         {
@@ -543,7 +544,7 @@ namespace Kernel.Bullet
 
             int rawIndex = RiddleCandidateIndexResolver != null
                 ? RiddleCandidateIndexResolver(candidateCount)
-                : UnityEngine.Random.Range(0, candidateCount);
+                : RandomSource.Next(0, candidateCount);
             int resolvedIndex = Mathf.Clamp(rawIndex, 0, candidateCount - 1);
             if (!SpellCoreRuntimeCatalog.TryGetRiddleCandidate(resolvedIndex, out SpellCoreRuntimeTemplate template))
             {

@@ -13,7 +13,7 @@ public sealed class SpellProgramCompilerTests
     [TearDown]
     public void TearDown()
     {
-        SpellProgramCompiler.ChaosCandidateIndexResolver = count => UnityEngine.Random.Range(0, count);
+        SpellProgramCompiler.ChaosCandidateIndexResolver = null;
 
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {

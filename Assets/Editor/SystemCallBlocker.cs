@@ -114,6 +114,45 @@ namespace SystemCallBlocker
             ),
 
             new ForbiddenRule(
+                ruleId: "UnityEngine.Random",
+                replacementHint: "请改用：Vocalith.Random（可控/可测试）",
+                patterns: new[]
+                {
+                    // 1) 禁止 UnityEngine.Random.xxx(...) / global::UnityEngine.Random.xxx(...)
+                    new Regex(
+                        @"\b(?:global::\s*)?UnityEngine\s*\.\s*Random\s*\.\s*" +
+                        @"(?:Range|value|insideUnitCircle|insideUnitSphere|onUnitSphere|rotation|rotationUniform|ColorHSV|InitState|state)\b",
+                        RegexOptions.Compiled
+                    ),
+
+                    // 1.5) 禁止 using UnityEngine; 后的裸 Random.xxx(...)
+                    new Regex(
+                        @"\bRandom\s*\.\s*" +
+                        @"(?:Range|value|insideUnitCircle|insideUnitSphere|onUnitSphere|rotation|rotationUniform|ColorHSV|InitState|state)\b",
+                        RegexOptions.Compiled
+                    ),
+
+                    // 2) 禁止直接引用类型本体（例如 typeof(UnityEngine.Random)、作为参数类型、别名指向等）
+                    new Regex(
+                        @"\b(?:global::\s*)?UnityEngine\s*\.\s*Random\b",
+                        RegexOptions.Compiled
+                    ),
+
+                    // 3) 禁止用 using 别名把 UnityEngine.Random 引进来
+                    new Regex(
+                        @"\busing\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:global::\s*)?UnityEngine\s*\.\s*Random\s*;",
+                        RegexOptions.Compiled
+                    ),
+                },
+                quickContainsAny: new[]
+                {
+                    "UnityEngine.Random",
+                    "Random.",
+                    "using",
+                }
+            ),
+
+            new ForbiddenRule(
                 ruleId: "禁止 UnityEngine.Debug",
                 replacementHint: "请改用：Vocalith.GameDebug（可控/可测试）",
                 patterns: new[]

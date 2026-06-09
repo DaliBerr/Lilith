@@ -42,7 +42,8 @@ public sealed class CharBullet : MonoBehaviour
     private const int MaxPayloadDerivedProjectileCount = 64;
     private const string EnemyTagName = "Enemy_Object";
     private static readonly Color DefaultDelayedExplosionIndicatorColor = new(1f, 0.1f, 0.1f, 0.92f);
-    internal static Func<int, int> ConfuseCandidateIndexResolver { get; set; } = count => UnityEngine.Random.Range(0, count);
+    private static readonly Vocalith.Random RandomSource = new();
+    internal static Func<int, int> ConfuseCandidateIndexResolver { get; set; } = count => RandomSource.Next(0, count);
     // private const string AlternateEnemyTagName = "Enemy";
 
     private static readonly string[] PreferredMovementChildNames =
@@ -2617,7 +2618,7 @@ public sealed class CharBullet : MonoBehaviour
 
         int rawIndex = ConfuseCandidateIndexResolver != null
             ? ConfuseCandidateIndexResolver(candidates.Length)
-            : UnityEngine.Random.Range(0, candidates.Length);
+            : RandomSource.Next(0, candidates.Length);
         int resolvedIndex = Mathf.Clamp(rawIndex, 0, candidates.Length - 1);
         candidate = candidates[resolvedIndex].GetSanitized();
         return candidate.IsValid;
@@ -3321,7 +3322,7 @@ public sealed class CharBullet : MonoBehaviour
         int requestedSplitCount = Mathf.Min(resultEffects.splitProjectileCount, remainingBudget / childProjectileCount);
         for (int i = 0; i < requestedSplitCount && emittedCount < remainingBudget; i++)
         {
-            Vector3 splitDirection = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, 360f), Vector3.up) * Vector3.forward;
+            Vector3 splitDirection = Quaternion.AngleAxis((float)(RandomSource.NextDouble() * 360f), Vector3.up) * Vector3.forward;
             Vector3 spawnOffset = splitDirection * Mathf.Max(ResolveImpactRadius() + 0.05f, 0.1f);
             List<CharBullet> spawnedBullets = new();
             emittedCount += AttackProjectileEmitter.Emit(

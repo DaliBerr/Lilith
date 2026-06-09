@@ -13,7 +13,7 @@ public sealed class CharBulletImpactTests
     [TearDown]
     public void TearDown()
     {
-        CharBullet.ConfuseCandidateIndexResolver = count => UnityEngine.Random.Range(0, count);
+        CharBullet.ConfuseCandidateIndexResolver = null;
         StatusController.ClearStatus();
 
         for (int i = createdObjects.Count - 1; i >= 0; i--)

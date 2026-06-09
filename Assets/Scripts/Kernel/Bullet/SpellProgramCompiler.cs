@@ -8,7 +8,8 @@ namespace Kernel.Bullet
     /// </summary>
     public static class SpellProgramCompiler
     {
-        internal static Func<int, int> ChaosCandidateIndexResolver { get; set; } = count => UnityEngine.Random.Range(0, count);
+        private static readonly Vocalith.Random RandomSource = new();
+        internal static Func<int, int> ChaosCandidateIndexResolver { get; set; } = count => RandomSource.Next(0, count);
 
         private sealed class MulticastCompileState
         {
@@ -170,7 +171,7 @@ namespace Kernel.Bullet
 
             int rawIndex = ChaosCandidateIndexResolver != null
                 ? ChaosCandidateIndexResolver(candidates.Count)
-                : UnityEngine.Random.Range(0, candidates.Count);
+                : RandomSource.Next(0, candidates.Count);
             int resolvedIndex = Clamp(rawIndex, 0, candidates.Count - 1);
             return candidates[resolvedIndex];
         }

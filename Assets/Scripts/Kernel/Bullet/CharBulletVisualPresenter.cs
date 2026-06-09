@@ -47,7 +47,7 @@ public sealed class CharBulletVisualPresenter : MonoBehaviour
 
     private void Awake()
     {
-        animationSeed = Random.value * 100f;
+        animationSeed = Mathf.Repeat(GetInstanceID() * 0.6180339f, 100f);
         bullet = GetComponent<CharBullet>();
         TryCacheBindings();
         RefreshPreview();

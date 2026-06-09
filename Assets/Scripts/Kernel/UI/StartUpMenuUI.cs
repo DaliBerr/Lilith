@@ -17,6 +17,8 @@ namespace Kernel.UI
     [UIPrefab("Assets/Prefabs/UI/StartUp UI Prefab")]
     public sealed class StartUpMenuUI : GameUIScreen
     {
+        private static readonly Vocalith.Random RandomSource = new();
+
         [Header("Buttons")]
         [SerializeField] private Button startButton;
         [SerializeField] private GameObject loadButtonRoot;
@@ -149,7 +151,7 @@ namespace Kernel.UI
         /// </summary>
         private IEnumerator LoadRandomSealSpriteCoroutine()
         {
-            int startIndex = Random.Range(0, SealSpriteAddresses.Length);
+            int startIndex = RandomSource.Next(0, SealSpriteAddresses.Length);
             for (int offset = 0; offset < SealSpriteAddresses.Length; offset++)
             {
                 string address = SealSpriteAddresses[(startIndex + offset) % SealSpriteAddresses.Length];
