@@ -21,6 +21,7 @@ namespace Kernel.UI
     public sealed class SettlementUIScreen : GameUIScreen
     {
         private const string DefaultPresentationCatalogAddress = "Assets/Data/UI/SettlementPresentationCatalog";
+        private static readonly Vocalith.Random RandomSource = new();
 
         [Header("Layout")]
         [SerializeField] private RectTransform panelRoot;
@@ -226,7 +227,7 @@ namespace Kernel.UI
                     : SettlementPresentationCatalogUtility.CreateDefault().DefeatTitles;
             }
 
-            return titlePool[Random.Range(0, titlePool.Count)];
+            return titlePool[RandomSource.Next(0, titlePool.Count)];
         }
 
         private static string BuildCountBlock(string header, string emptyText, System.Collections.Generic.IReadOnlyList<SettlementCountEntry> entries)

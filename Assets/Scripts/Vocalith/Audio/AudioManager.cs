@@ -438,7 +438,175 @@ namespace Vocalith.Audio
                 }
             }
 
-            return nextSfxIndex;
+            return -1;
+        }
+
+        private int CountPlayingCue(AudioCue cue)
+        {
+            int count = 0;
+            for (int i = 0; i < sfxStates.Length; i++)
+            {
+                if (sfxStates[i].Active && sfxStates[i].Cue == cue)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountPlayingCategory(AudioCueCategory category)
+        {
+            int count = 0;
+            for (int i = 0; i < sfxStates.Length; i++)
+            {
+                if (sfxStates[i].Active && sfxStates[i].Category == category)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int FindLowestPriorityCueSource(AudioCue cue)
+        {
+            return FindLowestPrioritySource(state => state.Cue == cue);
+        }
+
+        private int FindLowestPriorityCategorySource(AudioCueCategory category)
+        {
+            return FindLowestPrioritySource(state => state.Category == category);
+        }
+
+        private int FindLowestPrioritySfxSource()
+        {
+            return FindLowestPrioritySource(_ => true);
+        }
+
+        private int FindLowestPrioritySource(System.Predicate<SfxPlaybackState> predicate)
+        {
+            int index = -1;
+            int priority = int.MaxValue;
+            float startTime = float.MaxValue;
+
+            for (int i = 0; i < sfxStates.Length; i++)
+            {
+                SfxPlaybackState state = sfxStates[i];
+                if (!state.Active || !predicate(state))
+                {
+                    continue;
+                }
+
+                if (state.Priority < priority || (state.Priority == priority && state.StartTime < startTime))
+                {
+                    priority = state.Priority;
+                    startTime = state.StartTime;
+                    index = i;
+                }
+            }
+
+            return index;
+        }
+
+        private static int GetCategoryLimit(AudioCueCategory category)
+        {
+            return category switch
+            {
+                AudioCueCategory.Ui => 6,
+                AudioCueCategory.Combat => 18,
+                AudioCueCategory.Ambience => 4,
+                AudioCueCategory.Voice => 3,
+                AudioCueCategory.System => 4,
+                _ => 12,
+            };
+        }
+
+        private void ConfigureSfxSource(
+            AudioSource source,
+            AudioClip clip,
+            float normalizedScale,
+            float pitch,
+            Vector3 position,
+            bool useWorldPosition,
+            float minDistance,
+            float maxDistance)
+        {
+            source.Stop();
+            source.clip = clip;
+            source.loop = false;
+            source.pitch = pitch;
+            source.volume = EffectiveSfxVolume * normalizedScale;
+            source.spatialBlend = useWorldPosition ? 1f : 0f;
+            source.rolloffMode = AudioRolloffMode.Linear;
+            source.minDistance = Mathf.Max(0f, minDistance);
+            source.maxDistance = Mathf.Max(source.minDistance + 0.01f, maxDistance);
+
+            if (useWorldPosition)
+            {
+                source.transform.position = position;
+            }
+            else
+            {
+                source.transform.SetParent(transform, false);
+                source.transform.localPosition = Vector3.zero;
+            }
+
+            source.Play();
+        }
+
+        private void SetSfxState(int index, AudioCue cue, AudioCueCategory category, int priority, float volumeScale)
+        {
+            sfxVolumeScales[index] = volumeScale;
+            sfxStates[index] = new SfxPlaybackState
+            {
+                Active = true,
+                Cue = cue,
+                Category = category,
+                Priority = priority,
+                StartTime = Time.unscaledTime,
+            };
+        }
+
+        private void RefreshSfxPlaybackStates()
+        {
+            if (sfxSources == null || sfxStates == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < sfxSources.Length; i++)
+            {
+                AudioSource source = sfxSources[i];
+                if (source == null || !source.isPlaying || source.clip == null)
+                {
+                    sfxStates[i] = default;
+                }
+            }
+        }
+
+        private static float ResolvePitch(AudioCue cue)
+        {
+            float min = SanitizePitch(cue.PitchMin);
+            float max = Mathf.Max(min, SanitizePitch(cue.PitchMax));
+            if (Mathf.Approximately(min, max))
+            {
+                return min;
+            }
+
+            return min + (float)RandomSource.NextDouble() * (max - min);
+        }
+
+        private static readonly Random RandomSource = new();
+
+        private static float SanitizePitch(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value) || value <= 0f)
+            {
+                return 1f;
+            }
+
+            return value;
         }
 
         private void RefreshSourceVolumes()

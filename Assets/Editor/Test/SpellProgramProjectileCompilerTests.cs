@@ -14,9 +14,9 @@ public sealed class SpellProgramProjectileCompilerTests
     [TearDown]
     public void TearDown()
     {
-        AttackProjectileEmitter.RiddleCandidateIndexResolver = count => UnityEngine.Random.Range(0, count);
-        CharBullet.ConfuseCandidateIndexResolver = count => UnityEngine.Random.Range(0, count);
-        SpellProgramCompiler.ChaosCandidateIndexResolver = count => UnityEngine.Random.Range(0, count);
+        AttackProjectileEmitter.RiddleCandidateIndexResolver = null;
+        CharBullet.ConfuseCandidateIndexResolver = null;
+        SpellProgramCompiler.ChaosCandidateIndexResolver = null;
 
         for (int i = createdObjects.Count - 1; i >= 0; i--)
         {
