@@ -1,4 +1,13 @@
 {
+  "canvasSize": { "x": 1800, "y": 1200 },
+  "edges": [
+    {
+      "from": "damage_test",
+      "to": "damage_test_2",
+      "color": "#66E35F",
+      "width": 8
+    }
+  ],
   "sections": [
     {
       "id": "combat",
@@ -10,10 +19,33 @@
           "costRemnants": 10,
           "maxLevel": 1,
           "effectType": "DamageMultiplierBonus",
-          "effectValue": 1.0
+          "effectValue": 1.0,
+          "requires": [],
+          "position": { "x": 120, "y": 160 },
+          "size": { "x": 112, "y": 112 },
+          "shape": "Rectangle",
+          "iconAddress": "",
+          "backgroundColor": "#1F2937",
+          "borderColor": "#66E35F",
+          "borderWidth": 4
+        },
+        {
+          "id": "damage_test_2",
+          "title": "攻击力 +50%",
+          "costRemnants": 20,
+          "maxLevel": 1,
+          "effectType": "DamageMultiplierBonus",
+          "effectValue": 0.5,
+          "requires": [ "damage_test" ],
+          "position": { "x": 340, "y": 160 },
+          "size": { "x": 112, "y": 112 },
+          "shape": "Rectangle",
+          "iconAddress": "",
+          "backgroundColor": "#1F2937",
+          "borderColor": "#66E35F",
+          "borderWidth": 4
         }
       ]
     }
   ]
-
 }

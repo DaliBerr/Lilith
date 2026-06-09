@@ -7,6 +7,9 @@
     },
     "damage_test": {
       "title": "Attack Power +100%"
+    },
+    "damage_test_2": {
+      "title": "Attack Power +50%"
     }
   }
 }
