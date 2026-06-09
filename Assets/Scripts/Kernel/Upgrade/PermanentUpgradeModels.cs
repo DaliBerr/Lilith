@@ -15,11 +15,61 @@ namespace Kernel.Upgrade
     }
 
     /// <summary>
+    /// 永久升级科技树节点第一版支持的外观形状。
+    /// </summary>
+    [JsonConverter(typeof(StringEnumConverter))]
+    public enum PermanentUpgradeNodeShape
+    {
+        Rectangle = 0,
+        Circle = 1,
+        Diamond = 2,
+        Hexagon = 3,
+    }
+
+    /// <summary>
+    /// 永久升级 JSON 中使用的二维数值。
+    /// </summary>
+    [Serializable]
+    public sealed class PermanentUpgradeVector2Data
+    {
+        [JsonProperty("x")]
+        public float X { get; set; }
+
+        [JsonProperty("y")]
+        public float Y { get; set; }
+    }
+
+    /// <summary>
+    /// 永久升级科技树节点之间的连线配置。
+    /// </summary>
+    [Serializable]
+    public sealed class PermanentUpgradeEdgeData
+    {
+        [JsonProperty("from")]
+        public string From { get; set; }
+
+        [JsonProperty("to")]
+        public string To { get; set; }
+
+        [JsonProperty("color")]
+        public string Color { get; set; }
+
+        [JsonProperty("width")]
+        public float Width { get; set; }
+    }
+
+    /// <summary>
     /// 永久升级目录的根对象。
     /// </summary>
     [Serializable]
     public sealed class PermanentUpgradeCatalogData
     {
+        [JsonProperty("canvasSize")]
+        public PermanentUpgradeVector2Data CanvasSize { get; set; }
+
+        [JsonProperty("edges")]
+        public List<PermanentUpgradeEdgeData> Edges { get; set; } = new();
+
         [JsonProperty("sections")]
         public List<PermanentUpgradeSectionData> Sections { get; set; } = new();
     }
@@ -63,6 +113,30 @@ namespace Kernel.Upgrade
 
         [JsonProperty("effectValue")]
         public float EffectValue { get; set; }
+
+        [JsonProperty("requires")]
+        public List<string> Requires { get; set; } = new();
+
+        [JsonProperty("position")]
+        public PermanentUpgradeVector2Data Position { get; set; }
+
+        [JsonProperty("size")]
+        public PermanentUpgradeVector2Data Size { get; set; }
+
+        [JsonProperty("shape")]
+        public PermanentUpgradeNodeShape Shape { get; set; } = PermanentUpgradeNodeShape.Rectangle;
+
+        [JsonProperty("iconAddress")]
+        public string IconAddress { get; set; }
+
+        [JsonProperty("backgroundColor")]
+        public string BackgroundColor { get; set; }
+
+        [JsonProperty("borderColor")]
+        public string BorderColor { get; set; }
+
+        [JsonProperty("borderWidth")]
+        public float BorderWidth { get; set; }
     }
 
     /// <summary>
@@ -76,6 +150,7 @@ namespace Kernel.Upgrade
         MaxLevelReached = 3,
         InsufficientRemnants = 4,
         SaveUnavailable = 5,
+        PrerequisiteMissing = 6,
     }
 
     /// <summary>

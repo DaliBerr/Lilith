@@ -19,8 +19,18 @@ namespace Kernel.Upgrade
     {
         private const string DefaultCatalogAddress = "Assets/Data/Upgrades/PermanentUpgradeCatalog";
         private const string UpgradeLifetimeStatPrefix = "upgrade.";
+        private const float DefaultCanvasWidth = 1800f;
+        private const float DefaultCanvasHeight = 1200f;
+        private const float DefaultNodeWidth = 100f;
+        private const float DefaultNodeHeight = 100f;
+        private const float DefaultBorderWidth = 4f;
+        private const float DefaultEdgeWidth = 8f;
+        private const string DefaultNodeBackgroundColor = "#1F2937";
+        private const string DefaultNodeBorderColor = "#66E35F";
+        private const string DefaultEdgeColor = "#66E35F";
 
         private static readonly IReadOnlyList<PermanentUpgradeSectionData> EmptySections = Array.Empty<PermanentUpgradeSectionData>();
+        private static readonly IReadOnlyList<PermanentUpgradeEdgeData> EmptyEdges = Array.Empty<PermanentUpgradeEdgeData>();
 
         private PermanentUpgradeCatalogData currentCatalog;
         private readonly Dictionary<string, PermanentUpgradeEntryData> entryById = new(StringComparer.Ordinal);
@@ -232,6 +242,28 @@ namespace Kernel.Upgrade
         }
 
         /// <summary>
+        /// summary: 返回当前科技树画布尺寸；旧 JSON 未声明时使用默认尺寸。
+        /// param: 无
+        /// returns: 当前目录声明的科技树画布尺寸
+        /// </summary>
+        public PermanentUpgradeVector2Data GetCanvasSize()
+        {
+            EnsureCatalogLoaded();
+            return currentCatalog?.CanvasSize ?? CreateVector2(DefaultCanvasWidth, DefaultCanvasHeight);
+        }
+
+        /// <summary>
+        /// summary: 返回当前科技树的连线列表；旧 JSON 未声明时返回空列表。
+        /// param: 无
+        /// returns: 当前目录声明的连线只读列表
+        /// </summary>
+        public IReadOnlyList<PermanentUpgradeEdgeData> GetEdges()
+        {
+            EnsureCatalogLoaded();
+            return currentCatalog != null ? currentCatalog.Edges : EmptyEdges;
+        }
+
+        /// <summary>
         /// summary: 查询一个升级条目是否存在于当前目录中。
         /// param name="entryId": 需要查询的条目 ID
         /// param name="entry": 输出命中的条目数据
@@ -264,6 +296,21 @@ namespace Kernel.Upgrade
 
             RuntimeSaveService saveService = RuntimeSaveService.GetOrCreateInstance();
             return saveService != null ? Mathf.Max(0, saveService.GetLifetimeStat(BuildLifetimeStatKey(sanitizedEntryId))) : 0;
+        }
+
+        /// <summary>
+        /// summary: 判断指定条目的所有前置升级是否已经至少购买 1 级。
+        /// param name="entryId": 需要查询的条目 ID
+        /// returns: 条目存在且所有前置满足时返回 true；条目无效或目录未加载时返回 false
+        /// </summary>
+        public bool HasPrerequisitesMet(string entryId)
+        {
+            if (!TryGetEntry(entryId, out PermanentUpgradeEntryData entry))
+            {
+                return false;
+            }
+
+            return HasPurchasedRequiredEntries(entry);
         }
 
         /// <summary>
@@ -337,6 +384,20 @@ namespace Kernel.Upgrade
                     message: LocalizationManager.TranslateOrDefault(
                         "ui.upgrade.purchase.max_level",
                         "该升级已经达到上限。"));
+                return false;
+            }
+
+            if (!HasPurchasedRequiredEntries(entry))
+            {
+                result = new PermanentUpgradePurchaseResult(
+                    succeeded: false,
+                    failureReason: PermanentUpgradePurchaseFailureReason.PrerequisiteMissing,
+                    entryId: entry.Id,
+                    newLevel: currentLevel,
+                    remainingRemnants: PlayerRemnantWallet.GetCurrentRemnants(),
+                    message: LocalizationManager.TranslateOrDefault(
+                        "ui.upgrade.purchase.prerequisite_missing",
+                        "前置升级尚未解锁。"));
                 return false;
             }
 
@@ -545,6 +606,25 @@ namespace Kernel.Upgrade
             cachedDamageMultiplier = 1f + Mathf.Max(0f, totalBonus);
         }
 
+        private bool HasPurchasedRequiredEntries(PermanentUpgradeEntryData entry)
+        {
+            if (entry?.Requires == null || entry.Requires.Count <= 0)
+            {
+                return true;
+            }
+
+            for (int index = 0; index < entry.Requires.Count; index++)
+            {
+                string requiredEntryId = SanitizeIdentifier(entry.Requires[index]);
+                if (string.IsNullOrEmpty(requiredEntryId) || GetPurchasedLevel(requiredEntryId) < 1)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private static bool TryBuildValidatedCatalog(PermanentUpgradeCatalogData rawCatalog, out PermanentUpgradeCatalogData catalog, out string errorMessage)
         {
             catalog = null;
@@ -556,9 +636,21 @@ namespace Kernel.Upgrade
                 return false;
             }
 
+            if (!TryBuildPositiveVector2(
+                    rawCatalog.CanvasSize,
+                    DefaultCanvasWidth,
+                    DefaultCanvasHeight,
+                    "Permanent upgrade catalog canvasSize",
+                    out PermanentUpgradeVector2Data sanitizedCanvasSize,
+                    out errorMessage))
+            {
+                return false;
+            }
+
             HashSet<string> sectionIds = new(StringComparer.Ordinal);
             HashSet<string> entryIds = new(StringComparer.Ordinal);
             List<PermanentUpgradeSectionData> sanitizedSections = new(rawCatalog.Sections.Count);
+            Dictionary<string, PermanentUpgradeEntryData> sanitizedEntryById = new(StringComparer.Ordinal);
 
             for (int sectionIndex = 0; sectionIndex < rawCatalog.Sections.Count; sectionIndex++)
             {
@@ -594,6 +686,28 @@ namespace Kernel.Upgrade
                         return false;
                     }
 
+                    if (!TryBuildFiniteVector2(
+                            rawEntry.Position,
+                            0f,
+                            0f,
+                            $"Permanent upgrade entry '{entryId}' position",
+                            out PermanentUpgradeVector2Data sanitizedPosition,
+                            out errorMessage))
+                    {
+                        return false;
+                    }
+
+                    if (!TryBuildPositiveVector2(
+                            rawEntry.Size,
+                            DefaultNodeWidth,
+                            DefaultNodeHeight,
+                            $"Permanent upgrade entry '{entryId}' size",
+                            out PermanentUpgradeVector2Data sanitizedSize,
+                            out errorMessage))
+                    {
+                        return false;
+                    }
+
                     if (rawEntry.CostRemnants < 0)
                     {
                         errorMessage = $"Permanent upgrade entry '{entryId}' has a negative Remnant cost.";
@@ -612,7 +726,48 @@ namespace Kernel.Upgrade
                         return false;
                     }
 
-                    sanitizedEntries.Add(new PermanentUpgradeEntryData
+                    if (!Enum.IsDefined(typeof(PermanentUpgradeNodeShape), rawEntry.Shape))
+                    {
+                        errorMessage = $"Permanent upgrade entry '{entryId}' has an invalid shape.";
+                        return false;
+                    }
+
+                    if (!TryBuildRequires(entryId, rawEntry.Requires, out List<string> sanitizedRequires, out errorMessage))
+                    {
+                        return false;
+                    }
+
+                    if (!TryBuildHtmlColor(
+                            rawEntry.BackgroundColor,
+                            DefaultNodeBackgroundColor,
+                            $"Permanent upgrade entry '{entryId}' backgroundColor",
+                            out string sanitizedBackgroundColor,
+                            out errorMessage))
+                    {
+                        return false;
+                    }
+
+                    if (!TryBuildHtmlColor(
+                            rawEntry.BorderColor,
+                            DefaultNodeBorderColor,
+                            $"Permanent upgrade entry '{entryId}' borderColor",
+                            out string sanitizedBorderColor,
+                            out errorMessage))
+                    {
+                        return false;
+                    }
+
+                    if (!TryBuildNonNegativeOrDefault(
+                            rawEntry.BorderWidth,
+                            DefaultBorderWidth,
+                            $"Permanent upgrade entry '{entryId}' borderWidth",
+                            out float sanitizedBorderWidth,
+                            out errorMessage))
+                    {
+                        return false;
+                    }
+
+                    PermanentUpgradeEntryData sanitizedEntry = new()
                     {
                         Id = entryId,
                         Title = SanitizeTitle(rawEntry.Title, entryId),
@@ -620,7 +775,17 @@ namespace Kernel.Upgrade
                         MaxLevel = rawEntry.MaxLevel,
                         EffectType = rawEntry.EffectType,
                         EffectValue = rawEntry.EffectValue,
-                    });
+                        Requires = sanitizedRequires,
+                        Position = sanitizedPosition,
+                        Size = sanitizedSize,
+                        Shape = rawEntry.Shape,
+                        IconAddress = SanitizeOptionalText(rawEntry.IconAddress),
+                        BackgroundColor = sanitizedBackgroundColor,
+                        BorderColor = sanitizedBorderColor,
+                        BorderWidth = sanitizedBorderWidth,
+                    };
+                    sanitizedEntries.Add(sanitizedEntry);
+                    sanitizedEntryById[entryId] = sanitizedEntry;
                 }
 
                 sanitizedSections.Add(new PermanentUpgradeSectionData
@@ -631,10 +796,303 @@ namespace Kernel.Upgrade
                 });
             }
 
+            foreach (KeyValuePair<string, PermanentUpgradeEntryData> pair in sanitizedEntryById)
+            {
+                List<string> requires = pair.Value.Requires;
+                for (int index = 0; index < requires.Count; index++)
+                {
+                    string requiredEntryId = requires[index];
+                    if (!entryIds.Contains(requiredEntryId))
+                    {
+                        errorMessage = $"Permanent upgrade entry '{pair.Key}' requires unknown entry '{requiredEntryId}'.";
+                        return false;
+                    }
+                }
+            }
+
+            if (HasRequirementCycle(sanitizedEntryById, out string cycleEntryId))
+            {
+                errorMessage = $"Permanent upgrade requirements contain a cycle at '{cycleEntryId}'.";
+                return false;
+            }
+
+            if (!TryBuildEdges(rawCatalog.Edges, entryIds, out List<PermanentUpgradeEdgeData> sanitizedEdges, out errorMessage))
+            {
+                return false;
+            }
+
             catalog = new PermanentUpgradeCatalogData
             {
+                CanvasSize = sanitizedCanvasSize,
+                Edges = sanitizedEdges,
                 Sections = sanitizedSections,
             };
+            return true;
+        }
+
+        private static bool TryBuildEdges(
+            List<PermanentUpgradeEdgeData> rawEdges,
+            HashSet<string> entryIds,
+            out List<PermanentUpgradeEdgeData> sanitizedEdges,
+            out string errorMessage)
+        {
+            errorMessage = null;
+            rawEdges ??= new List<PermanentUpgradeEdgeData>();
+            sanitizedEdges = new List<PermanentUpgradeEdgeData>(rawEdges.Count);
+
+            for (int edgeIndex = 0; edgeIndex < rawEdges.Count; edgeIndex++)
+            {
+                PermanentUpgradeEdgeData rawEdge = rawEdges[edgeIndex];
+                string from = SanitizeIdentifier(rawEdge?.From);
+                string to = SanitizeIdentifier(rawEdge?.To);
+                if (string.IsNullOrEmpty(from) || string.IsNullOrEmpty(to))
+                {
+                    errorMessage = $"Permanent upgrade edge #{edgeIndex} is missing a valid endpoint.";
+                    return false;
+                }
+
+                if (!entryIds.Contains(from))
+                {
+                    errorMessage = $"Permanent upgrade edge #{edgeIndex} uses unknown from endpoint '{from}'.";
+                    return false;
+                }
+
+                if (!entryIds.Contains(to))
+                {
+                    errorMessage = $"Permanent upgrade edge #{edgeIndex} uses unknown to endpoint '{to}'.";
+                    return false;
+                }
+
+                if (string.Equals(from, to, StringComparison.Ordinal))
+                {
+                    errorMessage = $"Permanent upgrade edge #{edgeIndex} cannot connect '{from}' to itself.";
+                    return false;
+                }
+
+                if (!TryBuildHtmlColor(
+                        rawEdge?.Color,
+                        DefaultEdgeColor,
+                        $"Permanent upgrade edge #{edgeIndex} color",
+                        out string color,
+                        out errorMessage))
+                {
+                    return false;
+                }
+
+                if (!TryBuildPositiveOrDefault(
+                        rawEdge != null ? rawEdge.Width : 0f,
+                        DefaultEdgeWidth,
+                        $"Permanent upgrade edge #{edgeIndex} width",
+                        out float width,
+                        out errorMessage))
+                {
+                    return false;
+                }
+
+                sanitizedEdges.Add(new PermanentUpgradeEdgeData
+                {
+                    From = from,
+                    To = to,
+                    Color = color,
+                    Width = width,
+                });
+            }
+
+            return true;
+        }
+
+        private static bool TryBuildRequires(
+            string entryId,
+            List<string> rawRequires,
+            out List<string> sanitizedRequires,
+            out string errorMessage)
+        {
+            errorMessage = null;
+            rawRequires ??= new List<string>();
+            sanitizedRequires = new List<string>(rawRequires.Count);
+            HashSet<string> uniqueRequires = new(StringComparer.Ordinal);
+
+            for (int index = 0; index < rawRequires.Count; index++)
+            {
+                string requiredEntryId = SanitizeIdentifier(rawRequires[index]);
+                if (string.IsNullOrEmpty(requiredEntryId))
+                {
+                    errorMessage = $"Permanent upgrade entry '{entryId}' has an empty requires entry.";
+                    return false;
+                }
+
+                if (string.Equals(entryId, requiredEntryId, StringComparison.Ordinal))
+                {
+                    errorMessage = $"Permanent upgrade entry '{entryId}' cannot require itself.";
+                    return false;
+                }
+
+                if (uniqueRequires.Add(requiredEntryId))
+                {
+                    sanitizedRequires.Add(requiredEntryId);
+                }
+            }
+
+            return true;
+        }
+
+        private static bool HasRequirementCycle(
+            Dictionary<string, PermanentUpgradeEntryData> entries,
+            out string cycleEntryId)
+        {
+            cycleEntryId = null;
+            Dictionary<string, int> visitStateByEntryId = new(StringComparer.Ordinal);
+
+            foreach (string entryId in entries.Keys)
+            {
+                if (Visit(entryId))
+                {
+                    cycleEntryId = entryId;
+                    return true;
+                }
+            }
+
+            return false;
+
+            bool Visit(string entryId)
+            {
+                if (!entries.TryGetValue(entryId, out PermanentUpgradeEntryData entry))
+                {
+                    return false;
+                }
+
+                if (visitStateByEntryId.TryGetValue(entryId, out int state))
+                {
+                    return state == 1;
+                }
+
+                visitStateByEntryId[entryId] = 1;
+                List<string> requires = entry.Requires ?? new List<string>();
+                for (int index = 0; index < requires.Count; index++)
+                {
+                    if (Visit(requires[index]))
+                    {
+                        return true;
+                    }
+                }
+
+                visitStateByEntryId[entryId] = 2;
+                return false;
+            }
+        }
+
+        private static bool TryBuildFiniteVector2(
+            PermanentUpgradeVector2Data rawVector,
+            float defaultX,
+            float defaultY,
+            string fieldName,
+            out PermanentUpgradeVector2Data vector,
+            out string errorMessage)
+        {
+            errorMessage = null;
+            float x = rawVector != null ? rawVector.X : defaultX;
+            float y = rawVector != null ? rawVector.Y : defaultY;
+            if (!IsFinite(x) || !IsFinite(y))
+            {
+                errorMessage = $"{fieldName} must contain finite x/y values.";
+                vector = null;
+                return false;
+            }
+
+            vector = CreateVector2(x, y);
+            return true;
+        }
+
+        private static bool TryBuildPositiveVector2(
+            PermanentUpgradeVector2Data rawVector,
+            float defaultX,
+            float defaultY,
+            string fieldName,
+            out PermanentUpgradeVector2Data vector,
+            out string errorMessage)
+        {
+            if (!TryBuildFiniteVector2(rawVector, defaultX, defaultY, fieldName, out vector, out errorMessage))
+            {
+                return false;
+            }
+
+            if (vector.X <= 0f || vector.Y <= 0f)
+            {
+                errorMessage = $"{fieldName} must contain positive x/y values.";
+                vector = null;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryBuildHtmlColor(
+            string rawColor,
+            string defaultColor,
+            string fieldName,
+            out string color,
+            out string errorMessage)
+        {
+            errorMessage = null;
+            color = SanitizeOptionalText(rawColor);
+            if (string.IsNullOrEmpty(color))
+            {
+                color = defaultColor;
+            }
+
+            if (!ColorUtility.TryParseHtmlString(color, out _))
+            {
+                errorMessage = $"{fieldName} must be a valid HTML color.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryBuildNonNegativeOrDefault(
+            float rawValue,
+            float defaultValue,
+            string fieldName,
+            out float value,
+            out string errorMessage)
+        {
+            errorMessage = null;
+            if (!IsFinite(rawValue))
+            {
+                value = 0f;
+                errorMessage = $"{fieldName} must be finite.";
+                return false;
+            }
+
+            if (rawValue < 0f)
+            {
+                value = 0f;
+                errorMessage = $"{fieldName} cannot be negative.";
+                return false;
+            }
+
+            value = rawValue > 0f ? rawValue : defaultValue;
+            return true;
+        }
+
+        private static bool TryBuildPositiveOrDefault(
+            float rawValue,
+            float defaultValue,
+            string fieldName,
+            out float value,
+            out string errorMessage)
+        {
+            if (!TryBuildNonNegativeOrDefault(rawValue, defaultValue, fieldName, out value, out errorMessage))
+            {
+                return false;
+            }
+
+            if (value <= 0f)
+            {
+                errorMessage = $"{fieldName} must be positive.";
+                return false;
+            }
+
             return true;
         }
 
@@ -647,6 +1105,25 @@ namespace Kernel.Upgrade
         {
             string trimmedTitle = rawTitle != null ? rawTitle.Trim() : string.Empty;
             return string.IsNullOrEmpty(trimmedTitle) ? fallbackTitle : trimmedTitle;
+        }
+
+        private static string SanitizeOptionalText(string rawText)
+        {
+            return rawText != null ? rawText.Trim() : string.Empty;
+        }
+
+        private static PermanentUpgradeVector2Data CreateVector2(float x, float y)
+        {
+            return new PermanentUpgradeVector2Data
+            {
+                X = x,
+                Y = y,
+            };
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private void ReleaseActiveCatalogHandle()
