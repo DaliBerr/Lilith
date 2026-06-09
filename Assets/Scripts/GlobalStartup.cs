@@ -7,6 +7,7 @@ using Kernel.GameState;
 using Kernel.Quest;
 using Kernel.UI;
 using Kernel.Upgrade;
+using Vocalith.Audio;
 using Vocalith.Localization;
 using Vocalith.Logging;
 using Vocalith.UI;
@@ -23,6 +24,7 @@ namespace Kernel
     public sealed class GlobalStartup : MonoBehaviour
     {
         private const string DefaultStartStoryAddress = "Assets/Data/Story/Introduction";
+        private const string AudioCueBankLabel = "AudioCueBank";
         public static GlobalStartup Instance { get; private set; }
 
         private const string MainSceneName = "Main";
@@ -53,6 +55,7 @@ namespace Kernel
         [SerializeField] [Min(0f)] private float startStoryLineHoldSeconds = 1.2f;
 
         private readonly List<AsyncOperationHandle<UnityEngine.Object>> preloadedDefHandles = new();
+        private readonly List<AsyncOperationHandle<AudioCueBank>> preloadedAudioCueBankHandles = new();
         private bool isBootCompleted;
         private bool isStartGameFlowRequested;
         private bool isLoadingMainScene;
@@ -90,6 +93,7 @@ namespace Kernel
         private void OnDestroy()
         {
             UnsubscribeFromNarrativeSequence();
+            ReleasePreloadedAudioCueBankHandles();
             ReleasePreloadedDefHandles();
             StartupFlowBridge.Unregister(this);
 
@@ -381,9 +385,10 @@ namespace Kernel
             isLoadingAllDefs = true;
             bool hasFailedLoad = false;
             List<string> preloadAddresses = BuildDataLayerPreloadAddressList();
-            int totalStepCount = Mathf.Max(1, preloadAddresses.Count + 1);
+            int totalStepCount = Mathf.Max(1, preloadAddresses.Count + 2);
             int completedStepCount = 0;
 
+            ReleasePreloadedAudioCueBankHandles();
             ReleasePreloadedDefHandles();
             ReportAllDefsProgress(0f, reportProgress);
 
@@ -394,6 +399,13 @@ namespace Kernel
                 {
                     yield return upgradeService.LoadCatalogIfNeededCo();
                 }
+
+                completedStepCount++;
+                ReportAllDefsProgress((float)completedStepCount / totalStepCount, reportProgress);
+
+                yield return StartCoroutine(PreloadAudioCueBanksCoroutine(
+                    stepProgress => ReportAllDefsProgress((completedStepCount + stepProgress) / totalStepCount, reportProgress),
+                    () => hasFailedLoad = true));
 
                 completedStepCount++;
                 ReportAllDefsProgress((float)completedStepCount / totalStepCount, reportProgress);
@@ -475,6 +487,67 @@ namespace Kernel
             return addresses;
         }
 
+        private IEnumerator PreloadAudioCueBanksCoroutine(Action<float> reportProgress, Action markFailure)
+        {
+            AudioManager audioManager = AudioManager.GetOrCreateInstance();
+            AsyncOperationHandle<IList<UnityEngine.ResourceManagement.ResourceLocations.IResourceLocation>> locationsHandle =
+                Addressables.LoadResourceLocationsAsync(AudioCueBankLabel, typeof(AudioCueBank));
+
+            while (!locationsHandle.IsDone)
+            {
+                reportProgress?.Invoke(Mathf.Clamp01(locationsHandle.PercentComplete * 0.1f));
+                yield return null;
+            }
+
+            if (locationsHandle.Status != AsyncOperationStatus.Succeeded || locationsHandle.Result == null)
+            {
+                GameDebug.LogWarning($"[GlobalStartup] Audio cue bank label '{AudioCueBankLabel}' was not resolved.");
+                markFailure?.Invoke();
+                if (locationsHandle.IsValid())
+                {
+                    Addressables.Release(locationsHandle);
+                }
+
+                reportProgress?.Invoke(1f);
+                yield break;
+            }
+
+            IList<UnityEngine.ResourceManagement.ResourceLocations.IResourceLocation> locations = locationsHandle.Result;
+            if (locations.Count == 0)
+            {
+                Addressables.Release(locationsHandle);
+                reportProgress?.Invoke(1f);
+                yield break;
+            }
+
+            for (int i = 0; i < locations.Count; i++)
+            {
+                AsyncOperationHandle<AudioCueBank> handle = Addressables.LoadAssetAsync<AudioCueBank>(locations[i]);
+                preloadedAudioCueBankHandles.Add(handle);
+
+                while (!handle.IsDone)
+                {
+                    float locationProgress = Mathf.Clamp01(handle.PercentComplete);
+                    reportProgress?.Invoke((i + locationProgress) / locations.Count);
+                    yield return null;
+                }
+
+                if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
+                {
+                    markFailure?.Invoke();
+                    GameDebug.LogError($"[GlobalStartup] Failed to preload audio cue bank at '{locations[i].PrimaryKey}'.");
+                    ReleasePreloadedAudioCueBankHandle(handle);
+                    continue;
+                }
+
+                yield return StartCoroutine(audioManager.PreloadBank(handle.Result));
+                reportProgress?.Invoke((float)(i + 1) / locations.Count);
+            }
+
+            Addressables.Release(locationsHandle);
+            reportProgress?.Invoke(1f);
+        }
+
         private static void SetLoadingProgress(LoadingUIScreen loadingScreen, float progress)
         {
             if (loadingScreen != null)
@@ -516,6 +589,38 @@ namespace Kernel
 
             Addressables.Release(handle);
             preloadedDefHandles.Remove(handle);
+        }
+
+        private void ReleasePreloadedAudioCueBankHandles()
+        {
+            AudioManager audioManager = AudioManager.Instance;
+            for (int i = preloadedAudioCueBankHandles.Count - 1; i >= 0; i--)
+            {
+                ReleasePreloadedAudioCueBankHandle(preloadedAudioCueBankHandles[i], audioManager);
+            }
+
+            preloadedAudioCueBankHandles.Clear();
+            audioManager?.ReleaseAllCachedCues();
+        }
+
+        private void ReleasePreloadedAudioCueBankHandle(
+            AsyncOperationHandle<AudioCueBank> handle,
+            AudioManager audioManager = null)
+        {
+            if (!handle.IsValid())
+            {
+                preloadedAudioCueBankHandles.Remove(handle);
+                return;
+            }
+
+            AudioCueBank bank = handle.Result;
+            if (bank != null)
+            {
+                (audioManager ?? AudioManager.Instance)?.ReleaseBank(bank);
+            }
+
+            Addressables.Release(handle);
+            preloadedAudioCueBankHandles.Remove(handle);
         }
 
         /// <summary>

@@ -2,7 +2,7 @@
 
 这份文档面向不写代码的协作者，目标是让你能安全地把音乐和音效放进项目，并把它们交给程序接入游戏。
 
-当前音频系统已经支持音乐、音效、淡入淡出、音量设置、Addressables 加载，以及基于 `AudioCue` 资产的分类限流、优先级、冷却、并发上限和世界位置音效。也就是说，你可以先完成资源导入、Addressable 地址配置和 `AudioCue` 资产配置；具体在什么场景、按钮、敌人或技能上播放，仍需要程序把对应 `AudioCue` 接到触发点。
+当前音频系统已经支持音乐、音效、淡入淡出、循环、播放句柄、Transform 跟随、显式暂停策略、运行时统计、Addressables 预加载，以及基于 `AudioCue` 资产的多变体、intro-loop 音乐、分类限流、优先级、冷却、并发上限和世界位置音效。也就是说，你可以先完成资源导入、Addressable 地址配置、`AudioCue` 资产和 `AudioCueBank` 资产配置；具体在什么场景、按钮、敌人或技能上播放，仍需要程序把对应 `AudioCue` 接到触发点。
 
 ## 你可以做什么
 
@@ -126,9 +126,10 @@ Assets/Audio/Sfx/Enemy/boss_phase_change
 1. 在 Project 面板里右键。
 2. 选择 `Create > Vocalith > Audio > Audio Cue`。
 3. 把资产放在清晰目录里，例如 `Assets/Data/AudioCues/UI` 或 `Assets/Data/AudioCues/Combat`。
-4. 如果音频会常驻或低频播放，可以直接把 `AudioClip` 拖到 `Clip`。
-5. 如果音频希望按需加载或预加载，填写稳定的 Addressable `Address`。
-6. 同时有 `Clip` 和 `Address` 时，系统优先使用 `Clip`。
+4. 在 `Variants` 列表里新增一项或多项变体。
+5. 每个变体可以填一个直接 `AudioClip`，也可以填一个稳定的 Addressable `Address`。
+6. 同一变体同时有 `Clip` 和 `Address` 时，系统优先使用 `Clip`。
+7. 多个变体会按 `Weight` 权重随机播放，并尽量避免同一个 cue 连续两次选到同一变体。
 
 常用字段建议：
 
@@ -141,8 +142,34 @@ Assets/Audio/Sfx/Enemy/boss_phase_change
 | Pitch Min / Max | 每次播放随机音高范围；普通 UI 可固定 `1 / 1` |
 | Cooldown Seconds | 同一 cue 的最小重复间隔，用来防止大量同类命中音叠在一起 |
 | Max Simultaneous Self | 同一 cue 可同时播放几份；普通短反馈建议 1，连续技能可适当提高 |
+| Playback Mode | `OneShot` 播完自动回收；`Loop` 会一直播放，必须由程序通过句柄或停止音乐显式停止 |
+| Fade In / Fade Out Seconds | 这条 cue 播放或停止时的淡入淡出时间 |
+| Pause Policy | 暂停时行为；不确定时保留 `UseCategoryDefault` |
 | Spatial Mode | `TwoDimensional` 为普通 2D 音效；`WorldPosition` 会在触发位置播放并启用距离衰减 |
 | Min / Max Distance | 世界位置音效的距离衰减范围 |
+
+### 音乐 intro-loop
+
+音乐 cue 的 `Kind` 设为 `Music`。如果音乐有开场段和循环段：
+
+| 列表 | 用法 |
+| --- | --- |
+| Intro Variants | 只播放一次的开场段 |
+| Loop Variants | intro 播完后进入并循环播放的段落 |
+
+如果没有开场段，只填写普通 `Variants` 或 `Loop Variants` 即可。程序播放这个 cue 后，系统会自动切入循环段。
+
+### 批量预加载 AudioCueBank
+
+需要随启动流程预加载的 cue，请创建 `AudioCueBank`：
+
+1. 在 Project 面板里右键。
+2. 选择 `Create > Vocalith > Audio > Audio Cue Bank`。
+3. 把需要预加载的 `AudioCue` 放进 `Cues` 列表。
+4. 把这个 bank 资产标记为 Addressable。
+5. 给 bank 资产添加 Addressables 标签：`AudioCueBank`。
+
+进入 Main 前，启动流程会扫描 `AudioCueBank` 标签，加载所有 bank，并顺序预加载 bank 里的 cue。Address 型变体应优先放入 bank 预加载；播放时如果地址没有预加载，系统会拒绝播放并在 Console 里提示。
 
 ### 不要随便改已交付地址
 

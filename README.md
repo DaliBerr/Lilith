@@ -122,7 +122,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - UI 基础设施：[`Assets/Scripts/Vocalith/UI`](Assets/Scripts/Vocalith/UI)
   - 入口：[`UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)，负责持久化 UI 栈、EventSystem 收敛、根 CanvasScaler UI 缩放与固定尺寸 LayoutGroup 自适应，不再强制 16:9 视口
 - 音频基础设施：[`Assets/Scripts/Vocalith/Audio`](Assets/Scripts/Vocalith/Audio)
-  - 入口：[`AudioManager.cs`](Assets/Scripts/Vocalith/Audio/AudioManager.cs)，负责持久化单例、BGM crossfade、SFX 播放池、Master/Music/SFX 三路音量，以及基于 [`AudioCue`](Assets/Scripts/Vocalith/Audio/AudioCue.cs) 的分类限流、优先级抢占、冷却、Addressables 预加载和世界位置音效
+  - 入口：[`AudioManager.cs`](Assets/Scripts/Vocalith/Audio/AudioManager.cs)，负责持久化单例、Music crossfade、SFX 播放池、Master/Music/SFX 三路音量，以及基于 [`AudioCue`](Assets/Scripts/Vocalith/Audio/AudioCue.cs) / [`AudioCueBank`](Assets/Scripts/Vocalith/Audio/AudioCueBank.cs) 的播放句柄、循环、淡入淡出、Transform 跟随、intro-loop 音乐、多变体、分类限流、优先级抢占、冷却、Addressables 预加载和世界位置音效
 - 本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
   - 入口：[`LocalizationManager.cs`](Assets/Scripts/Vocalith/Localization/LocalizationManager.cs)
   - 字符串表资源位于 [`Assets/Data/Localization/StringTables`](Assets/Data/Localization/StringTables)，通过 Addressables label `Localization` 加载
