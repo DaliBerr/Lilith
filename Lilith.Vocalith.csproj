@@ -64,6 +64,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeCrossRefs.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Math.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIPrefabAttribute.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\Audio\AudioPlaybackHandle.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Localization\StringLocalizationExtensions.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScrobePolymorph.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIManager.cs" />
@@ -82,6 +83,7 @@
     <Compile Include="Assets\Scripts\Vocalith\Scribe\NodeFrame.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\Scribe.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Scribe\ScribeValue.cs" />
+    <Compile Include="Assets\Scripts\Vocalith\Audio\AudioCueBank.cs" />
     <Compile Include="Assets\Scripts\Vocalith\Log\LogForwarder.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\FixedPixelSlicedImage.cs" />
     <Compile Include="Assets\Scripts\Vocalith\UI\UIScale.cs" />
