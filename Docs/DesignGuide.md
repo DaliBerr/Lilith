@@ -212,8 +212,13 @@
           "title": "攻击力 +100%",
           "costRemnants": 10,
           "maxLevel": 1,
-          "effectType": "DamageMultiplierBonus",
-          "effectValue": 1.0,
+          "effects": [
+            {
+              "statId": "OutgoingDamage",
+              "operation": "AddMultiplier",
+              "value": 1.0
+            }
+          ],
           "requires": [],
           "position": { "x": 120, "y": 160 },
           "size": { "x": 112, "y": 112 },
@@ -244,8 +249,10 @@
 | `entries[].title` | 玩家看到的升级名 |
 | `costRemnants` | 消耗的长期资源数量 |
 | `maxLevel` | 最大等级 |
-| `effectType` | 效果类型，目前已有 `DamageMultiplierBonus` |
-| `effectValue` | 效果数值，例如 `1.0` 表示 +100% |
+| `effects[]` | 升级效果列表，每个节点至少需要 1 条效果 |
+| `effects[].statId` | 目标数值接口；当前接口包含 `OutgoingDamage`、`MaxHealth`、`MoveSpeed`、`DashDistance`、`DashStaminaMax`、`CastCooldown`、`CastsPerActivation`、`ActivationSpreadAngle`、`SpellEnergyCapacity`、`SpellEnergyRegen`、`SpellEnergyCost` |
+| `effects[].operation` | 聚合方式：`AddFlat`、`AddMultiplier`、`Multiply` |
+| `effects[].value` | 效果数值；`AddMultiplier` 的 `1.0` 表示 +100%，`Multiply` 必须大于 0 |
 | `requires` | 前置升级 ID 列表；依赖节点购买等级 `>= 1` 时满足 |
 | `position` | 节点左上角位置，`x` 向右、`y` 向下；旧 JSON 缺省为 `{ "x": 0, "y": 0 }` |
 | `size` | 节点尺寸；旧 JSON 缺省为 `{ "x": 100, "y": 100 }` |
@@ -254,7 +261,7 @@
 | `backgroundColor` / `borderColor` | 节点背景和边框颜色，HTML hex 格式 |
 | `borderWidth` | 边框厚度；节点 prefab 会按该值内缩 `Background` |
 
-校验规则：重复升级 ID、未知前置、循环前置、自依赖、未知连线端点、非法尺寸和非法颜色会让整个目录加载失败。多 section 第一版会渲染到同一个科技树画布，章节切换暂未启用。
+校验规则：重复升级 ID、缺失效果、未知数值接口、未知聚合方式、非法效果数值、未知前置、循环前置、自依赖、未知连线端点、非法尺寸和非法颜色会让整个目录加载失败。多 section 第一版会渲染到同一个科技树画布，章节切换暂未启用。
 
 ## 任务配置
 
@@ -658,7 +665,7 @@ JSON 最容易出错的地方：
 
 | 改动 | 风险 |
 | --- | --- |
-| 新增 `effectType` | 代码里可能还没有对应效果 |
+| 新增 `statId` / `operation` | 代码里可能还没有对应数值接口或聚合方式 |
 | 新增任务 `kind` | 代码里可能还没有对应条件 / 奖励 |
 | 新增 Token 类型 | 代码里可能还没有编译规则 |
 | 删除已有 ID | 存档、任务、引用可能找不到 |

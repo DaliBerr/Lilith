@@ -6,12 +6,33 @@ using Newtonsoft.Json.Converters;
 namespace Kernel.Upgrade
 {
     /// <summary>
-    /// 永久升级当前支持的效果类型。
+    /// 永久升级可影响的玩家数值接口。
     /// </summary>
     [JsonConverter(typeof(StringEnumConverter))]
-    public enum PermanentUpgradeEffectType
+    public enum PermanentUpgradeStatId
     {
-        DamageMultiplierBonus = 0,
+        OutgoingDamage = 0,
+        MaxHealth = 1,
+        MoveSpeed = 2,
+        DashDistance = 3,
+        DashStaminaMax = 4,
+        CastCooldown = 5,
+        CastsPerActivation = 6,
+        ActivationSpreadAngle = 7,
+        SpellEnergyCapacity = 8,
+        SpellEnergyRegen = 9,
+        SpellEnergyCost = 10,
+    }
+
+    /// <summary>
+    /// 永久升级数值效果的聚合方式。
+    /// </summary>
+    [JsonConverter(typeof(StringEnumConverter))]
+    public enum PermanentUpgradeStatOperation
+    {
+        AddFlat = 0,
+        AddMultiplier = 1,
+        Multiply = 2,
     }
 
     /// <summary>
@@ -108,11 +129,8 @@ namespace Kernel.Upgrade
         [JsonProperty("maxLevel")]
         public int MaxLevel { get; set; } = 1;
 
-        [JsonProperty("effectType")]
-        public PermanentUpgradeEffectType EffectType { get; set; } = PermanentUpgradeEffectType.DamageMultiplierBonus;
-
-        [JsonProperty("effectValue")]
-        public float EffectValue { get; set; }
+        [JsonProperty("effects")]
+        public List<PermanentUpgradeEffectData> Effects { get; set; } = new();
 
         [JsonProperty("requires")]
         public List<string> Requires { get; set; } = new();
@@ -137,6 +155,46 @@ namespace Kernel.Upgrade
 
         [JsonProperty("borderWidth")]
         public float BorderWidth { get; set; }
+    }
+
+    /// <summary>
+    /// 单条永久升级数值效果。
+    /// </summary>
+    [Serializable]
+    public sealed class PermanentUpgradeEffectData
+    {
+        [JsonProperty("statId")]
+        public PermanentUpgradeStatId StatId { get; set; } = PermanentUpgradeStatId.OutgoingDamage;
+
+        [JsonProperty("operation")]
+        public PermanentUpgradeStatOperation Operation { get; set; } = PermanentUpgradeStatOperation.AddMultiplier;
+
+        [JsonProperty("value")]
+        public float Value { get; set; }
+    }
+
+    /// <summary>
+    /// 一个数值维度上所有永久升级效果的聚合结果。
+    /// </summary>
+    public readonly struct PermanentUpgradeStatModifiers
+    {
+        public PermanentUpgradeStatModifiers(float flatBonus, float additiveMultiplier, float multiplicativeMultiplier)
+        {
+            FlatBonus = flatBonus;
+            AdditiveMultiplier = additiveMultiplier;
+            MultiplicativeMultiplier = multiplicativeMultiplier > 0f ? multiplicativeMultiplier : 1f;
+        }
+
+        public float FlatBonus { get; }
+        public float AdditiveMultiplier { get; }
+        public float MultiplicativeMultiplier { get; }
+
+        public static PermanentUpgradeStatModifiers Identity { get; } = new(0f, 0f, 1f);
+
+        public float Resolve(float baseValue)
+        {
+            return (baseValue + FlatBonus) * (1f + AdditiveMultiplier) * MultiplicativeMultiplier;
+        }
     }
 
     /// <summary>

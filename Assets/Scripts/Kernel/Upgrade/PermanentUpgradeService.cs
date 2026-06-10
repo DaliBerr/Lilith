@@ -34,9 +34,9 @@ namespace Kernel.Upgrade
 
         private PermanentUpgradeCatalogData currentCatalog;
         private readonly Dictionary<string, PermanentUpgradeEntryData> entryById = new(StringComparer.Ordinal);
+        private readonly Dictionary<PermanentUpgradeStatId, PermanentUpgradeStatModifiers> cachedModifiersByStat = new();
         private bool hasCatalogLoaded;
         private bool isCatalogLoading;
-        private float cachedDamageMultiplier = 1f;
         private AsyncOperationHandle<TextAsset> activeCatalogHandle;
         private bool hasActiveCatalogHandle;
 
@@ -320,8 +320,41 @@ namespace Kernel.Upgrade
         /// </summary>
         public float GetDamageMultiplier()
         {
+            return GetStatMultiplier(PermanentUpgradeStatId.OutgoingDamage);
+        }
+
+        /// <summary>
+        /// summary: 返回指定玩家数值接口当前累计的永久升级 modifier。
+        /// param name="statId": 需要查询的数值接口
+        /// returns: 当前已购买升级带来的聚合 modifier；没有加成时返回 Identity
+        /// </summary>
+        public PermanentUpgradeStatModifiers GetStatModifiers(PermanentUpgradeStatId statId)
+        {
             EnsureCatalogLoaded();
-            return Mathf.Max(1f, cachedDamageMultiplier);
+            return cachedModifiersByStat.TryGetValue(statId, out PermanentUpgradeStatModifiers modifiers)
+                ? modifiers
+                : PermanentUpgradeStatModifiers.Identity;
+        }
+
+        /// <summary>
+        /// summary: 按固定公式解析指定玩家数值的永久升级后结果。
+        /// param name="statId": 需要解析的数值接口
+        /// param name="baseValue": 未受永久升级影响前的基础值
+        /// returns: 应用于永久升级后的结果，公式为 (base + flat) * (1 + additiveMultiplier) * multiplicativeMultiplier
+        /// </summary>
+        public float ResolveStat(PermanentUpgradeStatId statId, float baseValue)
+        {
+            return GetStatModifiers(statId).Resolve(baseValue);
+        }
+
+        /// <summary>
+        /// summary: 返回指定玩家数值在基础值为 1 时的倍率结果。
+        /// param name="statId": 需要查询的数值接口
+        /// returns: 当前永久升级对该数值的倍率式结果
+        /// </summary>
+        public float GetStatMultiplier(PermanentUpgradeStatId statId)
+        {
+            return Mathf.Max(0f, ResolveStat(statId, 1f));
         }
 
         /// <summary>
@@ -457,7 +490,7 @@ namespace Kernel.Upgrade
                 return false;
             }
 
-            RecalculateCachedDamageMultiplier();
+            RecalculateCachedStatModifiers();
             result = new PermanentUpgradePurchaseResult(
                 succeeded: true,
                 failureReason: PermanentUpgradePurchaseFailureReason.None,
@@ -577,12 +610,12 @@ namespace Kernel.Upgrade
                 }
             }
 
-            RecalculateCachedDamageMultiplier();
+            RecalculateCachedStatModifiers();
         }
 
-        private void RecalculateCachedDamageMultiplier()
+        private void RecalculateCachedStatModifiers()
         {
-            float totalBonus = 0f;
+            Dictionary<PermanentUpgradeStatId, MutableStatModifiers> mutableModifiersByStat = new();
             foreach (KeyValuePair<string, PermanentUpgradeEntryData> pair in entryById)
             {
                 PermanentUpgradeEntryData entry = pair.Value;
@@ -597,13 +630,43 @@ namespace Kernel.Upgrade
                     continue;
                 }
 
-                if (entry.EffectType == PermanentUpgradeEffectType.DamageMultiplierBonus)
+                List<PermanentUpgradeEffectData> effects = entry.Effects ?? new List<PermanentUpgradeEffectData>();
+                for (int effectIndex = 0; effectIndex < effects.Count; effectIndex++)
                 {
-                    totalBonus += Mathf.Max(0f, entry.EffectValue) * currentLevel;
+                    PermanentUpgradeEffectData effect = effects[effectIndex];
+                    if (effect == null)
+                    {
+                        continue;
+                    }
+
+                    if (!mutableModifiersByStat.TryGetValue(effect.StatId, out MutableStatModifiers modifiers))
+                    {
+                        modifiers = MutableStatModifiers.Identity;
+                    }
+
+                    float scaledValue = effect.Value * currentLevel;
+                    switch (effect.Operation)
+                    {
+                        case PermanentUpgradeStatOperation.AddFlat:
+                            modifiers.flatBonus += scaledValue;
+                            break;
+                        case PermanentUpgradeStatOperation.AddMultiplier:
+                            modifiers.additiveMultiplier += scaledValue;
+                            break;
+                        case PermanentUpgradeStatOperation.Multiply:
+                            modifiers.multiplicativeMultiplier *= Mathf.Pow(effect.Value, currentLevel);
+                            break;
+                    }
+
+                    mutableModifiersByStat[effect.StatId] = modifiers;
                 }
             }
 
-            cachedDamageMultiplier = 1f + Mathf.Max(0f, totalBonus);
+            cachedModifiersByStat.Clear();
+            foreach (KeyValuePair<PermanentUpgradeStatId, MutableStatModifiers> pair in mutableModifiersByStat)
+            {
+                cachedModifiersByStat[pair.Key] = pair.Value.ToImmutable();
+            }
         }
 
         private bool HasPurchasedRequiredEntries(PermanentUpgradeEntryData entry)
@@ -720,15 +783,14 @@ namespace Kernel.Upgrade
                         return false;
                     }
 
-                    if (float.IsNaN(rawEntry.EffectValue) || float.IsInfinity(rawEntry.EffectValue) || rawEntry.EffectValue < 0f)
-                    {
-                        errorMessage = $"Permanent upgrade entry '{entryId}' has an invalid effectValue.";
-                        return false;
-                    }
-
                     if (!Enum.IsDefined(typeof(PermanentUpgradeNodeShape), rawEntry.Shape))
                     {
                         errorMessage = $"Permanent upgrade entry '{entryId}' has an invalid shape.";
+                        return false;
+                    }
+
+                    if (!TryBuildEffects(entryId, rawEntry.Effects, out List<PermanentUpgradeEffectData> sanitizedEffects, out errorMessage))
+                    {
                         return false;
                     }
 
@@ -773,8 +835,7 @@ namespace Kernel.Upgrade
                         Title = SanitizeTitle(rawEntry.Title, entryId),
                         CostRemnants = rawEntry.CostRemnants,
                         MaxLevel = rawEntry.MaxLevel,
-                        EffectType = rawEntry.EffectType,
-                        EffectValue = rawEntry.EffectValue,
+                        Effects = sanitizedEffects,
                         Requires = sanitizedRequires,
                         Position = sanitizedPosition,
                         Size = sanitizedSize,
@@ -827,6 +888,74 @@ namespace Kernel.Upgrade
                 Edges = sanitizedEdges,
                 Sections = sanitizedSections,
             };
+            return true;
+        }
+
+        private static bool TryBuildEffects(
+            string entryId,
+            List<PermanentUpgradeEffectData> rawEffects,
+            out List<PermanentUpgradeEffectData> sanitizedEffects,
+            out string errorMessage)
+        {
+            errorMessage = null;
+            sanitizedEffects = null;
+
+            if (rawEffects == null || rawEffects.Count <= 0)
+            {
+                errorMessage = $"Permanent upgrade entry '{entryId}' must contain at least one effect.";
+                return false;
+            }
+
+            sanitizedEffects = new List<PermanentUpgradeEffectData>(rawEffects.Count);
+            for (int effectIndex = 0; effectIndex < rawEffects.Count; effectIndex++)
+            {
+                PermanentUpgradeEffectData rawEffect = rawEffects[effectIndex];
+                if (rawEffect == null)
+                {
+                    errorMessage = $"Permanent upgrade entry '{entryId}' effect #{effectIndex} is missing.";
+                    return false;
+                }
+
+                if (!Enum.IsDefined(typeof(PermanentUpgradeStatId), rawEffect.StatId))
+                {
+                    errorMessage = $"Permanent upgrade entry '{entryId}' effect #{effectIndex} has an unknown statId.";
+                    return false;
+                }
+
+                if (!Enum.IsDefined(typeof(PermanentUpgradeStatOperation), rawEffect.Operation))
+                {
+                    errorMessage = $"Permanent upgrade entry '{entryId}' effect #{effectIndex} has an unknown operation.";
+                    return false;
+                }
+
+                if (!IsFinite(rawEffect.Value))
+                {
+                    errorMessage = $"Permanent upgrade entry '{entryId}' effect #{effectIndex} has a non-finite value.";
+                    return false;
+                }
+
+                if (rawEffect.Operation == PermanentUpgradeStatOperation.Multiply)
+                {
+                    if (rawEffect.Value <= 0f)
+                    {
+                        errorMessage = $"Permanent upgrade entry '{entryId}' effect #{effectIndex} multiply value must be positive.";
+                        return false;
+                    }
+                }
+                else if (rawEffect.Value < 0f)
+                {
+                    errorMessage = $"Permanent upgrade entry '{entryId}' effect #{effectIndex} value cannot be negative.";
+                    return false;
+                }
+
+                sanitizedEffects.Add(new PermanentUpgradeEffectData
+                {
+                    StatId = rawEffect.StatId,
+                    Operation = rawEffect.Operation,
+                    Value = rawEffect.Value,
+                });
+            }
+
             return true;
         }
 
@@ -1124,6 +1253,25 @@ namespace Kernel.Upgrade
         private static bool IsFinite(float value)
         {
             return !float.IsNaN(value) && !float.IsInfinity(value);
+        }
+
+        private struct MutableStatModifiers
+        {
+            public float flatBonus;
+            public float additiveMultiplier;
+            public float multiplicativeMultiplier;
+
+            public static MutableStatModifiers Identity => new()
+            {
+                flatBonus = 0f,
+                additiveMultiplier = 0f,
+                multiplicativeMultiplier = 1f,
+            };
+
+            public PermanentUpgradeStatModifiers ToImmutable()
+            {
+                return new PermanentUpgradeStatModifiers(flatBonus, additiveMultiplier, multiplicativeMultiplier);
+            }
         }
 
         private void ReleaseActiveCatalogHandle()

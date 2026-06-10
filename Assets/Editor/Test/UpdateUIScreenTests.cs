@@ -151,8 +151,10 @@ public sealed class UpdateUIScreenTests
                             Title = "Root Damage",
                             CostRemnants = 10,
                             MaxLevel = 1,
-                            EffectType = PermanentUpgradeEffectType.DamageMultiplierBonus,
-                            EffectValue = 0.1f,
+                            Effects = new List<PermanentUpgradeEffectData>
+                            {
+                                CreateEffect(PermanentUpgradeStatId.OutgoingDamage, PermanentUpgradeStatOperation.AddMultiplier, 0.1f),
+                            },
                             Requires = new List<string>(),
                             Position = new PermanentUpgradeVector2Data { X = 50f, Y = 60f },
                             Size = new PermanentUpgradeVector2Data { X = 120f, Y = 80f },
@@ -166,8 +168,10 @@ public sealed class UpdateUIScreenTests
                             Title = "Child Damage",
                             CostRemnants = 20,
                             MaxLevel = 1,
-                            EffectType = PermanentUpgradeEffectType.DamageMultiplierBonus,
-                            EffectValue = 0.2f,
+                            Effects = new List<PermanentUpgradeEffectData>
+                            {
+                                CreateEffect(PermanentUpgradeStatId.MoveSpeed, PermanentUpgradeStatOperation.AddFlat, 0.2f),
+                            },
                             Requires = new List<string> { "damage_root" },
                             Position = new PermanentUpgradeVector2Data { X = 250f, Y = 60f },
                             Size = new PermanentUpgradeVector2Data { X = 100f, Y = 100f },
@@ -178,6 +182,19 @@ public sealed class UpdateUIScreenTests
                     },
                 },
             },
+        };
+    }
+
+    private static PermanentUpgradeEffectData CreateEffect(
+        PermanentUpgradeStatId statId,
+        PermanentUpgradeStatOperation operation,
+        float value)
+    {
+        return new PermanentUpgradeEffectData
+        {
+            StatId = statId,
+            Operation = operation,
+            Value = value,
         };
     }
 

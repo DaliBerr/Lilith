@@ -18,8 +18,13 @@
           "title": "攻击力 +100%",
           "costRemnants": 10,
           "maxLevel": 1,
-          "effectType": "DamageMultiplierBonus",
-          "effectValue": 1.0,
+          "effects": [
+            {
+              "statId": "OutgoingDamage",
+              "operation": "AddMultiplier",
+              "value": 1.0
+            }
+          ],
           "requires": [],
           "position": { "x": 120, "y": 160 },
           "size": { "x": 112, "y": 112 },
@@ -34,8 +39,13 @@
           "title": "攻击力 +50%",
           "costRemnants": 20,
           "maxLevel": 1,
-          "effectType": "DamageMultiplierBonus",
-          "effectValue": 0.5,
+          "effects": [
+            {
+              "statId": "OutgoingDamage",
+              "operation": "AddMultiplier",
+              "value": 0.5
+            }
+          ],
           "requires": [ "damage_test" ],
           "position": { "x": 340, "y": 160 },
           "size": { "x": 112, "y": 112 },

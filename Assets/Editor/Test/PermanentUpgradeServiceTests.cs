@@ -31,7 +31,7 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_DuplicateEntryId_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"dup\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0},{\"id\":\"dup\",\"title\":\"B\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"dup\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}]},{\"id\":\"dup\",\"title\":\"B\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -42,7 +42,7 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_EmptyEntryId_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\" \",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\" \",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -53,7 +53,7 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_NegativeCost_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":-1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":-1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -64,7 +64,7 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_MaxLevelLessThanOne_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":0,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":0,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -73,9 +73,9 @@ public sealed class PermanentUpgradeServiceTests
     }
 
     [Test]
-    public void TryDeserializeCatalogJson_OldJson_UsesDefaultLayoutValues()
+    public void TryDeserializeCatalogJson_MissingLayout_UsesDefaultLayoutValues()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out PermanentUpgradeCatalogData catalog, out string errorMessage);
 
@@ -93,12 +93,16 @@ public sealed class PermanentUpgradeServiceTests
         Assert.That(entry.BackgroundColor, Is.EqualTo("#1F2937"));
         Assert.That(entry.BorderColor, Is.EqualTo("#66E35F"));
         Assert.That(entry.BorderWidth, Is.EqualTo(4f));
+        Assert.That(entry.Effects, Has.Count.EqualTo(1));
+        Assert.That(entry.Effects[0].StatId, Is.EqualTo(PermanentUpgradeStatId.OutgoingDamage));
+        Assert.That(entry.Effects[0].Operation, Is.EqualTo(PermanentUpgradeStatOperation.AddMultiplier));
+        Assert.That(entry.Effects[0].Value, Is.EqualTo(1f));
     }
 
     [Test]
     public void TryDeserializeCatalogJson_NewJson_ParsesLayoutEdgesAndRequires()
     {
-        const string json = "{\"canvasSize\":{\"x\":640,\"y\":480},\"edges\":[{\"from\":\"damage_1\",\"to\":\"damage_2\",\"color\":\"#123456\",\"width\":6}],\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage_1\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":0.1,\"requires\":[],\"position\":{\"x\":12,\"y\":24},\"size\":{\"x\":96,\"y\":88},\"shape\":\"Circle\",\"iconAddress\":\"Assets/Icon\",\"backgroundColor\":\"#111111\",\"borderColor\":\"#222222\",\"borderWidth\":3},{\"id\":\"damage_2\",\"title\":\"B\",\"costRemnants\":2,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":0.2,\"requires\":[\"damage_1\"],\"position\":{\"x\":160,\"y\":24},\"size\":{\"x\":100,\"y\":100},\"shape\":\"Diamond\",\"iconAddress\":\"\",\"backgroundColor\":\"#333333\",\"borderColor\":\"#444444\",\"borderWidth\":5}]}]}";
+        const string json = "{\"canvasSize\":{\"x\":640,\"y\":480},\"edges\":[{\"from\":\"damage_1\",\"to\":\"damage_2\",\"color\":\"#123456\",\"width\":6}],\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage_1\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":0.1}],\"requires\":[],\"position\":{\"x\":12,\"y\":24},\"size\":{\"x\":96,\"y\":88},\"shape\":\"Circle\",\"iconAddress\":\"Assets/Icon\",\"backgroundColor\":\"#111111\",\"borderColor\":\"#222222\",\"borderWidth\":3},{\"id\":\"damage_2\",\"title\":\"B\",\"costRemnants\":2,\"maxLevel\":1,\"effects\":[{\"statId\":\"MoveSpeed\",\"operation\":\"AddFlat\",\"value\":0.2}],\"requires\":[\"damage_1\"],\"position\":{\"x\":160,\"y\":24},\"size\":{\"x\":100,\"y\":100},\"shape\":\"Diamond\",\"iconAddress\":\"\",\"backgroundColor\":\"#333333\",\"borderColor\":\"#444444\",\"borderWidth\":5}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out PermanentUpgradeCatalogData catalog, out string errorMessage);
 
@@ -119,12 +123,14 @@ public sealed class PermanentUpgradeServiceTests
         Assert.That(secondEntry.Requires, Is.EquivalentTo(new[] { "damage_1" }));
         Assert.That(secondEntry.Shape, Is.EqualTo(PermanentUpgradeNodeShape.Diamond));
         Assert.That(secondEntry.BorderWidth, Is.EqualTo(5f));
+        Assert.That(secondEntry.Effects[0].StatId, Is.EqualTo(PermanentUpgradeStatId.MoveSpeed));
+        Assert.That(secondEntry.Effects[0].Operation, Is.EqualTo(PermanentUpgradeStatOperation.AddFlat));
     }
 
     [Test]
     public void TryDeserializeCatalogJson_UnknownRequirement_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0,\"requires\":[\"missing\"]}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}],\"requires\":[\"missing\"]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -135,7 +141,7 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_SelfRequirement_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0,\"requires\":[\"damage\"]}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}],\"requires\":[\"damage\"]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -146,7 +152,7 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_CyclicRequirement_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"a\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0,\"requires\":[\"b\"]},{\"id\":\"b\",\"title\":\"B\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0,\"requires\":[\"a\"]}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"a\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}],\"requires\":[\"b\"]},{\"id\":\"b\",\"title\":\"B\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}],\"requires\":[\"a\"]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -157,7 +163,7 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_UnknownEdgeEndpoint_IsRejected()
     {
-        const string json = "{\"edges\":[{\"from\":\"damage\",\"to\":\"missing\",\"color\":\"#66E35F\",\"width\":8}],\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0}]}]}";
+        const string json = "{\"edges\":[{\"from\":\"damage\",\"to\":\"missing\",\"color\":\"#66E35F\",\"width\":8}],\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}]}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -168,7 +174,7 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_InvalidColor_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0,\"borderColor\":\"not-a-color\"}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}],\"borderColor\":\"not-a-color\"}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
@@ -179,12 +185,71 @@ public sealed class PermanentUpgradeServiceTests
     [Test]
     public void TryDeserializeCatalogJson_InvalidSize_IsRejected()
     {
-        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effectType\":\"DamageMultiplierBonus\",\"effectValue\":1.0,\"size\":{\"x\":0,\"y\":100}}]}]}";
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":1.0}],\"size\":{\"x\":0,\"y\":100}}]}]}";
 
         bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
 
         Assert.That(success, Is.False);
         Assert.That(errorMessage, Does.Contain("positive x/y"));
+    }
+
+    [Test]
+    public void TryDeserializeCatalogJson_MissingEffects_IsRejected()
+    {
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1}]}]}";
+
+        bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
+
+        Assert.That(success, Is.False);
+        Assert.That(errorMessage, Does.Contain("at least one effect"));
+    }
+
+    [Test]
+    public void TryDeserializeCatalogJson_NegativeEffectDataValue_IsRejected()
+    {
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"AddMultiplier\",\"value\":-0.1}]}]}]}";
+
+        bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
+
+        Assert.That(success, Is.False);
+        Assert.That(errorMessage, Does.Contain("cannot be negative"));
+    }
+
+    [Test]
+    public void TryDeserializeCatalogJson_ZeroMultiplyValue_IsRejected()
+    {
+        const string json = "{\"sections\":[{\"id\":\"combat\",\"title\":\"Combat\",\"entries\":[{\"id\":\"damage\",\"title\":\"A\",\"costRemnants\":1,\"maxLevel\":1,\"effects\":[{\"statId\":\"OutgoingDamage\",\"operation\":\"Multiply\",\"value\":0}]}]}]}";
+
+        bool success = PermanentUpgradeService.TryDeserializeCatalogJson(json, out _, out string errorMessage);
+
+        Assert.That(success, Is.False);
+        Assert.That(errorMessage, Does.Contain("must be positive"));
+    }
+
+    [Test]
+    public void TryUseCatalog_UnknownStatId_IsRejected()
+    {
+        PermanentUpgradeService upgradeService = CreateUpgradeService();
+        PermanentUpgradeCatalogData catalog = CreateCatalog(costRemnants: 1, maxLevel: 1, value: 0.1f);
+        catalog.Sections[0].Entries[0].Effects[0].StatId = (PermanentUpgradeStatId)999;
+
+        bool success = upgradeService.TryUseCatalog(catalog, out string errorMessage);
+
+        Assert.That(success, Is.False);
+        Assert.That(errorMessage, Does.Contain("unknown statId"));
+    }
+
+    [Test]
+    public void TryUseCatalog_UnknownOperation_IsRejected()
+    {
+        PermanentUpgradeService upgradeService = CreateUpgradeService();
+        PermanentUpgradeCatalogData catalog = CreateCatalog(costRemnants: 1, maxLevel: 1, value: 0.1f);
+        catalog.Sections[0].Entries[0].Effects[0].Operation = (PermanentUpgradeStatOperation)999;
+
+        bool success = upgradeService.TryUseCatalog(catalog, out string errorMessage);
+
+        Assert.That(success, Is.False);
+        Assert.That(errorMessage, Does.Contain("unknown operation"));
     }
 
     [Test]
@@ -217,7 +282,7 @@ public sealed class PermanentUpgradeServiceTests
 
         Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
         Assert.That(PlayerRemnantWallet.TrySetCurrentRemnants(10, out _), Is.True);
-        Assert.That(upgradeService.TryUseCatalog(CreateCatalog(costRemnants: 10, maxLevel: 1, effectValue: 1f), out string errorMessage), Is.True, errorMessage);
+        Assert.That(upgradeService.TryUseCatalog(CreateCatalog(costRemnants: 10, maxLevel: 1, value: 1f), out string errorMessage), Is.True, errorMessage);
         Assert.That(upgradeService.TryPurchase("damage_test", out PermanentUpgradePurchaseResult purchaseResult), Is.True, purchaseResult.Message);
 
         CompiledSpellProgram compiledProgram = SpellProgramCompiler.Compile(new BaseTokenData[] { coreToken });
@@ -240,7 +305,7 @@ public sealed class PermanentUpgradeServiceTests
 
         Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
         Assert.That(PlayerRemnantWallet.TrySetCurrentRemnants(20, out _), Is.True);
-        Assert.That(upgradeService.TryUseCatalog(CreateCatalog(costRemnants: 10, maxLevel: 1, effectValue: 1f), out string errorMessage), Is.True, errorMessage);
+        Assert.That(upgradeService.TryUseCatalog(CreateCatalog(costRemnants: 10, maxLevel: 1, value: 1f), out string errorMessage), Is.True, errorMessage);
         Assert.That(upgradeService.TryPurchase("damage_test", out _), Is.True);
 
         bool secondPurchaseSuccess = upgradeService.TryPurchase("damage_test", out PermanentUpgradePurchaseResult secondResult);
@@ -293,7 +358,32 @@ public sealed class PermanentUpgradeServiceTests
         Assert.That(saveService.GetLifetimeStat(PermanentUpgradeService.BuildLifetimeStatKey("damage_child")), Is.EqualTo(1));
     }
 
-    private PermanentUpgradeCatalogData CreateCatalog(int costRemnants, int maxLevel, float effectValue)
+    [Test]
+    public void TryPurchase_MultipleEffects_ResolveStatsWithFixedOrder()
+    {
+        PrepareCleanSaveEnvironment();
+        CreateWallet(initialCount: 0);
+        RuntimeSaveService saveService = CreateSaveService();
+        PermanentUpgradeService upgradeService = CreateUpgradeService();
+
+        Assert.That(saveService.SelectProfileSlot(0, out _), Is.True);
+        Assert.That(PlayerRemnantWallet.TrySetCurrentRemnants(30, out _), Is.True);
+        Assert.That(upgradeService.TryUseCatalog(CreateMultiStatCatalog(), out string errorMessage), Is.True, errorMessage);
+        Assert.That(upgradeService.TryPurchase("multi_stat", out PermanentUpgradePurchaseResult firstResult), Is.True, firstResult.Message);
+        Assert.That(upgradeService.TryPurchase("multi_stat", out PermanentUpgradePurchaseResult secondResult), Is.True, secondResult.Message);
+
+        PermanentUpgradeStatModifiers damageModifiers = upgradeService.GetStatModifiers(PermanentUpgradeStatId.OutgoingDamage);
+
+        Assert.That(secondResult.NewLevel, Is.EqualTo(2));
+        Assert.That(damageModifiers.FlatBonus, Is.EqualTo(4f).Within(0.0001f));
+        Assert.That(damageModifiers.AdditiveMultiplier, Is.EqualTo(0.5f).Within(0.0001f));
+        Assert.That(damageModifiers.MultiplicativeMultiplier, Is.EqualTo(2.25f).Within(0.0001f));
+        Assert.That(upgradeService.ResolveStat(PermanentUpgradeStatId.OutgoingDamage, 10f), Is.EqualTo(47.25f).Within(0.0001f));
+        Assert.That(upgradeService.ResolveStat(PermanentUpgradeStatId.MoveSpeed, 5f), Is.EqualTo(6.5f).Within(0.0001f));
+        Assert.That(upgradeService.ResolveStat(PermanentUpgradeStatId.MaxHealth, 100f), Is.EqualTo(100f).Within(0.0001f));
+    }
+
+    private PermanentUpgradeCatalogData CreateCatalog(int costRemnants, int maxLevel, float value)
     {
         return new PermanentUpgradeCatalogData
         {
@@ -311,8 +401,10 @@ public sealed class PermanentUpgradeServiceTests
                             Title = "Attack +100%",
                             CostRemnants = costRemnants,
                             MaxLevel = maxLevel,
-                            EffectType = PermanentUpgradeEffectType.DamageMultiplierBonus,
-                            EffectValue = effectValue,
+                            Effects = new List<PermanentUpgradeEffectData>
+                            {
+                                CreateEffect(PermanentUpgradeStatId.OutgoingDamage, PermanentUpgradeStatOperation.AddMultiplier, value),
+                            },
                         }
                     }
                 }
@@ -348,8 +440,10 @@ public sealed class PermanentUpgradeServiceTests
                             Title = "Parent",
                             CostRemnants = 10,
                             MaxLevel = 1,
-                            EffectType = PermanentUpgradeEffectType.DamageMultiplierBonus,
-                            EffectValue = 0.1f,
+                            Effects = new List<PermanentUpgradeEffectData>
+                            {
+                                CreateEffect(PermanentUpgradeStatId.OutgoingDamage, PermanentUpgradeStatOperation.AddMultiplier, 0.1f),
+                            },
                             Position = new PermanentUpgradeVector2Data { X = 0f, Y = 0f },
                             Size = new PermanentUpgradeVector2Data { X = 100f, Y = 100f },
                         },
@@ -359,8 +453,10 @@ public sealed class PermanentUpgradeServiceTests
                             Title = "Child",
                             CostRemnants = 20,
                             MaxLevel = 1,
-                            EffectType = PermanentUpgradeEffectType.DamageMultiplierBonus,
-                            EffectValue = 0.2f,
+                            Effects = new List<PermanentUpgradeEffectData>
+                            {
+                                CreateEffect(PermanentUpgradeStatId.OutgoingDamage, PermanentUpgradeStatOperation.AddMultiplier, 0.2f),
+                            },
                             Requires = new List<string> { "damage_parent" },
                             Position = new PermanentUpgradeVector2Data { X = 160f, Y = 0f },
                             Size = new PermanentUpgradeVector2Data { X = 100f, Y = 100f },
@@ -368,6 +464,51 @@ public sealed class PermanentUpgradeServiceTests
                     }
                 }
             }
+        };
+    }
+
+    private PermanentUpgradeCatalogData CreateMultiStatCatalog()
+    {
+        return new PermanentUpgradeCatalogData
+        {
+            Sections = new List<PermanentUpgradeSectionData>
+            {
+                new()
+                {
+                    Id = "combat",
+                    Title = "Combat",
+                    Entries = new List<PermanentUpgradeEntryData>
+                    {
+                        new()
+                        {
+                            Id = "multi_stat",
+                            Title = "Multi Stat",
+                            CostRemnants = 10,
+                            MaxLevel = 2,
+                            Effects = new List<PermanentUpgradeEffectData>
+                            {
+                                CreateEffect(PermanentUpgradeStatId.OutgoingDamage, PermanentUpgradeStatOperation.AddFlat, 2f),
+                                CreateEffect(PermanentUpgradeStatId.OutgoingDamage, PermanentUpgradeStatOperation.AddMultiplier, 0.25f),
+                                CreateEffect(PermanentUpgradeStatId.OutgoingDamage, PermanentUpgradeStatOperation.Multiply, 1.5f),
+                                CreateEffect(PermanentUpgradeStatId.MoveSpeed, PermanentUpgradeStatOperation.AddMultiplier, 0.15f),
+                            },
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private static PermanentUpgradeEffectData CreateEffect(
+        PermanentUpgradeStatId statId,
+        PermanentUpgradeStatOperation operation,
+        float value)
+    {
+        return new PermanentUpgradeEffectData
+        {
+            StatId = statId,
+            Operation = operation,
+            Value = value,
         };
     }
 
