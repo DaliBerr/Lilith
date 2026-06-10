@@ -13,6 +13,11 @@ GameObject:
   - component: {fileID: 3487072645567440750}
   - component: {fileID: 8130113412789628443}
   - component: {fileID: 8400994856508879268}
+  - component: {fileID: 4236851021450190656}
+  - component: {fileID: 1268649065543090392}
+  - component: {fileID: 6398402847847257403}
+  - component: {fileID: 2573765602061360003}
+  - component: {fileID: 4087462069676781177}
   m_Layer: 0
   m_Name: Test2DCharacterSprite
   m_TagString: Untagged
@@ -84,7 +89,7 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 20
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 21300000, guid: 0ade5443275986f4997265a0e734737c, type: 3}
+  m_Sprite: {fileID: 7152930139536384079, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -167,7 +172,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c3bc22fcec944524db41ec0446b87340, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Player2DMovementController
   moveSpeed: 3.5
   body: {fileID: 3487072645567440750}
@@ -175,9 +180,95 @@ MonoBehaviour:
   targetCamera: {fileID: 0}
   facingPivot: {fileID: 8083404688936030029}
   facingAngleOffsetDegrees: -90
+  rotateTowardsMouse: 0
   dashDistance: 2.2
   dashDuration: 0.16
   dashStaminaCost: 25
   staminaMax: 100
   staminaRegenPerSecond: 20
   staminaRegenDelay: 0.35
+--- !u!114 &4236851021450190656
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5577261485902496735}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c29cff538c195c249b69c6f2236de67b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteLibrary
+  m_Library: []
+  m_SpriteLibraryAsset: {fileID: 11400000, guid: 903e3b803971fab43946b1dac861d5ef, type: 2}
+--- !u!114 &1268649065543090392
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5577261485902496735}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed8b1ae4e4e52b34ea557c1c11e076fc, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteResolver
+  m_CategoryHash: 0
+  m_labelHash: 0
+  m_SpriteKey: 0
+  m_SpriteHash: 367004753
+--- !u!95 &6398402847847257403
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5577261485902496735}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: e6883491eab6f0e46854434915983829, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage:
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &2573765602061360003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5577261485902496735}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9889243a078a6e4b8d423a0db000a03, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Lilith.Kernel::Character2DAnimatorDriver
+  animator: {fileID: 6398402847847257403}
+  moveXParameter: MoveX
+  moveYParameter: MoveY
+  isMovingParameter: IsMoving
+  speedParameter: Speed
+  movementThreshold: 0.0001
+  defaultFacing: {x: 0, y: -1}
+--- !u!114 &4087462069676781177
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5577261485902496735}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e4b85cecf14ef48b54fb68a3f9185a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Lilith.Kernel::Player2DMovementAnimatorDriver
+  movementController: {fileID: 8400994856508879268}
+  animatorDriver: {fileID: 2573765602061360003}

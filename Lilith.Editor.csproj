@@ -52,6 +52,7 @@
     <Compile Include="Assets\Editor\SystemCallBlocker.cs" />
     <Compile Include="Assets\Editor\EnemyDefinitionEditor.cs" />
     <Compile Include="Assets\Editor\WallTagColliderBatchTool.cs" />
+    <Compile Include="Assets\Editor\SharedCharacterAnimationBuilder.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
     <Compile Include="Assets\Editor\LinkedTokenDataEditor.cs" />
     <Compile Include="Assets\Editor\CharBulletVisualAssetGenerator.cs" />
@@ -1195,6 +1196,10 @@
     </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>Library\ScriptAssemblies\Unity.TextMeshPro.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.2D.Animation.Runtime">
+      <HintPath>Library\ScriptAssemblies\Unity.2D.Animation.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEditor.UI">

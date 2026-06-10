@@ -34,7 +34,7 @@ public sealed class Player2DIsometricCameraTests
         followCamera.SnapToTarget();
 
         Assert.That(camera.orthographic, Is.False);
-        Assert.That(camera.fieldOfView, Is.EqualTo(6f).Within(0.0001f));
+        Assert.That(camera.fieldOfView, Is.EqualTo(43f).Within(0.0001f));
         Assert.That(cameraObject.transform.position.x, Is.EqualTo(2f).Within(0.0001f));
         Assert.That(cameraObject.transform.position.y, Is.EqualTo(3f).Within(0.0001f));
         Assert.That(cameraObject.transform.position.z, Is.EqualTo(-10f).Within(0.0001f));

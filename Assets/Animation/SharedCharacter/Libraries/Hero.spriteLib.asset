@@ -1,0 +1,80 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bf7c34a0dc4e6348bea04faa70406ee, type: 3}
+  m_Name: Hero.spriteLib
+  m_EditorClassIdentifier: Unity.2D.Animation.Runtime::UnityEngine.U2D.Animation.SpriteLibraryAsset
+  m_Labels:
+  - m_Name: Character
+    m_Hash: 294335127
+    m_CategoryList:
+    - m_Name: IdleDown_0
+      m_Hash: 1049683420
+      m_Sprite: {fileID: 7152930139536384079, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: IdleRight_0
+      m_Hash: 987860453
+      m_Sprite: {fileID: -4124168217499134943, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: IdleLeft_0
+      m_Hash: 560425292
+      m_Sprite: {fileID: -4060318028669273776, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: IdleUp_0
+      m_Hash: 825606066
+      m_Sprite: {fileID: -4888305619323244325, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkDown_0
+      m_Hash: 492792469
+      m_Sprite: {fileID: 7152930139536384079, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkDown_1
+      m_Hash: 710433283
+      m_Sprite: {fileID: -5725962078152895296, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkDown_2
+      m_Hash: 860949433
+      m_Sprite: {fileID: -8401692288953904933, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkDown_3
+      m_Hash: 72760111
+      m_Sprite: {fileID: 7888922196035610388, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkRight_0
+      m_Hash: 901954398
+      m_Sprite: {fileID: -4124168217499134943, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkRight_1
+      m_Hash: 46500808
+      m_Sprite: {fileID: 4620578802948863353, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkRight_2
+      m_Hash: 466410098
+      m_Sprite: {fileID: -6835189599539173722, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkRight_3
+      m_Hash: 751561444
+      m_Sprite: {fileID: 679739729869728943, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkLeft_0
+      m_Hash: 44623365
+      m_Sprite: {fileID: -4060318028669273776, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkLeft_1
+      m_Hash: 900716179
+      m_Sprite: {fileID: -6092953325292582070, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkLeft_2
+      m_Hash: 749111081
+      m_Sprite: {fileID: 8340156370037202746, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkLeft_3
+      m_Hash: 463583167
+      m_Sprite: {fileID: -5163677950195982287, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkUp_0
+      m_Hash: 889982317
+      m_Sprite: {fileID: -4888305619323244325, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkUp_1
+      m_Hash: 34291195
+      m_Sprite: {fileID: 1822710792970894325, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkUp_2
+      m_Hash: 453143617
+      m_Sprite: {fileID: -4656049468798845499, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+    - m_Name: WalkUp_3
+      m_Hash: 738548951
+      m_Sprite: {fileID: 6237780861798913854, guid: 2be7c7fbf975224498378dcefd9c34b0, type: 3}
+  m_ModificationHash: 639167198552032435
+  m_Version: 1

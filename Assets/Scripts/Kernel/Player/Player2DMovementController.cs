@@ -19,6 +19,7 @@ public sealed class Player2DMovementController : MonoBehaviour
     [SerializeField] private Camera targetCamera;
     [SerializeField] private Transform facingPivot;
     [SerializeField] private float facingAngleOffsetDegrees = -90f;
+    [SerializeField] private bool rotateTowardsMouse;
 
     [Header("Dash")]
     [SerializeField, Min(0f)] private float dashDistance = 2.2f;
@@ -85,7 +86,10 @@ public sealed class Player2DMovementController : MonoBehaviour
 
         UpdateStamina(Time.deltaTime);
         HandleDashInput();
-        RotateTowardsMouse();
+        if (rotateTowardsMouse)
+        {
+            RotateTowardsMouse();
+        }
     }
 
     private void FixedUpdate()

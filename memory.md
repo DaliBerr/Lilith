@@ -12,6 +12,14 @@ Obsidian vault is now the primary cross-session memory layer for agent workflow,
 
 Keep this file as a repo-local compatibility mirror for high-value Lilith troubleshooting patterns. When adding new durable memory, prefer Obsidian first, then update this file only if the knowledge must remain available without Obsidian.
 
+## Agent Must Not Enter Lilith PlayMode
+
+- Problem: Agent 通过 Unity MCP 进入 Lilith PlayMode 会导致 Unity 崩溃或会话断开，影响用户继续手动验证。
+- Cause: Lilith 当前运行态 / Editor 环境对由 MCP 触发的 PlayMode 不稳定；用户明确要求所有 PlayMode / 手动运行验证都由用户自己执行。
+- Fix: Agent 禁止调用 Unity `play` 或运行 PlayMode 测试。验证策略应限制为 EditMode、Console、编译、静态检查、资源 / prefab / scene 读回和用户手动 Play 回报。
+- Verify: 后续 Lilith 任务总结中若涉及运行态验证，应明确区分“agent 已做的非 PlayMode 验证”和“仍需用户手动 Play 验证”。
+- Scope: 适用于 `G:\Unity Project\Lilith` 的所有 Unity MCP / Editor 工作流；不自动推广为其他 Unity 项目的硬规则。
+
 ## SystemCallBlocker Should Exclude Imported Third-Party Editor Plugins
 
 - Problem: 导入 ASE / Amplify Shader Editor 后，`SystemCallBlocker` 在编译完成扫描时把第三方 Editor 插件里的 `UnityEngine.Debug` 用法当成项目违规，Console 刷出 58 条 `[SystemCallBlocker] 违规调用：规则 禁止 UnityEngine.Debug，文件 Assets/AmplifyShaderEditor/...`，影响美术同事正常使用 ASE。

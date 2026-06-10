@@ -8,6 +8,7 @@
         "Unity.Addressables",
         "Unity.ResourceManager",
         "Unity.InputSystem",
+        "Unity.2D.Animation.Runtime",
         "UnityEngine.UI",
         "Newtonsoft.Json"
     ],

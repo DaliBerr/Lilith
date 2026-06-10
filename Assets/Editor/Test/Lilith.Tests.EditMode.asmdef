@@ -9,6 +9,7 @@
         "Lilith.Editor",
         "Unity.TextMeshPro",
         "Unity.InputSystem",
+        "Unity.2D.Animation.Runtime",
         "UnityEngine.UI"
     ],
     "includePlatforms": [

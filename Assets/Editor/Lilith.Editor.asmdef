@@ -4,7 +4,8 @@
     "references": [
         "Lilith.Kernel",
         "Lilith.Vocalith",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "Unity.2D.Animation.Runtime"
     ],
     "includePlatforms": [
         "Editor"

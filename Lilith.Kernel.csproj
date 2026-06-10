@@ -52,6 +52,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\SpellDescriptionGenerator.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\CombatRunTimer.cs" />
     <Compile Include="Assets\Scripts\Kernel\Audio\LilithAudioSettings.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Player\Player2DMovementAnimatorDriver.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\Status.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\UpgradeNodeView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerFollowCamera.cs" />
@@ -180,6 +181,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\CombatEntryTokenSelectionPlan.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\HintModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackGridSlotView.cs" />
+    <Compile Include="Assets\Scripts\Kernel\Animation\Character2DAnimatorDriver.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\NarrativeCatalogModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\HintUIScreen.cs" />
@@ -1340,6 +1342,10 @@
     </Reference>
     <Reference Include="Unity.InputSystem">
       <HintPath>Library\ScriptAssemblies\Unity.InputSystem.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.2D.Animation.Runtime">
+      <HintPath>Library\ScriptAssemblies\Unity.2D.Animation.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">

@@ -107,6 +107,7 @@
     <Compile Include="Assets\Editor\Test\PlayerHealthTests.cs" />
     <Compile Include="Assets\Editor\Test\SpellProgramCompilerTests.cs" />
     <Compile Include="Assets\Editor\Test\QuestCatalogJsonUtilityTests.cs" />
+    <Compile Include="Assets\Editor\Test\Player2DAnimationDriverTests.cs" />
     <Compile Include="Assets\Editor\Test\ProceduralRoomMapTests.cs" />
     <Compile Include="Assets\Editor\Test\BossPhaseControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\MapGridAuthoringTests.cs" />
@@ -126,6 +127,7 @@
     <Compile Include="Assets\Editor\Test\OptionsUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\ScreenShakeStateTests.cs" />
     <Compile Include="Assets\Editor\Test\RuntimeSaveServiceTests.cs" />
+    <Compile Include="Assets\Editor\Test\HeroSharedCharacterAnimationTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyMeleeAttackerTests.cs" />
     <Compile Include="Assets\Editor\Test\GameplayBillboardTests.cs" />
     <Compile Include="Assets\Editor\Test\MainUIScreenTests.cs" />
@@ -1204,6 +1206,10 @@
     </Reference>
     <Reference Include="Unity.InputSystem">
       <HintPath>Library\ScriptAssemblies\Unity.InputSystem.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.2D.Animation.Runtime">
+      <HintPath>Library\ScriptAssemblies\Unity.2D.Animation.Runtime.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">

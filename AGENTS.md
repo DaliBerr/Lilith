@@ -51,6 +51,8 @@
 
 需要确认 Scene / Prefab / GameObject / Component / Console / Test / Screenshot 状态时，优先走 Unity MCP，并先确认目标实例没有路由到其他 Unity 项目。
 
+禁止由 agent 进入 PlayMode 或运行 PlayMode 测试；Lilith 当前 PlayMode 由用户手动执行，agent 只做 EditMode、Console、编译、静态检查和必要的非 PlayMode Editor 读写验证。
+
 ## Repo Invariants
 
 - 禁止在 `Assets/Scripts/Vocalith/**` 新增任何 `Kernel.*` 引用。

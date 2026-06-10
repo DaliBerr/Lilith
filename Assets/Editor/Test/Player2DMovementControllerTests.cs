@@ -3,6 +3,8 @@ using System.Reflection;
 using Kernel.GameState;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
 
 public sealed class Player2DMovementControllerTests
 {
@@ -66,6 +68,37 @@ public sealed class Player2DMovementControllerTests
         Assert.That(isDashing, Is.False);
     }
 
+    [Test]
+    public void Update_ByDefault_DoesNotRotateFacingPivotTowardsMouse()
+    {
+        Mouse testMouse = InputSystem.AddDevice<Mouse>();
+        try
+        {
+            Player2DMovementController controller = CreateController(out _);
+            GameObject cameraObject = CreateGameObject("Facing Camera");
+            Camera camera = cameraObject.AddComponent<Camera>();
+            camera.orthographic = true;
+            camera.orthographicSize = 5f;
+            camera.pixelRect = new Rect(0f, 0f, 1000f, 1000f);
+            cameraObject.transform.position = new Vector3(0f, 0f, -10f);
+
+            Quaternion initialRotation = Quaternion.Euler(0f, 0f, 37f);
+            controller.transform.rotation = initialRotation;
+            SetPrivateField(controller, "targetCamera", camera);
+            SetPrivateField(controller, "facingPivot", controller.transform);
+            QueueMousePosition(testMouse, new Vector2(900f, 500f));
+
+            InvokePrivateVoidMethod(controller, "Update");
+
+            Assert.That(GetPrivateField<bool>(controller, "rotateTowardsMouse"), Is.False);
+            Assert.That(Quaternion.Angle(initialRotation, controller.transform.rotation), Is.LessThan(0.0001f));
+        }
+        finally
+        {
+            InputSystem.RemoveDevice(testMouse);
+        }
+    }
+
     private Player2DMovementController CreateController(out Rigidbody2D body)
     {
         GameObject gameObject = CreateGameObject("Player2D");
@@ -106,6 +139,15 @@ public sealed class Player2DMovementControllerTests
         MethodInfo method = FindInstanceMethod(target.GetType(), methodName);
         Assert.That(method, Is.Not.Null, $"Missing private method '{methodName}'.");
         method.Invoke(target, args);
+    }
+
+    private static void QueueMousePosition(Mouse mouse, Vector2 position)
+    {
+        Assert.That(mouse, Is.Not.Null);
+        mouse.MakeCurrent();
+        InputSystem.QueueStateEvent(mouse, new MouseState { position = position });
+        InputSystem.Update();
+        Assert.That(Mouse.current, Is.SameAs(mouse));
     }
 
     private static T GetPrivateField<T>(object target, string fieldName)
