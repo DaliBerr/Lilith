@@ -51,6 +51,12 @@ MonoBehaviour:
     m_SerializedLabels:
     - Json
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 91b7ff37a5954f339fa7380817dc7399
+    m_Address: Assets/Data/Story/NarrativeCatalog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Json
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: eade859664fdd3b479ac7ba5ba1309d1
     m_Address: Assets/Data/Upgrades/PermanentUpgradeCatalog
     m_ReadOnly: 0

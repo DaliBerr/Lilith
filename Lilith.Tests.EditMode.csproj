@@ -122,6 +122,7 @@
     <Compile Include="Assets\Editor\Test\CombatRunTimerTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthBarControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\StoryTellerUIScreenTests.cs" />
+    <Compile Include="Assets\Editor\Test\NarrativeReaderTests.cs" />
     <Compile Include="Assets\Editor\Test\OptionsUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\ScreenShakeStateTests.cs" />
     <Compile Include="Assets\Editor\Test\RuntimeSaveServiceTests.cs" />

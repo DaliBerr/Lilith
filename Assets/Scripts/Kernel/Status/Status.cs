@@ -120,11 +120,18 @@ namespace Kernel.GameState
             allowSwitchWith = new List<string> { "Paused", "Playing", "SaveLoading", "BackPack", "InPauseMenu" },
             Persistent = false
         };
+        public static Status InNarrativeScreenStatus = new Status
+        {
+            StatusName = "InNarrativeScreen",
+            InActiveWith = null,
+            allowSwitchWith = new List<string> { "Paused", "Playing", "SaveLoading", "BackPack", "InPauseMenu" },
+            Persistent = false
+        };
         public static Status InSettlementScreenStatus = new Status
         {
             StatusName = "InSettlementScreen",
             InActiveWith = null,
-            allowSwitchWith = new List<string> { "Playing", "Paused", "InPauseMenu", "BackPack", "InUpgradeScreen", "InDialog" },
+            allowSwitchWith = new List<string> { "Playing", "Paused", "InPauseMenu", "BackPack", "InUpgradeScreen", "InNarrativeScreen", "InDialog" },
             Persistent = false
         };
         public static Status InDialogStatus = new Status
@@ -174,6 +181,7 @@ namespace Kernel.GameState
             Register(InBackPackStatus);
             Register(InHintStatus);
             Register(InUpgradeScreenStatus);
+            Register(InNarrativeScreenStatus);
             Register(InSettlementScreenStatus);
             Register(InDialogStatus);
             Register(PopUpStatus);

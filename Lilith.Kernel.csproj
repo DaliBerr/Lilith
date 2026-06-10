@@ -133,6 +133,7 @@
     <Compile Include="Assets\Scripts\Kernel\Bullet\AttackSpec.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\TokenSelectUIUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\SettlementUIScreen.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\NarrativeUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Save\GlobalModeSettingsService.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StrokeHealthBarController.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\TilemapRoomPresenter.cs" />
@@ -146,6 +147,7 @@
     <Compile Include="Assets\Scripts\Kernel\UI\StoryTextPageUtility.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\RunRewardCollectedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterEndedEvent.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\BookNarrativeTrigger.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\ModifierTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyStatusEffectController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenModifierExpressionUtility.cs" />
@@ -179,7 +181,9 @@
     <Compile Include="Assets\Scripts\Kernel\UI\HintModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackGridSlotView.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyGenerator.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\NarrativeCatalogModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\HintUIScreen.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\NarrativeEvents.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDefinition.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\MainUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyMovement.cs" />
@@ -198,6 +202,7 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharGlyphPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackPreviewDummyEnemy.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BulletTokenSelectionSampler.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\NarrativeEntryViews.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\WaveSequenceProgressionConfig.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\BackPackAttackPreviewController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemySummoner.cs" />

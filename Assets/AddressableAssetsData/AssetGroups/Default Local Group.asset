@@ -15,6 +15,11 @@ MonoBehaviour:
   m_GroupName: Default Local Group
   m_GUID: 378265894cc4fb84a9261618a5e23123
   m_SerializeEntries:
+  - m_GUID: 1ce050aaae12bda4e886e530f8102b24
+    m_Address: Assets/Prefabs/UI/Narrative/Chapter Entry
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2006e86e98a24e14799069970910b35a
     m_Address: Assets/Data/BulletTokens/Core/InitCore
     m_ReadOnly: 0
@@ -22,6 +27,21 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 21dbee42a271c3a4ea112c91598ae0b1
     m_Address: Assets/Images/New Piskel-1.png.png
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 363a21366b2f15846accdbf0daec72e7
+    m_Address: Assets/Prefabs/UI/Narrative/Narrative Menu Panel
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: afdd4664653acc94ca966a213b0e52ce
+    m_Address: Assets/Prefabs/UI/Narrative/Story Entry
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d23cd2f58ee8f134ba3e8502bc3fb49f
+    m_Address: Assets/Prefabs/UI/Narrative/Narrative Content Panel
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

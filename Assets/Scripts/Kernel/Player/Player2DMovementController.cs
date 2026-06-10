@@ -379,6 +379,7 @@ public sealed class Player2DMovementController : MonoBehaviour
         return StatusController.HasStatus(StatusList.InBackPackStatus)
             || StatusController.HasStatus(StatusList.InHintStatus)
             || StatusController.HasStatus(StatusList.InUpgradeScreenStatus)
+            || StatusController.HasStatus(StatusList.InNarrativeScreenStatus)
             || StatusController.HasStatus(StatusList.InPauseMenuStatus)
             || StatusController.HasStatus(StatusList.InSettlementScreenStatus)
             || StatusController.HasStatus(StatusList.InDialogStatus)

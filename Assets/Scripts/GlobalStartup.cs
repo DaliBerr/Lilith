@@ -36,6 +36,7 @@ namespace Kernel
             "Assets/Data/Story/Introduction",
             "Assets/Data/UI/HintCatalog",
             "Assets/Data/Story/DialogTest",
+            "Assets/Data/Story/NarrativeCatalog",
             "Assets/Data/Upgrades/PermanentUpgradeCatalog",
             "Assets/Data/Localization/StringTables/ui.zh-Hans-CN",
             "Assets/Data/Localization/StringTables/ui.en-US",

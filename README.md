@@ -117,6 +117,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - 存档入口：[`RuntimeSaveService.cs`](Assets/Scripts/Kernel/Save/RuntimeSaveService.cs)
   - `UIInputRouter` 当前支持 `Hint(Tab)`：在 `MainUIScreen` 与 `BackPackUIScreen` 上开关 [`Assets/Scripts/Kernel/UI/HintUIScreen.cs`](Assets/Scripts/Kernel/UI/HintUIScreen.cs)；背包顶部 Hint 按钮与 Tab 走同一条路由
   - `HintUIScreen` 打开时会进入 `InHint` 状态，并与背包一致阻断玩家战斗输入和敌人行为
+  - `Book_2` 当前接入剧情阅读器：[`BookNarrativeTrigger`](Assets/Scripts/Kernel/UI/BookNarrativeTrigger.cs) 复用永久升级书的交互注册模式，`UIInputRouter` 会从 `MainUIScreen` 栈顶打开 [`NarrativeMenuUIScreen`](Assets/Scripts/Kernel/UI/NarrativeUIScreen.cs)，Entry 点击后推入 `NarrativeContentUIScreen`。阅读器使用 `InNarrativeScreenStatus` 阻断玩家输入和敌人行为，Esc / Interaction 从 Content 回 Menu、再回 Main；最后一章的 Start Battle Button 只发布 `NarrativeStartBattleRequestedEvent`，当前不直接进入战斗
   - 当前存档使用动态槽位：`profile-slot-N.json` 保存每个栏位的永久数据，`global-mode.json` 保存 `DevMode` / `NormalMode`、已知槽位摘要与最近打开时间；新档会复用最小空槽位，加载弹窗只展示已有存档，并按最近打开时间从上到下排序，旧档缺少打开时间时回退保存时间
 
 ### 基础设施层 `Vocalith`
@@ -152,7 +153,8 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
   - `EnemyDefinition` 资产持有敌人的行为开关、AI Profile、基础战斗数值、远程/自爆配置与技能槽；当前包含 8 个普通敌人原型与双阶段 Boss 定义 `Boss_Phase1`、`Boss_Phase2`，普通敌人 profile 位于 [`Assets/Data/Enemies/AIProfiles`](Assets/Data/Enemies/AIProfiles)
 - 波次定义：[`Assets/Data/Waves`](Assets/Data/Waves)
   - `WaveDefinition` 资产声明每波会刷哪些 `EnemyDefinition`、刷多少只、可选条目级额外掉落、Boss 波次标记与 Boss 元数据；普通波次掉落与波后抽取映射由 [`Assets/Data/Waves/NonBossWaveSequenceProgression.asset`](Assets/Data/Waves/NonBossWaveSequenceProgression.asset) 维护，Boss 波次使用自身 `WaveDefinition` 内部配置；当前 `Main` 场景默认串联 `Wave01` 到 `Wave06`，其中 `Wave01` 到 `Wave05` 为普通波次，`Wave06` 为 Boss 波次
-- 开场剧情文本与 Main 场景开场引导对话：[`Assets/Data/Story`](Assets/Data/Story)
+- 剧情文本与 Main 场景剧情入口：[`Assets/Data/Story`](Assets/Data/Story)
+  - [`Assets/Data/Story/NarrativeCatalog.json`](Assets/Data/Story/NarrativeCatalog.json) 是 `Book_2` 剧情阅读器目录真源，结构为 `entries[] -> chapters[] -> pages[]`；正文按左右两页一组翻页。`GlobalStartup` 会按 Addressables 地址 `Assets/Data/Story/NarrativeCatalog` 预加载；UI prefab 地址包括 `Assets/Prefabs/UI/Narrative/Narrative Menu Panel`、`Assets/Prefabs/UI/Narrative/Narrative Content Panel`、`Assets/Prefabs/UI/Narrative/Story Entry` 与 `Assets/Prefabs/UI/Narrative/Chapter Entry`
 - 永久升级目录：[`Assets/Data/Upgrades`](Assets/Data/Upgrades)
 - UI 文案目录：[`Assets/Data/UI`](Assets/Data/UI)
   - [`Assets/Data/UI/OptionsCatalog.json`](Assets/Data/UI/OptionsCatalog.json) 负责设置界面分类和条目配置
@@ -193,4 +195,5 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 - [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，使用 `Assets/Prefabs/UI/Options/Setting Panel.prefab` 作为 Addressables 设置页；当前主菜单和暂停菜单的 Setting Panel 都带 Reset / Apply，控件值变更后先暂存，点击 Apply 后写入 `PlayerPrefs` 并应用，Reset 会把控件恢复默认值并等待 Apply 提交；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏 / 垂直同步会通过 `Kernel.Display.LilithDisplaySettings` 应用并在下次启动恢复，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用，游戏项中的屏幕震动开关会被 `ScreenShakeState` 读取；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准；首版尚未配置实际音乐资源和玩法音效触发点
 - [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs) 当前直接内嵌同一个 `Assets/Prefabs/UI/Options/Setting Panel.prefab` 设置页；`PauseUI.prefab` 的旧 `Main Panel`、Resume / Option / Quit 按钮只作为可选兼容引用保留，不再是初始化必需项。暂停设置页的 `Close Button` 通过 `UIInputRouter.RequestClosePauseMenu()` 恢复游戏，`Menu Button` / 旧 Quit 入口会先打开通用 `PopUpUIScreen` 二级确认，确认后再通过 `UIInputRouter.RequestReturnToStartUpScene()` 返回开始菜单；开始菜单仍继续以独立 modal 方式打开 `OptionsUIScreen`
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 当前预加载进入 `Main` 前需要的 Addressables 数据层资源；非 Addressable 且由场景直接引用的资产仍随场景加载
+- 剧情阅读器的 `NarrativeStartBattleRequestedEvent` 当前没有默认订阅者；Start Battle Button 只是发布 `entryId/chapterId`，后续进入哪场战斗需要由新的订阅者接线
 - 当前 `asmdef` 是第一版保守切分：`Kernel` 内部 UI / Bullet / Enemy / MapGrid / Quest 等子模块仍在同一程序集内，后续若要细拆需要先解开这些子模块之间的双向或横向依赖。

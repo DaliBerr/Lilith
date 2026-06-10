@@ -32,6 +32,7 @@ namespace Kernel.UI
         private bool isHandlingDebugCollect;
         private bool isReturningToStartUpScene;
         private readonly HashSet<Transform> permanentUpgradeInteractorRoots = new();
+        private readonly HashSet<Transform> narrativeReaderInteractorRoots = new();
 
         /// <summary>
         /// summary: 在首个场景加载前确保场景中存在 UI 输入路由实例。
@@ -127,7 +128,7 @@ namespace Kernel.UI
         }
 
         /// <summary>
-        /// summary: 对接 UIControls 的 Interaction 动作；当玩家位于永久升级触发区内时切换升级界面开关。
+        /// summary: 对接 UIControls 的 Interaction 动作；当玩家位于书本交互区内时切换对应界面开关。
         /// param: context 当前输入回调上下文
         /// returns: 无
         /// </summary>
@@ -146,6 +147,18 @@ namespace Kernel.UI
             if (uiManager.GetTopScreen() is UpdateUIScreen)
             {
                 RequestClosePermanentUpgradeScreen();
+                return;
+            }
+
+            if (uiManager.GetTopScreen() is NarrativeMenuUIScreen or NarrativeContentUIScreen)
+            {
+                RequestCloseNarrativeReaderScreen();
+                return;
+            }
+
+            if (HasAnyNarrativeReaderInteractor())
+            {
+                RequestOpenNarrativeReaderScreen();
                 return;
             }
 
@@ -200,6 +213,26 @@ namespace Kernel.UI
             }
 
             permanentUpgradeInteractorRoots.Remove(playerRoot);
+        }
+
+        public void RegisterNarrativeReaderInteractor(Transform playerRoot)
+        {
+            if (playerRoot == null)
+            {
+                return;
+            }
+
+            narrativeReaderInteractorRoots.Add(playerRoot);
+        }
+
+        public void UnregisterNarrativeReaderInteractor(Transform playerRoot)
+        {
+            if (playerRoot == null)
+            {
+                return;
+            }
+
+            narrativeReaderInteractorRoots.Remove(playerRoot);
         }
 
         /// <summary>
@@ -292,6 +325,26 @@ namespace Kernel.UI
             StartCoroutine(HandlePermanentUpgradeScreenClose());
         }
 
+        public void RequestOpenNarrativeReaderScreen()
+        {
+            if (isHandlingBack || isReturningToStartUpScene)
+            {
+                return;
+            }
+
+            StartCoroutine(HandleNarrativeReaderScreenOpen());
+        }
+
+        public void RequestCloseNarrativeReaderScreen()
+        {
+            if (isHandlingBack)
+            {
+                return;
+            }
+
+            StartCoroutine(HandleNarrativeReaderScreenClose());
+        }
+
         /// <summary>
         /// summary: 供背包按钮或其他入口复用的 Hint 开关请求。
         /// param: 无
@@ -371,6 +424,7 @@ namespace Kernel.UI
         {
             UnbindInputCallbacks();
             permanentUpgradeInteractorRoots.Clear();
+            narrativeReaderInteractorRoots.Clear();
 
             if (Instance == this)
             {
@@ -578,7 +632,11 @@ namespace Kernel.UI
                     yield break;
                 }
 
-                if (topScreen is BackPackUIScreen || topScreen is PauseUIScreen || topScreen is UpdateUIScreen)
+                if (topScreen is BackPackUIScreen
+                    || topScreen is PauseUIScreen
+                    || topScreen is UpdateUIScreen
+                    || topScreen is NarrativeMenuUIScreen
+                    || topScreen is NarrativeContentUIScreen)
                 {
                     yield return uiManager.PopScreenAndWait();
                     yield break;
@@ -703,6 +761,44 @@ namespace Kernel.UI
             try
             {
                 if (!CanClosePermanentUpgradeScreen(out UIManager uiManager))
+                {
+                    yield break;
+                }
+
+                yield return uiManager.PopScreenAndWait();
+            }
+            finally
+            {
+                isHandlingBack = false;
+            }
+        }
+
+        private IEnumerator HandleNarrativeReaderScreenOpen()
+        {
+            isHandlingBack = true;
+
+            try
+            {
+                if (!CanOpenNarrativeReaderScreen(out UIManager uiManager))
+                {
+                    yield break;
+                }
+
+                yield return uiManager.PushScreenAndWait<NarrativeMenuUIScreen>();
+            }
+            finally
+            {
+                isHandlingBack = false;
+            }
+        }
+
+        private IEnumerator HandleNarrativeReaderScreenClose()
+        {
+            isHandlingBack = true;
+
+            try
+            {
+                if (!CanCloseNarrativeReaderScreen(out UIManager uiManager))
                 {
                     yield break;
                 }
@@ -1001,6 +1097,41 @@ namespace Kernel.UI
             return uiManager.GetTopScreen() is UpdateUIScreen;
         }
 
+        private static bool CanOpenNarrativeReaderScreen(out UIManager uiManager)
+        {
+            if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            if (uiManager.GetTopModal() != null)
+            {
+                return false;
+            }
+
+            if (uiManager.GetTopScreen() is NarrativeMenuUIScreen or NarrativeContentUIScreen)
+            {
+                return false;
+            }
+
+            if (uiManager.GetTopScreen() is not MainUIScreen)
+            {
+                return false;
+            }
+
+            return StatusController.HasStatus(StatusList.PlayingStatus) && FindFirstObjectByType<PlayerPlaneMovement>() != null;
+        }
+
+        private static bool CanCloseNarrativeReaderScreen(out UIManager uiManager)
+        {
+            if (!TryGetAvailableUIManager(out uiManager))
+            {
+                return false;
+            }
+
+            return uiManager.GetTopScreen() is NarrativeMenuUIScreen or NarrativeContentUIScreen;
+        }
+
         /// <summary>
         /// summary: 判断当前是否允许关闭结算界面。
         /// param: uiManager 输出当前可用的 UI 管理器
@@ -1061,6 +1192,17 @@ namespace Kernel.UI
 
             permanentUpgradeInteractorRoots.RemoveWhere(root => root == null);
             return permanentUpgradeInteractorRoots.Count > 0;
+        }
+
+        private bool HasAnyNarrativeReaderInteractor()
+        {
+            if (narrativeReaderInteractorRoots.Count == 0)
+            {
+                return false;
+            }
+
+            narrativeReaderInteractorRoots.RemoveWhere(root => root == null);
+            return narrativeReaderInteractorRoots.Count > 0;
         }
 
         /// <summary>
