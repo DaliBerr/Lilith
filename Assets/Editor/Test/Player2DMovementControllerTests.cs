@@ -99,6 +99,37 @@ public sealed class Player2DMovementControllerTests
         }
     }
 
+    [Test]
+    public void TryGetMouseFacingDirection_UsesScreenSpaceAboveForPerspectiveCamera()
+    {
+        Mouse testMouse = InputSystem.AddDevice<Mouse>();
+        try
+        {
+            Player2DMovementController controller = CreateController(out _);
+            GameObject cameraObject = CreateGameObject("Perspective Facing Camera");
+            Camera camera = cameraObject.AddComponent<Camera>();
+            camera.orthographic = false;
+            camera.fieldOfView = 45f;
+            camera.pixelRect = new Rect(0f, 0f, 1000f, 1000f);
+            cameraObject.transform.position = new Vector3(0f, 0f, -10f);
+            cameraObject.transform.rotation = Quaternion.Euler(45f, 35f, 0f);
+
+            SetPrivateField(controller, "targetCamera", camera);
+            Vector2 playerScreenPosition = camera.WorldToScreenPoint(controller.transform.position);
+            QueueMousePosition(testMouse, playerScreenPosition + new Vector2(0f, 100f));
+
+            bool hasDirection = controller.TryGetMouseFacingDirection(out Vector2 direction);
+
+            Assert.That(hasDirection, Is.True);
+            Assert.That(direction.x, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(direction.y, Is.EqualTo(1f).Within(0.0001f));
+        }
+        finally
+        {
+            InputSystem.RemoveDevice(testMouse);
+        }
+    }
+
     private Player2DMovementController CreateController(out Rigidbody2D body)
     {
         GameObject gameObject = CreateGameObject("Player2D");

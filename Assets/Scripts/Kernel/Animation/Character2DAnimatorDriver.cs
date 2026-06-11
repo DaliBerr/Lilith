@@ -5,15 +5,21 @@ using UnityEngine;
 public sealed class Character2DAnimatorDriver : MonoBehaviour
 {
     [SerializeField] private Animator animator;
+    [SerializeField] private SpriteRenderer spriteRenderer;
     [SerializeField] private string moveXParameter = "MoveX";
     [SerializeField] private string moveYParameter = "MoveY";
     [SerializeField] private string isMovingParameter = "IsMoving";
     [SerializeField] private string speedParameter = "Speed";
+    [SerializeField] private string isFacingBackParameter = "IsFacingBack";
+    [SerializeField] private string dodgeParameter = "Dodge";
     [SerializeField, Min(0f)] private float movementThreshold = 0.0001f;
     [SerializeField] private Vector2 defaultFacing = Vector2.down;
+    [SerializeField] private bool flipHorizontalWhenFacingLeft = true;
+    [SerializeField, Min(0f)] private float horizontalFlipThreshold = 0.0001f;
 
     private readonly HashSet<int> availableParameters = new();
     private Vector2 facingDirection = Vector2.down;
+    private bool wasDashing;
 
     public Vector2 FacingDirection => facingDirection;
 
@@ -32,19 +38,22 @@ public sealed class Character2DAnimatorDriver : MonoBehaviour
     private void OnValidate()
     {
         movementThreshold = Mathf.Max(0f, movementThreshold);
+        horizontalFlipThreshold = Mathf.Max(0f, horizontalFlipThreshold);
         defaultFacing = NormalizeOrDefault(defaultFacing, Vector2.down);
         ResolveReferences();
     }
 
     public void SetMovement(Vector2 movement)
     {
+        SetMovement(movement, movement);
+    }
+
+    public void SetMovement(Vector2 movement, Vector2 facing)
+    {
         Movement = movement;
         float speed = movement.magnitude;
         bool moving = movement.sqrMagnitude > movementThreshold * movementThreshold;
-        if (moving)
-        {
-            facingDirection = movement / speed;
-        }
+        facingDirection = NormalizeOrDefault(facing, moving ? movement / speed : facingDirection);
 
         IsMoving = moving;
         ApplyAnimatorParameters(facingDirection, moving, moving ? speed : 0f);
@@ -65,6 +74,16 @@ public sealed class Character2DAnimatorDriver : MonoBehaviour
         ApplyAnimatorParameters(facingDirection, false, 0f);
     }
 
+    public void SetDashing(bool isDashing)
+    {
+        if (isDashing && !wasDashing)
+        {
+            SetTrigger(dodgeParameter);
+        }
+
+        wasDashing = isDashing;
+    }
+
     public void RefreshAnimatorParameters()
     {
         CacheParameters();
@@ -76,6 +95,11 @@ public sealed class Character2DAnimatorDriver : MonoBehaviour
         if (animator == null)
         {
             animator = GetComponent<Animator>();
+        }
+
+        if (spriteRenderer == null)
+        {
+            spriteRenderer = GetComponent<SpriteRenderer>();
         }
     }
 
@@ -105,6 +129,8 @@ public sealed class Character2DAnimatorDriver : MonoBehaviour
         SetFloat(moveYParameter, facing.y);
         SetFloat(speedParameter, speed);
         SetBool(isMovingParameter, isMoving);
+        SetBool(isFacingBackParameter, ShouldFaceBack(facing));
+        ApplySpriteFlip(facing);
     }
 
     private void SetFloat(string parameterName, float value)
@@ -123,6 +149,35 @@ public sealed class Character2DAnimatorDriver : MonoBehaviour
         {
             animator.SetBool(hash, value);
         }
+    }
+
+    private void SetTrigger(string parameterName)
+    {
+        int hash = Animator.StringToHash(parameterName);
+        if (availableParameters.Contains(hash))
+        {
+            animator.SetTrigger(hash);
+        }
+    }
+
+    private void ApplySpriteFlip(Vector2 facing)
+    {
+        if (spriteRenderer == null || Mathf.Abs(facing.x) <= horizontalFlipThreshold)
+        {
+            return;
+        }
+
+        spriteRenderer.flipX = ShouldFlipHorizontally(facing);
+    }
+
+    private bool ShouldFlipHorizontally(Vector2 facing)
+    {
+        return flipHorizontalWhenFacingLeft ? facing.x < 0f : facing.x > 0f;
+    }
+
+    private static bool ShouldFaceBack(Vector2 facing)
+    {
+        return facing.y > 0f;
     }
 
     private static Vector2 NormalizeOrDefault(Vector2 value, Vector2 fallback)

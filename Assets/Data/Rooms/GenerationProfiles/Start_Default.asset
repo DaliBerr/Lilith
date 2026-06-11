@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 85998ec9bf11bc14c955ba121dabf0a2, type: 3}
+  m_Name: Start_Default
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.MapGrid.RoomGenerationProfileData
+  id: Start_Default
+  roomKind: 0
+  widthRange: {x: 15, y: 19}
+  heightRange: {x: 13, y: 17}
+  minimumWidth: 9
+  minimumHeight: 9
+  minPathWidth: 2
+  playerSafeRadius: 3
+  doorBufferRadius: 2
+  obstacleCountRange: {x: 0, y: 1}
+  obstacleWidthRange: {x: 1, y: 3}
+  obstacleHeightRange: {x: 1, y: 2}
+  maxObstacleDensity: 0.12
+  enemySpawnCountRange: {x: 0, y: 0}
+  minEnemySpawnDistance: 0
+  minCombatGroundCells: 32
+  bossOpenRadius: 0
+  maxPlacementAttempts: 32
+  maxGenerationRetries: 4

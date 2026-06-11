@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 using VocalithRandom = Vocalith.Random;
@@ -19,54 +18,25 @@ namespace Kernel.MapGrid
 
         public bool TryGenerateDefaultRun(
             int seed,
-            IReadOnlyList<RoomTemplateData> templates,
             out RoomGraph graph,
-            out string warning,
             out string error)
         {
             graph = null;
-            warning = null;
             error = null;
-
-            if (templates == null || templates.Count == 0)
-            {
-                error = "Room graph generation requires at least one room template.";
-                return false;
-            }
 
             var random = new VocalithRandom(seed);
             List<NodeDraft> drafts = BuildDefaultDrafts(random);
-            var warningLines = new List<string>();
             var nodes = new List<RoomGraphNode>(drafts.Count);
             for (int i = 0; i < drafts.Count; i++)
             {
                 NodeDraft draft = drafts[i];
-                if (!TrySelectTemplate(
-                        draft.Kind,
-                        draft.Connections.Keys,
-                        templates,
-                        random,
-                        out RoomTemplateData selectedTemplate,
-                        out bool usedFallback,
-                        out error))
-                {
-                    return false;
-                }
-
-                if (usedFallback)
-                {
-                    warningLines.Add($"Room '{draft.RoomId}' used fallback template '{selectedTemplate.Id}'.");
-                }
-
                 nodes.Add(new RoomGraphNode(
                     draft.RoomId,
                     draft.Kind,
                     draft.GraphCoordinate,
-                    selectedTemplate,
                     draft.Connections));
             }
 
-            warning = warningLines.Count > 0 ? string.Join(Environment.NewLine, warningLines) : null;
             graph = new RoomGraph(seed, nodes, drafts[0].RoomId);
             return true;
         }
@@ -102,62 +72,6 @@ namespace Kernel.MapGrid
         {
             from.Connections[directionFromTo] = to.RoomId;
             to.Connections[RoomDirectionUtility.GetOpposite(directionFromTo)] = from.RoomId;
-        }
-
-        private static bool TrySelectTemplate(
-            RoomKind roomKind,
-            IReadOnlyCollection<RoomDirection> requiredDirections,
-            IReadOnlyList<RoomTemplateData> templates,
-            VocalithRandom random,
-            out RoomTemplateData template,
-            out bool usedFallback,
-            out string error)
-        {
-            template = null;
-            usedFallback = false;
-            error = null;
-
-            List<RoomTemplateData> kindMatches = CollectTemplates(
-                templates,
-                candidate => candidate.RoomKind == roomKind && candidate.SupportsDoorDirections(requiredDirections));
-            if (kindMatches.Count > 0)
-            {
-                template = kindMatches[random.Next(0, kindMatches.Count)];
-                return true;
-            }
-
-            List<RoomTemplateData> fallbackMatches = CollectTemplates(
-                templates,
-                candidate => candidate.HasAllDoorDirections() && candidate.SupportsDoorDirections(requiredDirections));
-            if (fallbackMatches.Count > 0)
-            {
-                template = fallbackMatches[0];
-                usedFallback = true;
-                return true;
-            }
-
-            error = $"No room template supports kind '{roomKind}' with the required doors.";
-            return false;
-        }
-
-        private static List<RoomTemplateData> CollectTemplates(
-            IReadOnlyList<RoomTemplateData> templates,
-            Predicate<RoomTemplateData> predicate)
-        {
-            var matches = new List<RoomTemplateData>();
-            for (int i = 0; i < templates.Count; i++)
-            {
-                RoomTemplateData template = templates[i];
-                if (template == null || !predicate(template))
-                {
-                    continue;
-                }
-
-                matches.Add(template);
-            }
-
-            matches.Sort((left, right) => string.Compare(left.Id, right.Id, StringComparison.Ordinal));
-            return matches;
         }
 
         private sealed class NodeDraft

@@ -32,6 +32,25 @@ namespace Kernel.MapGrid
         public Vector2Int Coordinates { get; }
     }
 
+    public enum RoomSpecialAnchorKind
+    {
+        PlayerEntry,
+        Reward,
+        Boss,
+    }
+
+    public readonly struct RoomSpecialAnchor
+    {
+        public RoomSpecialAnchor(RoomSpecialAnchorKind kind, Vector2Int coordinates)
+        {
+            Kind = kind;
+            Coordinates = coordinates;
+        }
+
+        public RoomSpecialAnchorKind Kind { get; }
+        public Vector2Int Coordinates { get; }
+    }
+
     public sealed class RoomResolvedLayout
     {
         public RoomResolvedLayout(
@@ -43,6 +62,29 @@ namespace Kernel.MapGrid
             IReadOnlyList<Vector2Int> playerEntryCells,
             IReadOnlyList<Vector2Int> enemySpawnCells,
             IReadOnlyList<RoomDoor> doors)
+            : this(
+                templateId,
+                roomKind,
+                width,
+                height,
+                surfaces,
+                playerEntryCells,
+                enemySpawnCells,
+                doors,
+                Array.Empty<RoomSpecialAnchor>())
+        {
+        }
+
+        public RoomResolvedLayout(
+            string templateId,
+            RoomKind roomKind,
+            int width,
+            int height,
+            IReadOnlyList<CellData.CellSurfaceType> surfaces,
+            IReadOnlyList<Vector2Int> playerEntryCells,
+            IReadOnlyList<Vector2Int> enemySpawnCells,
+            IReadOnlyList<RoomDoor> doors,
+            IReadOnlyList<RoomSpecialAnchor> specialAnchors)
         {
             TemplateId = templateId ?? string.Empty;
             RoomKind = roomKind;
@@ -52,6 +94,7 @@ namespace Kernel.MapGrid
             PlayerEntryCells = playerEntryCells ?? Array.Empty<Vector2Int>();
             EnemySpawnCells = enemySpawnCells ?? Array.Empty<Vector2Int>();
             Doors = doors ?? Array.Empty<RoomDoor>();
+            SpecialAnchors = specialAnchors ?? Array.Empty<RoomSpecialAnchor>();
         }
 
         public string TemplateId { get; }
@@ -62,6 +105,7 @@ namespace Kernel.MapGrid
         public IReadOnlyList<Vector2Int> PlayerEntryCells { get; }
         public IReadOnlyList<Vector2Int> EnemySpawnCells { get; }
         public IReadOnlyList<RoomDoor> Doors { get; }
+        public IReadOnlyList<RoomSpecialAnchor> SpecialAnchors { get; }
 
         public CellData.CellSurfaceType GetSurface(int x, int y)
         {
@@ -135,13 +179,11 @@ namespace Kernel.MapGrid
             string roomId,
             RoomKind kind,
             Vector2Int graphCoordinate,
-            RoomTemplateData template,
             IReadOnlyDictionary<RoomDirection, string> connections)
         {
             RoomId = roomId ?? string.Empty;
             Kind = kind;
             GraphCoordinate = graphCoordinate;
-            Template = template;
             this.connections = connections != null
                 ? new Dictionary<RoomDirection, string>(connections)
                 : new Dictionary<RoomDirection, string>();
@@ -153,26 +195,12 @@ namespace Kernel.MapGrid
         public string RoomId { get; }
         public RoomKind Kind { get; }
         public Vector2Int GraphCoordinate { get; }
-        public RoomTemplateData Template { get; }
         public IReadOnlyDictionary<RoomDirection, string> Connections => connections;
         public IReadOnlyList<RoomDirection> RequiredDoorDirections => requiredDoorDirections;
 
         public bool TryGetConnectedRoomId(RoomDirection direction, out string roomId)
         {
             return connections.TryGetValue(direction, out roomId) && !string.IsNullOrWhiteSpace(roomId);
-        }
-
-        public bool TryResolveLayout(out RoomResolvedLayout layout, out string error)
-        {
-            layout = null;
-            error = null;
-            if (Template == null)
-            {
-                error = $"Room '{RoomId}' is missing a template.";
-                return false;
-            }
-
-            return Template.TryResolveLayout(requiredDoorDirections, out layout, out error);
         }
     }
 

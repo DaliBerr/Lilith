@@ -20,6 +20,22 @@ Keep this file as a repo-local compatibility mirror for high-value Lilith troubl
 - Verify: 后续 Lilith 任务总结中若涉及运行态验证，应明确区分“agent 已做的非 PlayMode 验证”和“仍需用户手动 Play 验证”。
 - Scope: 适用于 `G:\Unity Project\Lilith` 的所有 Unity MCP / Editor 工作流；不自动推广为其他 Unity 项目的硬规则。
 
+## Unity Version Control SDF Asset Conflict UI Can Be Stale
+
+- Problem: Unity Plastic Version Control 对 Unity 生成的 TMP SDF 字体资产（例如 `Assets/Fonts/fusion-pixel-12px-monospaced-zh_hans SDF.asset`）显示冲突，选择保留 ours/theirs 时弹 `An unexpected error has occurred.`。
+- Cause: Unity Version Control UI 可能残留一个已不存在或已处理失败的冲突状态；Plastic CLI 对该文件实际只报告 `CO|...|False|...|NO_MERGES`，含义是文件被 checkout 但内容未改变，且没有待处理 merge。
+- Fix: 先只读确认状态：`cm status "Assets\Fonts" --all --machinereadable --fieldseparator='|' --includeRevId --iscochanged`；若目标文件为 `CO ... False ... NO_MERGES`，用 `cm unco "Assets\Fonts\fusion-pixel-12px-monospaced-zh_hans SDF.asset"` 释放 checkout，再通过 Unity MCP `refresh_unity` 或 Unity Editor refresh 让编辑器吸收外部变化。不要用 Git 或手删 `.plastic` 来解决 Plastic UI 卡住的问题。
+- Verify: `cm status "Assets\Fonts" --all ...` 不再列出该文件；Unity editor state 的 `external_changes_dirty=false`；Console error/warning 为 0。
+- Scope: 适用于 Plastic 管理下的 Unity 生成资产大文件，尤其是 TMP SDF font asset 这类可由 Unity 再生成、但已被他人同步并导致 Version Control UI 冲突面板异常的情况。若 CLI 显示内容已变或仍有 merge，不要直接 `unco`，先备份或明确选择保留哪一侧。
+
+## Plastic Recovery Can Leave Unity Console And Generated Projects Stale
+
+- Problem: Plastic metadata-only update / conflict cleanup 已经完成后，Unity Console 仍显示大量 C# error，例如测试调用旧 API、`EnemyDefinition.AIProfile` 看似不存在，或命令行 `dotnet build Lilith.Tests.EditMode.csproj` 报 `UnityEngine.U2D.Animation` / `SpriteLibraryAsset` / `SpriteResolver` 缺失。
+- Cause: 这不一定是文件丢失。恢复工作区后可能同时存在三层不同步：Unity AssetDatabase / Console 仍缓存旧编译结果；Unity 生成的 `.csproj` 没有重新同步 asmdef/package 引用；手动 backup shelveset（如 `sh:9`）中的源码、测试、asmdef、Packages 和 ScriptableObject 资产需要按同一版本面精确恢复，不能只恢复触发第一条报错的文件。
+- Fix: 先用 Plastic CLI 确认真正 update 状态：`cm status --header`、`cm update --last`、`cm status --changed --short`、`cm status --private --short`。若有手动 backup shelveset，不要整包 apply；用 `cm diff sh:<id> --download=<temp> --changed --added --encoding=utf-8` 下载到临时目录，再按 Console / build 报错精确复制相关文件并备份覆盖前版本。修改 C#、asmdef、Packages 或 Unity 资产后，执行 Unity MCP `refresh_unity(mode=force, scope=all, compile=request, wait_for_ready=true)`。若 Unity Console 已清但 `dotnet build` 仍报 package 类型缺失，执行 Unity 菜单 `Assets/Open C# Project` 触发生成工程文件同步，再重跑 build。
+- Verify: Unity Console error 为 0；`dotnet build Lilith.Kernel.csproj --no-restore /p:UseSharedCompilation=false` 和 `dotnet build Lilith.Tests.EditMode.csproj --no-restore /p:UseSharedCompilation=false` 均 0 warning / 0 error；相关 EditMode 测试通过；`cm update --last` 返回 up-to-date；`cm status --changed --short` 只剩预期项目文件，`cm status --private --short` 只剩明确不提交的本地文件。
+- Scope: 适用于 Lilith 在 Plastic/Unity Version Control 恢复后出现“文件看起来已经在磁盘上正确，但 Unity 或 dotnet 仍按旧状态报错”的场景。不要把 TMP SDF 字体动态 atlas 误判为这类脚本错误根因；字体文件若不在 `cm status --changed/private` 中，优先查 Unity 缓存、工程文件生成和 sh9 配套文件版本面。
+
 ## SystemCallBlocker Should Exclude Imported Third-Party Editor Plugins
 
 - Problem: 导入 ASE / Amplify Shader Editor 后，`SystemCallBlocker` 在编译完成扫描时把第三方 Editor 插件里的 `UnityEngine.Debug` 用法当成项目违规，Console 刷出 58 条 `[SystemCallBlocker] 违规调用：规则 禁止 UnityEngine.Debug，文件 Assets/AmplifyShaderEditor/...`，影响美术同事正常使用 ASE。

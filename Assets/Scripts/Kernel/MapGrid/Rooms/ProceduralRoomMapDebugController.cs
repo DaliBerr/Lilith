@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using Vocalith.Logging;
 
@@ -11,10 +10,12 @@ namespace Kernel.MapGrid
 
         [SerializeField] private int seed = 12345;
         [SerializeField] private bool generateOnStart = true;
-        [SerializeField] private List<RoomTemplateData> roomTemplates = new();
+        [SerializeField, Min(0)] private int difficultyTier = 1;
+        [SerializeField] private RoomGenerationProfileLibrary profileLibrary;
         [SerializeField] private TilemapRoomPresenter roomPresenter;
 
         private readonly RoomGraphGenerator graphGenerator = new();
+        private readonly RoomLayoutGenerator layoutGenerator = new();
         private RoomGraph currentGraph;
 
         public int Seed
@@ -27,7 +28,7 @@ namespace Kernel.MapGrid
 
         private void OnValidate()
         {
-            roomTemplates ??= new List<RoomTemplateData>();
+            difficultyTier = Mathf.Max(0, difficultyTier);
         }
 
         private void Start()
@@ -51,14 +52,9 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            if (!graphGenerator.TryGenerateDefaultRun(seed, roomTemplates, out currentGraph, out string warning, out error))
+            if (!graphGenerator.TryGenerateDefaultRun(seed, out currentGraph, out error))
             {
                 return false;
-            }
-
-            if (!string.IsNullOrWhiteSpace(warning))
-            {
-                GameDebug.LogWarning($"[ProceduralRoomMapDebugController] {warning}");
             }
 
             return RenderCurrentRoom(out error);
@@ -105,7 +101,7 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            return node.TryResolveLayout(out layout, out error);
+            return TryGenerateLayout(node, out layout, out error);
         }
 
         public bool RenderFirstConnectedRoom(out string error)
@@ -164,12 +160,58 @@ namespace Kernel.MapGrid
                 return false;
             }
 
-            if (!node.TryResolveLayout(out RoomResolvedLayout layout, out error))
+            if (!TryGenerateLayout(node, out RoomResolvedLayout layout, out error))
             {
                 return false;
             }
 
             return roomPresenter.TryApply(layout, out error);
+        }
+
+        private bool TryGenerateLayout(RoomGraphNode node, out RoomResolvedLayout layout, out string error)
+        {
+            layout = null;
+            error = null;
+            if (node == null)
+            {
+                error = "Room graph node is missing.";
+                return false;
+            }
+
+            var input = new RoomGenerationInput(
+                CreateRoomSeed(seed, node.RoomId),
+                node.Kind,
+                node.RequiredDoorDirections,
+                difficultyTier);
+
+            if (profileLibrary == null)
+            {
+                error = "ProceduralRoomMapDebugController requires a RoomGenerationProfileLibrary.";
+                return false;
+            }
+
+            if (!profileLibrary.TrySelectProfile(input, out RoomGenerationProfileData profileData, out error))
+            {
+                return false;
+            }
+
+            RoomGenerationProfile profile = profileData.BuildRuntimeProfile(input);
+            return layoutGenerator.TryGenerate(input, profile, out layout, out error);
+        }
+
+        private static int CreateRoomSeed(int runSeed, string roomId)
+        {
+            unchecked
+            {
+                int hash = runSeed;
+                string id = roomId ?? string.Empty;
+                for (int i = 0; i < id.Length; i++)
+                {
+                    hash = (hash * 397) ^ id[i];
+                }
+
+                return hash;
+            }
         }
 
         private bool TryResolvePresenter(out string error)

@@ -51,6 +51,7 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\Kernel\Bullet\SpellDescriptionGenerator.cs" />
     <Compile Include="Assets\Scripts\Kernel\MapGrid\CombatRunTimer.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomGenerationTypes.cs" />
     <Compile Include="Assets\Scripts\Kernel\Audio\LilithAudioSettings.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\Player2DMovementAnimatorDriver.cs" />
     <Compile Include="Assets\Scripts\Kernel\Status\Status.cs" />
@@ -59,11 +60,13 @@
     <Compile Include="Assets\Scripts\Kernel\MapGrid\CombatVictoryEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StartUpButtonHoverFeedback.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\StartUpMenuUI.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomLayoutGenerator.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\TokenSelectUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenCellOccupancy.cs" />
     <Compile Include="Assets\Scripts\Kernel\Camera\ScreenShakeState.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\DamageShieldController.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PlayerHealthBarController.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomGenerationProfileData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BulletTokenLibrary.cs" />
     <Compile Include="Assets\Scripts\Kernel\Player\PlayerHealthChangedEvent.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\RewardNotificationEvent.cs" />
@@ -117,6 +120,7 @@
     <Compile Include="Assets\Scripts\Kernel\Save\RuntimeSaveService.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyAIController.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\Enemy.cs" />
+    <Compile Include="Assets\Scripts\Kernel\MapGrid\Rooms\RoomGenerationProfileLibrary.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\SettlementModels.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyVisualPresenter.cs" />
     <Compile Include="Assets\Scripts\Kernel\Quest\QuestPersistenceModels.cs" />

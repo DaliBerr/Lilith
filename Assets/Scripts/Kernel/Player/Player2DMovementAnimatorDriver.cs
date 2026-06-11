@@ -23,13 +23,17 @@ public sealed class Player2DMovementAnimatorDriver : MonoBehaviour
             return;
         }
 
-        if (movementController.TryGetMotion(out Vector2 velocity, out _))
+        bool hasMotion = movementController.TryGetMotion(out Vector2 velocity, out bool isDashing);
+        Vector2 facing = ResolveFacingDirection(hasMotion ? velocity : Vector2.zero);
+        animatorDriver.SetDashing(isDashing);
+
+        if (hasMotion)
         {
-            animatorDriver.SetMovement(velocity);
+            animatorDriver.SetMovement(velocity, facing);
             return;
         }
 
-        animatorDriver.SetIdle();
+        animatorDriver.SetFacing(facing);
     }
 
     private void OnValidate()
@@ -50,5 +54,20 @@ public sealed class Player2DMovementAnimatorDriver : MonoBehaviour
         }
 
         return movementController != null && animatorDriver != null;
+    }
+
+    private Vector2 ResolveFacingDirection(Vector2 fallback)
+    {
+        if (movementController != null && movementController.TryGetMouseFacingDirection(out Vector2 mouseFacing))
+        {
+            return mouseFacing;
+        }
+
+        if (fallback.sqrMagnitude > 0.000001f)
+        {
+            return fallback;
+        }
+
+        return animatorDriver != null ? animatorDriver.FacingDirection : Vector2.down;
     }
 }

@@ -47,6 +47,26 @@ public sealed class Player2DMovementController : MonoBehaviour
         return isDashing || velocity.sqrMagnitude > MinimumFacingSqrMagnitude;
     }
 
+    public bool TryGetMouseFacingDirection(out Vector2 direction)
+    {
+        direction = Vector2.zero;
+        if (Mouse.current == null || !TryGetTargetCamera(out Camera camera))
+        {
+            return false;
+        }
+
+        Vector2 mousePosition = Mouse.current.position.ReadValue();
+        Vector2 playerScreenPosition = camera.WorldToScreenPoint(GetCurrentPosition());
+        Vector2 offset = mousePosition - playerScreenPosition;
+        if (offset.sqrMagnitude <= MinimumFacingSqrMagnitude)
+        {
+            return false;
+        }
+
+        direction = offset.normalized;
+        return true;
+    }
+
     public void WarpTo(Vector3 worldPosition)
     {
         Vector2 position = worldPosition;
