@@ -163,6 +163,61 @@ public sealed class OptionsUIScreenTests
         }
     }
 
+    [Test]
+    public void SettingPanelPrefab_UsesLocalSidebarLayoutWithoutResponsiveFitter()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents(SettingPanelPrefabPath);
+        try
+        {
+            Assert.That(prefabRoot.GetComponentsInChildren<ResponsiveLayoutGroupFitter>(true), Is.Empty);
+
+            RectTransform settings = FindRectTransform(prefabRoot, "Settings ");
+            RectTransform background = FindRectTransform(prefabRoot, "Background");
+            RectTransform scrollView = FindRectTransform(prefabRoot, "Scroll View");
+            RectTransform buttonPanel = FindRectTransform(prefabRoot, "Button Panel");
+            RectTransform catalogPanel = FindRectTransform(prefabRoot, "Setting Button Panel");
+
+            Assert.That(settings.anchorMin.x, Is.EqualTo(0.22f).Within(0.0001f));
+            Assert.That(settings.anchorMax.x, Is.EqualTo(0.8f).Within(0.0001f));
+            Assert.That(catalogPanel.GetSiblingIndex(), Is.GreaterThan(settings.GetSiblingIndex()));
+            Assert.That(ToRootX(settings, background.anchorMax.x), Is.LessThan(catalogPanel.anchorMin.x));
+            Assert.That(ToRootX(settings, scrollView.anchorMax.x), Is.LessThan(catalogPanel.anchorMin.x));
+            Assert.That(ToRootX(settings, buttonPanel.anchorMax.x), Is.LessThan(catalogPanel.anchorMin.x));
+            Assert.That(catalogPanel.anchorMax.x, Is.LessThanOrEqualTo(settings.anchorMax.x));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
+    public void OptionEntryPrefab_SeparatesLabelAndControlsAtNarrowWidths()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Options/Option Entry Entry.prefab");
+        try
+        {
+            RectTransform label = FindRectTransform(prefabRoot, "Setting Text");
+            RectTransform dropdown = FindRectTransform(prefabRoot, "Dropdown");
+            RectTransform slider = FindRectTransform(prefabRoot, "Slider");
+            RectTransform toggleContainer = FindDirectChildRectTransform(prefabRoot, "Toggle");
+            TMP_Text labelText = label.GetComponent<TMP_Text>();
+
+            Assert.That(label.anchorMax.x, Is.LessThan(dropdown.anchorMin.x));
+            Assert.That(label.anchorMax.x, Is.LessThan(slider.anchorMin.x));
+            Assert.That(label.anchorMax.x, Is.LessThan(toggleContainer.anchorMin.x));
+            Assert.That(dropdown.anchorMin.x, Is.EqualTo(0.58f).Within(0.0001f));
+            Assert.That(slider.anchorMin.x, Is.EqualTo(0.58f).Within(0.0001f));
+            Assert.That(toggleContainer.anchorMin.x, Is.EqualTo(0.82f).Within(0.0001f));
+            Assert.That(labelText.enableAutoSizing, Is.True);
+            Assert.That(labelText.fontSizeMin, Is.EqualTo(20f).Within(0.0001f));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
     [UnityTest]
     public IEnumerator ToggleValueChange_AppliesImmediatelyWithoutApplyButton()
     {
@@ -245,6 +300,32 @@ public sealed class OptionsUIScreenTests
         OptionsUIScreen screen = CreateOptionsScreen(uiManager);
 
         Assert.DoesNotThrow(() => InvokePrivate(screen, "RefreshActionButtons"));
+    }
+
+    [Test]
+    public void NormalizeDropdownStoredValue_WhenCandidateIsUnavailable_FallsBackToAvailableChoice()
+    {
+        OptionsEntryData entry = new()
+        {
+            Id = "resolution",
+            Title = "Resolution",
+            Mode = "dropdown",
+            DefaultOptionId = "res_1080p",
+            Options = new List<OptionsChoiceData>
+            {
+                new() { Id = "res_720p", Title = "1280 x 720", Value = "1280x720" },
+                new() { Id = "res_1080p", Title = "1920 x 1080", Value = "1920x1080" },
+            },
+        };
+
+        string normalized = InvokePrivateStatic<string>(
+            typeof(OptionsUIScreen),
+            "NormalizeDropdownStoredValue",
+            entry,
+            "2560x1440",
+            "1920x1080");
+
+        Assert.That(normalized, Is.EqualTo("1920x1080"));
     }
 
     private UIManager CreateUIManager()
@@ -408,6 +489,40 @@ public sealed class OptionsUIScreenTests
         return gameObject;
     }
 
+    private static RectTransform FindRectTransform(GameObject root, string objectName)
+    {
+        foreach (RectTransform rectTransform in root.GetComponentsInChildren<RectTransform>(true))
+        {
+            if (rectTransform.name == objectName)
+            {
+                return rectTransform;
+            }
+        }
+
+        Assert.Fail($"Expected RectTransform '{objectName}' under '{root.name}'.");
+        return null;
+    }
+
+    private static RectTransform FindDirectChildRectTransform(GameObject root, string objectName)
+    {
+        Transform rootTransform = root.transform;
+        for (int i = 0; i < rootTransform.childCount; i++)
+        {
+            if (rootTransform.GetChild(i).name == objectName)
+            {
+                return rootTransform.GetChild(i) as RectTransform;
+            }
+        }
+
+        Assert.Fail($"Expected direct RectTransform child '{objectName}' under '{root.name}'.");
+        return null;
+    }
+
+    private static float ToRootX(RectTransform parent, float childAnchorX)
+    {
+        return parent.anchorMin.x + ((parent.anchorMax.x - parent.anchorMin.x) * childAnchorX);
+    }
+
     private GameObject CreateGameObject(string name)
     {
         GameObject gameObject = new(name);
@@ -453,6 +568,16 @@ public sealed class OptionsUIScreenTests
         Assert.That(method, Is.Not.Null);
 
         method.Invoke(target, Array.Empty<object>());
+    }
+
+    private static T InvokePrivateStatic<T>(Type targetType, string methodName, params object[] args)
+    {
+        MethodInfo method = targetType.GetMethod(
+            methodName,
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(method, Is.Not.Null);
+
+        return (T)method.Invoke(null, args);
     }
 
     private static T GetPrivateField<T>(object target, string fieldName)

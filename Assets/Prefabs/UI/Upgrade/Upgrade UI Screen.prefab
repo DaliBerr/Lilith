@@ -1124,6 +1124,7 @@ GameObject:
   - component: {fileID: 4199879559996954277}
   - component: {fileID: 8494235475348505501}
   - component: {fileID: 6705644747971962149}
+  - component: {fileID: 3567274218472374243}
   m_Layer: 5
   m_Name: Upgrade UI Screen
   m_TagString: Untagged
@@ -1217,6 +1218,19 @@ CanvasGroup:
   m_Interactable: 1
   m_BlocksRaycasts: 1
   m_IgnoreParentGroups: 0
+--- !u!114 &3567274218472374243
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5789848618385498699}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5ca60fee4f180a4f8f74c332f91ff87, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Lilith.Vocalith::Vocalith.UI.UIContentSafeFrame
+  maxAspect: 1.7777778
 --- !u!1 &8016859803168850803
 GameObject:
   m_ObjectHideFlags: 0

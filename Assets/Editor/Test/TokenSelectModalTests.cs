@@ -8,6 +8,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
+using Vocalith.UI;
 using VocalithRandom = Vocalith.Random;
 
 public sealed class TokenSelectModalTests
@@ -433,6 +434,100 @@ public sealed class TokenSelectModalTests
             Assert.That(screen.BulletTokenLibrary, Is.Not.Null);
             Assert.That(screen.SelectionPrefab, Is.Not.Null);
             Assert.That(screen.SelectionPrefab.GetComponent<BulletTokenSelectionView>(), Is.Not.Null);
+            Assert.That(screen.MainContent.GetComponent<TokenSelectPanelLayoutFitter>(), Is.Not.Null);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
+    public void TokenSelectPanelPrefab_UsesLocalFitterWithoutGlobalResponsiveFitter()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/TokenSelect/Token Select Panel.prefab");
+
+        try
+        {
+            TokenSelectUIScreen screen = prefabRoot.GetComponent<TokenSelectUIScreen>();
+            Assert.That(screen, Is.Not.Null);
+            Assert.That(screen.MainContent, Is.Not.Null);
+
+            Assert.That(prefabRoot.GetComponentsInChildren<ResponsiveLayoutGroupFitter>(true), Is.Empty);
+            Assert.That(screen.MainContent.GetComponent<ContentSizeFitter>(), Is.Null);
+            Assert.That(screen.MainContent.GetComponent<HorizontalLayoutGroup>(), Is.Not.Null);
+            Assert.That(screen.MainContent.GetComponent<TokenSelectPanelLayoutFitter>(), Is.Not.Null);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
+    public void TokenSelectPanelLayoutFitter_ConstrainsCardsByAvailableWidthAndHeight()
+    {
+        RectTransform parent = CreateUiObject("Parent").GetComponent<RectTransform>();
+        parent.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 1000f);
+        parent.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, 600f);
+
+        RectTransform content = CreateUiObject("Main Content", parent).GetComponent<RectTransform>();
+        content.anchorMin = new Vector2(0.1f, 0.2f);
+        content.anchorMax = new Vector2(0.9f, 0.8f);
+        content.offsetMin = Vector2.zero;
+        content.offsetMax = Vector2.zero;
+
+        HorizontalLayoutGroup layoutGroup = content.gameObject.AddComponent<HorizontalLayoutGroup>();
+        layoutGroup.spacing = 50f;
+        layoutGroup.padding = new RectOffset(40, 40, 20, 20);
+        content.gameObject.AddComponent<TokenSelectPanelLayoutFitter>();
+
+        for (int i = 0; i < 3; i++)
+        {
+            RectTransform card = CreateUiObject($"Card {i + 1}", content).GetComponent<RectTransform>();
+            LayoutElement layoutElement = card.gameObject.AddComponent<LayoutElement>();
+            layoutElement.preferredWidth = 460f;
+            AspectRatioFitter aspectRatioFitter = card.gameObject.AddComponent<AspectRatioFitter>();
+            aspectRatioFitter.aspectMode = AspectRatioFitter.AspectMode.WidthControlsHeight;
+            aspectRatioFitter.aspectRatio = 0.92f;
+        }
+
+        TokenSelectPanelLayoutFitter fitter = content.GetComponent<TokenSelectPanelLayoutFitter>();
+        fitter.FitNow();
+
+        float maxAnchoredHeight = parent.rect.height * Mathf.Abs(content.anchorMax.y - content.anchorMin.y);
+        float requiredWidth = ResolveHorizontalRequiredWidth(layoutGroup);
+        float cardWidth = LayoutUtility.GetPreferredWidth(content.GetChild(0) as RectTransform);
+        float cardHeight = cardWidth / 0.92f;
+
+        Assert.That(requiredWidth, Is.LessThanOrEqualTo(content.rect.width + 0.5f));
+        Assert.That(content.rect.height, Is.LessThanOrEqualTo(maxAnchoredHeight + 0.5f));
+        Assert.That(cardHeight + layoutGroup.padding.vertical, Is.LessThanOrEqualTo(content.rect.height + 0.5f));
+        Assert.That(cardWidth, Is.LessThan(460f));
+    }
+
+    [Test]
+    public void BulletTokenSelectionPrefab_SeparatesCatalogAndDescriptionAtSmallScale()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents(SelectionPrefabPath);
+
+        try
+        {
+            AspectRatioFitter aspectRatioFitter = prefabRoot.GetComponent<AspectRatioFitter>();
+            Assert.That(aspectRatioFitter, Is.Not.Null);
+            Assert.That(aspectRatioFitter.aspectMode, Is.EqualTo(AspectRatioFitter.AspectMode.WidthControlsHeight));
+            Assert.That(aspectRatioFitter.aspectRatio, Is.EqualTo(0.92f).Within(0.0001f));
+
+            RectTransform catalog = FindDirectChild<RectTransform>(prefabRoot.transform, "Catalog");
+            RectTransform token = FindDirectChild<RectTransform>(prefabRoot.transform, "Token");
+            RectTransform description = FindDirectChild<RectTransform>(prefabRoot.transform, "Description");
+
+            Assert.That(description.anchorMax.y, Is.LessThanOrEqualTo(catalog.anchorMin.y - 0.04f));
+            Assert.That(catalog.anchorMax.y, Is.LessThanOrEqualTo(token.anchorMin.y));
+
+            TMPro.TextMeshProUGUI catalogText = catalog.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+            Assert.That(catalogText, Is.Not.Null);
+            Assert.That(catalogText.enableAutoSizing, Is.True);
         }
         finally
         {
@@ -677,6 +772,19 @@ public sealed class TokenSelectModalTests
         }
     }
 
+    private static float ResolveHorizontalRequiredWidth(HorizontalLayoutGroup layout)
+    {
+        float requiredWidth = layout.padding.horizontal;
+        for (int i = 0; i < layout.transform.childCount; i++)
+        {
+            RectTransform child = layout.transform.GetChild(i) as RectTransform;
+            requiredWidth += LayoutUtility.GetPreferredWidth(child);
+        }
+
+        requiredWidth += layout.spacing * Mathf.Max(0, layout.transform.childCount - 1);
+        return requiredWidth;
+    }
+
     private static void InvokeNonPublic(object target, string methodName)
     {
         MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -694,5 +802,22 @@ public sealed class TokenSelectModalTests
         }
 
         return gameObject;
+    }
+
+    private static T FindDirectChild<T>(Transform parent, string childName) where T : Component
+    {
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform child = parent.GetChild(i);
+            if (child.name == childName)
+            {
+                T component = child.GetComponent<T>();
+                Assert.That(component, Is.Not.Null, $"{childName} should have {typeof(T).Name}.");
+                return component;
+            }
+        }
+
+        Assert.Fail($"Expected direct child '{childName}' under '{parent.name}'.");
+        return null;
     }
 }

@@ -188,10 +188,13 @@ namespace Kernel.UI
         /// </summary>
         private void TryAutoBindReferences()
         {
-            topPanel ??= transform.Find("Top Panel") as RectTransform;
+            Transform popupRoot = FindInContentSafeFrame("Popup");
+            topPanel ??= FindInContentSafeFrame("Top Panel") as RectTransform;
+            topPanel ??= popupRoot?.Find("Top Panel") as RectTransform;
             if (topCloseButton == null)
             {
                 topCloseButton = FindButton("Top Panel/Close Button");
+                topCloseButton ??= FindButton("Popup/Top Panel/Close Button");
             }
 
             if (topCloseButton != null)
@@ -199,7 +202,8 @@ namespace Kernel.UI
                 topCloseButtonText ??= topCloseButton.GetComponentInChildren<TMP_Text>(true);
             }
 
-            mainContent ??= transform.Find("Main Content") as RectTransform;
+            mainContent ??= FindInContentSafeFrame("Main Content") as RectTransform;
+            mainContent ??= popupRoot?.Find("Main Content") as RectTransform;
             if (mainContent == null)
             {
                 return;
@@ -212,6 +216,7 @@ namespace Kernel.UI
             if (confirmButton == null)
             {
                 confirmButton = FindButton("Main Content/Button/Confirm Buton");
+                confirmButton ??= FindButton("Popup/Main Content/Button/Confirm Buton");
             }
 
             if (confirmButton != null)
@@ -222,6 +227,7 @@ namespace Kernel.UI
             if (closeButton == null)
             {
                 closeButton = FindButton("Main Content/Button/Close Button");
+                closeButton ??= FindButton("Popup/Main Content/Button/Close Button");
             }
 
             if (closeButton != null)
@@ -322,7 +328,7 @@ namespace Kernel.UI
         /// </summary>
         private Button FindButton(string relativePath)
         {
-            Transform target = transform.Find(relativePath);
+            Transform target = FindInContentSafeFrame(relativePath);
             if (target == null)
             {
                 return null;

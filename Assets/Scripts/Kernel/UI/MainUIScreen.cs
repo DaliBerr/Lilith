@@ -193,7 +193,7 @@ namespace Kernel.UI
                 dangerEdgeImage = dangerEdge.GetComponent<Image>() ?? dangerEdgeImage;
             }
 
-            notificationPanel = transform.Find("Notification Panel") as RectTransform ?? notificationPanel;
+            notificationPanel = FindInContentSafeFrame("Notification Panel") as RectTransform ?? notificationPanel;
             if (notificationPanel != null)
             {
                 notificationCanvasGroup = notificationPanel.GetComponent<CanvasGroup>() ?? notificationCanvasGroup;
@@ -204,7 +204,7 @@ namespace Kernel.UI
                 notificationImage = notificationPanel.Find("Image")?.GetComponent<Image>() ?? notificationImage;
             }
 
-            Transform arrowPanel = transform.Find("Arrow Panel");
+            Transform arrowPanel = FindInContentSafeFrame("Arrow Panel");
             if (arrowPanel != null)
             {
                 objectiveArrowView = arrowPanel.GetComponent<ObjectiveArrowView>() ?? objectiveArrowView;
@@ -234,7 +234,7 @@ namespace Kernel.UI
                 }
             }
 
-            questPanel = transform.Find("Quest Panel") as RectTransform ?? questPanel;
+            questPanel = FindInContentSafeFrame("Quest Panel") as RectTransform ?? questPanel;
             if (questPanel != null)
             {
                 questListRoot = questPanel.Find("Quests") as RectTransform ?? questListRoot;
@@ -1115,7 +1115,9 @@ namespace Kernel.UI
         private static RectTransform ResolvePauseButtonRoot(Transform root)
         {
             RectTransform rootButton = FindDirectChildRect(root, "Pause Btn")
-                ?? FindDirectChildRect(root, "Pause Button");
+                ?? FindDirectChildRect(root, "Pause Button")
+                ?? FindDirectChildRect(root, "Content Safe Frame/Pause Btn")
+                ?? FindDirectChildRect(root, "Content Safe Frame/Pause Button");
             if (rootButton != null)
             {
                 return rootButton;
@@ -1150,12 +1152,18 @@ namespace Kernel.UI
 
         private static RectTransform ResolvePlayerInfoPanelRoot(Transform root)
         {
-            return root != null ? root.Find("Player Info Panel") as RectTransform : null;
+            return root != null
+                ? root.Find("Player Info Panel") as RectTransform
+                    ?? root.Find("Content Safe Frame/Player Info Panel") as RectTransform
+                : null;
         }
 
         private static RectTransform ResolveHealthPanel(Transform root)
         {
-            return root != null ? root.Find("Player Info Panel/Panel/Hp bar") as RectTransform : null;
+            return root != null
+                ? root.Find("Player Info Panel/Panel/Hp bar") as RectTransform
+                    ?? root.Find("Content Safe Frame/Player Info Panel/Panel/Hp bar") as RectTransform
+                : null;
         }
 
         private static TMP_Text ResolveHealthTitleText(RectTransform panel)
@@ -1184,7 +1192,10 @@ namespace Kernel.UI
 
         private static RectTransform ResolveSpellPanel(Transform root)
         {
-            return root != null ? root.Find("Player Info Panel/Panel/Spell") as RectTransform : null;
+            return root != null
+                ? root.Find("Player Info Panel/Panel/Spell") as RectTransform
+                    ?? root.Find("Content Safe Frame/Player Info Panel/Panel/Spell") as RectTransform
+                : null;
         }
 
         private static RectTransform FindDirectChildRect(Transform root, string childName)

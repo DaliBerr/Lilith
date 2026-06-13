@@ -10,9 +10,9 @@ GameObject:
   m_Component:
   - component: {fileID: 5628663336214487922}
   - component: {fileID: 3689821166171287028}
-  - component: {fileID: 3520573127934098433}
   - component: {fileID: 7076933695854816207}
   - component: {fileID: 487867926104748989}
+  - component: {fileID: 2698012765045593991}
   m_Layer: 5
   m_Name: Token Select Panel
   m_TagString: Untagged
@@ -35,8 +35,8 @@ RectTransform:
   - {fileID: 6705941339285346697}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 1, y: 1}
+  m_AnchorMin: {x: 0.1, y: 0.2}
+  m_AnchorMax: {x: 0.9, y: 0.8}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -48,36 +48,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1246138586089533854}
   m_CullTransparentMesh: 1
---- !u!114 &3520573127934098433
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1246138586089533854}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
-  m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.392}
-  m_RaycastTarget: 1
-  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
-  m_Maskable: 1
-  m_OnCullStateChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  m_Sprite: {fileID: 10907, guid: 0000000000000000f000000000000000, type: 0}
-  m_Type: 1
-  m_PreserveAspect: 0
-  m_FillCenter: 1
-  m_FillMethod: 4
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
 --- !u!114 &7076933695854816207
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -88,11 +58,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7b55b8d6e1636954aa6e55c5e20477fc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.UI.TokenSelectUIScreen
   canvasGroup: {fileID: 487867926104748989}
   mainContent: {fileID: 6705941339285346697}
   bulletTokenLibrary: {fileID: 11400000, guid: a8fcb56ab6b8b37458a0deb54388d697, type: 2}
+  spellBookRewardLibrary: {fileID: 0}
   selectionPrefab: {fileID: 4845717621748364334, guid: e5b98263adf94d04ab18ac63ad9168e8, type: 3}
 --- !u!225 &487867926104748989
 CanvasGroup:
@@ -106,6 +77,19 @@ CanvasGroup:
   m_Interactable: 1
   m_BlocksRaycasts: 1
   m_IgnoreParentGroups: 0
+--- !u!114 &2698012765045593991
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1246138586089533854}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5ca60fee4f180a4f8f74c332f91ff87, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Lilith.Vocalith::Vocalith.UI.UIContentSafeFrame
+  maxAspect: 1.7777778
 --- !u!1 &9001159968905457129
 GameObject:
   m_ObjectHideFlags: 0
@@ -118,7 +102,7 @@ GameObject:
   - component: {fileID: 8983978330822526696}
   - component: {fileID: 712754579236179879}
   - component: {fileID: 7160549076601911159}
-  - component: {fileID: 24365578138145255}
+  - component: {fileID: 2399392145794196106}
   m_Layer: 5
   m_Name: Main Content
   m_TagString: Untagged
@@ -163,7 +147,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 594330143bf64458b42c307fd9dad490, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier:
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.92156863}
@@ -193,23 +177,23 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.HorizontalLayoutGroup
   m_Padding:
     m_Left: 25
     m_Right: 25
     m_Top: 25
     m_Bottom: 25
-  m_ChildAlignment: 1
+  m_ChildAlignment: 4
   m_Spacing: 50
   m_ChildForceExpandWidth: 0
-  m_ChildForceExpandHeight: 1
+  m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
-  m_ChildControlHeight: 1
+  m_ChildControlHeight: 0
   m_ChildScaleWidth: 0
-  m_ChildScaleHeight: 1
+  m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
---- !u!114 &24365578138145255
+--- !u!114 &2399392145794196106
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -218,8 +202,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 9001159968905457129}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3245ec927659c4140ac4f8d17403cc18, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ContentSizeFitter
-  m_HorizontalFit: 2
-  m_VerticalFit: 0
+  m_Script: {fileID: 11500000, guid: f44ee842c5384e748bbb92e44af72c0d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Lilith.Kernel::Kernel.UI.TokenSelectPanelLayoutFitter
+  contentRoot: {fileID: 6705941339285346697}
+  layoutGroup: {fileID: 7160549076601911159}
+  referenceCardSize: {x: 460, y: 500}
+  extraVerticalPadding: 0
+  minimumHeight: 120

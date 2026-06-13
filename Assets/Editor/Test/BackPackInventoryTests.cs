@@ -182,6 +182,35 @@ public sealed class BackPackInventoryTests
     }
 
     [Test]
+    public void Prefab_BackPackUI_HasResponsiveGridFitterOnRoot()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Backpack/BackPackUI.prefab");
+
+        try
+        {
+            ResponsiveLayoutGroupFitter[] fitters = prefabRoot.GetComponentsInChildren<ResponsiveLayoutGroupFitter>(true);
+            Assert.That(fitters, Has.Length.EqualTo(1));
+            Assert.That(fitters[0].gameObject, Is.SameAs(prefabRoot));
+            Assert.That(prefabRoot.GetComponent<BackPackUIScreen>(), Is.Not.Null);
+
+            GridLayoutGroup[] gridLayoutGroups = prefabRoot.GetComponentsInChildren<GridLayoutGroup>(true);
+            List<string> gridPaths = new(gridLayoutGroups.Length);
+            for (int i = 0; i < gridLayoutGroups.Length; i++)
+            {
+                gridPaths.Add(GetRelativeTransformPath(prefabRoot.transform, gridLayoutGroups[i].transform));
+            }
+
+            Assert.That(gridPaths, Does.Contain("Grids Preview Panel/BackPack Grid Panel/Scroll View/Viewport/Grid Content"));
+            Assert.That(gridPaths, Does.Contain("Grids Preview Panel/Book/Special_Item Grid Panel/Book Grid/Scroll View/Viewport/Content"));
+            Assert.That(gridPaths, Does.Contain("Grids Preview Panel/Book/Special_Item Grid Panel/Special_Item Grid/Scroll View/Viewport/Content"));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
     public void Prefab_BackPackUI_WiresHoverPreviewPrefab()
     {
         GameObject prefabRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/Backpack/BackPackUI.prefab");
@@ -436,6 +465,20 @@ public sealed class BackPackInventoryTests
         Assert.That(actual.g, Is.EqualTo(expected.g).Within(tolerance));
         Assert.That(actual.b, Is.EqualTo(expected.b).Within(tolerance));
         Assert.That(actual.a, Is.EqualTo(expected.a).Within(tolerance));
+    }
+
+    private static string GetRelativeTransformPath(Transform root, Transform child)
+    {
+        List<string> segments = new();
+        Transform current = child;
+        while (current != null && current != root)
+        {
+            segments.Add(current.name);
+            current = current.parent;
+        }
+
+        segments.Reverse();
+        return string.Join("/", segments);
     }
 
     private static T GetPrivateField<T>(object target, string fieldName)

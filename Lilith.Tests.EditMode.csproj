@@ -64,6 +64,7 @@
     <Compile Include="Assets\Editor\Test\EnemyGeneratorTests.cs" />
     <Compile Include="Assets\Editor\Test\SpellBookLoadoutTests.cs" />
     <Compile Include="Assets\Editor\Test\SpellSystemBaselineTests.cs" />
+    <Compile Include="Assets\Editor\Test\UILayoutScreenshotBatcherTests.cs" />
     <Compile Include="Assets\Editor\Test\ResponsiveLayoutGroupFitterTests.cs" />
     <Compile Include="Assets\Editor\Test\MapRunFlowControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\ReplaceTMPFontReferences.cs" />
@@ -118,11 +119,13 @@
     <Compile Include="Assets\Editor\Test\EnemyStatusEffectControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\EnemyResultVisualFeedbackTests.cs" />
     <Compile Include="Assets\Editor\Test\CharGlyphPresenterTests.cs" />
+    <Compile Include="Assets\Editor\Test\CoverImageTests.cs" />
     <Compile Include="Assets\Editor\Test\MapSpawnUtilityTests.cs" />
     <Compile Include="Assets\Editor\Test\UIGuideOverlayControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\CombatRunTimerTests.cs" />
     <Compile Include="Assets\Editor\Test\PlayerHealthBarControllerTests.cs" />
     <Compile Include="Assets\Editor\Test\StoryTellerUIScreenTests.cs" />
+    <Compile Include="Assets\Editor\Test\UIContentSafeFrameTests.cs" />
     <Compile Include="Assets\Editor\Test\NarrativeReaderTests.cs" />
     <Compile Include="Assets\Editor\Test\OptionsUIScreenTests.cs" />
     <Compile Include="Assets\Editor\Test\ScreenShakeStateTests.cs" />
@@ -131,6 +134,7 @@
     <Compile Include="Assets\Editor\Test\EnemyMeleeAttackerTests.cs" />
     <Compile Include="Assets\Editor\Test\GameplayBillboardTests.cs" />
     <Compile Include="Assets\Editor\Test\MainUIScreenTests.cs" />
+    <Compile Include="Assets\Editor\Test\HintUIScreenTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Editor\Test\Lilith.Tests.EditMode.asmdef" />

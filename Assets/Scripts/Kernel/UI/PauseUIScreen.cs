@@ -101,7 +101,7 @@ namespace Kernel.UI
         private void TryAutoBindReferences()
         {
             backgroundMask ??= GetComponent<Image>();
-            mainPanel ??= transform.Find("Main Panel") as RectTransform;
+            mainPanel ??= FindInContentSafeFrame("Main Panel") as RectTransform;
 
             if (mainPanel != null)
             {
@@ -124,7 +124,7 @@ namespace Kernel.UI
                 }
             }
 
-            settingPanel ??= transform.Find("Setting Panel")?.gameObject;
+            settingPanel ??= FindInContentSafeFrame("Setting Panel")?.gameObject;
             if (settingPanel != null)
             {
                 embeddedOptionsScreen ??= settingPanel.GetComponent<OptionsUIScreen>();

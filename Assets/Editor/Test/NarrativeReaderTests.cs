@@ -4,9 +4,11 @@ using System.Reflection;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 using Vocalith.EventSystem;
+using Vocalith.UI;
 
 public sealed class NarrativeReaderTests
 {
@@ -77,6 +79,120 @@ public sealed class NarrativeReaderTests
         Assert.That(screen.RuntimeEntryViews[0].TitleText.text, Is.EqualTo("Entry 1"));
         Assert.That(screen.RuntimeEntryViews[0].ProgressText.text, Is.EqualTo("2/2"));
         Assert.That(screen.RuntimeEntryViews[2].TitleText.text, Is.EqualTo("Entry 3"));
+    }
+
+    [Test]
+    public void MenuPrefab_HasResponsiveLayoutFitterForBothColumnGrids()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UI/Narrative/Narrative Menu Panel.prefab");
+
+        Assert.That(prefab, Is.Not.Null);
+        Assert.That(prefab.GetComponent<ResponsiveLayoutGroupFitter>(), Is.Not.Null);
+        Assert.That(prefab.transform.Find("Panel/Main Content/Left Panel")?.GetComponent<GridLayoutGroup>(), Is.Not.Null);
+        Assert.That(prefab.transform.Find("Panel/Main Content/Right Panel")?.GetComponent<GridLayoutGroup>(), Is.Not.Null);
+    }
+
+    [Test]
+    public void ContentPrefab_BindsNestedTextWhenScreenComponentIsAttached()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UI/Narrative/Narrative Content Panel.prefab");
+
+        Assert.That(prefab, Is.Not.Null);
+        Assert.That(prefab.GetComponents<Component>(), Does.Not.Contain(null));
+
+        GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+        createdObjects.Add(instance);
+
+        NarrativeContentUIScreen screen = instance.GetComponent<NarrativeContentUIScreen>() ?? instance.AddComponent<NarrativeContentUIScreen>();
+        TMP_Text titleText = instance.transform.Find("Main Content/Tittle/Text (TMP)")?.GetComponent<TMP_Text>();
+        TMP_Text leftText = instance.transform.Find("Main Content/Left Page Text/Text (TMP)")?.GetComponent<TMP_Text>();
+        TMP_Text rightText = instance.transform.Find("Main Content/Right Page Text/Text (TMP)")?.GetComponent<TMP_Text>();
+
+        Assert.That(screen, Is.Not.Null);
+        Assert.That(titleText, Is.Not.Null);
+        Assert.That(leftText, Is.Not.Null);
+        Assert.That(rightText, Is.Not.Null);
+
+        InvokeNonPublic(screen, "OnInit");
+        screen.Configure(CreateEntry("layout_audit", "Layout Audit", pageCount: 2, chapterCount: 1));
+
+        Assert.That(titleText.text, Is.EqualTo("Layout Audit / Chapter 1"));
+        Assert.That(leftText.text, Is.EqualTo("Page 1"));
+        Assert.That(rightText.text, Is.EqualTo("Page 2"));
+    }
+
+    [Test]
+    public void ContentPrefab_UsesLocalReadablePageLayoutWithoutResponsiveFitter()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UI/Narrative/Narrative Content Panel.prefab");
+
+        Assert.That(prefab, Is.Not.Null);
+        Assert.That(prefab.GetComponent<ResponsiveLayoutGroupFitter>(), Is.Null);
+
+        RectTransform title = prefab.transform.Find("Main Content/Tittle") as RectTransform;
+        RectTransform leftPage = prefab.transform.Find("Main Content/Left Page Text") as RectTransform;
+        RectTransform rightPage = prefab.transform.Find("Main Content/Right Page Text") as RectTransform;
+        RectTransform previousButton = prefab.transform.Find("Main Content/Previous Page") as RectTransform;
+        RectTransform nextButton = prefab.transform.Find("Main Content/Next Page") as RectTransform;
+        RectTransform chapterPanel = prefab.transform.Find("Chapter Selection Panel") as RectTransform;
+        TMP_Text titleText = prefab.transform.Find("Main Content/Tittle/Text (TMP)")?.GetComponent<TMP_Text>();
+        TMP_Text leftPageText = prefab.transform.Find("Main Content/Left Page Text/Text (TMP)")?.GetComponent<TMP_Text>();
+        TMP_Text previousLabel = prefab.transform.Find("Main Content/Previous Page/Button/Text (TMP)")?.GetComponent<TMP_Text>();
+        TMP_Text nextLabel = prefab.transform.Find("Main Content/Next Page/Button/Text (TMP)")?.GetComponent<TMP_Text>();
+
+        Assert.That(title, Is.Not.Null);
+        Assert.That(leftPage, Is.Not.Null);
+        Assert.That(rightPage, Is.Not.Null);
+        Assert.That(previousButton, Is.Not.Null);
+        Assert.That(nextButton, Is.Not.Null);
+        Assert.That(chapterPanel, Is.Not.Null);
+        Assert.That(titleText, Is.Not.Null);
+        Assert.That(leftPageText, Is.Not.Null);
+        Assert.That(previousLabel, Is.Not.Null);
+        Assert.That(nextLabel, Is.Not.Null);
+        Assert.That(title.anchorMin.x, Is.EqualTo(0.12f).Within(0.001f));
+        Assert.That(title.anchorMax.x, Is.EqualTo(0.88f).Within(0.001f));
+        Assert.That(leftPage.anchorMin.x, Is.GreaterThanOrEqualTo(0.10f));
+        Assert.That(rightPage.anchorMax.x, Is.LessThanOrEqualTo(0.90f));
+        Assert.That(leftPage.anchorMax.y, Is.LessThan(title.anchorMin.y));
+        Assert.That(rightPage.anchorMax.y, Is.EqualTo(leftPage.anchorMax.y).Within(0.001f));
+        Assert.That(previousButton.anchorMax.x - previousButton.anchorMin.x, Is.GreaterThanOrEqualTo(0.05f));
+        Assert.That(nextButton.anchorMax.x - nextButton.anchorMin.x, Is.GreaterThanOrEqualTo(0.05f));
+        Assert.That(chapterPanel.anchorMin.y, Is.GreaterThanOrEqualTo(previousButton.anchorMax.y));
+        Assert.That(chapterPanel.anchorMax.y, Is.LessThanOrEqualTo(title.anchorMin.y));
+        Assert.That(titleText.enableAutoSizing, Is.True);
+        Assert.That(titleText.textWrappingMode, Is.EqualTo(TextWrappingModes.NoWrap));
+        Assert.That(titleText.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+        Assert.That(leftPageText.enableAutoSizing, Is.True);
+        Assert.That(previousLabel.text, Is.EqualTo("<"));
+        Assert.That(nextLabel.text, Is.EqualTo(">"));
+    }
+
+    [Test]
+    public void EntryPrefabs_UseAutoSizingAndEllipsisForScreenshotScaleRange()
+    {
+        GameObject storyEntryPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UI/Narrative/Story Entry.prefab");
+        GameObject chapterEntryPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UI/Narrative/Chapter Entry.prefab");
+
+        Assert.That(storyEntryPrefab, Is.Not.Null);
+        Assert.That(chapterEntryPrefab, Is.Not.Null);
+
+        TMP_Text storyTitle = storyEntryPrefab.transform.Find("Tittle")?.GetComponent<TMP_Text>();
+        TMP_Text storyProgress = storyEntryPrefab.transform.Find("Progress")?.GetComponent<TMP_Text>();
+        TMP_Text chapterText = chapterEntryPrefab.GetComponentInChildren<TMP_Text>(includeInactive: true);
+        LayoutElement chapterLayout = chapterEntryPrefab.GetComponent<LayoutElement>();
+
+        Assert.That(storyTitle, Is.Not.Null);
+        Assert.That(storyProgress, Is.Not.Null);
+        Assert.That(chapterText, Is.Not.Null);
+        Assert.That(chapterLayout, Is.Not.Null);
+        Assert.That(storyTitle.enableAutoSizing, Is.True);
+        Assert.That(storyProgress.enableAutoSizing, Is.True);
+        Assert.That(chapterText.enableAutoSizing, Is.True);
+        Assert.That(storyTitle.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+        Assert.That(storyProgress.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+        Assert.That(chapterText.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+        Assert.That(chapterLayout.preferredHeight, Is.GreaterThanOrEqualTo(34f));
     }
 
     [Test]

@@ -11,8 +11,6 @@ namespace Vocalith.UI
 
         private readonly List<LayoutGroup> layoutGroups = new();
         private readonly Dictionary<GridLayoutGroup, GridLayoutBase> gridBases = new();
-        private readonly Dictionary<HorizontalOrVerticalLayoutGroup, LinearLayoutBase> linearBases = new();
-        private readonly Dictionary<LayoutElement, LayoutElementBase> layoutElementBases = new();
         private bool isFitting;
 
         public void SetRoot(RectTransform value)
@@ -22,7 +20,8 @@ namespace Vocalith.UI
 
         public void FitNow()
         {
-            if (isFitting || root == null)
+            RectTransform resolvedRoot = ResolveRoot();
+            if (isFitting || resolvedRoot == null)
             {
                 return;
             }
@@ -30,7 +29,7 @@ namespace Vocalith.UI
             isFitting = true;
             try
             {
-                root.GetComponentsInChildren(false, layoutGroups);
+                resolvedRoot.GetComponentsInChildren(false, layoutGroups);
                 layoutGroups.Sort((left, right) => GetTransformDepth(right.transform).CompareTo(GetTransformDepth(left.transform)));
                 for (int i = 0; i < layoutGroups.Count; i++)
                 {
@@ -42,6 +41,11 @@ namespace Vocalith.UI
                 layoutGroups.Clear();
                 isFitting = false;
             }
+        }
+
+        private RectTransform ResolveRoot()
+        {
+            return root != null ? root : transform as RectTransform;
         }
 
         private void LateUpdate()
@@ -59,12 +63,6 @@ namespace Vocalith.UI
             if (layoutGroup is GridLayoutGroup gridLayoutGroup)
             {
                 FitGridLayout(gridLayoutGroup);
-                return;
-            }
-
-            if (layoutGroup is HorizontalOrVerticalLayoutGroup linearLayoutGroup)
-            {
-                FitLinearLayout(linearLayoutGroup);
             }
         }
 
@@ -74,9 +72,12 @@ namespace Vocalith.UI
             RestoreGridLayout(gridLayoutGroup, baseLayout);
 
             RectTransform rectTransform = gridLayoutGroup.transform as RectTransform;
-            Vector2 availableSize = rectTransform.rect.size;
+            GridFitSpace fitSpace = ResolveGridFitSpace(gridLayoutGroup, rectTransform);
+            Vector2 availableSize = fitSpace.AvailableSize;
             int childCount = CountLayoutChildren(rectTransform);
-            if (childCount <= 0 || availableSize.x <= 0f || availableSize.y <= 0f)
+            if (childCount <= 0 ||
+                (fitSpace.ConstrainWidth && availableSize.x <= 0f) ||
+                (fitSpace.ConstrainHeight && availableSize.y <= 0f))
             {
                 return;
             }
@@ -88,65 +89,56 @@ namespace Vocalith.UI
             float requiredHeight = baseLayout.Padding.Vertical
                 + (baseLayout.CellSize.y * rowCount)
                 + (baseLayout.Spacing.y * Mathf.Max(0, rowCount - 1));
-            float scale = ResolveFitScale(availableSize.x, availableSize.y, requiredWidth, requiredHeight);
+            float scale = ResolveFitScale(
+                availableSize.x,
+                availableSize.y,
+                requiredWidth,
+                requiredHeight,
+                fitSpace.ConstrainWidth,
+                fitSpace.ConstrainHeight);
 
             ApplyGridScale(gridLayoutGroup, baseLayout, scale);
         }
 
-        private void FitLinearLayout(HorizontalOrVerticalLayoutGroup layoutGroup)
+        private static GridFitSpace ResolveGridFitSpace(GridLayoutGroup gridLayoutGroup, RectTransform rectTransform)
         {
-            LinearLayoutBase baseLayout = CaptureLinearBase(layoutGroup);
-            RestoreLinearLayout(layoutGroup, baseLayout);
-
-            RectTransform rectTransform = layoutGroup.transform as RectTransform;
-            Vector2 availableSize = rectTransform.rect.size;
-            if (availableSize.x <= 0f || availableSize.y <= 0f)
+            GridFitSpace fitSpace = new()
             {
-                return;
+                AvailableSize = rectTransform.rect.size,
+                ConstrainWidth = true,
+                ConstrainHeight = true,
+            };
+
+            ScrollRect scrollRect = gridLayoutGroup.GetComponentInParent<ScrollRect>();
+            if (scrollRect == null || scrollRect.content != rectTransform)
+            {
+                return fitSpace;
             }
 
-            bool isHorizontal = layoutGroup is HorizontalLayoutGroup;
-            int childCount = 0;
-            float requiredMain = isHorizontal ? baseLayout.Padding.Horizontal : baseLayout.Padding.Vertical;
-            float requiredCross = isHorizontal ? baseLayout.Padding.Vertical : baseLayout.Padding.Horizontal;
-            RestoreDirectChildLayoutElements(rectTransform);
-            for (int i = 0; i < rectTransform.childCount; i++)
+            RectTransform viewport = scrollRect.viewport != null
+                ? scrollRect.viewport
+                : scrollRect.transform as RectTransform;
+            if (viewport == null || viewport.rect.width <= 0f || viewport.rect.height <= 0f)
             {
-                RectTransform child = rectTransform.GetChild(i) as RectTransform;
-                if (!IsLayoutChild(child))
-                {
-                    continue;
-                }
-
-                childCount++;
-                requiredMain += LayoutUtility.GetPreferredSize(child, isHorizontal ? 0 : 1);
-                requiredCross = Mathf.Max(requiredCross,
-                    (isHorizontal ? baseLayout.Padding.Vertical : baseLayout.Padding.Horizontal)
-                    + LayoutUtility.GetPreferredSize(child, isHorizontal ? 1 : 0));
+                return fitSpace;
             }
 
-            if (childCount <= 0)
+            fitSpace.AvailableSize = viewport.rect.size;
+            if (scrollRect.vertical && !scrollRect.horizontal)
             {
-                return;
+                fitSpace.ConstrainHeight = false;
+            }
+            else if (scrollRect.horizontal && !scrollRect.vertical)
+            {
+                fitSpace.ConstrainWidth = false;
             }
 
-            requiredMain += baseLayout.Spacing * Mathf.Max(0, childCount - 1);
-            float availableMain = isHorizontal ? availableSize.x : availableSize.y;
-            float availableCross = isHorizontal ? availableSize.y : availableSize.x;
-            float scale = ResolveFitScale(availableMain, availableCross, requiredMain, requiredCross);
-
-            ApplyLinearScale(layoutGroup, baseLayout, scale);
-            ApplyDirectChildLayoutElementScale(rectTransform, scale);
+            return fitSpace;
         }
 
         private static bool ShouldSkip(LayoutGroup layoutGroup)
         {
             if (layoutGroup == null || !layoutGroup.isActiveAndEnabled)
-            {
-                return true;
-            }
-
-            if (layoutGroup is not GridLayoutGroup && layoutGroup.GetComponent<ContentSizeFitter>() != null)
             {
                 return true;
             }
@@ -172,87 +164,11 @@ namespace Vocalith.UI
             return baseLayout;
         }
 
-        private LinearLayoutBase CaptureLinearBase(HorizontalOrVerticalLayoutGroup layoutGroup)
-        {
-            if (linearBases.TryGetValue(layoutGroup, out LinearLayoutBase baseLayout))
-            {
-                return baseLayout;
-            }
-
-            baseLayout = new LinearLayoutBase
-            {
-                Spacing = Mathf.Max(0f, layoutGroup.spacing),
-                Padding = PaddingValues.From(layoutGroup.padding),
-            };
-            linearBases[layoutGroup] = baseLayout;
-            return baseLayout;
-        }
-
-        private LayoutElementBase CaptureLayoutElementBase(LayoutElement layoutElement)
-        {
-            if (layoutElementBases.TryGetValue(layoutElement, out LayoutElementBase baseLayoutElement))
-            {
-                return baseLayoutElement;
-            }
-
-            baseLayoutElement = LayoutElementBase.From(layoutElement);
-            layoutElementBases[layoutElement] = baseLayoutElement;
-            return baseLayoutElement;
-        }
-
         private static void RestoreGridLayout(GridLayoutGroup gridLayoutGroup, GridLayoutBase baseLayout)
         {
             gridLayoutGroup.cellSize = baseLayout.CellSize;
             gridLayoutGroup.spacing = baseLayout.Spacing;
             ApplyPadding(gridLayoutGroup.padding, baseLayout.Padding, 1f);
-        }
-
-        private static void RestoreLinearLayout(HorizontalOrVerticalLayoutGroup layoutGroup, LinearLayoutBase baseLayout)
-        {
-            layoutGroup.spacing = baseLayout.Spacing;
-            ApplyPadding(layoutGroup.padding, baseLayout.Padding, 1f);
-        }
-
-        private void ApplyDirectChildLayoutElementScale(RectTransform parent, float scale)
-        {
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                RectTransform child = parent.GetChild(i) as RectTransform;
-                if (!IsLayoutChild(child))
-                {
-                    continue;
-                }
-
-                LayoutElement layoutElement = child.GetComponent<LayoutElement>();
-                if (layoutElement == null)
-                {
-                    continue;
-                }
-
-                LayoutElementBase baseLayoutElement = CaptureLayoutElementBase(layoutElement);
-                baseLayoutElement.ApplyTo(layoutElement, scale);
-            }
-        }
-
-        private void RestoreDirectChildLayoutElements(RectTransform parent)
-        {
-            for (int i = 0; i < parent.childCount; i++)
-            {
-                RectTransform child = parent.GetChild(i) as RectTransform;
-                if (!IsLayoutChild(child))
-                {
-                    continue;
-                }
-
-                LayoutElement layoutElement = child.GetComponent<LayoutElement>();
-                if (layoutElement == null)
-                {
-                    continue;
-                }
-
-                LayoutElementBase baseLayoutElement = CaptureLayoutElementBase(layoutElement);
-                baseLayoutElement.ApplyTo(layoutElement, 1f);
-            }
         }
 
         private static void ResolveGridShape(
@@ -307,17 +223,31 @@ namespace Vocalith.UI
             return layoutElement == null || !layoutElement.ignoreLayout;
         }
 
-        private static float ResolveFitScale(float availableWidth, float availableHeight, float requiredWidth, float requiredHeight)
+        private static float ResolveFitScale(
+            float availableWidth,
+            float availableHeight,
+            float requiredWidth,
+            float requiredHeight,
+            bool constrainWidth = true,
+            bool constrainHeight = true)
         {
             if (requiredWidth <= 0f || requiredHeight <= 0f)
             {
                 return 1f;
             }
 
-            return Mathf.Clamp(
-                Mathf.Min(1f, availableWidth / requiredWidth, availableHeight / requiredHeight),
-                0.01f,
-                1f);
+            float scale = float.PositiveInfinity;
+            if (constrainWidth)
+            {
+                scale = Mathf.Min(scale, availableWidth / requiredWidth);
+            }
+
+            if (constrainHeight)
+            {
+                scale = Mathf.Min(scale, availableHeight / requiredHeight);
+            }
+
+            return float.IsPositiveInfinity(scale) ? 1f : Mathf.Max(0.01f, scale);
         }
 
         private static void ApplyGridScale(GridLayoutGroup gridLayoutGroup, GridLayoutBase baseLayout, float scale)
@@ -330,13 +260,6 @@ namespace Vocalith.UI
                 Mathf.Max(0f, baseLayout.Spacing.y * scale));
             ApplyPadding(gridLayoutGroup.padding, baseLayout.Padding, scale);
             LayoutRebuilder.MarkLayoutForRebuild(gridLayoutGroup.transform as RectTransform);
-        }
-
-        private static void ApplyLinearScale(HorizontalOrVerticalLayoutGroup layoutGroup, LinearLayoutBase baseLayout, float scale)
-        {
-            layoutGroup.spacing = Mathf.Max(0f, baseLayout.Spacing * scale);
-            ApplyPadding(layoutGroup.padding, baseLayout.Padding, scale);
-            LayoutRebuilder.MarkLayoutForRebuild(layoutGroup.transform as RectTransform);
         }
 
         private static void ApplyPadding(RectOffset target, PaddingValues source, float scale)
@@ -367,10 +290,11 @@ namespace Vocalith.UI
             public PaddingValues Padding;
         }
 
-        private struct LinearLayoutBase
+        private struct GridFitSpace
         {
-            public float Spacing;
-            public PaddingValues Padding;
+            public Vector2 AvailableSize;
+            public bool ConstrainWidth;
+            public bool ConstrainHeight;
         }
 
         private struct PaddingValues
@@ -395,36 +319,5 @@ namespace Vocalith.UI
             }
         }
 
-        private struct LayoutElementBase
-        {
-            public float MinWidth;
-            public float MinHeight;
-            public float PreferredWidth;
-            public float PreferredHeight;
-
-            public static LayoutElementBase From(LayoutElement layoutElement)
-            {
-                return new LayoutElementBase
-                {
-                    MinWidth = layoutElement.minWidth,
-                    MinHeight = layoutElement.minHeight,
-                    PreferredWidth = layoutElement.preferredWidth,
-                    PreferredHeight = layoutElement.preferredHeight,
-                };
-            }
-
-            public void ApplyTo(LayoutElement layoutElement, float scale)
-            {
-                layoutElement.minWidth = ScaleOptional(MinWidth, scale);
-                layoutElement.minHeight = ScaleOptional(MinHeight, scale);
-                layoutElement.preferredWidth = ScaleOptional(PreferredWidth, scale);
-                layoutElement.preferredHeight = ScaleOptional(PreferredHeight, scale);
-            }
-
-            private static float ScaleOptional(float value, float scale)
-            {
-                return value >= 0f ? Mathf.Max(1f, value * scale) : value;
-            }
-        }
     }
 }

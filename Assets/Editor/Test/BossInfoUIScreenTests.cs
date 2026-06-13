@@ -3,12 +3,15 @@ using System.Reflection;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 using Vocalith.EventSystem;
+using Vocalith.UI;
 
 public sealed class BossInfoUIScreenTests
 {
+    private const string BossInfoPrefabPath = "Assets/Prefabs/UI/MainHUD/Boss Info UI.prefab";
     private readonly List<Object> createdObjects = new();
 
     [TearDown]
@@ -75,6 +78,33 @@ public sealed class BossInfoUIScreenTests
 
         Assert.That(screen.getAlpha(), Is.EqualTo(1f).Within(0.0001f));
         Assert.That(bossNameText.text, Is.EqualTo("\u971c\u950b\u00b7\u8d30"));
+    }
+
+    [Test]
+    public void Prefab_UsesBoundedNativeOverlayLayoutWithoutResponsiveFitter()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BossInfoPrefabPath);
+        Assert.That(prefab, Is.Not.Null, $"{BossInfoPrefabPath} should exist.");
+        Assert.That(prefab.GetComponentInChildren<ResponsiveLayoutGroupFitter>(includeInactive: true), Is.Null);
+
+        RectTransform hpBar = prefab.transform.Find("Hp Bar") as RectTransform;
+        RectTransform bossInfo = prefab.transform.Find("Boss Info") as RectTransform;
+        TMP_Text bossName = prefab.transform.Find("Boss Info/Text (TMP)")?.GetComponent<TMP_Text>();
+
+        Assert.That(hpBar, Is.Not.Null);
+        Assert.That(bossInfo, Is.Not.Null);
+        Assert.That(bossName, Is.Not.Null);
+        Assert.That(hpBar.anchorMin.x, Is.EqualTo(0.10f).Within(0.001f));
+        Assert.That(hpBar.anchorMax.x, Is.EqualTo(0.90f).Within(0.001f));
+
+        HorizontalLayoutGroup hpLayout = hpBar.GetComponent<HorizontalLayoutGroup>();
+        Assert.That(hpLayout, Is.Not.Null);
+        Assert.That(hpLayout.spacing, Is.EqualTo(12f).Within(0.01f));
+        Assert.That(hpLayout.childForceExpandWidth, Is.False);
+
+        Assert.That(bossName.enableAutoSizing, Is.True);
+        Assert.That(bossName.textWrappingMode, Is.EqualTo(TextWrappingModes.NoWrap));
+        Assert.That(bossName.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
     }
 
     private BossInfoUIScreen CreateBossInfoScreen(GameObject healthCellPrefab, out RectTransform barRoot, out TMP_Text bossNameText)

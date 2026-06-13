@@ -86,7 +86,7 @@ namespace Kernel.UI
 
         private void TryAutoBindReferences()
         {
-            panelRoot ??= transform.Find("Settlement Panel") as RectTransform;
+            panelRoot ??= FindInContentSafeFrame("Settlement Panel") as RectTransform;
             if (panelRoot == null)
             {
                 return;

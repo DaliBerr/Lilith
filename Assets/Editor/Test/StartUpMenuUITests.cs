@@ -4,13 +4,16 @@ using System.Reflection;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using Vocalith.UI;
 
 public sealed class StartUpMenuUITests
 {
+    private const string StartUpPrefabPath = "Assets/Prefabs/UI/StartUp/StartUp UI Prefab.prefab";
     private static readonly Color HoverTextColor = new Color(78f / 255f, 69f / 255f, 60f / 255f, 1f);
 
     private readonly List<Object> createdObjects = new();
@@ -112,6 +115,32 @@ public sealed class StartUpMenuUITests
         Assert.That(startListeners, Does.Not.Contain("HandleLoadButtonClicked"));
         Assert.That(loadListeners, Does.Contain("HandleLoadButtonClicked"));
         Assert.That(loadListeners, Does.Not.Contain("HandleStartButtonClicked"));
+    }
+
+    [Test]
+    public void Prefab_UsesBoundedNativeButtonLayoutWithoutResponsiveFitter()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(StartUpPrefabPath);
+        Assert.That(prefab, Is.Not.Null, $"{StartUpPrefabPath} should exist.");
+        Assert.That(prefab.GetComponentInChildren<ResponsiveLayoutGroupFitter>(includeInactive: true), Is.Null);
+
+        Transform buttonPanel = prefab.transform.Find("Content Safe Frame/Button Panel");
+        Assert.That(buttonPanel, Is.Not.Null);
+        Assert.That(buttonPanel.GetComponent<ContentSizeFitter>(), Is.Null);
+
+        VerticalLayoutGroup layout = buttonPanel.GetComponent<VerticalLayoutGroup>();
+        Assert.That(layout, Is.Not.Null);
+        Assert.That(layout.childForceExpandHeight, Is.True);
+        Assert.That(layout.spacing, Is.EqualTo(8f).Within(0.01f));
+
+        TMP_Text[] labels = buttonPanel.GetComponentsInChildren<TMP_Text>(includeInactive: true);
+        Assert.That(labels, Has.Length.GreaterThanOrEqualTo(4));
+        foreach (TMP_Text label in labels)
+        {
+            Assert.That(label.enableAutoSizing, Is.True);
+            Assert.That(label.textWrappingMode, Is.EqualTo(TextWrappingModes.NoWrap));
+            Assert.That(label.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+        }
     }
 
     private StartUpMenuUI CreateStartUpMenuUI(out List<Button> buttons, out List<Image> backgrounds, out List<TMP_Text> labels)

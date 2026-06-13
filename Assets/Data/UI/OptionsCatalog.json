@@ -48,6 +48,13 @@
           "optionsSource": "screenResolutions"
         },
         {
+          "id": "target_display",
+          "title": "渲染屏幕",
+          "mode": "dropdown",
+          "playerPrefsKey": "Options.Display.TargetDisplay",
+          "optionsSource": "screenDisplays"
+        },
+        {
           "id": "fullscreen",
           "title": "全屏",
           "mode": "toggle",
@@ -60,16 +67,6 @@
           "mode": "toggle",
           "playerPrefsKey": "Options.Display.VSync",
           "defaultBool": true
-        },
-        {
-          "id": "ui_scale",
-          "title": "UI 缩放",
-          "mode": "slider",
-          "playerPrefsKey": "Options.Display.UIScale",
-          "min": 0.6,
-          "max": 1.5,
-          "defaultValue": 1,
-          "valueFormat": "{value}x"
         },
         {
           "id": "language",

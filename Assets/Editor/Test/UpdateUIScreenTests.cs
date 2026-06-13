@@ -7,6 +7,7 @@ using NUnit.Framework;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using Vocalith.UI;
 
 public sealed class UpdateUIScreenTests
 {
@@ -120,6 +121,23 @@ public sealed class UpdateUIScreenTests
 
         Assert.That(PlayerRemnantWallet.GetCurrentRemnants(), Is.EqualTo(0));
         Assert.That(saveService.GetLifetimeStat(PermanentUpgradeService.BuildLifetimeStatKey("damage_child")), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Prefab_UpgradeSection_HasResponsiveGridFitterOnRoot()
+    {
+        const string prefabPath = "Assets/Prefabs/UI/Upgrade/Upgrage Section Prefab.prefab";
+        GameObject prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+
+        Assert.That(prefab, Is.Not.Null, $"{prefabPath} should exist.");
+
+        ResponsiveLayoutGroupFitter[] fitters = prefab.GetComponentsInChildren<ResponsiveLayoutGroupFitter>(true);
+        GridLayoutGroup[] grids = prefab.GetComponentsInChildren<GridLayoutGroup>(true);
+
+        Assert.That(fitters, Has.Length.EqualTo(1));
+        Assert.That(fitters[0].gameObject, Is.SameAs(prefab));
+        Assert.That(grids, Has.Length.EqualTo(1));
+        Assert.That(grids[0].transform.parent, Is.SameAs(prefab.transform));
     }
 
     private PermanentUpgradeCatalogData CreateTreeCatalog()

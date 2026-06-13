@@ -1265,10 +1265,13 @@ namespace Kernel.UI
             int elementIndex = 0;
             string currentPrefix = prefixText ?? string.Empty;
             int currentPrefixCount = CountTextElements(currentPrefix);
+            bool useMeasuredPageFit = displayTextFitsPage != null;
             while (elementIndex < elements.Count)
             {
                 int remainingCount = elements.Count - elementIndex;
-                int maxChunkCount = maxCharactersPerPage > 0
+                int maxChunkCount = useMeasuredPageFit
+                    ? remainingCount
+                    : maxCharactersPerPage > 0
                     ? Mathf.Max(1, Mathf.Min(remainingCount, maxCharactersPerPage - currentPrefixCount))
                     : remainingCount;
                 int chunkCount = ResolveLargestFittingChunkCount(elements, elementIndex, maxChunkCount, currentPrefix, maxCharactersPerPage, displayTextFitsPage);
@@ -1291,6 +1294,18 @@ namespace Kernel.UI
             int maxCharactersPerPage,
             Func<string, bool> displayTextFitsPage)
         {
+            bool useMeasuredPageFit = displayTextFitsPage != null;
+            if (useMeasuredPageFit)
+            {
+                return ResolveLargestMeasuredChunkCount(
+                    elements,
+                    startIndex,
+                    Mathf.Max(1, maxChunkCount),
+                    prefixText,
+                    maxCharactersPerPage,
+                    displayTextFitsPage);
+            }
+
             int low = 1;
             int high = Mathf.Max(1, maxChunkCount);
             int best = 0;
@@ -1314,17 +1329,102 @@ namespace Kernel.UI
             return best > 0 ? best : 1;
         }
 
+        private static int ResolveLargestMeasuredChunkCount(
+            IReadOnlyList<string> elements,
+            int startIndex,
+            int maxChunkCount,
+            string prefixText,
+            int maxCharactersPerPage,
+            Func<string, bool> displayTextFitsPage)
+        {
+            int upperBound = Mathf.Max(1, maxChunkCount);
+            int probeSeedCount = ResolveLargestMeasuredProbeSeed(prefixText, maxCharactersPerPage, upperBound);
+
+            if (DoesDisplayTextFitPage(
+                string.Concat(prefixText ?? string.Empty, BuildTextElementsString(elements, startIndex, probeSeedCount)),
+                maxCharactersPerPage,
+                displayTextFitsPage))
+            {
+                return ResolveLargestFittingChunkCountInRange(
+                    elements,
+                    startIndex,
+                    probeSeedCount,
+                    upperBound,
+                    prefixText,
+                    maxCharactersPerPage,
+                    displayTextFitsPage);
+            }
+
+            return ResolveLargestFittingChunkCountInRange(
+                elements,
+                startIndex,
+                1,
+                Mathf.Max(1, probeSeedCount - 1),
+                prefixText,
+                maxCharactersPerPage,
+                displayTextFitsPage);
+        }
+
+        private static int ResolveLargestMeasuredProbeSeed(string prefixText, int maxCharactersPerPage, int upperBound)
+        {
+            if (maxCharactersPerPage <= 0)
+            {
+                return upperBound;
+            }
+
+            int prefixCount = CountTextElements(prefixText);
+            int preferredCount = Mathf.Max(1, maxCharactersPerPage - prefixCount);
+            return Mathf.Clamp(preferredCount, 1, upperBound);
+        }
+
+        private static int ResolveLargestFittingChunkCountInRange(
+            IReadOnlyList<string> elements,
+            int startIndex,
+            int low,
+            int high,
+            string prefixText,
+            int maxCharactersPerPage,
+            Func<string, bool> displayTextFitsPage)
+        {
+            int best = 0;
+            int searchLow = Mathf.Max(1, low);
+            int searchHigh = Mathf.Max(searchLow, high);
+
+            while (searchLow <= searchHigh)
+            {
+                int middle = (searchLow + searchHigh) / 2;
+                string candidateChunk = BuildTextElementsString(elements, startIndex, middle);
+                string candidateDisplayText = string.Concat(prefixText ?? string.Empty, candidateChunk);
+                if (DoesDisplayTextFitPage(candidateDisplayText, maxCharactersPerPage, displayTextFitsPage))
+                {
+                    best = middle;
+                    searchLow = middle + 1;
+                }
+                else
+                {
+                    searchHigh = middle - 1;
+                }
+            }
+
+            return best > 0 ? best : 1;
+        }
+
         private static bool DoesDisplayTextFitPage(
             string displayText,
             int maxCharactersPerPage,
             Func<string, bool> displayTextFitsPage)
         {
+            if (displayTextFitsPage != null)
+            {
+                return displayTextFitsPage(displayText ?? string.Empty);
+            }
+
             if (maxCharactersPerPage > 0 && CountTextElements(displayText) > maxCharactersPerPage)
             {
                 return false;
             }
 
-            return displayTextFitsPage == null || displayTextFitsPage(displayText ?? string.Empty);
+            return true;
         }
 
         private static List<string> GetTextElements(string text)

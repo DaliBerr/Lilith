@@ -52,6 +52,7 @@
     <Compile Include="Assets\Editor\SystemCallBlocker.cs" />
     <Compile Include="Assets\Editor\EnemyDefinitionEditor.cs" />
     <Compile Include="Assets\Editor\WallTagColliderBatchTool.cs" />
+    <Compile Include="Assets\Editor\UILayoutScreenshotBatcher.cs" />
     <Compile Include="Assets\Editor\SharedCharacterAnimationBuilder.cs" />
     <Compile Include="Assets\Editor\MapGridAuthoringEditor.cs" />
     <Compile Include="Assets\Editor\LinkedTokenDataEditor.cs" />

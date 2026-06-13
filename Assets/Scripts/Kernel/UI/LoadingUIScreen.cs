@@ -37,9 +37,9 @@ namespace Kernel.UI
 
         private void TryAutoBindReferences()
         {
-            progressText ??= transform.Find("Progress/Text/Text (TMP)")?.GetComponent<TMP_Text>();
+            progressText ??= FindInContentSafeFrame("Progress/Text/Text (TMP)")?.GetComponent<TMP_Text>();
             progressText ??= GetComponentInChildren<TMP_Text>(true);
-            progressFill ??= transform.Find("Progress/Animation") as RectTransform;
+            progressFill ??= FindInContentSafeFrame("Progress/Animation") as RectTransform;
         }
 
         private void ApplyProgress()

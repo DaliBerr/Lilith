@@ -32,19 +32,22 @@ namespace Kernel.UI
         private const string DropdownMode = "dropdown";
         private const string ToggleMode = "toggle";
         public const string UIScalePlayerPrefsKey = "Options.Display.UIScale";
-        private const float DisplayUIScaleMin = 0.6f;
-        private const float DisplayUIScaleMax = 1.5f;
-        private const float DisplayUIScaleStep = 0.1f;
+        public const float FixedUIScale = 1f;
         private const string ScreenResolutionsOptionsSource = "screenResolutions";
+        private const string ScreenDisplaysOptionsSource = "screenDisplays";
         private const string DisplayResolutionEntryId = "resolution";
+        private const string DisplayTargetDisplayEntryId = "target_display";
         private const string DisplayFullscreenEntryId = "fullscreen";
         private const string DisplayVSyncEntryId = "v_sync";
         private const string DisplayUIScaleEntryId = "ui_scale";
         private const string LocalizationLanguageEntryId = "language";
         private const string DisplayResolutionPrefsKey = LilithDisplaySettings.ResolutionPrefsKey;
+        private const string DisplayTargetDisplayPrefsKey = LilithDisplaySettings.TargetDisplayPrefsKey;
         private const string DisplayFullscreenPrefsKey = LilithDisplaySettings.FullscreenPrefsKey;
         private const string DisplayVSyncPrefsKey = LilithDisplaySettings.VSyncPrefsKey;
         private const string BindingCancelledMessage = "按键绑定已取消。";
+        private const int DisplayChangeRefreshMaxFrames = 30;
+        private const int DisplayChangeRefreshSettleFrames = 2;
 
         [Header("Layout")]
         [SerializeField] private RectTransform catalogRoot;
@@ -745,6 +748,12 @@ namespace Kernel.UI
                     if (UsesScreenResolutionOptions(entry))
                     {
                         entry.Options = BuildScreenResolutionChoices();
+                        continue;
+                    }
+
+                    if (UsesScreenDisplayOptions(entry))
+                    {
+                        entry.Options = BuildScreenDisplayChoices();
                     }
                 }
             }
@@ -825,6 +834,11 @@ namespace Kernel.UI
                         return ResolveCurrentResolutionValue(entry);
                     }
 
+                    if (IsDisplayTargetDisplayEntry(entry) && !PlayerPrefs.HasKey(prefsKey))
+                    {
+                        return ResolveCurrentDisplayValue(entry);
+                    }
+
                     if (PlayerPrefs.HasKey(prefsKey))
                     {
                         string storedDropdownValue = PlayerPrefs.GetString(prefsKey, string.Empty);
@@ -871,6 +885,11 @@ namespace Kernel.UI
                     if (IsDisplayResolutionEntry(entry))
                     {
                         return ResolveCurrentResolutionValue(entry);
+                    }
+
+                    if (IsDisplayTargetDisplayEntry(entry))
+                    {
+                        return ResolveCurrentDisplayValue(entry);
                     }
 
                     return ResolveDefaultDropdownValue(entry);
@@ -971,6 +990,38 @@ namespace Kernel.UI
             return ResolveDefaultDropdownValue(entry);
         }
 
+        private static List<OptionsChoiceData> BuildScreenDisplayChoices()
+        {
+            List<DisplayInfo> displays = new();
+            LilithDisplaySettings.GetDisplayLayout(displays);
+
+            List<OptionsChoiceData> choices = new(displays.Count);
+            for (int i = 0; i < displays.Count; i++)
+            {
+                DisplayInfo display = displays[i];
+                string value = LilithDisplaySettings.FormatDisplayValue(i);
+                string displayName = string.IsNullOrWhiteSpace(display.name)
+                    ? $"#{i + 1}"
+                    : $"#{i + 1} {display.name.Trim()}";
+                choices.Add(new OptionsChoiceData
+                {
+                    Id = value,
+                    Title = $"{displayName} ({display.width} x {display.height})",
+                    Value = value,
+                });
+            }
+
+            return choices;
+        }
+
+        private static string ResolveCurrentDisplayValue(OptionsEntryData entry)
+        {
+            string currentValue = LilithDisplaySettings.ResolveCurrentDisplayValue();
+            return FindChoiceIndex(entry.Options, currentValue) >= 0
+                ? currentValue
+                : ResolveDefaultDropdownValue(entry);
+        }
+
         private static string FormatResolutionValue(int width, int height)
         {
             return LilithDisplaySettings.FormatResolutionValue(width, height);
@@ -1026,13 +1077,7 @@ namespace Kernel.UI
 
         public static float NormalizeUIScaleValue(float value)
         {
-            if (float.IsNaN(value) || float.IsInfinity(value))
-            {
-                return 1f;
-            }
-
-            float steppedValue = Mathf.Round(value / DisplayUIScaleStep) * DisplayUIScaleStep;
-            return Mathf.Clamp(steppedValue, DisplayUIScaleMin, DisplayUIScaleMax);
+            return FixedUIScale;
         }
 
         private static float ParseFloatValue(string value, float fallback)
@@ -1071,6 +1116,13 @@ namespace Kernel.UI
                 && string.Equals(entry.OptionsSource, ScreenResolutionsOptionsSource, StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool UsesScreenDisplayOptions(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == DropdownMode
+                && string.Equals(entry.OptionsSource, ScreenDisplaysOptionsSource, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool IsDisplayResolutionEntry(OptionsEntryData entry)
         {
             return entry != null
@@ -1078,6 +1130,15 @@ namespace Kernel.UI
                 && (UsesScreenResolutionOptions(entry)
                     || string.Equals(entry.Id, DisplayResolutionEntryId, StringComparison.Ordinal)
                     || string.Equals(entry.PlayerPrefsKey, DisplayResolutionPrefsKey, StringComparison.Ordinal));
+        }
+
+        private static bool IsDisplayTargetDisplayEntry(OptionsEntryData entry)
+        {
+            return entry != null
+                && entry.Mode == DropdownMode
+                && (UsesScreenDisplayOptions(entry)
+                    || string.Equals(entry.Id, DisplayTargetDisplayEntryId, StringComparison.Ordinal)
+                    || string.Equals(entry.PlayerPrefsKey, DisplayTargetDisplayPrefsKey, StringComparison.Ordinal));
         }
 
         private static bool IsDisplayFullscreenEntry(OptionsEntryData entry)
@@ -1430,6 +1491,7 @@ namespace Kernel.UI
             RefreshActionButtons();
 
             bool shouldApplyLanguage = TryGetPendingLanguageTag(out string languageTag);
+            bool shouldRefreshDisplayDependentEntries = ShouldRefreshDisplayDependentEntriesAfterApply(out string targetDisplayValue);
             bool bindingOverridesChanged = false;
             try
             {
@@ -1460,6 +1522,11 @@ namespace Kernel.UI
                 ApplyDisplaySettings();
                 LilithAudioSettings.ApplyStoredSettings();
                 PlayerPrefs.Save();
+
+                if (shouldRefreshDisplayDependentEntries)
+                {
+                    yield return RefreshDisplayDependentEntriesAfterApplyCo(targetDisplayValue);
+                }
 
                 if (shouldApplyLanguage)
                 {
@@ -1570,6 +1637,7 @@ namespace Kernel.UI
         private void ApplyDisplaySettings()
         {
             ApplyResolutionAndFullscreenSettings();
+            ApplyTargetDisplaySetting();
             ApplyVSyncSetting();
             ApplyUIScaleSetting();
         }
@@ -1591,6 +1659,106 @@ namespace Kernel.UI
             LilithDisplaySettings.ApplyResolutionAndFullscreen(width, height, fullscreen);
         }
 
+        private void ApplyTargetDisplaySetting()
+        {
+            if (!TryFindState(DisplayTargetDisplayEntryId, out OptionsEntryRuntimeState targetDisplayState))
+            {
+                return;
+            }
+
+            LilithDisplaySettings.ApplyTargetDisplay(targetDisplayState.CurrentValue);
+        }
+
+        private bool ShouldRefreshDisplayDependentEntriesAfterApply(out string targetDisplayValue)
+        {
+            targetDisplayValue = string.Empty;
+            if (!TryFindState(DisplayTargetDisplayEntryId, out OptionsEntryRuntimeState targetDisplayState)
+                || targetDisplayState?.Entry == null
+                || string.Equals(targetDisplayState.CurrentValue, targetDisplayState.OriginalValue, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            targetDisplayValue = targetDisplayState.CurrentValue != null
+                ? targetDisplayState.CurrentValue.Trim()
+                : string.Empty;
+            return !string.IsNullOrWhiteSpace(targetDisplayValue);
+        }
+
+        private IEnumerator RefreshDisplayDependentEntriesAfterApplyCo(string targetDisplayValue)
+        {
+            for (int frame = 0; frame < DisplayChangeRefreshMaxFrames; frame++)
+            {
+                if (string.Equals(LilithDisplaySettings.ResolveCurrentDisplayValue(), targetDisplayValue, StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                yield return null;
+            }
+
+            for (int frame = 0; frame < DisplayChangeRefreshSettleFrames; frame++)
+            {
+                yield return null;
+            }
+
+            RefreshDisplayDependentEntries();
+        }
+
+        private void RefreshDisplayDependentEntries()
+        {
+            PrepareDynamicEntries();
+            NormalizeDisplayDependentEntryStates();
+            RefreshCurrentEntryControls();
+            RefreshActionButtons();
+        }
+
+        private void NormalizeDisplayDependentEntryStates()
+        {
+            if (TryFindState(DisplayTargetDisplayEntryId, out OptionsEntryRuntimeState targetDisplayState))
+            {
+                NormalizeDropdownStateValue(targetDisplayState, ResolveCurrentDisplayValue);
+            }
+
+            if (TryFindState(DisplayResolutionEntryId, out OptionsEntryRuntimeState resolutionState))
+            {
+                NormalizeDropdownStateValue(resolutionState, ResolveCurrentResolutionValue);
+            }
+        }
+
+        private static void NormalizeDropdownStateValue(OptionsEntryRuntimeState state, Func<OptionsEntryData, string> fallbackResolver)
+        {
+            if (state?.Entry == null || !string.Equals(state.Entry.Mode, DropdownMode, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            string fallbackValue = fallbackResolver != null ? fallbackResolver(state.Entry) : string.Empty;
+            state.CurrentValue = NormalizeDropdownStoredValue(state.Entry, state.CurrentValue, fallbackValue);
+            state.OriginalValue = NormalizeDropdownStoredValue(state.Entry, state.OriginalValue, state.CurrentValue);
+            state.DefaultValue = NormalizeDropdownStoredValue(state.Entry, state.DefaultValue, state.CurrentValue);
+        }
+
+        private static string NormalizeDropdownStoredValue(OptionsEntryData entry, string candidateValue, string fallbackValue)
+        {
+            if (entry == null)
+            {
+                return string.Empty;
+            }
+
+            if (FindChoiceIndex(entry.Options, candidateValue) >= 0)
+            {
+                return candidateValue.Trim();
+            }
+
+            if (FindChoiceIndex(entry.Options, fallbackValue) >= 0)
+            {
+                return fallbackValue.Trim();
+            }
+
+            return ResolveDefaultDropdownValue(entry);
+        }
+
         private void ApplyVSyncSetting()
         {
             if (!TryFindState(DisplayVSyncEntryId, out OptionsEntryRuntimeState vSyncState))
@@ -1608,6 +1776,7 @@ namespace Kernel.UI
             if (!TryFindState(DisplayUIScaleEntryId, out OptionsEntryRuntimeState uiScaleState)
                 || uiScaleState.Entry == null)
             {
+                UIManager.Instance?.ApplyUIScale(FixedUIScale);
                 return;
             }
 

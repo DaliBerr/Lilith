@@ -32,6 +32,8 @@ namespace Kernel.UI
                 return fallback;
             }
 
+            // 这里只提供动态分页的估算起点与无测量场景的 fallback，
+            // 真正的分页是否溢出仍应以 DoesTextFitPage 的实际排版结果为准。
             int low = 1;
             int high = Mathf.Max(fallback, DefaultProbeLimit);
             int best = 1;

@@ -104,8 +104,8 @@ namespace Kernel.UI
                 startButton ??= FindButton("Button Panel/Start Button");
             }
 
-            loadButtonRoot ??= transform.Find("Button Panel/Load")?.gameObject;
-            loadButtonRoot ??= transform.Find("Button Panel/Load Button")?.gameObject;
+            loadButtonRoot ??= FindInContentSafeFrame("Button Panel/Load")?.gameObject;
+            loadButtonRoot ??= FindInContentSafeFrame("Button Panel/Load Button")?.gameObject;
             if (loadButton == null)
             {
                 loadButton = loadButtonRoot != null ? loadButtonRoot.GetComponent<Button>() : null;
@@ -125,7 +125,7 @@ namespace Kernel.UI
                 quitButton ??= FindButton("Button Panel/Quit Button");
             }
 
-            sealImage ??= transform.Find("Seal Panel")?.GetComponent<Image>();
+            sealImage ??= FindInContentSafeFrame("Seal Panel")?.GetComponent<Image>();
         }
 
         /// <summary>
@@ -570,7 +570,7 @@ namespace Kernel.UI
         /// </summary>
         private Button FindButton(string relativePath)
         {
-            Transform target = transform.Find(relativePath);
+            Transform target = FindInContentSafeFrame(relativePath);
             if (target == null)
             {
                 return null;

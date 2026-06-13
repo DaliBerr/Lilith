@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Kernel.GameState;
 using Kernel.UI;
@@ -18,6 +19,7 @@ using Object = UnityEngine.Object;
 public sealed class PauseUIScreenTests
 {
     private const string PauseUIPrefabPath = "Assets/Prefabs/UI/System/Pause/PauseUI.prefab";
+    private const string InfoPopupPrefabPath = "Assets/Prefabs/UI/System/Info Popup.prefab";
 
     private readonly List<Object> createdObjects = new();
     private Dictionary<string, string> savedLocalizationStrings;
@@ -89,6 +91,59 @@ public sealed class PauseUIScreenTests
             Assert.That(applyButton, Is.Not.Null);
             Assert.That(resetButton.GetComponentInChildren<TMP_Text>(true)?.text, Is.EqualTo("重置"));
             Assert.That(applyButton.GetComponentInChildren<TMP_Text>(true)?.text, Is.EqualTo("应用"));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
+    public void PauseUIPrefab_MenuButtonStaysInsideHostPanel()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents(PauseUIPrefabPath);
+        try
+        {
+            RectTransform menuButton = FindRectTransform(prefabRoot, "Menu Button");
+            RectTransform settingPanel = FindRectTransform(prefabRoot, "Setting Panel");
+            RectTransform settingsPanel = prefabRoot.transform.Find("Content Safe Frame/Setting Panel/Settings ") as RectTransform;
+            TMP_Text menuText = menuButton.GetComponentInChildren<TMP_Text>(true);
+
+            Assert.That(settingsPanel, Is.Not.Null);
+            Assert.That(menuButton.parent, Is.SameAs(settingsPanel));
+            Assert.That(menuButton.anchorMin.y, Is.GreaterThanOrEqualTo(0.04f));
+            Assert.That(menuButton.anchorMax.y, Is.LessThanOrEqualTo(0.15f));
+            Assert.That(menuButton.anchorMin.y, Is.LessThan(menuButton.anchorMax.y));
+            Assert.That(settingPanel.anchorMin.y, Is.LessThanOrEqualTo(0.16f));
+            Assert.That(settingsPanel.anchorMin.y, Is.LessThanOrEqualTo(0.10f));
+            Assert.That(menuText, Is.Not.Null);
+            Assert.That(menuText.enableAutoSizing, Is.True);
+            Assert.That(menuText.fontSizeMax, Is.LessThanOrEqualTo(40f));
+            Assert.That(menuText.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
+    [Test]
+    public void InfoPopupPrefab_ButtonRowFitsWithinNarrowModal()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents(InfoPopupPrefabPath);
+        try
+        {
+            HorizontalLayoutGroup layout = prefabRoot
+                .GetComponentsInChildren<HorizontalLayoutGroup>(true)
+                .FirstOrDefault(candidate => candidate.name == "Button");
+            Assert.That(layout, Is.Not.Null);
+
+            RectTransform buttonRow = layout.transform as RectTransform;
+            LayoutElement[] buttonElements = buttonRow.GetComponentsInChildren<LayoutElement>(true);
+
+            Assert.That(layout.spacing, Is.LessThanOrEqualTo(24f));
+            Assert.That(buttonElements.Length, Is.GreaterThanOrEqualTo(2));
+            Assert.That(buttonElements.Select(element => element.minWidth), Is.All.LessThanOrEqualTo(180f));
         }
         finally
         {
@@ -260,6 +315,15 @@ public sealed class PauseUIScreenTests
         Assert.That(field, Is.Not.Null);
 
         return (T)field.GetValue(target);
+    }
+
+    private static RectTransform FindRectTransform(GameObject root, string name)
+    {
+        RectTransform rectTransform = root
+            .GetComponentsInChildren<RectTransform>(true)
+            .FirstOrDefault(candidate => candidate.name == name);
+        Assert.That(rectTransform, Is.Not.Null, $"{name} should exist in {root.name}.");
+        return rectTransform;
     }
 
     private static void SetPrivateField(object target, string fieldName, object value)

@@ -216,7 +216,7 @@ namespace Kernel.UI
         /// </summary>
         private void TryAutoBindReferences()
         {
-            popupRoot ??= transform.Find("Popup") as RectTransform;
+            popupRoot ??= FindInContentSafeFrame("Popup") as RectTransform;
             topPanel ??= popupRoot?.Find("Top Panel") as RectTransform;
             titleText ??= popupRoot?.Find("Top Panel/Tittle")?.GetComponent<TMP_Text>();
             titleText ??= popupRoot?.Find("Top Panel/Title")?.GetComponent<TMP_Text>();

@@ -223,14 +223,16 @@ namespace Kernel
         /// </summary>
         private StorySequenceRequest CreateOpeningGuideRequest(DialogUIScreen dialogScreen)
         {
-            int fallbackCapacity = Mathf.Max(1, openingGuideMaxCharactersPerEntry);
+            int paginationProbeCapacity = Mathf.Max(1, openingGuideMaxCharactersPerEntry);
             return new StorySequenceRequest
             {
                 Address = string.IsNullOrWhiteSpace(openingGuideAddress) ? DefaultOpeningGuideAddress : openingGuideAddress.Trim(),
                 CharactersPerSecond = openingGuideCharactersPerSecond,
                 LineHoldSeconds = openingGuideLineHoldSeconds,
                 AllowDefaultSkipInput = false,
-                MaxCharactersPerEntry = dialogScreen != null ? dialogScreen.EstimateDialogTextCapacity(fallbackCapacity) : fallbackCapacity,
+                // 有可用的 TMP 排版测量时，这里只作为动态分页的 probe seed / fallback，
+                // 不再把它当成固定的“每页最多多少字”硬上限。
+                MaxCharactersPerEntry = dialogScreen != null ? dialogScreen.EstimateDialogTextCapacity(paginationProbeCapacity) : paginationProbeCapacity,
                 DisplayTextFitsPage = dialogScreen != null ? dialogScreen.DoesDialogTextFitPage : null,
                 WaitForAdvanceInputAfterEntryReveal = true
             };

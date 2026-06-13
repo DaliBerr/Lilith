@@ -346,6 +346,42 @@ public sealed class StorySequenceParserTests
     }
 
     [UnityTest]
+    public IEnumerator Service_WithDisplayTextFitsPageAndCharacterSeed_PrefersMeasuredPageFit()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(new StorySequenceEntry { Text = "ABCDE" });
+        parser.DeltaTimeOverride = 100f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://dialog",
+            CharactersPerSecond = 100f,
+            LineHoldSeconds = 0f,
+            AllowDefaultSkipInput = false,
+            MaxCharactersPerEntry = 2,
+            DisplayTextFitsPage = text => (text ?? string.Empty).Length <= 4
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        parser.StartCoroutine(parser.RunSequenceForTest(request));
+
+        while (!result.HasValue)
+        {
+            yield return null;
+        }
+
+        Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "ABCD"), Is.True);
+        Assert.That(snapshots[snapshots.Count - 1].FullText, Is.EqualTo("E"));
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "AB"), Is.False);
+    }
+
+    [UnityTest]
     public IEnumerator Service_WithMaxCharactersPerEntry_SplitsAppendBlocksBeforeOverflow()
     {
         TestStorySequenceParser parser = CreateTestParser();
@@ -381,6 +417,45 @@ public sealed class StorySequenceParserTests
         Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "AAAA\nBBBB"), Is.True);
         Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "CCCC"), Is.True);
         Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "AAAA\nBBBB\nCCCC"), Is.False);
+    }
+
+    [UnityTest]
+    public IEnumerator Service_WithMeasuredPageFit_SplitsAppendBlocksUsingFullDisplayText()
+    {
+        TestStorySequenceParser parser = CreateTestParser();
+        parser.NextLoadedData = CreateData(
+            new StorySequenceEntry { Text = "AAAA", DisplayMode = StorySequenceDisplayMode.Append },
+            new StorySequenceEntry { Text = "BBBB", DisplayMode = StorySequenceDisplayMode.Append },
+            new StorySequenceEntry { Text = "CC", DisplayMode = StorySequenceDisplayMode.Append });
+        parser.DeltaTimeOverride = 100f;
+
+        StorySequenceRequest request = new()
+        {
+            Address = "mock://intro",
+            CharactersPerSecond = 100f,
+            LineHoldSeconds = 0f,
+            AllowDefaultSkipInput = false,
+            MaxCharactersPerEntry = 20,
+            DisplayTextFitsPage = text => (text ?? string.Empty).Length <= 9
+        };
+
+        List<StorySequenceSnapshot> snapshots = new();
+        StorySequenceResult? result = null;
+        parser.SnapshotChanged += snapshots.Add;
+        parser.SequenceCompleted += sequenceResult => result = sequenceResult;
+
+        Assert.That(parser.BeginSequenceForTest(request, out string errorMessage), Is.True, errorMessage);
+        parser.StartCoroutine(parser.RunSequenceForTest(request));
+
+        while (!result.HasValue)
+        {
+            yield return null;
+        }
+
+        Assert.That(result.Value.Status, Is.EqualTo(StorySequenceCompletionStatus.Completed));
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "AAAA\nBBBB"), Is.True);
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "CC"), Is.True);
+        Assert.That(snapshots.Exists(snapshot => snapshot.FullText == "AAAA\nBBBB\nCC"), Is.False);
     }
 
     [UnityTest]

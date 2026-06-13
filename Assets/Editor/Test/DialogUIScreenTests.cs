@@ -4,6 +4,7 @@ using Kernel.GameState;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -84,6 +85,17 @@ public sealed class DialogUIScreenTests
             out _);
 
         Assert.That(screen.currentStatus.StatusName, Is.EqualTo(StatusList.InDialogStatus.StatusName));
+    }
+
+    [Test]
+    public void DialogUIPrefab_HasDialogUIScreenOnRoot()
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UI/Narrative/Dialog UI.prefab");
+
+        Assert.That(prefab, Is.Not.Null);
+        Assert.That(prefab.GetComponent<DialogUIScreen>(), Is.Not.Null);
+        Assert.That(prefab.transform.Find("Main Content/Text (TMP)")?.GetComponent<TMP_Text>(), Is.Not.Null);
+        Assert.That(prefab.transform.Find("Info Panel/Text (TMP)")?.GetComponent<TMP_Text>(), Is.Not.Null);
     }
 
     private DialogUIScreen CreateDialogScreen(out TMP_Text dialogText, out GameObject speakerInfoRoot, out TMP_Text speakerNameText)

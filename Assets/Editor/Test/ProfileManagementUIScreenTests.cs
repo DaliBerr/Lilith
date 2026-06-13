@@ -1,14 +1,19 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using Kernel.UI;
 using NUnit.Framework;
 using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
+using Vocalith.UI;
 
 public sealed class ProfileManagementUIScreenTests
 {
+    private const string ProfilePopupPrefabPath = "Assets/Prefabs/UI/Profile/Profile Popup.prefab";
+
     private readonly List<Object> createdObjects = new();
 
     [TearDown]
@@ -61,6 +66,43 @@ public sealed class ProfileManagementUIScreenTests
         AssertExistingRow(content.GetChild(1));
     }
 
+    [Test]
+    public void ProfilePopupPrefab_UsesStableHeaderAnchorsWithoutResponsiveFitter()
+    {
+        GameObject prefabRoot = PrefabUtility.LoadPrefabContents(ProfilePopupPrefabPath);
+        try
+        {
+            RectTransform topPanel = FindRectTransform(prefabRoot, "Top Panel");
+            RectTransform title = FindRectTransform(prefabRoot, "Tittle");
+            RectTransform main = FindRectTransform(prefabRoot, "Main ");
+            RectTransform mainContent = FindRectTransform(prefabRoot, "Main Content");
+            RectTransform closeButton = FindRectTransform(prefabRoot, "Close Button");
+            TMP_Text titleText = title.GetComponent<TMP_Text>();
+
+            Assert.That(prefabRoot.GetComponentInChildren<ResponsiveLayoutGroupFitter>(true), Is.Null);
+            Assert.That(topPanel.anchorMin.y, Is.EqualTo(0.91f).Within(0.001f));
+            Assert.That(topPanel.anchorMax.y, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(main.anchorMax.y, Is.LessThanOrEqualTo(0.89f));
+            Assert.That(mainContent.anchorMax.y, Is.LessThanOrEqualTo(0.89f));
+
+            Assert.That(title.parent, Is.SameAs(topPanel));
+            Assert.That(title.anchorMin.x, Is.EqualTo(0.02f).Within(0.001f));
+            Assert.That(title.anchorMax.x, Is.EqualTo(0.78f).Within(0.001f));
+            Assert.That(title.sizeDelta.x, Is.EqualTo(0f).Within(0.001f));
+            Assert.That(titleText.margin.z, Is.EqualTo(0f).Within(0.001f));
+
+            Assert.That(closeButton.parent, Is.SameAs(topPanel));
+            Assert.That(closeButton.anchorMin.x, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(closeButton.anchorMax.x, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(closeButton.sizeDelta.x, Is.LessThanOrEqualTo(100f));
+            Assert.That(closeButton.anchoredPosition.x, Is.EqualTo(-closeButton.sizeDelta.x * 0.5f).Within(0.001f));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(prefabRoot);
+        }
+    }
+
     private ProfileManagementUIScreen CreateProfileScreen(out RectTransform content, out RectTransform template)
     {
         GameObject root = CreateUiObject("Profile Popup");
@@ -107,6 +149,15 @@ public sealed class ProfileManagementUIScreenTests
         CreateText("Text (TMP)", deleteButton.transform, "Delete");
 
         return item.GetComponent<RectTransform>();
+    }
+
+    private static RectTransform FindRectTransform(GameObject root, string objectName)
+    {
+        RectTransform transform = root
+            .GetComponentsInChildren<RectTransform>(includeInactive: true)
+            .FirstOrDefault(candidate => candidate.name == objectName);
+        Assert.That(transform, Is.Not.Null, $"{objectName} should exist in the profile popup prefab.");
+        return transform;
     }
 
     private GameObject CreateButton(string name, Transform parent)

@@ -123,7 +123,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 ### 基础设施层 `Vocalith`
 
 - UI 基础设施：[`Assets/Scripts/Vocalith/UI`](Assets/Scripts/Vocalith/UI)
-  - 入口：[`UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)，负责持久化 UI 栈、EventSystem 收敛、根 CanvasScaler UI 缩放与固定尺寸 LayoutGroup 自适应，不再强制 16:9 视口
+  - 入口：[`UIManager.cs`](Assets/Scripts/Vocalith/UI/UIManager.cs)，负责持久化 UI 栈、EventSystem 收敛、根 CanvasScaler 兼容入口与显式 UI layout 适配组件调用，不再强制 16:9 相机视口；超宽屏使用 [`UIContentSafeFrame.cs`](Assets/Scripts/Vocalith/UI/UIContentSafeFrame.cs) 让主要 Screen / Modal 内容居中限制到最大 16:9，背景、世界、Overlay 和 Toast 继续铺满屏幕
 - 音频基础设施：[`Assets/Scripts/Vocalith/Audio`](Assets/Scripts/Vocalith/Audio)
   - 入口：[`AudioManager.cs`](Assets/Scripts/Vocalith/Audio/AudioManager.cs)，负责持久化单例、Music crossfade、SFX 播放池、Master/Music/SFX 三路音量，以及基于 [`AudioCue`](Assets/Scripts/Vocalith/Audio/AudioCue.cs) / [`AudioCueBank`](Assets/Scripts/Vocalith/Audio/AudioCueBank.cs) 的播放句柄、循环、淡入淡出、Transform 跟随、intro-loop 音乐、多变体、分类限流、优先级抢占、冷却、Addressables 预加载和世界位置音效
 - 本地化：[`Assets/Scripts/Vocalith/Localization`](Assets/Scripts/Vocalith/Localization)
@@ -174,6 +174,9 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 | [`Docs/ArtistGuide.md`](Docs/ArtistGuide.md) | 美术 | 替换临时美术资源、确认场景 / prefab / UI 视觉入口与注意事项 |
 | [`Docs/DesignGuide.md`](Docs/DesignGuide.md) | 策划 | 编写游戏内文本、任务、敌人、波次、Token、掉落和数值配置 |
 | [`Docs/2DRoomGenerationPlan.md`](Docs/2DRoomGenerationPlan.md) | 程序 / Agent | 实施新的 2D 单房间路径优先约束生成系统 |
+| [`Docs/UILayoutScreenshotAuditGuide.md`](Docs/UILayoutScreenshotAuditGuide.md) | 程序 / UI / Agent | 用 Editor 离屏截图复核 UI prefab 在多分辨率和超宽安全框下的 layout 风险 |
+| [`Docs/UILayoutResponsiveRefactorPlan.md`](Docs/UILayoutResponsiveRefactorPlan.md) | 程序 / UI / Agent | 按固定阶段收口 UI 响应式布局，保留 uGUI / CanvasScaler 并把全局 fitter 补丁改为显式局部适配 |
+| [`Docs/UILayoutResponsiveInventory.md`](Docs/UILayoutResponsiveInventory.md) | 程序 / UI / Agent | 记录 Phase 0 responsive fitter 补丁面、显式适配 prefab 和隐式依赖清单 |
 | [`Docs/EnemyContentLayerPlan.md`](Docs/EnemyContentLayerPlan.md) | 程序 / 策划 / Agent | 接手普通敌人 AI 内容层调参、身份强化、治疗/控制/召唤/自爆表现和验收 |
 | [`Docs/EnemyBossAIPlan.md`](Docs/EnemyBossAIPlan.md) | 程序 / 策划 / Agent | 接手 Boss AI 层设计，保持与普通敌人 Utility AI 解耦 |
 | [`Docs/SpellConstructionSystemDesign.md`](Docs/SpellConstructionSystemDesign.md) | 程序 / 策划 / Agent | 理解当前法术构筑系统的概念、编译规则、运行边界和扩展方式 |
@@ -193,7 +196,7 @@ Lilith 是一个 Unity 6 原型项目仓库。当前稳定落地的主线是：`
 ## 已知限制
 
 - [`Assets/Scenes/Main.unity`](Assets/Scenes/Main.unity) 不能作为独立入口直接运行；当前必须先经过 [`Assets/Scenes/StartUp.unity`](Assets/Scenes/StartUp.unity) 中的 [`GlobalStartup`](Assets/Scripts/GlobalStartup.cs) 交接
-- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，使用 `Assets/Prefabs/UI/Options/Setting Panel.prefab` 作为 Addressables 设置页；当前主菜单和暂停菜单的 Setting Panel 都带 Reset / Apply，控件值变更后先暂存，点击 Apply 后写入 `PlayerPrefs` 并应用，Reset 会把控件恢复默认值并等待 Apply 提交；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 全屏 / 垂直同步会通过 `Kernel.Display.LilithDisplaySettings` 应用并在下次启动恢复，UI 缩放会通过 `UIManager` 根 CanvasScaler 应用，音频音量会通过 `Vocalith.Audio.AudioManager` 应用，游戏项中的屏幕震动开关会被 `ScreenShakeState` 读取；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准；首版尚未配置实际音乐资源和玩法音效触发点
+- [`Assets/Scripts/Kernel/UI/OptionsUIScreen.cs`](Assets/Scripts/Kernel/UI/OptionsUIScreen.cs) 当前负责按 JSON 生成设置 UI，使用 `Assets/Prefabs/UI/Options/Setting Panel.prefab` 作为 Addressables 设置页；当前主菜单和暂停菜单的 Setting Panel 都带 Reset / Apply，控件值变更后先暂存，点击 Apply 后写入 `PlayerPrefs` 并应用，Reset 会把控件恢复默认值并等待 Apply 提交；按键项会通过 Input System binding override 保存，显示项中的分辨率 / 渲染屏幕 / 全屏 / 垂直同步会通过 `Kernel.Display.LilithDisplaySettings` 应用并在下次启动恢复，用户 UI 缩放入口已关闭且运行值固定为 1.0，`UIManager.ApplyUIScale()` 仅保留底层兼容入口，音频音量会通过 `Vocalith.Audio.AudioManager` 应用，游戏项中的屏幕震动开关会被 `ScreenShakeState` 读取；目标帧率不可配置，默认上限为 360 FPS，显示器刷新率高于 360 时以显示器刷新率为准；首版尚未配置实际音乐资源和玩法音效触发点
 - [`Assets/Scripts/Kernel/UI/PauseUIScreen.cs`](Assets/Scripts/Kernel/UI/PauseUIScreen.cs) 当前直接内嵌同一个 `Assets/Prefabs/UI/Options/Setting Panel.prefab` 设置页；`PauseUI.prefab` 的旧 `Main Panel`、Resume / Option / Quit 按钮只作为可选兼容引用保留，不再是初始化必需项。暂停设置页的 `Close Button` 通过 `UIInputRouter.RequestClosePauseMenu()` 恢复游戏，`Menu Button` / 旧 Quit 入口会先打开通用 `PopUpUIScreen` 二级确认，确认后再通过 `UIInputRouter.RequestReturnToStartUpScene()` 返回开始菜单；开始菜单仍继续以独立 modal 方式打开 `OptionsUIScreen`
 - [`Assets/Scripts/GlobalStartup.cs`](Assets/Scripts/GlobalStartup.cs) 中的 `LoadAllDefsCoroutine()` 当前预加载进入 `Main` 前需要的 Addressables 数据层资源；非 Addressable 且由场景直接引用的资产仍随场景加载
 - 剧情阅读器的 `NarrativeStartBattleRequestedEvent` 当前没有默认订阅者；Start Battle Button 只是发布 `entryId/chapterId`，后续进入哪场战斗需要由新的订阅者接线

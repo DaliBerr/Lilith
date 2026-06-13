@@ -630,14 +630,13 @@ namespace Kernel.UI
 
         private void TryAutoBindReferences()
         {
-            chapterSelectionRoot ??= transform.Find("Chapter Selection Panel") as RectTransform;
-            titleText ??= transform.Find("Tittle")?.GetComponent<TMP_Text>();
-            titleText ??= transform.Find("Tittle")?.GetComponentInChildren<TMP_Text>(true);
-            leftPageText ??= ResolveNamedText("Left Page Text");
-            rightPageText ??= ResolveNamedText("Right Page Text");
-            previousPageButton ??= ResolveButton("Previous Page");
-            nextPageButton ??= ResolveButton("Next Page");
-            startBattleButtonRoot ??= transform.Find("Start Battle Button")?.gameObject;
+            chapterSelectionRoot ??= ResolveRect("Chapter Selection Panel", "Main Content/Chapter Selection Panel");
+            titleText ??= ResolveNamedText("Tittle", "Main Content/Tittle");
+            leftPageText ??= ResolveNamedText("Left Page Text", "Main Content/Left Page Text");
+            rightPageText ??= ResolveNamedText("Right Page Text", "Main Content/Right Page Text");
+            previousPageButton ??= ResolveButton("Previous Page", "Main Content/Previous Page");
+            nextPageButton ??= ResolveButton("Next Page", "Main Content/Next Page");
+            startBattleButtonRoot ??= ResolveTransform("Start Battle Button", "Main Content/Start Battle Button")?.gameObject;
             if (startBattleButtonRoot != null)
             {
                 startBattleButton ??= startBattleButtonRoot.GetComponent<Button>();
@@ -645,9 +644,39 @@ namespace Kernel.UI
             }
         }
 
-        private TMP_Text ResolveNamedText(string objectName)
+        private RectTransform ResolveRect(params string[] candidatePaths)
         {
-            Transform target = transform.Find(objectName);
+            return ResolveTransform(candidatePaths) as RectTransform;
+        }
+
+        private Transform ResolveTransform(params string[] candidatePaths)
+        {
+            if (candidatePaths == null)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < candidatePaths.Length; i++)
+            {
+                string candidatePath = candidatePaths[i];
+                if (string.IsNullOrWhiteSpace(candidatePath))
+                {
+                    continue;
+                }
+
+                Transform target = transform.Find(candidatePath);
+                if (target != null)
+                {
+                    return target;
+                }
+            }
+
+            return null;
+        }
+
+        private TMP_Text ResolveNamedText(params string[] candidatePaths)
+        {
+            Transform target = ResolveTransform(candidatePaths);
             if (target == null)
             {
                 return null;
@@ -657,9 +686,9 @@ namespace Kernel.UI
             return text != null ? text : target.GetComponentInChildren<TMP_Text>(true);
         }
 
-        private Button ResolveButton(string objectName)
+        private Button ResolveButton(params string[] candidatePaths)
         {
-            Transform target = transform.Find(objectName);
+            Transform target = ResolveTransform(candidatePaths);
             if (target == null)
             {
                 return null;

@@ -48,7 +48,7 @@ namespace Vocalith.UI
         private float rootCanvasBaseScaleFactor = 1f;
         private bool hasRootCanvasBaseReferenceResolution;
         private float currentUIScale = FallbackUIScale;
-        private ResponsiveLayoutGroupFitter responsiveLayoutFitter;
+        private readonly List<ResponsiveLayoutGroupFitter> responsiveLayoutFitters = new();
         private UIButtonPressScaleAutoInstaller buttonPressScaleInstaller;
 
         readonly Stack<UIScreen> screenStack = new();
@@ -270,7 +270,7 @@ namespace Vocalith.UI
         }
 
         /// <summary>
-        /// summary: 根据用户 UI 缩放设置更新根 CanvasScaler，不再补偿固定宽高比安全区。
+        /// summary: 根据兼容 UI 缩放值更新根 CanvasScaler，不再补偿固定宽高比安全区。
         /// param: 无
         /// returns: 无
         /// </summary>
@@ -324,8 +324,8 @@ namespace Vocalith.UI
         }
 
         /// <summary>
-        /// summary: 应用用户 UI 缩放倍率；通过根 CanvasScaler 生效。
-        /// param name="uiScale": 用户 UI 缩放倍率，1 为默认。
+        /// summary: 应用兼容 UI 缩放倍率；当前用户入口已关闭，运行值默认固定为 1。
+        /// param name="uiScale": UI 缩放倍率，1 为默认。
         /// returns: 无
         /// </summary>
         public void ApplyUIScale(float uiScale)
@@ -338,14 +338,37 @@ namespace Vocalith.UI
 
         internal void ApplyResponsiveLayouts()
         {
-            EnsureResponsiveLayoutFitter();
-            if (responsiveLayoutFitter == null)
+            if (rootCanvas == null)
+            {
+                return;
+            }
+
+            Transform root = rootCanvas.transform;
+            if (root == null)
             {
                 return;
             }
 
             Canvas.ForceUpdateCanvases();
-            responsiveLayoutFitter.FitNow();
+            try
+            {
+                root.GetComponentsInChildren(false, responsiveLayoutFitters);
+                for (int i = 0; i < responsiveLayoutFitters.Count; i++)
+                {
+                    ResponsiveLayoutGroupFitter fitter = responsiveLayoutFitters[i];
+                    if (fitter == null || !fitter.isActiveAndEnabled || !IsTopLevelResponsiveLayoutFitter(fitter.transform, root))
+                    {
+                        continue;
+                    }
+
+                    fitter.FitNow();
+                }
+            }
+            finally
+            {
+                responsiveLayoutFitters.Clear();
+            }
+
             Canvas.ForceUpdateCanvases();
         }
 
@@ -1003,31 +1026,30 @@ namespace Vocalith.UI
             rt.localScale = Vector3.one;
         }
 
-        private void EnsureResponsiveLayoutFitter()
+        private static bool IsTopLevelResponsiveLayoutFitter(Transform candidate, Transform subtreeRoot)
         {
-            if (rootCanvas == null)
+            if (candidate == null || subtreeRoot == null)
             {
-                responsiveLayoutFitter = null;
-                return;
+                return false;
             }
 
-            RectTransform root = rootCanvas.transform as RectTransform;
-            if (root == null)
+            Transform current = candidate.parent;
+            while (current != null && current != subtreeRoot.parent)
             {
-                responsiveLayoutFitter = null;
-                return;
-            }
-
-            if (responsiveLayoutFitter == null || responsiveLayoutFitter.gameObject != rootCanvas.gameObject)
-            {
-                responsiveLayoutFitter = rootCanvas.GetComponent<ResponsiveLayoutGroupFitter>();
-                if (responsiveLayoutFitter == null)
+                if (current != candidate && current.GetComponent<ResponsiveLayoutGroupFitter>() != null)
                 {
-                    responsiveLayoutFitter = rootCanvas.gameObject.AddComponent<ResponsiveLayoutGroupFitter>();
+                    return false;
                 }
+
+                if (current == subtreeRoot)
+                {
+                    break;
+                }
+
+                current = current.parent;
             }
 
-            responsiveLayoutFitter.SetRoot(root);
+            return true;
         }
 
         private void EnsureButtonPressScaleInstaller()

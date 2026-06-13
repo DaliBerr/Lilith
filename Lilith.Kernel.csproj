@@ -193,6 +193,7 @@
     <Compile Include="Assets\Scripts\Kernel\Enemy\EnemyDefinition.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\MainUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\CharEnemyMovement.cs" />
+    <Compile Include="Assets\Scripts\Kernel\UI\TokenSelectPanelLayoutFitter.cs" />
     <Compile Include="Assets\Scripts\Kernel\UI\PauseUIScreen.cs" />
     <Compile Include="Assets\Scripts\Kernel\Bullet\TokenData\BehaviorTokenData.cs" />
     <Compile Include="Assets\Scripts\Kernel\Enemy\BossEncounterStartedEvent.cs" />

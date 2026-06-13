@@ -10,6 +10,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 using Vocalith.EventSystem;
+using Vocalith.UI;
 
 public sealed class MainUIScreenTests
 {
@@ -358,8 +359,8 @@ public sealed class MainUIScreenTests
             Assert.That(screen.SpellPanel.Find("Book"), Is.Not.Null);
             Assert.That(screen.SpellPanel.Find("Book").GetComponentInChildren<BackPackGridSlotView>(true), Is.Not.Null);
             Assert.That(screen.SpellSlotTemplate, Is.Not.Null);
-            Assert.That(screen.SpellSlotTemplate.name, Is.EqualTo("Runtime Spell Template"));
             Assert.That(screen.SpellSlotTemplate.transform.IsChildOf(screen.SpellPanel), Is.True);
+            Assert.That(screen.SpellSlotTemplate.GetComponent<BackPackGridSlotView>(), Is.Not.Null);
 
             CanvasGroup notificationCanvasGroup = screen.NotificationCanvasGroup;
             Assert.That(notificationCanvasGroup, Is.Not.Null);
@@ -376,6 +377,76 @@ public sealed class MainUIScreenTests
         }
         finally
         {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+    }
+
+    [Test]
+    public void MainUIPrefab_HasResponsiveLayoutFitterForSpellGrid()
+    {
+        GameObject root = PrefabUtility.LoadPrefabContents(MainUIPrefabPath);
+        try
+        {
+            ResponsiveLayoutGroupFitter[] fitters = root.GetComponentsInChildren<ResponsiveLayoutGroupFitter>(true);
+            Assert.That(fitters.Length, Is.EqualTo(1));
+            Assert.That(fitters[0].transform, Is.SameAs(root.transform));
+
+            Transform spellPanel = root.transform.Find("Content Safe Frame/Player Info Panel/Panel/Spell");
+            Assert.That(spellPanel, Is.Not.Null);
+            Assert.That(spellPanel.GetComponent<GridLayoutGroup>(), Is.Not.Null);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+    }
+
+    [Test]
+    public void MainUIPrefab_UsesLocalQuestAndNotificationLayoutWithoutLinearFitter()
+    {
+        GameObject root = PrefabUtility.LoadPrefabContents(MainUIPrefabPath);
+        GameObject questEntryRoot = PrefabUtility.LoadPrefabContents("Assets/Prefabs/UI/MainHUD/Quest Entry.prefab");
+        try
+        {
+            RectTransform questPanel = root.transform.Find("Content Safe Frame/Quest Panel") as RectTransform;
+            RectTransform quests = root.transform.Find("Content Safe Frame/Quest Panel/Quests") as RectTransform;
+            TMP_Text questTitleText = root.transform.Find("Content Safe Frame/Quest Panel/Tittle/Text (TMP)")?.GetComponent<TMP_Text>();
+            RectTransform notificationPanel = root.transform.Find("Content Safe Frame/Notification Panel") as RectTransform;
+            TMP_Text notificationTitle = root.transform.Find("Content Safe Frame/Notification Panel/Tittle/Text (TMP)")?.GetComponent<TMP_Text>();
+            TMP_Text notificationDescription = root.transform.Find("Content Safe Frame/Notification Panel/Description/Text (TMP)")?.GetComponent<TMP_Text>();
+            TMP_Text questEntryText = questEntryRoot.transform.Find("Quest Text")?.GetComponent<TMP_Text>();
+            LayoutElement questEntryLayout = questEntryRoot.GetComponent<LayoutElement>();
+
+            Assert.That(questPanel, Is.Not.Null);
+            Assert.That(quests, Is.Not.Null);
+            Assert.That(notificationPanel, Is.Not.Null);
+            Assert.That(questPanel.anchorMin.x, Is.LessThanOrEqualTo(0.75f));
+            Assert.That(questPanel.anchorMax.x, Is.LessThanOrEqualTo(0.99f));
+            Assert.That(questPanel.anchorMax.x - questPanel.anchorMin.x, Is.GreaterThanOrEqualTo(0.2f));
+            Assert.That(quests.GetComponent<ContentSizeFitter>(), Is.Null);
+            Assert.That(questTitleText, Is.Not.Null);
+            Assert.That(questTitleText.enableAutoSizing, Is.True);
+            Assert.That(questTitleText.textWrappingMode, Is.EqualTo(TextWrappingModes.NoWrap));
+            Assert.That(questTitleText.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+
+            Assert.That(notificationPanel.anchorMax.x, Is.GreaterThan(notificationPanel.anchorMin.x));
+            Assert.That(notificationPanel.anchorMax.y, Is.GreaterThan(notificationPanel.anchorMin.y));
+            Assert.That(notificationTitle, Is.Not.Null);
+            Assert.That(notificationDescription, Is.Not.Null);
+            Assert.That(notificationTitle.enableAutoSizing, Is.True);
+            Assert.That(notificationDescription.enableAutoSizing, Is.True);
+            Assert.That(notificationTitle.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+            Assert.That(notificationDescription.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+
+            Assert.That(questEntryText, Is.Not.Null);
+            Assert.That(questEntryText.enableAutoSizing, Is.True);
+            Assert.That(questEntryText.overflowMode, Is.EqualTo(TextOverflowModes.Ellipsis));
+            Assert.That(questEntryLayout, Is.Not.Null);
+            Assert.That(questEntryLayout.preferredHeight, Is.GreaterThanOrEqualTo(50f));
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(questEntryRoot);
             PrefabUtility.UnloadPrefabContents(root);
         }
     }

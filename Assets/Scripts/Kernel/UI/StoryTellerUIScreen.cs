@@ -76,10 +76,10 @@ namespace Kernel.UI
         /// </summary>
         private void TryAutoBindReferences()
         {
-            storyText ??= transform.Find("Text")?.GetComponent<TMP_Text>();
+            storyText ??= FindInContentSafeFrame("Text")?.GetComponent<TMP_Text>();
             storyText ??= GetComponentInChildren<TMP_Text>(true);
-            skipButtonRoot ??= transform.Find("Skip Button")?.gameObject;
-            skipButton ??= transform.Find("Skip Button/Button")?.GetComponent<Button>();
+            skipButtonRoot ??= FindInContentSafeFrame("Skip Button")?.gameObject;
+            skipButton ??= FindInContentSafeFrame("Skip Button/Button")?.GetComponent<Button>();
         }
 
         /// <summary>

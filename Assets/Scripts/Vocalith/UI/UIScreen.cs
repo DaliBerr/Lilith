@@ -55,6 +55,17 @@ namespace Vocalith.UI
         // public abstract void HandleStart();
         // 子类做一次性初始化（抓引用/绑定按钮）
         protected virtual void OnInit() { }
+
+        protected Transform FindInContentSafeFrame(string relativePath)
+        {
+            Transform target = transform.Find(relativePath);
+            if (target != null)
+            {
+                return target;
+            }
+
+            return transform.Find("Content Safe Frame/" + relativePath);
+        }
         
         public virtual IEnumerator Show(float fade = 0.15f)
         {

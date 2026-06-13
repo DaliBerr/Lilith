@@ -30,7 +30,7 @@ RectTransform:
   m_LocalScale: {x: 0.4, y: 0.4, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1620361622174534032}
+  m_Father: {fileID: 5882478352684673314}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.31, y: 0.2}
   m_AnchorMax: {x: 1.315, y: 1.22}
@@ -55,7 +55,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -106,9 +106,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 8693458351047552354}
-  - {fileID: 4315650535226255678}
-  - {fileID: 4988423528194744380}
+  - {fileID: 5882478352684673314}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -133,9 +131,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 567102423705601293}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_Script: {fileID: 11500000, guid: 9b08a0ec0e6d4b24b92f4df0192d7893, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Lilith.Vocalith::Vocalith.UI.CoverImage
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
@@ -146,7 +144,7 @@ MonoBehaviour:
       m_Calls: []
   m_Sprite: {fileID: 21300000, guid: 20700ce27c4fd65478ad10c1d2ef52e8, type: 3}
   m_Type: 0
-  m_PreserveAspect: 1
+  m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
   m_FillAmount: 1
@@ -164,7 +162,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 176b8a797b89f06439176695960bcaeb, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Kernel.UI.StartUpMenuUI
   canvasGroup: {fileID: 0}
   startButton: {fileID: 3813016684991529779}
@@ -203,7 +201,7 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1620361622174534032}
+  m_Father: {fileID: 5882478352684673314}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.65, y: 0.55}
   m_AnchorMax: {x: 0.68, y: 0.65}
@@ -228,7 +226,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -283,10 +281,10 @@ RectTransform:
   - {fileID: 7326828320738012044}
   - {fileID: 3110747948974169813}
   - {fileID: 4144100362664970586}
-  m_Father: {fileID: 1620361622174534032}
+  m_Father: {fileID: 5882478352684673314}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.66, y: 0.17}
-  m_AnchorMax: {x: 0.96, y: 0.53}
+  m_AnchorMin: {x: 0.64, y: 0.16}
+  m_AnchorMax: {x: 0.96, y: 0.54}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -308,7 +306,7 @@ MonoBehaviour:
   m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 0.392}
@@ -338,22 +336,74 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
   m_Padding:
-    m_Left: 25
-    m_Right: 25
-    m_Top: 15
-    m_Bottom: 15
+    m_Left: 24
+    m_Right: 24
+    m_Top: 18
+    m_Bottom: 18
   m_ChildAlignment: 0
-  m_Spacing: 5
+  m_Spacing: 8
   m_ChildForceExpandWidth: 1
-  m_ChildForceExpandHeight: 0
+  m_ChildForceExpandHeight: 1
   m_ChildControlWidth: 1
   m_ChildControlHeight: 1
   m_ChildScaleWidth: 1
   m_ChildScaleHeight: 0
   m_ReverseArrangement: 0
+--- !u!1 &7438813297133656568
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5882478352684673314}
+  - component: {fileID: 1907518474457403932}
+  m_Layer: 5
+  m_Name: Content Safe Frame
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &5882478352684673314
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7438813297133656568}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 8693458351047552354}
+  - {fileID: 4315650535226255678}
+  - {fileID: 4988423528194744380}
+  m_Father: {fileID: 1620361622174534032}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1907518474457403932
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7438813297133656568}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5ca60fee4f180a4f8f74c332f91ff87, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Lilith.Vocalith::Vocalith.UI.UIContentSafeFrame
+  maxAspect: 1.7777778
 --- !u!1001 &647767996942074986
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -372,7 +422,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1498280802337971155, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_Sprite
-      value: 
+      value:
       objectReference: {fileID: 21300000, guid: 0f25739b30d5ca84ea832930af09bc05, type: 3}
     - target: {fileID: 1498280802337971155, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_PreserveAspect
@@ -384,7 +434,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontSize
-      value: 61.95
+      value: 48
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontStyle
@@ -401,6 +451,22 @@ PrefabInstance:
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontColor.r
       value: 0.30588236
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_fontSizeMax
+      value: 48
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_fontSizeMin
+      value: 24
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_overflowMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_TextWrappingMode
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_enableAutoSizing
@@ -491,8 +557,12 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_MinHeight
+      value: 52
+      objectReference: {fileID: 0}
+    - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_FlexibleWidth
-      value: -1
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_FlexibleHeight
@@ -500,11 +570,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_PreferredHeight
-      value: 75
+      value: 68
+      objectReference: {fileID: 0}
+    - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: -24
       objectReference: {fileID: 0}
     - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_SizeDelta.y
-      value: -24
+      value: -16
       objectReference: {fileID: 0}
     - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -524,7 +598,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!224 &4144100362664970586 stripped
 RectTransform:
@@ -549,7 +623,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1498280802337971155, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_Sprite
-      value: 
+      value:
       objectReference: {fileID: 21300000, guid: 0f25739b30d5ca84ea832930af09bc05, type: 3}
     - target: {fileID: 1498280802337971155, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_PreserveAspect
@@ -561,7 +635,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontSize
-      value: 61.95
+      value: 48
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontStyle
@@ -578,6 +652,22 @@ PrefabInstance:
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontColor.r
       value: 0.30588236
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_fontSizeMax
+      value: 48
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_fontSizeMin
+      value: 24
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_overflowMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_TextWrappingMode
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_enableAutoSizing
@@ -668,8 +758,12 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_MinHeight
+      value: 52
+      objectReference: {fileID: 0}
+    - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_FlexibleWidth
-      value: -1
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_FlexibleHeight
@@ -677,11 +771,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_PreferredHeight
-      value: 75
+      value: 68
+      objectReference: {fileID: 0}
+    - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: -24
       objectReference: {fileID: 0}
     - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_SizeDelta.y
-      value: -24
+      value: -16
       objectReference: {fileID: 0}
     - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -701,7 +799,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!224 &3110747948974169813 stripped
 RectTransform:
@@ -726,7 +824,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1498280802337971155, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_Sprite
-      value: 
+      value:
       objectReference: {fileID: 21300000, guid: 0f25739b30d5ca84ea832930af09bc05, type: 3}
     - target: {fileID: 1498280802337971155, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_Color.a
@@ -746,7 +844,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontSize
-      value: 61.95
+      value: 48
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontStyle
@@ -763,6 +861,22 @@ PrefabInstance:
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontColor.r
       value: 0.30588236
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_fontSizeMax
+      value: 48
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_fontSizeMin
+      value: 24
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_overflowMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_TextWrappingMode
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_enableAutoSizing
@@ -853,8 +967,12 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_MinHeight
+      value: 52
+      objectReference: {fileID: 0}
+    - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_FlexibleWidth
-      value: -1
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_FlexibleHeight
@@ -862,11 +980,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_PreferredHeight
-      value: 75
+      value: 68
+      objectReference: {fileID: 0}
+    - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: -24
       objectReference: {fileID: 0}
     - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_SizeDelta.y
-      value: -24
+      value: -16
       objectReference: {fileID: 0}
     - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -891,7 +1013,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!1001 &6111814967377503932
 PrefabInstance:
@@ -915,7 +1037,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1498280802337971155, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_Sprite
-      value: 
+      value:
       objectReference: {fileID: 21300000, guid: 0f25739b30d5ca84ea832930af09bc05, type: 3}
     - target: {fileID: 1498280802337971155, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_Enabled
@@ -931,7 +1053,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontSize
-      value: 61.95
+      value: 48
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontStyle
@@ -948,6 +1070,22 @@ PrefabInstance:
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_fontColor.r
       value: 0.30588236
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_fontSizeMax
+      value: 48
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_fontSizeMin
+      value: 24
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_overflowMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_TextWrappingMode
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 2914980342860011542, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_enableAutoSizing
@@ -1038,8 +1176,12 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_MinHeight
+      value: 52
+      objectReference: {fileID: 0}
+    - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_FlexibleWidth
-      value: -1
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_FlexibleHeight
@@ -1047,11 +1189,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4227090815044911295, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_PreferredHeight
-      value: 75
+      value: 68
+      objectReference: {fileID: 0}
+    - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: -24
       objectReference: {fileID: 0}
     - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_SizeDelta.y
-      value: -24
+      value: -16
       objectReference: {fileID: 0}
     - target: {fileID: 6482076566097215095, guid: 9025de58bfc1d91428fddd97fb29b131, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -1076,7 +1222,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!224 &7326828320738012044 stripped
 RectTransform:
